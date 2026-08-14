@@ -1,0 +1,55 @@
+{
+  "$comment": [
+    "Where every vendored file came from. Data, not code, so that re-fetching is a",
+    "mechanical operation and reviewing an upgrade is reading one diff.",
+    "",
+    "The authoritative copy of each hash is the `integrity` block in index.html,",
+    "because that is the one the browser enforces. The hashes here must agree with",
+    "it, and `npm run verify` fails if they drift. `npm run vendor` re-downloads",
+    "each url and refuses to overwrite a local file unless the freshly downloaded",
+    "bytes match the hash already recorded, so a compromised or silently rebuilt",
+    "upstream cannot land in this repository without an explicit --accept-new and",
+    "a visible diff.",
+    "",
+    "Every url is a static published file pinned to an exact version. jsDelivr's",
+    "generated artefacts are avoided on purpose: /+esm bundles and the implicit",
+    ".min.js it synthesises are built on demand, and jsDelivr's own output warns",
+    "against SRI-pinning them. @tailwindcss/browser is therefore pinned to",
+    "dist/index.global.js, the real published file, and not to the bare package",
+    "URL that resolves to a generated dist/index.global.min.js."
+  ],
+
+  "files": [
+    {
+      "file": "lit-all.min.js",
+      "package": "lit",
+      "version": "3.3.3",
+      "url": "https://cdn.jsdelivr.net/gh/lit/dist@3.3.3/all/lit-all.min.js",
+      "integrity": "sha384-qSoE0anPDAzsBuoT95C270Wd5oKtOOlLdEvSXEk9bRYTg+5ygjyt20ZuhzH0oNbt",
+      "bytes": 29370,
+      "loadedAs": "module",
+      "note": "The all-in-one bundle, so the shell and every remote share one Lit instance and `repeat` is included."
+    },
+    {
+      "file": "signals-core.mjs",
+      "package": "@preact/signals-core",
+      "version": "1.14.4",
+      "url": "https://cdn.jsdelivr.net/npm/@preact/signals-core@1.14.4/dist/signals-core.mjs",
+      "integrity": "sha384-keryyWsAJJ2UD+2G3I6cCzzXkFvp97AwDUCMKAOYrVGK2iwcrnTYMpWMrq9xkPSm",
+      "bytes": 5357,
+      "loadedAs": "module",
+      "note": "Imported only by source/lib/core/foundation/reactive.js, which is the seam for replacing it."
+    },
+    {
+      "file": "tailwind-browser.js",
+      "package": "@tailwindcss/browser",
+      "version": "4.3.3",
+      "url": "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3/dist/index.global.js",
+      "integrity": "sha384-2ql948lIdLcGEE0/qxNiudyTjgauA3RDJERu5xW75kFCvSl5a9odyQYCb6tEjnmB",
+      "bytes": 282289,
+      "loadedAs": "classic-script",
+      "development-only": true,
+      "note": "Browser JIT for development. Contains no fetch, XHR or WebAssembly, so it needs no network of its own. Production uses the committed app.css instead and never loads this."
+    }
+  ]
+}
