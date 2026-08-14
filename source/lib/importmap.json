@@ -1,0 +1,16 @@
+{
+  "imports": {
+    "lit": "/lib/vendor/lit-all.min.js",
+    "lit/async-directive.js": "/lib/vendor/lit-all.min.js",
+    "lit/directives/repeat.js": "/lib/vendor/lit-all.min.js",
+    "@preact/signals-core": "/lib/vendor/signals-core.mjs",
+    "@core/": "/lib/core/",
+    "@auth/": "/lib/auth/",
+    "@host/": "/lib/host/",
+    "@components/": "/components/"
+  },
+  "integrity": {
+    "/lib/vendor/lit-all.min.js": "sha384-qSoE0anPDAzsBuoT95C270Wd5oKtOOlLdEvSXEk9bRYTg+5ygjyt20ZuhzH0oNbt",
+    "/lib/vendor/signals-core.mjs": "sha384-keryyWsAJJ2UD+2G3I6cCzzXkFvp97AwDUCMKAOYrVGK2iwcrnTYMpWMrq9xkPSm"
+  }
+}
