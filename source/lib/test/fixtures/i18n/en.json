@@ -1,0 +1,33 @@
+{
+  "$comment": [
+    "Fixtures for the framework's own i18n suite.",
+    "",
+    "These used to be an application's message bundles, reached through the test",
+    "runner's /i18n/ mount. That made the library suite fail the moment a second",
+    "application became the one under test, which is the rule source/lib/test",
+    "states about itself: nothing here may need an application to pass.",
+    "",
+    "Whether a given application's bundles are complete is checked by",
+    "`npm run verify`, and whether its screens read correctly is that",
+    "application's own smoke test. Neither is this file's job."
+  ],
+
+  "login": {
+    "title": "Sign in"
+  },
+
+  "user": {
+    "notFound": "No user with id {id}."
+  },
+
+  "users": {
+    "title": "Users",
+    "count": {
+      "one": "{count} user",
+      "other": "{count} users"
+    },
+    "status": {
+      "active": "active"
+    }
+  }
+}

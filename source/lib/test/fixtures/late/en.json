@@ -1,0 +1,11 @@
+{
+  "$comment": [
+    "A bundle registered after startup, the way a micro-frontend registers its",
+    "own translations when it loads. Merged into the same table; the shell's",
+    "configuration never knew these keys existed."
+  ],
+
+  "billing": {
+    "title": "Billing"
+  }
+}

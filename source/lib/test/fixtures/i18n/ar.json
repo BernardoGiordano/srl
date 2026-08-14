@@ -1,0 +1,22 @@
+{
+  "$comment": [
+    "Deliberately partial: `login.title` is absent, so the suite can assert that",
+    "fallback happens key by key rather than the page reverting wholesale.",
+    "",
+    "`users.count` declares all six Arabic plural categories for a key English",
+    "declares two for. Intl.PluralRules picks; nothing here has to know how many",
+    "categories a language has."
+  ],
+
+  "users": {
+    "title": "المستخدمون",
+    "count": {
+      "zero": "لا مستخدمين",
+      "one": "مستخدم واحد",
+      "two": "مستخدمان",
+      "few": "{count} مستخدمين",
+      "many": "{count} مستخدمًا",
+      "other": "{count} مستخدم"
+    }
+  }
+}

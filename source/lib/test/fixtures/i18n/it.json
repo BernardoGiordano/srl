@@ -1,0 +1,20 @@
+{
+  "login": {
+    "title": "Accedi"
+  },
+
+  "user": {
+    "notFound": "Nessun utente con id {id}."
+  },
+
+  "users": {
+    "title": "Utenti",
+    "count": {
+      "one": "{count} utente",
+      "other": "{count} utenti"
+    },
+    "status": {
+      "active": "attivo"
+    }
+  }
+}
