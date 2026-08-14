@@ -1,0 +1,24 @@
+<div class="{{ fieldClass }}">
+  <!--
+    Always rendered, never behind an `*if`. A projection marker inside a
+    structural directive is a marker that appears and disappears, and content
+    moved into one that no longer exists is a HierarchyRequestError rather than an
+    empty slot — the same rule `app-card` documents. The label's *text* is guarded
+    instead.
+  -->
+  <label [id]="labelId" [for]="labelFor" class="{{ labelClass }}">
+    <span *if="label">{{ label }}</span>
+    <span *if="required" class="text-rose-600" aria-hidden="true">*</span>
+  </label>
+
+  <x-content></x-content>
+
+  <!--
+    `role="alert"` rather than a live region on a wrapper: the paragraph appears
+    and disappears, and an assertive region that is created already holding text
+    is announced, where one that is emptied and refilled sometimes is not.
+  -->
+  <p *if="errorText" [id]="errorId" role="alert" class="{{ errorClass }}">{{ errorText }}</p>
+
+  <p *if="showHint" [id]="hintId" class="{{ hintClass }}">{{ hint }}</p>
+</div>

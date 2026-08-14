@@ -1,0 +1,152 @@
+<!--
+  `data-invalid` mirrors the `aria-invalid` on the input below. The ARIA attribute
+  belongs on the widget — the input is the combobox — but the border belongs to this
+  box, and a caller styling the control has nothing to key off otherwise. A native
+  input is both things at once and needs no mirror; this one is two elements.
+-->
+<div
+  data-ui-part="combobox-control"
+  class="flex w-full flex-wrap items-center gap-1.5 rounded-md border border-ui-border bg-surface px-2 py-1.5 text-sm text-ink {{ controlClass }}"
+  [data-invalid]="invalidAttr"
+  (pointerdown)="onControlPointerDown($event)"
+>
+  <span
+    *for="option of chips; key: option"
+    data-ui-part="combobox-chip"
+    class="inline-flex max-w-full items-center gap-1 rounded bg-canvas px-2 py-0.5 text-xs text-ink {{ chipClass }}"
+  >
+    <span data-ui-part="combobox-chip-label" class="truncate">{{ renderChip(option) }}</span>
+    <button
+      type="button"
+      data-ui-part="combobox-chip-remove"
+      class="leading-none text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+      [aria-label]="removeAria(option)"
+      (click)="removeOption(option, $event)"
+    >
+      ×
+    </button>
+  </span>
+
+  <input
+    data-ui-part="combobox-input"
+    type="text"
+    role="combobox"
+    autocomplete="off"
+    spellcheck="false"
+    aria-autocomplete="list"
+    class="min-w-24 flex-1 bg-transparent text-ink outline-none placeholder:text-muted {{ inputClass }}"
+    [id]="inputId"
+    [.value]="inputText"
+    [?readonly]="!searchable"
+    [?disabled]="disabled"
+    [placeholder]="placeholderAttr"
+    [aria-expanded]="expandedAttr"
+    [aria-controls]="panelId"
+    [aria-activedescendant]="activeDescendant"
+    [aria-label]="labelAttr"
+    [aria-labelledby]="labelledByAttr"
+    [aria-describedby]="describedByAttr"
+    [aria-invalid]="invalidAttr"
+    (input)="onInput($event)"
+    (keydown)="onKeydown($event)"
+    (focus)="onFocus()"
+  />
+
+  <span
+    *if="loading"
+    data-ui-part="combobox-loading"
+    role="status"
+    class="flex items-center text-muted"
+    [aria-label]="text('loading')"
+    ><span data-ui-part="spinner" aria-hidden="true"></span
+  ></span>
+
+  <button
+    *if="showClear"
+    type="button"
+    data-ui-part="combobox-clear"
+    class="rounded leading-none text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+    [aria-label]="text('clear')"
+    (click)="clearSelection()"
+  >
+    ×
+  </button>
+
+  <button
+    type="button"
+    data-ui-part="combobox-toggle"
+    tabindex="-1"
+    aria-hidden="true"
+    class="leading-none text-muted transition-transform"
+    [?disabled]="disabled"
+    (click)="togglePanel()"
+  >
+    ▾
+  </button>
+</div>
+
+<div
+  *if="open"
+  data-ui-part="combobox-panel"
+  role="listbox"
+  class="overflow-y-auto overscroll-contain rounded-md border border-ui-border bg-surface-raised text-sm text-ink shadow-[0_12px_32px_var(--ui-color-shadow)] {{ panelClass }}"
+  [id]="panelId"
+  [aria-multiselectable]="multiselectableAttr"
+  [aria-label]="labelAttr"
+  (scroll)="onPanelScroll($event)"
+>
+  <div
+    *for="section of sections; key: section.key"
+    data-ui-part="combobox-group"
+    role="group"
+    [aria-label]="section.group"
+  >
+    <div
+      *if="section.group"
+      data-ui-part="combobox-group-label"
+      class="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted"
+    >
+      {{ renderGroup(section.group) }}
+    </div>
+
+    <div *for="row of section.rows; key: row.id" class="contents">
+      <div
+        data-ui-part="combobox-option"
+        role="option"
+        class="px-3 py-2 text-ink aria-disabled:cursor-not-allowed aria-disabled:opacity-45 aria-selected:font-medium {{ optionClass }}"
+        [id]="row.id"
+        [aria-selected]="row.selected"
+        [aria-disabled]="row.disabled"
+        [?data-active]="row.active"
+        [?data-expanded]="row.expanded"
+        (pointerdown)="onOptionPointerDown(row.option, $event)"
+      >
+        {{ renderOption(row.option) }}
+      </div>
+
+      <div
+        *if="row.expanded"
+        data-ui-part="combobox-option-expansion"
+        role="presentation"
+        class="px-2 pb-2"
+      >
+        {{ row.expansion }}
+      </div>
+    </div>
+  </div>
+
+  <div
+    *if="showAddTag"
+    data-ui-part="combobox-add-tag"
+    role="option"
+    aria-selected="false"
+    class="px-3 py-2 text-ink"
+    (pointerdown)="onAddTagPointerDown($event)"
+  >
+    {{ addTagContent }}
+  </div>
+
+  <div *if="showNotFound" data-ui-part="combobox-empty" class="px-3 py-2 text-muted">
+    {{ notFoundContent }}
+  </div>
+</div>

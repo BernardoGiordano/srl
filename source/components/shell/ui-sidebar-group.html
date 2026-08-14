@@ -1,0 +1,24 @@
+<button
+  type="button"
+  data-ui-part="sidebar-group-trigger"
+  class="{{ triggerClass }}"
+  [aria-expanded]="expandedAttr"
+  [aria-controls]="panelId"
+  [aria-label]="labelAttr"
+  (click)="toggle()"
+>
+  <x-content name="trigger"></x-content>
+</button>
+
+<!--
+  Removed rather than hidden. `hidden` loses to any `display` utility the
+  consumer puts on the panel — author styles beat the user-agent sheet whatever
+  the specificity — and a panel that is open because a class won an argument
+  with an attribute is a bug nobody finds by reading either file.
+
+  The projected nodes survive: they are held by the component, not by this
+  marker, and re-appended into the next one that appears.
+-->
+<div *if="expanded" data-ui-part="sidebar-group-panel" [id]="panelId" class="{{ panelClass }}">
+  <x-content></x-content>
+</div>

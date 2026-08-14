@@ -1,0 +1,23 @@
+<ui-combobox
+  multiple
+  data-ui-part="dynamic-filter-combobox"
+  class="block w-full {{ comboboxClass }}"
+  [.options]="options"
+  [.value]="selection"
+  [.add-tag]="addTagFn"
+  [.chip-renderer]="chipRenderer"
+  [.option-renderer]="optionRenderer"
+  [.expanded-option]="rangeEditorOption"
+  [.option-expansion]="optionExpansion"
+  [.search-fn]="optionSearch"
+  [.compare-with]="compareOptions"
+  [?disabled]="disabled"
+  [?loading]="loading"
+  [.label]="label"
+  [.placeholder]="placeholder"
+  (option-add)="onOptionAdd($event)"
+  (option-remove)="onOptionRemove($event)"
+  (selection-clear)="onSelectionClear()"
+  (search-change)="onSearch($event)"
+  (panel-close)="onPanelClose()"
+></ui-combobox>

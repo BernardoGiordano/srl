@@ -1,0 +1,12 @@
+<!--
+  A plain <a href>. The router intercepts clicks on any anchor in the document,
+  so there is no link directive to apply and no navigate() call to write.
+-->
+<a
+  data-ui-part="sidebar-item-link"
+  [href]="href"
+  class="{{ linkClasses }}"
+  [aria-current]="currentAttr"
+>
+  <x-content></x-content>
+</a>

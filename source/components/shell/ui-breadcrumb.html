@@ -1,0 +1,28 @@
+<nav data-ui-part="breadcrumb" [aria-label]="label">
+  <ol data-ui-part="breadcrumb-list" class="{{ listClass }}">
+    <li *for="crumb of crumbs; key: crumb.key" data-ui-part="breadcrumb-item" class="{{ itemClass }}">
+      <a
+        *if="crumb.href"
+        data-ui-part="breadcrumb-link"
+        [href]="crumb.href"
+        class="{{ linkClass }}"
+        >{{ crumb.label }}</a
+      >
+      <span *else data-ui-part="breadcrumb-current" class="{{ currentClass }}" aria-current="page"
+        >{{ crumb.label }}</span
+      >
+
+      <!--
+        aria-hidden, because the separator is decoration. Without it a trail of
+        four steps is read out with three slashes in it.
+      -->
+      <span
+        *if="!$last"
+        data-ui-part="breadcrumb-separator"
+        class="{{ separatorClass }}"
+        aria-hidden="true"
+        >{{ separator }}</span
+      >
+    </li>
+  </ol>
+</nav>

@@ -1,0 +1,22 @@
+<button
+  type="button"
+  data-ui-part="menu-trigger"
+  class="{{ triggerClass }}"
+  aria-haspopup="true"
+  [aria-expanded]="expandedAttr"
+  [aria-controls]="panelId"
+  [aria-label]="labelAttr"
+  (click)="toggle()"
+>
+  <x-content name="trigger"></x-content>
+</button>
+
+<div
+  *if="open"
+  data-ui-part="menu-panel"
+  [id]="panelId"
+  [role]="roleAttr"
+  class="{{ panelClass }}"
+>
+  <x-content></x-content>
+</div>

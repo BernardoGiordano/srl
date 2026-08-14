@@ -1,0 +1,267 @@
+<div data-ui-part="table-columns" hidden><x-content></x-content></div>
+
+<div
+  *if="showColumnChooser"
+  data-ui-part="table-columns-control"
+  class="relative flex justify-end border-b border-ui-border bg-surface px-4 py-2"
+>
+  <button
+    type="button"
+    data-ui-part="table-columns-trigger"
+    class="rounded-md border border-ui-border bg-surface-raised px-3 py-1.5 text-sm text-ink hover:bg-canvas focus-visible:ring-2 focus-visible:ring-accent"
+    [aria-label]="text('columns')"
+    [aria-expanded]="columnsOpen"
+    (click)="columnsOpen = !columnsOpen"
+  >
+    <span aria-hidden="true">☷</span>
+    <span>{{ text('columns') }}</span>
+  </button>
+
+  <div
+    *if="columnsOpen"
+    data-ui-part="table-columns-panel"
+    role="dialog"
+    [aria-label]="text('columns')"
+    class="min-w-72 overflow-y-auto overscroll-contain rounded-md border border-ui-border bg-surface-raised p-2 text-sm text-ink shadow-[0_12px_32px_var(--ui-color-shadow)]"
+  >
+    <div
+      *for="column of configurableColumns; key: column.key"
+      data-ui-part="table-columns-item"
+      class="flex items-center gap-2 rounded px-2 py-1"
+    >
+      <label *if="column.hideable" class="flex min-w-0 flex-1 items-center gap-2">
+        <input
+          type="checkbox"
+          [?checked]="!isColumnHidden(column)"
+          [?disabled]="!canHideColumn(column)"
+          (change)="toggleColumn(column)"
+        />
+        <span class="truncate">{{ column.label }}</span>
+      </label>
+      <span *else class="min-w-0 flex-1 truncate">{{ column.label }}</span>
+
+      <button
+        *if="columnReorderable(column)"
+        type="button"
+        data-ui-part="table-column-before"
+        class="rounded px-1.5 py-1 hover:bg-surface disabled:opacity-40"
+        [?disabled]="moveBeforeDisabled(column)"
+        [aria-label]="columnActionText('moveBefore', column)"
+        [title]="columnActionText('moveBefore', column)"
+        (click)="moveColumnBy(column, -1)"
+      >
+        ←
+      </button>
+      <button
+        *if="columnReorderable(column)"
+        type="button"
+        data-ui-part="table-column-after"
+        class="rounded px-1.5 py-1 hover:bg-surface disabled:opacity-40"
+        [?disabled]="moveAfterDisabled(column)"
+        [aria-label]="columnActionText('moveAfter', column)"
+        [title]="columnActionText('moveAfter', column)"
+        (click)="moveColumnBy(column, 1)"
+      >
+        →
+      </button>
+      <button
+        *if="!column.locked"
+        type="button"
+        data-ui-part="table-column-sticky"
+        class="rounded px-1.5 py-1 hover:bg-surface"
+        [aria-label]="stickyActionText(column)"
+        [title]="stickyActionText(column)"
+        (click)="cycleSticky(column)"
+      >
+        <span aria-hidden="true">⌖</span>
+      </button>
+    </div>
+
+    <button
+      type="button"
+      data-ui-part="table-columns-reset"
+      class="mt-2 w-full rounded-md border border-ui-border px-2 py-1.5 text-sm hover:bg-canvas"
+      (click)="resetColumns()"
+    >
+      {{ text('resetColumns') }}
+    </button>
+  </div>
+</div>
+
+<div data-ui-part="table-scroll" class="overflow-x-auto">
+  <table
+    data-ui-part="table"
+    class="w-full border-collapse text-start text-sm {{ tableClass }}"
+    [aria-busy]="loading"
+  >
+    <caption *if="caption" class="sr-only">{{ caption }}</caption>
+    <thead data-ui-part="table-head">
+      <tr>
+        <th
+          *for="column of visibleColumns; key: column.key"
+          scope="col"
+          data-ui-part="table-header"
+          [data-column-key]="column.key"
+          [data-sticky]="columnSticky(column)"
+          [aria-sort]="sortAria(column)"
+          [style]="headerStyle(column)"
+          class="relative border-b border-ui-border bg-canvas px-4 py-3 text-start text-xs font-semibold uppercase tracking-wide text-muted {{ column.headerClass }}"
+          (dragover)="allowColumnDrop(column, $event)"
+          (drop)="dropColumn(column, $event)"
+        >
+          <div class="flex items-center gap-1.5">
+            <button
+              *if="columnReorderable(column)"
+              type="button"
+              draggable="true"
+              data-ui-part="table-column-drag"
+              class="cursor-grab text-muted focus-visible:ring-2 focus-visible:ring-accent"
+              [aria-label]="columnActionText('reorder', column)"
+              [title]="columnActionText('reorder', column)"
+              (dragstart)="startColumnDrag(column, $event)"
+              (keydown)="reorderFromKeyboard(column, $event)"
+            >
+              <span aria-hidden="true">⠿</span>
+            </button>
+            <button
+              *if="column.sortable"
+              type="button"
+              data-ui-part="table-sort"
+              class="inline-flex min-w-0 flex-1 items-center gap-1.5 text-inherit outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-wait disabled:opacity-60"
+              [?disabled]="loading"
+              [aria-label]="sortActionText(column)"
+              [title]="sortActionText(column)"
+              (click)="toggleSort(column)"
+            >
+              <span>{{ column.label }}</span>
+              <span aria-hidden="true" class="text-sm normal-case tracking-normal">
+                {{ sortIcon(column) }}
+              </span>
+            </button>
+            <span *else>{{ column.label }}</span>
+          </div>
+          <button
+            *if="columnResizable(column)"
+            type="button"
+            data-ui-part="table-column-resize"
+            class="absolute inset-y-0 end-0 w-2 cursor-col-resize touch-none border-0 bg-transparent p-0 focus-visible:bg-accent"
+            [aria-label]="columnActionText('resize', column)"
+            [title]="columnActionText('resize', column)"
+            (pointerdown)="beginResize(column, $event)"
+            (keydown)="resizeFromKeyboard(column, $event)"
+          ></button>
+        </th>
+      </tr>
+    </thead>
+
+    <tbody data-ui-part="table-body" class="divide-y divide-ui-border">
+      <tr
+        *for="row of visibleRows; key: keyFor(row, $index); index as rowIndex"
+        data-ui-part="table-row"
+        [tabindex]="rowTabIndex"
+        class="bg-surface transition-colors"
+        (click)="activate(row, rowIndex, $event)"
+        (keydown)="activateFromKeyboard(row, rowIndex, $event)"
+      >
+        <td
+          *for="column of visibleColumns; key: column.key"
+          data-ui-part="table-cell"
+          [data-column-key]="column.key"
+          [data-sticky]="columnSticky(column)"
+          [style]="cellStyle(column)"
+          class="px-4 py-3 text-ink {{ column.cellClass }}"
+        >
+          {{ renderCell(column, row, rowIndex) }}
+        </td>
+      </tr>
+
+      <tr *if="showLoading" data-ui-part="table-loading">
+        <td [colspan]="columnSpan" class="px-4 py-8 text-center text-muted">
+          <span class="inline-flex items-center gap-2">
+            <span data-ui-part="spinner" aria-hidden="true"></span>
+            <span>{{ text('loading') }}</span>
+          </span>
+        </td>
+      </tr>
+
+      <tr *if="showEmpty" data-ui-part="table-empty">
+        <td [colspan]="columnSpan" class="px-4 py-8 text-center text-muted">{{ emptyText }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div
+  *if="showPaginator"
+  data-ui-part="table-pagination"
+  class="flex flex-wrap items-center gap-2 border-t border-ui-border bg-surface px-4 py-3 text-sm"
+>
+  <label class="me-auto flex items-center gap-2 text-muted">
+    <span>{{ text('pageSize') }}</span>
+    <select
+      data-ui-part="table-page-size"
+      class="rounded-md border border-ui-border bg-surface-raised px-2 py-1 text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      [.value]="selectedPageSize"
+      (change)="changePageSize($event)"
+    >
+      <option *for="option of pageOptions; key: option.value" [value]="option.label">
+        {{ option.label }}
+      </option>
+    </select>
+  </label>
+
+  <span data-ui-part="table-status" class="min-w-24 text-center tabular-nums text-muted">
+    {{ statusText }}
+  </span>
+
+  <nav class="flex items-center gap-1" [aria-label]="text('pagination')">
+    <button
+      type="button"
+      data-ui-part="table-previous"
+      class="rounded-md border border-ui-border px-2.5 py-1 text-ink hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-40"
+      [?disabled]="previousDisabled"
+      [aria-label]="text('previous')"
+      (click)="previous()"
+    >
+      ‹
+    </button>
+
+    <button
+      *for="number of pageNumbers; key: number"
+      type="button"
+      data-ui-part="table-page"
+      class="min-w-8 rounded-md border border-ui-border px-2 py-1 tabular-nums text-ink transition-colors hover:bg-canvas"
+      [aria-current]="pageCurrent(number)"
+      (click)="goTo(number)"
+    >
+      {{ number }}
+    </button>
+
+    <button
+      type="button"
+      data-ui-part="table-next"
+      class="rounded-md border border-ui-border px-2.5 py-1 text-ink hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-40"
+      [?disabled]="nextDisabled"
+      [aria-label]="text('next')"
+      (click)="next()"
+    >
+      ›
+    </button>
+  </nav>
+</div>
+
+<div
+  *if="showInfiniteControl"
+  data-ui-part="table-infinite"
+  class="flex justify-center border-t border-ui-border bg-surface px-4 py-3"
+>
+  <button
+    type="button"
+    data-ui-part="table-load-more"
+    class="rounded-md border border-ui-border px-3 py-1.5 text-sm text-ink hover:bg-canvas disabled:opacity-40"
+    [?disabled]="loading"
+    (click)="requestMore()"
+  >
+    {{ text('loadMore') }}
+  </button>
+</div>

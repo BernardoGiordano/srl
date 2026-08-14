@@ -1,0 +1,21 @@
+<!--
+  Two boxes, and the split is what makes the backdrop clickable.
+
+  The `<dialog>` is the layer: the full viewport, transparent, centring its one
+  child. The panel is the box a consumer styles with `panel-class`. Centring the
+  dialog itself instead would mean a click on its own padding is a click on the
+  element — indistinguishable from a click on the backdrop, which is the event
+  `onLayerClick` is reading. It would also depend on the UA's `margin: auto`,
+  which Tailwind's preflight resets on every element in the document.
+-->
+<dialog
+  data-ui-part="dialog"
+  [role]="roleAttr"
+  [aria-label]="labelAttr"
+  (cancel)="onCancel($event)"
+  (click)="onLayerClick($event)"
+>
+  <div data-ui-part="dialog-panel" class="{{ panelClass }}">
+    <x-content></x-content>
+  </div>
+</dialog>

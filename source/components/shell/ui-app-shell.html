@@ -1,0 +1,16 @@
+<x-content name="sidebar"></x-content>
+
+<!--
+  Rendered only while the drawer is open, rather than always present and hidden.
+  A permanently mounted overlay is the thing that eats clicks on desktop when a
+  media query somewhere disagrees with the JavaScript about what "mobile" means.
+-->
+<div
+  *if="drawerOpen"
+  data-ui-part="backdrop"
+  class="{{ backdropClass }}"
+  aria-hidden="true"
+  (click)="closeDrawer()"
+></div>
+
+<x-content></x-content>

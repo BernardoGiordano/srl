@@ -1,0 +1,17 @@
+<img
+  *if="showImage"
+  [src]="src"
+  [alt]="name"
+  data-ui-part="avatar-image"
+  class="{{ imageClass }}"
+  (error)="onImageError()"
+/>
+
+<span
+  *else
+  data-ui-part="avatar-fallback"
+  class="{{ fallbackClass }}"
+  role="img"
+  [aria-label]="name"
+  >{{ shownInitials }}</span
+>
