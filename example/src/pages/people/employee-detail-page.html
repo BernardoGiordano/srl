@@ -1,0 +1,40 @@
+<div class="space-y-5 p-4 sm:p-6">
+  <app-notice *if="pending" variant="loading" message="{{ t('common.loading') }}"></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('people.notFound', { id: employeeId }) }}"
+    action="{{ t('common.retry') }}"
+    (action)="retry()"
+  ></app-notice>
+
+  <div
+    class="flex flex-wrap items-center gap-4 rounded-xl border border-ui-border bg-surface px-5 py-4 shadow-[0_1px_3px_var(--ui-color-shadow)]"
+  >
+    <ui-avatar
+      name="{{ name }}"
+      fallback-class="flex size-12 items-center justify-center rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast"
+    ></ui-avatar>
+
+    <div class="min-w-0">
+      <p class="text-[17px] font-bold text-ink">{{ name }}</p>
+      <p class="text-[13px] text-muted">{{ role }} · {{ team }}</p>
+      <a
+        *if="email"
+        class="text-[12.5px] text-brand hover:text-accent-strong"
+        [href]="'mailto:' + email"
+        >{{ email }}</a
+      >
+    </div>
+
+    <app-badge class="ms-auto" [tone]="statusTone">{{ statusLabel }}</app-badge>
+  </div>
+
+  <div
+    class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_3px_var(--ui-color-shadow)]"
+  >
+    <app-tabs [.items]="tabs" label="{{ t('people.tabsLabel') }}"></app-tabs>
+    <x-route-outlet class="block p-4 sm:p-5"></x-route-outlet>
+  </div>
+</div>

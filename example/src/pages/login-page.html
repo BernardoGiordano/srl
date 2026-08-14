@@ -1,0 +1,94 @@
+<div class="flex min-h-screen items-center justify-center bg-canvas px-4 py-10">
+  <div class="w-full max-w-sm">
+    <div class="mb-6 flex items-start justify-between gap-3">
+      <!--
+        The name and what it is, together: a visitor who reads only this line should
+        leave knowing that srl is the library and Meridian is a demonstration of it.
+      -->
+      <div>
+        <p class="text-[20px] font-bold tracking-tight text-brand">{{ t('app.name') }}</p>
+        <p class="mt-0.5 text-[12px] text-muted">{{ t('app.tagline') }}</p>
+      </div>
+
+      <!-- Available before sign-in, because a login form nobody can read is a wall. -->
+      <label class="shrink-0 text-[12px] text-muted">
+        <span class="sr-only">{{ t('app.language') }}</span>
+        <select
+          class="cursor-pointer rounded-md border border-ui-border bg-surface px-2 py-1 text-[12px] font-medium text-ink outline-none"
+          [aria-label]="t('app.language')"
+          (change)="selectLocale($event)"
+        >
+          <option
+            *for="option of locales; key: option.code"
+            [value]="option.code"
+            [.selected]="option.code === localeCode"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+    </div>
+
+    <form
+      class="space-y-4 rounded-xl border border-ui-border bg-surface p-6 shadow-[0_1px_3px_var(--ui-color-shadow)]"
+      (submit)="submit($event)"
+    >
+      <div>
+        <h1 class="text-[17px] font-bold text-ink">{{ t('login.title') }}</h1>
+        <p class="mt-1 text-[13px] text-muted">{{ t('login.lead') }}</p>
+      </div>
+
+      <label class="block">
+        <span class="text-[12.5px] font-medium text-muted">{{ t('login.username') }}</span>
+        <input
+          name="username"
+          required
+          autocomplete="username"
+          value="ada"
+          class="mt-1 w-full rounded-md border border-ui-border bg-surface-raised px-3 py-2 text-[13.5px] text-ink outline-none focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+        />
+      </label>
+
+      <!--
+        Deliberately not prefilled, unlike the username above. The password is the
+        role selector, and a box arriving with `admin` already in it hands out
+        administrator to anyone who edits the field above it and presses the button
+        — including someone who typed `viewer` as the username and then wondered why
+        the session carried every scope. What the field is for is in the list below;
+        which role is being taken has to be an act.
+      -->
+      <label class="block">
+        <span class="text-[12.5px] font-medium text-muted">{{ t('login.password') }}</span>
+        <input
+          name="password"
+          type="password"
+          required
+          autocomplete="current-password"
+          placeholder="{{ t('login.passwordHint') }}"
+          class="mt-1 w-full rounded-md border border-ui-border bg-surface-raised px-3 py-2 text-[13.5px] text-ink outline-none placeholder:text-muted focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+        />
+      </label>
+
+      <p *if="errorMessage" class="text-[13px] font-medium text-rose-700 dark:text-rose-300" role="alert">
+        {{ errorMessage }}
+      </p>
+
+      <button
+        type="submit"
+        [?disabled]="busy"
+        class="w-full cursor-pointer rounded-md bg-brand px-3 py-2 text-[13.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-default disabled:opacity-50"
+      >
+        {{ busy ? t('login.submitting') : t('login.submit') }}
+      </button>
+
+      <div class="rounded-md border border-ui-border bg-canvas px-3 py-2.5 text-[12px] text-muted">
+        <p class="font-semibold">{{ t('login.rolesTitle') }}</p>
+        <ul class="mt-1 space-y-0.5">
+          <li><code class="font-semibold text-ink">admin</code> — {{ t('login.roleAdmin') }}</li>
+          <li><code class="font-semibold text-ink">operator</code> — {{ t('login.roleOperator') }}</li>
+          <li><code class="font-semibold text-ink">viewer</code> — {{ t('login.roleViewer') }}</li>
+        </ul>
+      </div>
+    </form>
+  </div>
+</div>

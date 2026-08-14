@@ -1,0 +1,127 @@
+<div class="p-4 sm:p-6">
+  <app-card
+    flush
+    eyebrow="{{ t('nav.sales') }}"
+    heading="{{ t('nav.salesOrders') }}"
+    lead="{{ t('orders.lead') }}"
+  >
+    <!--
+      One control holding every filter this screen offers, plus the rail of chips
+      saying which are on. The screen declares rules and consumes state; it never
+      touches options, and it never imports the table's matching code — both sides
+      import filter-descriptor.js, so the connection is one assignment.
+    -->
+    <ui-dynamic-filter
+      slot="toolbar"
+      class="block max-w-3xl"
+      name="sales-orders"
+      persist
+      [.rules]="rules"
+      label="{{ t('table.filter') }}"
+      placeholder="{{ t('table.filterPlaceholder') }}"
+      (filter-ready)="applyFilters($event)"
+      (filter-change)="applyFilters($event)"
+    ></ui-dynamic-filter>
+
+    <app-notice
+      *if="failed"
+      variant="error"
+      message="{{ t('common.loadFailed') }}"
+      action="{{ t('common.retry') }}"
+      (action)="retry()"
+    ></app-notice>
+
+    <ui-table
+      state-id="sales-orders"
+      pagination="server"
+      page-size="20"
+      page-sizes="10,20,50"
+      column-chooser
+      reorderable-columns
+      resizable-columns
+      persist-filters
+      [.rows]="rows"
+      [.total-rows]="total"
+      [.filters]="filters"
+      [.loading]="loading"
+      [.row-key]="rowKey"
+      caption="{{ t('nav.salesOrders') }}"
+      empty-label="{{ t('orders.empty') }}"
+      (state-restore)="restore($event)"
+      (query-change)="changeQuery($event)"
+    >
+      <ui-table-column
+        key="code"
+        label="{{ t('orders.code') }}"
+        sortable
+        sticky="start"
+        width="130"
+        locked
+        [.renderer]="renderCode"
+      ></ui-table-column>
+      <ui-table-column
+        key="customer"
+        label="{{ t('orders.customer') }}"
+        sortable
+        hideable
+        width="200"
+      ></ui-table-column>
+      <ui-table-column
+        key="status"
+        label="{{ t('orders.status') }}"
+        sortable
+        hideable
+        width="130"
+        [.renderer]="renderStatus"
+      ></ui-table-column>
+      <ui-table-column
+        key="channel"
+        label="{{ t('orders.channel') }}"
+        sortable
+        hideable
+        width="120"
+        [.renderer]="renderChannel"
+      ></ui-table-column>
+      <ui-table-column
+        key="comune"
+        label="{{ t('orders.comune') }}"
+        sortable
+        hideable
+        width="170"
+      ></ui-table-column>
+      <ui-table-column
+        key="placedOn"
+        label="{{ t('orders.placedOn') }}"
+        sortable
+        hideable
+        width="140"
+        [.renderer]="renderPlacedOn"
+      ></ui-table-column>
+      <!--
+        Rendered as formatted currency, so the cell text is "€ 1.234,50" and would
+        sort as a string. `sort-value` hands the table the number instead — which is
+        academic under server pagination and correct the day this screen switches to
+        client mode.
+      -->
+      <ui-table-column
+        key="total"
+        label="{{ t('orders.total') }}"
+        sortable
+        hideable
+        width="140"
+        header-class="text-end"
+        cell-class="text-end tabular-nums"
+        [.renderer]="renderTotal"
+        [.sort-value]="sortTotal"
+      ></ui-table-column>
+      <ui-table-column
+        key="owner"
+        label="{{ t('orders.owner') }}"
+        sortable
+        hideable
+        hidden
+        width="170"
+      ></ui-table-column>
+    </ui-table>
+  </app-card>
+</div>

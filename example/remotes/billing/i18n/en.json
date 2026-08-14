@@ -1,0 +1,35 @@
+{
+  "$comment": "This remote's own translations, shipped in its own folder and registered by remote-entry.js. The shell has no knowledge of these keys, and adding a language here needs no shell redeploy.",
+
+  "billing": {
+    "remoteLabel": "Micro-frontend · same stack",
+    "title": "Billing",
+    "lead": "Served from /remotes/billing/, loaded on first navigation into its mount path, routing its own sub-views and shipping its own translations.",
+    "view": {
+      "overview": "Overview",
+      "invoices": "Invoices",
+      "plans": "Plans"
+    },
+    "body": "This remote imports lit, the signal library and two elements from the shared collection by the same specifiers the shell declares, so there is exactly one Lit instance, one signal graph and one table implementation on the page. It is granted no API access in the manifest and needs none: everything here is local.",
+    "signedInAs": "The host context carries an identity and no token: signed in as {name}.",
+    "source": "remotes/billing/billing-root.js",
+    "total": "Outstanding: {amount}",
+    "number": "Number",
+    "customer": "Customer",
+    "issuedOn": "Issued",
+    "dueOn": "Due",
+    "statusLabel": "Status",
+    "amount": "Amount",
+    "status": {
+      "open": "Open",
+      "paid": "Paid",
+      "overdue": "Overdue"
+    },
+    "plan": {
+      "starter": "Starter",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "planBody": "Placeholder copy. A plan catalogue is not what this remote exists to demonstrate."
+  }
+}

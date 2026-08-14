@@ -1,0 +1,401 @@
+<!--
+  The same nine fields as the first version of this screen, measured at 21 lines of
+  markup each before the form primitives existed. What is left per field is the label, the
+  control, and which state it edits; `ui-field` owns the label element, the error
+  paragraph, the three ARIA attributes that tie them together and the value
+  wiring in both directions.
+
+  There is no second, read-only copy of those nine fields. View mode is the same
+  markup with the form disabled, which is the whole reason `@core/forms` has a
+  disabled state: a screen that rendered its values twice would have two places to
+  fix every time a field changed, and they would drift.
+-->
+<div class="space-y-5 p-4 sm:p-6">
+  <app-notice *if="loading" variant="loading" message="{{ t('common.loading') }}"></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="retry()"
+  ></app-notice>
+
+  <app-card eyebrow="{{ t('nav.salesCustomers') }}" heading="{{ title }}" lead="{{ lead }}">
+    <!--
+      Rendered for everybody and disabled with a reason for a session that may not
+      write, which is the same choice `order-detail-page` makes about its own write
+      control: a missing button is indistinguishable from a broken one. The server
+      refuses the write regardless.
+
+      A button rather than a link to `?edit=true`, because an anchor cannot be
+      disabled — `startEdit()` navigates, so the URL still ends up carrying the
+      mode and the back button still leaves it.
+
+      The `slot` element is unconditional and the `*if` is on the button inside
+      it: a structural directive decides whether its element exists, so it cannot
+      itself be attributed to that element's slot. See `projection.js`.
+    -->
+    <div slot="actions">
+      <button
+        *if="viewing && !creating"
+        type="button"
+        class="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+        [?disabled]="!canWrite"
+        [title]="writeHint"
+        (click)="startEdit()"
+      >
+        {{ t('customerForm.edit') }}
+      </button>
+    </div>
+
+    <form novalidate (submit)="submit($event)">
+      <p
+        *if="saveError"
+        class="mb-4 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-[13px] font-medium text-rose-900 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200"
+        role="alert"
+      >
+        {{ saveError }}
+      </p>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <ui-field
+          class="sm:col-span-2"
+          name="name"
+          label="{{ t('customerForm.name') }}"
+          required
+          [.field]="fields.name"
+          [.messages]="serverMessages"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+        >
+          <input id="cf-name" name="name" autocomplete="organization" class="{{ inputClass }}" />
+        </ui-field>
+
+        <ui-field
+          class="sm:col-span-2"
+          name="email"
+          label="{{ t('customerForm.email') }}"
+          required
+          [.field]="fields.email"
+          [.messages]="serverMessages"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+        >
+          <input id="cf-email" name="email" type="email" autocomplete="email" class="{{ inputClass }}" />
+        </ui-field>
+
+        <!--
+          The two comboboxes differ from the inputs in nothing this markup can
+          see, which is the point of the form-control contract: `ui-field` reads
+          and writes codes, associates the label with the generated input, and
+          points `aria-describedby` at the error. The first version of this screen
+          could do none of the three.
+        -->
+        <ui-field
+          name="segment"
+          label="{{ t('customerForm.segment') }}"
+          required
+          [.field]="fields.segment"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+        >
+          <ui-combobox
+            id="cf-segment"
+            class="mt-1 block w-full"
+            searchable
+            clearable
+            [.options]="segmentOptions"
+            placeholder="{{ t('customerForm.choose') }}"
+            control-class="{{ comboboxControlClass }}"
+            input-class="min-w-24 flex-1 bg-transparent text-[13px] text-ink outline-none"
+            panel-class="{{ comboboxPanelClass }}"
+            chip-class="inline-flex items-center gap-1 rounded-full bg-canvas px-2 py-0.5 text-[12px] text-ink"
+            option-class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-canvas"
+          ></ui-combobox>
+        </ui-field>
+
+        <ui-field
+          name="country"
+          label="{{ t('customerForm.country') }}"
+          required
+          [.field]="fields.country"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+        >
+          <ui-combobox
+            id="cf-country"
+            class="mt-1 block w-full"
+            searchable
+            clearable
+            [.options]="countryOptions"
+            placeholder="{{ t('customerForm.choose') }}"
+            control-class="{{ comboboxControlClass }}"
+            input-class="min-w-24 flex-1 bg-transparent text-[13px] text-ink outline-none"
+            panel-class="{{ comboboxPanelClass }}"
+            chip-class="inline-flex items-center gap-1 rounded-full bg-canvas px-2 py-0.5 text-[12px] text-ink"
+            option-class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-canvas"
+          ></ui-combobox>
+        </ui-field>
+
+        <ui-field
+          name="city"
+          label="{{ t('customerForm.city') }}"
+          required
+          [.field]="fields.city"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+        >
+          <input id="cf-city" name="city" autocomplete="address-level2" class="{{ inputClass }}" />
+        </ui-field>
+
+        <ui-field
+          name="owner"
+          label="{{ t('customerForm.owner') }}"
+          required
+          [.field]="fields.owner"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+        >
+          <input id="cf-owner" name="owner" autocomplete="off" class="{{ inputClass }}" />
+        </ui-field>
+
+        <ui-field
+          name="since"
+          label="{{ t('customerForm.since') }}"
+          required
+          [.field]="fields.since"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+        >
+          <input id="cf-since" name="since" type="date" class="{{ inputClass }}" />
+        </ui-field>
+
+        <ui-field
+          name="revenue"
+          label="{{ t('customerForm.revenue') }}"
+          [.field]="fields.revenue"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+        >
+          <input
+            id="cf-revenue"
+            name="revenue"
+            type="number"
+            min="0"
+            step="1"
+            inputmode="numeric"
+            class="{{ inputClass }}"
+          />
+        </ui-field>
+
+        <ui-field
+          class="sm:col-span-2"
+          name="notes"
+          label="{{ t('customerForm.notes') }}"
+          hint="{{ notesCount }}"
+          [.field]="fields.notes"
+          label-class="block text-[12.5px] font-medium text-muted"
+          error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+          hint-class="mt-1 text-end text-[12px] text-muted"
+        >
+          <textarea id="cf-notes" name="notes" rows="3" class="{{ inputClass }}"></textarea>
+        </ui-field>
+      </div>
+
+      <!--
+        The repeating row.
+
+        Two things here are the array primitive and not this screen. The `key` is
+        `row.key` rather than `row.index`, because removing the first contact
+        renumbers every row below it and a keyed repeat tracking the index would
+        see every row's contents change instead of one row leaving. And each
+        field's `name` is the path the row occupies — `contacts.1.email` — which
+        is the string a 422 carries and the string `focusInvalidField` looks for,
+        so a server error on the second contact puts the caret in the second
+        contact.
+
+        No `id` on these controls, unlike the nine fields above. An id written
+        into markup cannot repeat, and the convention the first version of this
+        screen used to tie a label to its input would collide on the second row;
+        `ui-field` generates one per instance and points the label, the error and
+        `aria-describedby` at it.
+      -->
+      <fieldset class="mt-6 border-t border-ui-border pt-4">
+        <legend class="text-[13px] font-semibold text-ink">{{ t('customerForm.contacts') }}</legend>
+
+        <p *if="!hasContacts" class="mt-2 text-[12.5px] text-muted">{{ t('customerForm.contactsEmpty') }}</p>
+
+        <div
+          *for="row of contactRows; key: row.key"
+          class="mt-3 grid gap-3 rounded-lg border border-ui-border bg-canvas p-3 sm:grid-cols-[1fr_1fr_auto]"
+        >
+          <ui-field
+            name="contacts.{{ row.index }}.name"
+            label="{{ t('customerForm.contactName') }}"
+            required
+            [.field]="row.control.fields.name"
+            [.messages]="serverMessages"
+            label-class="block text-[12.5px] font-medium text-muted"
+            error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+          >
+            <input autocomplete="off" class="{{ inputClass }}" />
+          </ui-field>
+
+          <ui-field
+            name="contacts.{{ row.index }}.email"
+            label="{{ t('customerForm.contactEmail') }}"
+            required
+            [.field]="row.control.fields.email"
+            [.messages]="serverMessages"
+            label-class="block text-[12.5px] font-medium text-muted"
+            error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+          >
+            <input type="email" autocomplete="off" class="{{ inputClass }}" />
+          </ui-field>
+
+          <div class="flex items-start gap-3">
+            <!--
+              A native select rather than a third `ui-combobox`: three fixed
+              options with no search and no chips is what `<select>` already is,
+              and `ui-field` wires a native control without being told — which is
+              the point of the two kinds sharing one contract.
+            -->
+            <ui-field
+              class="flex-1"
+              name="contacts.{{ row.index }}.role"
+              label="{{ t('customerForm.contactRole') }}"
+              required
+              [.field]="row.control.fields.role"
+              [.messages]="serverMessages"
+              label-class="block text-[12.5px] font-medium text-muted"
+              error-class="mt-1 text-[12px] font-medium text-rose-700 dark:text-rose-300"
+            >
+              <!--
+                The height on top of the shared control class, because a select
+                is the one control that cannot be made to match by line box:
+                Chrome ignores `line-height` on it, so the same padding and font
+                size still leave it shorter than the inputs beside it. The value
+                is the inputs' own box written out — one line at the body's 1.5,
+                `py-2` top and bottom, and the two borders.
+              -->
+              <select class="{{ inputClass }} h-[calc(1.5em+1rem+2px)]">
+                <option value="">{{ t('customerForm.choose') }}</option>
+                <option *for="role of contactRoleOptions; key: role.value" [value]="role.value">
+                  {{ role.label }}
+                </option>
+              </select>
+            </ui-field>
+
+            <button
+              *if="editing"
+              type="button"
+              class="mt-6 cursor-pointer rounded-md border border-ui-border px-2.5 py-2 text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-raised"
+              [title]="t('customerForm.removeContact')"
+              [aria-label]="t('customerForm.removeContact')"
+              (click)="removeContact(row.index)"
+            >
+              {{ t('customerForm.remove') }}
+            </button>
+          </div>
+        </div>
+
+        <div *if="editing" class="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            class="cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50"
+            [?disabled]="!canAddContact"
+            (click)="addContact()"
+          >
+            {{ t('customerForm.addContact') }}
+          </button>
+          <p *if="!canAddContact" class="text-[12px] text-muted">{{ contactsLimitHint }}</p>
+        </div>
+      </fieldset>
+
+      <!--
+        Only edit mode has anything to submit or abandon. The unsaved note is
+        outside that guard on purpose: leaving edit mode does not discard, so a
+        user who backed out of the form still has to be told the changes are
+        there — it is what the discard prompt will be about on the way out.
+      -->
+      <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-ui-border pt-4">
+        <button
+          *if="editing"
+          type="submit"
+          [?disabled]="saveDisabled"
+          class="cursor-pointer rounded-md bg-brand px-4 py-2 text-[13.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-default disabled:opacity-50"
+        >
+          {{ saveLabel }}
+        </button>
+
+        <button
+          *if="editing"
+          type="button"
+          class="cursor-pointer rounded-md border border-ui-border px-4 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+          (click)="cancel()"
+        >
+          {{ t('customerForm.cancel') }}
+        </button>
+
+        <a
+          *if="viewing"
+          href="/sales/customers"
+          class="rounded-md border border-ui-border px-4 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+        >
+          {{ t('customerForm.backToList') }}
+        </a>
+
+        <p *if="dirty" class="ms-auto text-[12px] text-muted">{{ t('customerForm.unsaved') }}</p>
+      </div>
+    </form>
+  </app-card>
+
+  <!--
+    The route's `canDeactivate` is awaiting one of these two buttons.
+
+    `mandatory`, so Escape and the backdrop do nothing: the guard is holding a
+    promise open and every way out of this dialog has to resolve it, which a
+    dismissal with no answer would not. That leaves the two buttons, and the
+    modal's own focus trap means they are the only things reachable.
+
+    Every colour here is a semantic token rather than a Tailwind palette with
+    `dark:` variants beside it. The variant compiles to `prefers-color-scheme`,
+    which is the *operating system's* setting and not this application's — a page
+    switched to Light on a dark desktop rendered the previous version of this
+    prompt as pale text on a pale surface.
+  -->
+  <ui-dialog
+    alert
+    mandatory
+    [.open]="askingToLeave"
+    label="{{ t('customerForm.discardTitle') }}"
+    panel-class="w-full max-w-md rounded-xl border border-ui-border p-5"
+  >
+    <h2 class="text-[15px] font-bold text-brand">{{ t('customerForm.discardTitle') }}</h2>
+    <p class="mt-2 text-[13.5px] leading-relaxed text-muted">{{ t('customerForm.discardPrompt') }}</p>
+
+    <div class="mt-5 flex flex-wrap justify-end gap-2">
+      <button
+        type="button"
+        class="cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+        (click)="discard()"
+      >
+        {{ t('customerForm.discard') }}
+      </button>
+      <!--
+        Staying is the safe answer, so it is the one under the keyboard when the
+        dialog opens. `autofocus` rather than a `focus()` call: `showModal()`
+        already looks for it, and the timing is the browser's problem.
+      -->
+      <button
+        type="button"
+        autofocus
+        class="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover"
+        (click)="keepEditing()"
+      >
+        {{ t('customerForm.keepEditing') }}
+      </button>
+    </div>
+  </ui-dialog>
+</div>

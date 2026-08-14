@@ -1,0 +1,110 @@
+{
+  "$comment": [
+    "Runtime configuration, fetched by src/main.js on every load with cache: no-cache.",
+    "Source delivery declares Remote locations here and pins executable bytes in index.html.",
+    "Production delivery composes independently verified Remote artifact reports into this",
+    "manifest and the shell integrity import map; Remote implementation bytes never enter",
+    "the shell bundle.",
+    "",
+    "Remote entries are loaded by absolute URL through dynamic import(). A Remote may use",
+    "only its exact shared bare-specifier interface; the production shell emits facade URLs",
+    "for those specifiers. Central governance of shared versions is the feature."
+  ],
+  "$remotes-comment": [
+    "Two blocks per remote, and they are not the same thing.",
+    "",
+    "  requires  Access control on the mount path. The shell turns it into a route guard,",
+    "            which the router runs BEFORE `load`, so a user who does not satisfy it",
+    "            never downloads the remote's code. Absent means the remote is public.",
+    "",
+    "  grants    Least privilege for the remote's host context. `api` lists the same-origin",
+    "            path prefixes it may call through host.auth.fetch; anything else throws",
+    "            before a request is made. `permissions` is the set it may ask about, so",
+    "            host.auth.permissions() returns that set intersected with the session's",
+    "            scopes and the remote learns nothing about the user's other entitlements.",
+    "",
+    "`billing` declares neither: it calls no API and asks about no permission. It still",
+    "receives a context and routes its sub-views off it \u2014 routing and translation are not",
+    "grants, they are what every remote gets."
+  ],
+  "remotes": [
+    {
+      "$comment": "Built on the shell's own stack: imports lit, the signal library and two elements from the shared collection by the specifiers index.html declares. Public, granted nothing, routed through the host context like every other remote.",
+      "name": "billing",
+      "url": "/remotes/billing/remote-entry.js",
+      "integrity": "sha384-E5eqKtGjo78yF0+SPoZq6Mzz7Rg8MEavpNn/qdAhXBzeujy57OZ12Xqp0SScrzWC",
+      "shared": [
+        "@core/elements/component.js",
+        "@core/elements/signal-element.js",
+        "@core/foundation/reactive.js",
+        "@core/localization/i18n.js",
+        "@components/data/ui-table.js",
+        "@components/data/ui-table-column.js"
+      ],
+      "locales": [
+        "/remotes/billing/i18n/{locale}.json"
+      ],
+      "mount": "/billing"
+    },
+    {
+      "$comment": "Shares nothing with the shell: no bare specifiers, no Lit, no signals. It reaches the session only through the capabilities granted below, and the server checks the same scope on every request it makes.",
+      "name": "analytics",
+      "url": "/remotes/analytics/remote-entry.js",
+      "integrity": "sha384-gikXl5fGQ0JSt91gbIGS5QeVey8/CZ/dOXzGvDIIuh350ltSRN/++0TlTFf+R13O",
+      "locales": [
+        "/remotes/analytics/i18n/{locale}.json"
+      ],
+      "mount": "/analytics",
+      "requires": {
+        "session": true,
+        "permissions": [
+          "analytics:read"
+        ]
+      },
+      "grants": {
+        "api": [
+          "/api/analytics/"
+        ],
+        "permissions": [
+          "analytics:read",
+          "analytics:write"
+        ]
+      }
+    }
+  ],
+  "i18n": {
+    "$comment": [
+      "Locale is a runtime value, not a build target: one deployment for every language, and",
+      "setLocale() re-renders every mounted component from its signal.",
+      "",
+      "bundles are URL patterns merged in order, so a micro-frontend can register its own",
+      "translations at load time without the shell knowing they exist.",
+      "",
+      "ar is deliberately incomplete. Fallback is per key, so what is missing renders in",
+      "English while the layout still flips to rtl."
+    ],
+    "defaultLocale": "en",
+    "supportedLocales": [
+      "en",
+      "it",
+      "ar"
+    ],
+    "bundles": [
+      "/i18n/{locale}.json"
+    ]
+  },
+  "auth": {
+    "$comment": [
+      "Where the API is, and nothing else. Which authentication strategy this",
+      "application uses is a decision in src/main.js, and what its endpoints are",
+      "called is a fact in src/auth/bff-cookie-store.js. Neither is manifest data:",
+      "the library admits this document, and a key here would be the library",
+      "asserting a contract with a backend it cannot see.",
+      "",
+      "This application uses `bff`, and example/server/auth.mjs is the backend half",
+      "\u2014 an HttpOnly session cookie, a readable CSRF token, and an access window",
+      "that really does expire so AuthSession.fetch() exercises refresh-and-retry."
+    ],
+    "apiBaseUrl": "/api"
+  }
+}

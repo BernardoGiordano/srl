@@ -1,0 +1,511 @@
+{
+  "$comment": [
+    "The default locale, and therefore the key inventory: `npm run verify` fails the build",
+    "for a key present in a translation and absent here, because such a key renders",
+    "correctly in exactly one language and as a raw key everywhere else. Untranslated keys",
+    "in the other bundles are counted, not failed — fallback is per key, not per locale.",
+    "",
+    "Nested for the benefit of translators; flattened to dotted keys once at load. A key",
+    "beginning with $ is a note like this one and never becomes a message."
+  ],
+
+  "app": {
+    "name": "Meridian",
+    "tagline": "A CRM example application, built with the srl library",
+    "language": "Language"
+  },
+
+  "$nav-comment": [
+    "nav.analytics and nav.billing are keyed by remote name: the shell asks for",
+    "nav.{name} for every remote in app.manifest.json, so mounting a remote needs one",
+    "message key and no code. nav.apps is the group they are listed under."
+  ],
+
+  "nav": {
+    "dashboard": "Dashboard",
+    "sales": "Sales",
+    "salesOrders": "Orders",
+    "salesCustomers": "Customers",
+    "inventory": "Inventory",
+    "inventoryProducts": "Products",
+    "inventoryMovements": "Stock movements",
+    "inventoryWarehouses": "Warehouses",
+    "people": "People",
+    "peopleEmployees": "Employees",
+    "peopleTeams": "Teams",
+    "settings": "Settings",
+    "settingsProfile": "Profile",
+    "settingsAppearance": "Appearance",
+    "settingsUsers": "Users",
+    "settingsAudit": "Audit log",
+    "apps": "Applications",
+    "analytics": "Analytics",
+    "billing": "Billing"
+  },
+
+  "a11y": {
+    "toggleSidebar": "Collapse or expand the sidebar",
+    "openMenu": "Open the navigation menu",
+    "userMenu": "Account menu",
+    "breadcrumb": "Breadcrumb",
+    "theme": "Colour theme"
+  },
+
+  "theme": {
+    "label": "Theme",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark",
+    "ocean": "Ocean"
+  },
+
+  "role": {
+    "administrator": "Administrator",
+    "operator": "Operator",
+    "viewer": "Viewer"
+  },
+
+  "user": {
+    "signOut": "Sign out"
+  },
+
+  "live": {
+    "connected": {
+      "one": "Live · {count} event",
+      "other": "Live · {count} events"
+    },
+    "reconnecting": "Reconnecting…",
+    "waiting": "Waiting for the first event.",
+    "onHand": {
+      "one": "{count} on hand",
+      "other": "{count} on hand"
+    }
+  },
+
+  "common": {
+    "loading": "Loading…",
+    "loadFailed": "That did not load.",
+    "saveFailed": "That did not save.",
+    "retry": "Try again",
+    "refresh": "Refresh",
+    "saving": "Saving…",
+    "goHome": "Go to the dashboard"
+  },
+
+  "page": {
+    "notFound": "Not found",
+    "notFoundBody": "Nothing is routed to {path}."
+  },
+
+  "$breadcrumb-comment": [
+    "The last step of a detail path when it is a word the route table chose rather",
+    "than an identifier out of the data. Only keywords belong here: an entry per",
+    "customer id would be a bundle the size of the database, and `shell-layout.js`",
+    "shows an unlisted segment as it stands for exactly that reason."
+  ],
+  "breadcrumb": {
+    "new": "New"
+  },
+
+  "stat": {
+    "up": "Up {value} on the previous period.",
+    "down": "Down {value} on the previous period."
+  },
+
+  "table": {
+    "filter": "Filters",
+    "filterPlaceholder": "Search or add a filter"
+  },
+
+  "login": {
+    "title": "Sign in",
+    "lead": "srl is the library; Meridian is the example CRM built with it. The session lives in an HttpOnly cookie set by the local server.",
+    "username": "Username",
+    "password": "Password",
+    "passwordHint": "admin, operator or viewer",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "failed": "Those credentials were refused.",
+    "rolesTitle": "The password picks the role",
+    "roleAdmin": "every scope: sales writes, user administration, the audit log, and the analytics remote",
+    "roleOperator": "sales writes and the analytics remote, but no user administration and no audit log",
+    "roleViewer": "read only, and neither the analytics remote nor the administration screens"
+  },
+
+  "forbidden": {
+    "title": "Not allowed",
+    "body": "Your session does not carry the permission this area requires.",
+    "signedInAs": "Signed in as {name}. Signing in again will not change this."
+  },
+
+  "dashboard": {
+    "kpi": {
+      "openOrders": "Open orders",
+      "pipeline": "Pipeline value",
+      "shipped": "Shipped",
+      "belowReorder": "Below reorder point"
+    },
+    "panelsTitle": "Operations",
+    "panelsLead": "Each panel's module is fetched the first time it is selected. Choosing one swaps the outlet's child and re-renders nothing else on this screen.",
+    "panel": {
+      "live": "Live stock",
+      "targets": "Quarter target"
+    },
+    "alertsTitle": "Reorder alerts",
+    "alertsLead": "Products whose stock has fallen below their reorder point.",
+    "alertsEmpty": "Nothing is below its reorder point.",
+    "alert": {
+      "belowReorder": "{stock} in stock against a reorder point of {reorderPoint}."
+    },
+    "generatedAt": "Generated at {time}.",
+    "targetTitle": "Attainment this quarter",
+    "ofTarget": "of target",
+    "targetCaption": "{attained} of {target}"
+  },
+
+  "orders": {
+    "lead": "Server-paginated: one page of rows and a total count per request, with paging, sorting and filtering done by the API.",
+    "code": "Order",
+    "customer": "Customer",
+    "status": "Status",
+    "channel": "Channel",
+    "comune": "Municipality",
+    "city": "City",
+    "placedOn": "Placed",
+    "promisedOn": "Promised",
+    "total": "Total",
+    "owner": "Account manager",
+    "quantity": "Quantity",
+    "unitPrice": "Unit price",
+    "empty": "No orders match these filters.",
+    "statusValue": {
+      "draft": "Draft",
+      "confirmed": "Confirmed",
+      "shipped": "Shipped",
+      "invoiced": "Invoiced",
+      "cancelled": "Cancelled"
+    },
+    "channelValue": {
+      "direct": "Direct",
+      "partner": "Partner",
+      "web": "Web",
+      "edi": "EDI"
+    },
+    "loadCities": "Load the city list",
+    "searchComune": "Search municipalities",
+    "customRange": "Custom range",
+    "lastMonth": "Last 30 days",
+    "lastQuarter": "Last 90 days",
+    "thisYear": "This year",
+    "tabsLabel": "Order sections",
+    "tabSummary": "Summary",
+    "tabLines": "Lines",
+    "tabHistory": "History",
+    "notFound": "No order with id {id}.",
+    "noCustomer": "This order has no customer record.",
+    "advanceTo": "Advance to {status}",
+    "noNextStatus": "No further status",
+    "needsWriteScope": "Advancing an order needs the sales:write scope.",
+    "writeForbidden": "The server refused: this session does not carry sales:write.",
+    "linesEmpty": "This order has no lines.",
+    "linesTotal": {
+      "one": "{count} line · {total}",
+      "other": "{count} lines · {total}"
+    },
+    "historyEmpty": "Nothing has happened to this order yet.",
+    "event": {
+      "created": "Created",
+      "confirmed": "Confirmed",
+      "status": "Status changed"
+    }
+  },
+
+  "customers": {
+    "lead": "Client-paginated: forty-eight rows arrive once and the table filters, sorts and slices them locally.",
+    "name": "Customer",
+    "segment": "Segment",
+    "city": "City",
+    "country": "Country",
+    "since": "Customer since",
+    "revenue": "Revenue",
+    "openOrders": "Open orders",
+    "empty": "No customers match these filters.",
+    "anySegment": "Any segment",
+    "actions": "Actions",
+    "new": "New customer",
+    "open": "Open",
+    "needsWriteScope": "Changing a customer needs the sales:write entitlement.",
+    "segmentValue": {
+      "enterprise": "Enterprise",
+      "midmarket": "Mid-market",
+      "smb": "Small business",
+      "public": "Public sector"
+    },
+    "contactRole": {
+      "billing": "Billing",
+      "technical": "Technical",
+      "commercial": "Commercial"
+    }
+  },
+
+  "$customerForm-comment": "The form's messages. Error codes come from the server as codes and are resolved here, so a validation failure is in the reader's language and follows a language change without a refetch.",
+  "customerForm": {
+    "newTitle": "New customer",
+    "edit": "Edit",
+    "backToList": "Back to customers",
+    "lead": "Required fields are marked. Changes are saved when you submit.",
+    "name": "Company name",
+    "email": "Email",
+    "segment": "Segment",
+    "country": "Country",
+    "city": "City",
+    "owner": "Account owner",
+    "since": "Customer since",
+    "revenue": "Revenue (EUR)",
+    "notes": "Notes",
+    "choose": "Choose…",
+    "notesCount": "{count} of {max}",
+    "contacts": "Contacts",
+    "contactsEmpty": "No contacts yet.",
+    "contactName": "Contact name",
+    "contactEmail": "Contact email",
+    "contactRole": "Role",
+    "addContact": "Add contact",
+    "removeContact": "Remove this contact",
+    "remove": "Remove",
+    "contactsLimit": "A customer may have at most {max} contacts.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "unsaved": "Unsaved changes",
+    "rejected": "The server refused these values. See the fields below.",
+    "writeForbidden": "Saving needs the sales:write entitlement.",
+    "discardTitle": "Unsaved changes",
+    "discardPrompt": "This form has changes that have not been saved.",
+    "discard": "Discard them",
+    "keepEditing": "Keep editing",
+    "$error-comment": "Only the codes this API invents. Everything the framework's own validators produce is standard collection text under ui.field.*, which is why this list is two entries rather than a dozen. duplicate is a rule about the set of contacts rather than about one of them, so no field validator could answer it.",
+    "error": {
+      "taken": "Another customer already uses this.",
+      "duplicateContact": "Another contact already uses this address."
+    }
+  },
+
+  "products": {
+    "lead": "Infinite scrolling: each page is appended, and a filter or sort change starts the list again.",
+    "sku": "SKU",
+    "name": "Product",
+    "category": "Category",
+    "warehouse": "Warehouse",
+    "stock": "Stock",
+    "reorderPoint": "Reorder point",
+    "price": "Price",
+    "updatedAt": "Updated",
+    "empty": "No products match these filters.",
+    "low": "Low",
+    "loadedCount": "{loaded} of {total} loaded",
+    "loadWarehouses": "Load the warehouse list",
+    "belowReorderOnly": "Below reorder point only",
+    "categoryValue": {
+      "cabling": "Cabling",
+      "enclosures": "Enclosures",
+      "meters": "Meters",
+      "modems": "Modems",
+      "routers": "Routers",
+      "sensors": "Sensors"
+    }
+  },
+
+  "movements": {
+    "lead": "The first page is a request; everything after it arrives on the event stream and is merged in front of it.",
+    "kindLabel": "Movement",
+    "quantity": "Quantity",
+    "at": "When",
+    "ago": "Age",
+    "actor": "By",
+    "empty": "No movements recorded.",
+    "kind": {
+      "receipt": "Receipt",
+      "issue": "Issue",
+      "transfer": "Transfer",
+      "adjustment": "Adjustment"
+    }
+  },
+
+  "warehouses": {
+    "capacityLabel": "{units} of {capacity} units",
+    "skus": {
+      "one": "{count} SKU",
+      "other": "{count} SKUs"
+    },
+    "alerts": {
+      "one": "{count} alert",
+      "other": "{count} alerts"
+    }
+  },
+
+  "people": {
+    "lead": "The staff directory, filtered locally and paginated in the browser.",
+    "name": "Name",
+    "role": "Role",
+    "team": "Team",
+    "location": "Location",
+    "hiredOn": "Hired",
+    "status": "Status",
+    "manager": "Manager",
+    "phone": "Phone",
+    "id": "Employee id",
+    "empty": "No employees match these filters.",
+    "statusValue": {
+      "active": "Active",
+      "leave": "On leave"
+    },
+    "loadRoles": "Load the role list",
+    "onLeaveOnly": "On leave only",
+    "customRange": "Custom range",
+    "hiredRecently": "Hired in the last two years",
+    "hiredLongAgo": "Hired more than five years ago",
+    "notFound": "No employee with id {id}.",
+    "tabsLabel": "Employee sections",
+    "tabProfile": "Profile",
+    "tabContracts": "Contracts",
+    "tabDocuments": "Documents",
+    "contractKind": {
+      "permanent": "Permanent",
+      "fixed-term": "Fixed term",
+      "apprenticeship": "Apprenticeship"
+    },
+    "openEnded": "open-ended",
+    "hoursPerWeek": "{hours} h/week",
+    "contractPeriod": "From {since} until {until}.",
+    "contractsEmpty": "No contract on file.",
+    "documentsEmpty": "No documents on file.",
+    "headcount": {
+      "one": "{count} person",
+      "other": "{count} people"
+    },
+    "teamLead": "Team lead"
+  },
+
+  "settings": {
+    "tabsLabel": "Settings sections",
+    "name": "Name",
+    "subject": "Subject",
+    "email": "Email",
+    "role": "Role",
+    "status": "Status",
+    "lastSeen": "Last seen",
+    "action": "Action",
+    "strategy": "Token strategy",
+    "renewsAt": "Session renews at",
+    "scopes": "Scopes in this session",
+    "strategyNote": {
+      "bff": "The backend holds the tokens. This browser has an HttpOnly cookie it cannot read plus a CSRF token it can, so no credential appears anywhere in the application's JavaScript — which is why there is nothing to show above.",
+      "memory": "The access token is in a module-scoped variable and dies with the tab. Nothing is in localStorage, and a strict CSP is what makes that worth anything.",
+      "dpop": "Requests are signed by a non-extractable key. A stolen token is useless elsewhere, and script execution on this origin can still mint proofs."
+    },
+    "themeLead": "The choice is stored as a UI preference like any other. `system` follows the operating system and re-renders when it changes.",
+    "resolvedTheme": "Currently resolved to",
+    "localeLead": "One deployment for every language: switching re-renders every mounted component from a signal, with no reload and no per-locale bundle.",
+    "direction": "Text direction",
+    "storedState": "Stored interface state",
+    "storedStateLead": "The sidebar's collapsed state, five tables' column layouts and three filters' values all cross one versioned, synchronous boundary. Nothing in the framework or the collection calls localStorage directly, which is why one screen can clear all of it.",
+    "clearTables": "Clear table and filter state",
+    "clearSidebar": "Clear the sidebar state",
+    "clearedTables": "Cleared. The tables take their defaults on the next visit to each screen.",
+    "clearedSidebar": "Cleared. The sidebar starts expanded on the next load.",
+    "usersLead": "Accounts, not employees: an employee is a person in the HR system and a user is a login, administered by different people with different permissions.",
+    "usersEmpty": "No accounts.",
+    "readOnlyNotice": "This session can read accounts but not change them. The controls are shown disabled rather than hidden, because a control that vanishes is indistinguishable from a broken page.",
+    "suspend": "Suspend",
+    "activate": "Activate",
+    "needsWriteScope": "Changing an account needs the users:write scope.",
+    "writeForbidden": "The server refused: this session does not carry users:write.",
+    "userStatus": {
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "auditLead": "Every mutating endpoint appends here, so the writes on the other screens are verifiable rather than merely present.",
+    "auditEmpty": "Nothing recorded yet."
+  },
+
+  "audit": {
+    "$comment": "Keyed by the action the server sends. An unknown action renders as itself rather than as a raw message key; see settings-audit.js.",
+    "action": {
+      "order": {
+        "status": "Order status"
+      },
+      "user": {
+        "suspend": "Account suspended",
+        "activate": "Account activated"
+      },
+      "product": {
+        "reorder": "Reorder point"
+      },
+      "session": {
+        "login": "Signed in"
+      }
+    }
+  },
+
+  "ui": {
+    "$comment": [
+      "Standard interaction text for the shared collection, resolved by",
+      "source/components/internal/text.js. The collection names these keys; this bundle owns",
+      "the language. An empty value is deliberate, not missing: `filter.from` and",
+      "`filter.to` emptied make a range chip read `3/3 – 3/7`."
+    ],
+    "table": {
+      "empty": "No rows found.",
+      "loading": "Loading rows…",
+      "pagination": "Table pagination",
+      "previous": "Previous page",
+      "next": "Next page",
+      "pageSize": "Rows per page",
+      "loadMore": "Load more",
+      "sortAscending": "Sort ascending by",
+      "sortDescending": "Sort descending by",
+      "clearSort": "Clear sort for",
+      "columns": "Columns",
+      "resetColumns": "Reset columns",
+      "moveBefore": "Move column left",
+      "moveAfter": "Move column right",
+      "stickyStart": "Pin column to start",
+      "stickyEnd": "Pin column to end",
+      "unstick": "Unpin column",
+      "resize": "Resize column; use arrow keys",
+      "reorder": "Reorder column; use arrow keys"
+    },
+    "filter": {
+      "free": "Text",
+      "loading": "Loading",
+      "from": "from",
+      "to": "to"
+    },
+    "combobox": {
+      "notFound": "Nothing matches",
+      "addTag": "Search for",
+      "clear": "Clear selection",
+      "remove": "Remove",
+      "loading": "Loading…"
+    },
+    "dateRange": {
+      "title": "Pick a date range",
+      "since": "From",
+      "until": "To",
+      "confirm": "Apply",
+      "cancel": "Cancel",
+      "invalid": "The end date is before the start date."
+    },
+    "field": {
+      "required": "This field is required.",
+      "tooShort": "That is too short.",
+      "tooLong": "That is too long.",
+      "malformed": "That is not a valid value.",
+      "notAllowed": "That is not one of the allowed values.",
+      "tooSmall": "That is too small.",
+      "tooLarge": "That is too large.",
+      "future": "That date is in the future.",
+      "past": "That date is in the past."
+    }
+  }
+}

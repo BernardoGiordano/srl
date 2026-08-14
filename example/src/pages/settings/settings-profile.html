@@ -1,0 +1,29 @@
+<div class="space-y-5">
+  <div class="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+    <app-field label="{{ t('settings.name') }}">
+      <span class="font-medium">{{ session?.name }}</span>
+    </app-field>
+    <app-field label="{{ t('settings.subject') }}">
+      <span class="font-mono text-[12.5px]">{{ session?.subject }}</span>
+    </app-field>
+    <app-field label="{{ t('settings.strategy') }}">
+      <span class="font-mono text-[12.5px]">{{ strategy }}</span>
+    </app-field>
+    <app-field label="{{ t('settings.renewsAt') }}">
+      <span class="tabular-nums">{{ renewsAt }}</span>
+    </app-field>
+  </div>
+
+  <div>
+    <p class="text-[11.5px] font-semibold uppercase tracking-wide text-muted">
+      {{ t('settings.scopes') }}
+    </p>
+    <div class="mt-2 flex flex-wrap gap-1.5">
+      <app-badge *for="scope of scopes; key: scope" [tone]="scopeTone(scope)">{{ scope }}</app-badge>
+    </div>
+  </div>
+
+  <p class="rounded-lg border border-ui-border bg-canvas px-4 py-3 text-[12.5px] leading-relaxed text-muted">
+    {{ strategyNote }}
+  </p>
+</div>

@@ -1,0 +1,88 @@
+import { SignalElement } from '@core/elements/signal-element.js';
+import { defineComponent } from '@core/elements/component.js';
+import { signal } from '@core/foundation/reactive.js';
+import { inject } from '@core/foundation/inject.js';
+import { routeParams } from '@core/navigation/router.js';
+import { dt, num } from '@core/localization/i18n.js';
+
+import { AppNotice } from '../../ui/app-notice.js';
+import { PEOPLE_SERVICE } from '../../services/people-service.js';
+
+/** @import { EmployeeDocument } from '../../services/people-service.js' */
+
+/**
+ * Documents attached to one employee.
+ *
+ * Nothing downloads: there are no files behind these records, and a link that 404s is
+ * worse than a row that says what it is. `num()` with `unit` formatting turns bytes into
+ * "1.4 MB" in the active locale, which is the kind of thing hand-written formatting gets
+ * wrong in every language but the one it was written in.
+ */
+export class EmployeeDocumentsTab extends SignalElement {
+  rows = signal(/** @type {readonly EmployeeDocument[]} */ ([]));
+  failed = signal(false);
+  loaded = signal(false);
+
+  /** @type {AbortController | undefined} */
+  #request;
+
+  get pending() {
+    return !this.loaded.value && !this.failed.value;
+  }
+
+  get documents() {
+    return this.rows.value;
+  }
+
+  onMount() {
+    void this.load();
+  }
+
+  onDestroy() {
+    this.#request?.abort();
+    this.#request = undefined;
+  }
+
+  async load() {
+    const id = routeParams.value.id ?? '';
+    if (id === '') return;
+
+    this.#request?.abort();
+    const request = new AbortController();
+    this.#request = request;
+    this.failed.value = false;
+
+    try {
+      const result = await inject(PEOPLE_SERVICE).documents(id, request.signal);
+      if (request.signal.aborted) return;
+      this.rows.value = result.rows;
+      this.loaded.value = true;
+    } catch {
+      if (!request.signal.aborted) this.failed.value = true;
+    } finally {
+      if (this.#request === request) this.#request = undefined;
+    }
+  }
+
+  /** @param {EmployeeDocument} document */
+  size(document) {
+    return num(document.size / 1_000_000, { style: 'unit', unit: 'megabyte', maximumFractionDigits: 1 });
+  }
+
+  /** @param {EmployeeDocument} document */
+  when(document) {
+    return dt(document.at, { dateStyle: 'medium' });
+  }
+
+  /** @param {EmployeeDocument} document */
+  kind(document) {
+    return document.kind.toUpperCase();
+  }
+}
+
+await defineComponent({
+  tag: 'employee-documents-tab',
+  element: EmployeeDocumentsTab,
+  module: import.meta.url,
+  uses: [AppNotice],
+});

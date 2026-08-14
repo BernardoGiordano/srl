@@ -1,0 +1,403 @@
+<!--
+  The chrome: a sidebar, a header, a title bar, and the outlet every screen inside
+  the application renders into.
+
+  Every custom element here comes from source/components and ships no CSS of its
+  own; every class here is Tailwind over the semantic tokens in
+  /components/theme.css. Nothing in this file computes a class list, and nothing in
+  it knows what a collapsed sidebar looks like — `data-collapsed` is published by
+  the element and read by the `group-data-collapsed/sidebar:` variants below.
+-->
+<ui-app-shell
+  class="group/shell flex min-h-screen bg-canvas"
+  backdrop-class="fixed inset-0 z-20 bg-overlay lg:hidden"
+>
+  <!-- ─────────────────────────────────────────────────────── SIDEBAR ── -->
+  <!--
+    Two layouts in one element, and the breakpoint is written on every class that
+    belongs to only one of them.
+
+    Below `lg` this is an off-canvas drawer: taken out of flow and slid away by its
+    own width, in whichever direction "away" is — `-translate-x-full` in a
+    left-to-right document, `translate-x-full` in a right-to-left one, because the
+    drawer is anchored to `start` and `translate-x` is physical.
+
+    From `lg` up it is a column of the page that stays put: `sticky top-0` with
+    `h-screen`, so the menu scrolls inside itself and the status bar at its foot
+    sits on the bottom edge of the viewport rather than the bottom of the document.
+
+    The `max-lg:` prefixes are what make that work. Tailwind orders `rtl:` after
+    `lg:`, so an unqualified `rtl:translate-x-full` beat `lg:translate-x-0` and left
+    the desktop sidebar pushed a full width off the right edge of a right-to-left
+    page — present in the DOM, invisible on screen. Scoping the drawer's classes to
+    the drawer's breakpoint removes the contest rather than trying to win it.
+  -->
+  <ui-sidebar
+    slot="sidebar"
+    storage-key="example.sidebar"
+    class="group/sidebar z-30 flex w-[248px] shrink-0 flex-col bg-sidebar transition-[transform,width] duration-200 ease-out max-lg:fixed max-lg:inset-y-0 max-lg:start-0 max-lg:-translate-x-full max-lg:rtl:translate-x-full max-lg:group-data-drawer-open/shell:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:data-collapsed:w-[76px]"
+  >
+    <div class="relative flex h-[60px] shrink-0 items-center gap-2.5 px-5">
+      <svg
+        class="size-[22px] shrink-0 text-accent"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path [d]="iconPath('bolt')"></path>
+      </svg>
+
+      <span
+        class="truncate text-[18px] font-semibold tracking-tight text-sidebar-text group-data-collapsed/sidebar:hidden"
+      >
+        {{ t('app.name') }}
+      </span>
+
+      <!--
+        The collapse control. It knows nothing about this sidebar: it walks up to
+        the nearest <ui-sidebar> when clicked, which is why the same element works
+        in the header below with for="drawer".
+
+        Its hover background has to stay opaque. The button straddles the seam
+        between the sidebar and the page, so a translucent `bg-accent/10` let the
+        dark sidebar show through and read as the button vanishing under the cursor
+        — most obviously in the light theme, where the resting `bg-surface` is white.
+
+        The chevron is mirrored with `rtl:-scale-x-100` rather than rotated again:
+        it has to point at whichever edge the sidebar collapses towards, and
+        mirroring composes correctly with the collapsed rotation where a second
+        `rtl:rotate-180` would just cancel it.
+      -->
+      <ui-sidebar-toggle
+        label="{{ t('a11y.toggleSidebar') }}"
+        button-class="absolute -end-3 top-1/2 hidden size-6 -translate-y-1/2 items-center justify-center rounded-md bg-surface shadow-[0_2px_6px_var(--ui-color-shadow)] transition-colors hover:bg-canvas lg:flex"
+      >
+        <svg
+          class="size-4 text-accent transition-transform duration-200 rtl:-scale-x-100 group-data-collapsed/sidebar:rotate-180"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path [d]="iconPath('chevronLeft')"></path>
+        </svg>
+      </ui-sidebar-toggle>
+    </div>
+
+    <nav class="flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 pb-6 pt-2">
+      <!--
+        The dashboard is a leaf at the root, so it is a row rather than a group.
+        `exact` is what keeps it from staying highlighted on every other screen:
+        without it, `/` is a prefix of everything.
+      -->
+      <ui-sidebar-item
+        class="block"
+        href="/"
+        exact
+        link-class="flex items-center gap-3 rounded-lg px-2 py-2 text-[15px] text-sidebar-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-text"
+        active-class="bg-sidebar-active font-medium text-sidebar-text"
+      >
+        <span
+          class="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-hover text-sidebar-text"
+        >
+          <svg
+            class="size-[18px]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [d]="iconPath('dashboard')"></path>
+          </svg>
+        </span>
+        <span class="min-w-0 flex-1 truncate group-data-collapsed/sidebar:hidden">
+          {{ t('nav.dashboard') }}
+        </span>
+      </ui-sidebar-item>
+
+      <ui-sidebar-group
+        *for="section of sections; key: section.key"
+        class="group/section block"
+        [match]="section.path"
+        trigger-class="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-start text-[15px] leading-snug text-sidebar-muted transition-colors hover:bg-sidebar-hover"
+        panel-class="mt-0.5 space-y-0.5 ps-11 group-data-collapsed/sidebar:hidden"
+      >
+        <span slot="trigger" class="flex w-full items-center gap-3">
+          <span
+            class="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-hover text-sidebar-text"
+          >
+            <svg
+              class="size-[18px]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path [d]="iconPath(section.icon)"></path>
+            </svg>
+          </span>
+
+          <span class="min-w-0 flex-1 text-start group-data-collapsed/sidebar:hidden">
+            {{ t('nav.' + section.key) }}
+          </span>
+
+          <svg
+            class="size-4 shrink-0 text-sidebar-muted transition-transform duration-200 group-data-open/section:rotate-180 group-data-collapsed/sidebar:hidden"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [d]="iconPath('chevronDown')"></path>
+          </svg>
+        </span>
+
+        <!-- The wrapper spaces the rows; the `*for` no longer needs one. -->
+        <div class="space-y-0.5">
+          <ui-sidebar-item
+            *for="leaf of section.children; key: leaf.key"
+            class="block"
+            [href]="leaf.path"
+            link-class="block truncate rounded-md px-3 py-2 text-[13.5px] text-sidebar-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-text"
+            active-class="bg-sidebar-active font-medium text-sidebar-text"
+            >{{ t('nav.' + leaf.key) }}</ui-sidebar-item
+          >
+        </div>
+      </ui-sidebar-group>
+    </nav>
+
+    <!-- The live stream's state, where a status bar belongs. -->
+    <div
+      class="flex items-center gap-2 border-t border-white/10 px-5 py-3 text-[12px] text-sidebar-muted group-data-collapsed/sidebar:justify-center group-data-collapsed/sidebar:px-0"
+    >
+      <span
+        class="size-2 shrink-0 rounded-full {{ live ? 'bg-emerald-400' : 'animate-pulse bg-amber-400' }}"
+        aria-hidden="true"
+      ></span>
+      <span class="truncate group-data-collapsed/sidebar:hidden">
+        {{ live ? t('live.connected', { count: liveCount }) : t('live.reconnecting') }}
+      </span>
+    </div>
+  </ui-sidebar>
+
+  <!-- ──────────────────────────────────────────────────── MAIN COLUMN ── -->
+  <div class="flex min-w-0 flex-1 flex-col">
+    <!--
+      Scrolls away with the page. `<ui-topbar>` supports being pinned — that is what
+      its `stuck-offset` and `data-stuck` are for — but this application does not
+      pin it: the sidebar is the fixed frame here, and a second stationary strip
+      under it costs 60px of every screen to repeat what the title bar already says.
+    -->
+    <ui-topbar class="flex h-[60px] shrink-0 items-center gap-1 bg-surface px-4 sm:px-6">
+      <ui-sidebar-toggle
+        for="drawer"
+        label="{{ t('a11y.openMenu') }}"
+        button-class="flex size-9 items-center justify-center rounded-lg text-brand transition-colors hover:bg-canvas lg:hidden"
+      >
+        <svg
+          class="size-5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path [d]="iconPath('menu')"></path>
+        </svg>
+      </ui-sidebar-toggle>
+
+      <div class="ms-auto flex items-center gap-2">
+        <!--
+          The whole language switch. `setLocale` writes a signal every `t()` reads,
+          so every mounted component re-renders in the new language with no reload,
+          no per-locale bundle and no subscription anywhere.
+        -->
+        <label
+          class="relative flex h-9 items-center gap-1.5 rounded-lg border border-ui-border bg-surface-raised ps-2 text-muted transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent hover:bg-canvas"
+          title="{{ t('app.language') }}"
+        >
+          <svg
+            class="size-4 shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [d]="iconPath('globe')"></path>
+          </svg>
+          <span class="sr-only">{{ t('app.language') }}</span>
+          <select
+            class="h-full cursor-pointer appearance-none bg-transparent pe-6 text-[12px] font-medium text-ink outline-none"
+            [aria-label]="t('app.language')"
+            (change)="selectLocale($event)"
+          >
+            <option
+              *for="option of locales; key: option.code"
+              [value]="option.code"
+              [.selected]="option.code === localeCode"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+          <svg
+            class="pointer-events-none absolute end-1.5 size-3"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [d]="iconPath('chevronDown')"></path>
+          </svg>
+        </label>
+
+        <label
+          class="relative flex h-9 items-center gap-1.5 rounded-lg border border-ui-border bg-surface-raised ps-2 text-muted transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent hover:bg-canvas"
+          title="{{ t('theme.label') }}"
+        >
+          <svg
+            class="size-4 shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [d]="iconPath('palette')"></path>
+          </svg>
+          <span class="sr-only">{{ t('theme.label') }}</span>
+          <select
+            class="h-full cursor-pointer appearance-none bg-transparent pe-6 text-[12px] font-medium text-ink outline-none"
+            [.value]="themeName"
+            [aria-label]="t('a11y.theme')"
+            (change)="selectTheme($event)"
+          >
+            <option *for="option of themes; key: option.name" [value]="option.name">
+              {{ option.label }}
+            </option>
+          </select>
+          <svg
+            class="pointer-events-none absolute end-1.5 size-3"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [d]="iconPath('chevronDown')"></path>
+          </svg>
+        </label>
+
+        <ui-menu
+          class="relative"
+          label="{{ t('a11y.userMenu') }}"
+          trigger-class="block cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          panel-class="absolute end-0 z-40 mt-2 w-60 overflow-hidden rounded-xl border border-ui-border bg-surface-raised py-1 text-[13px] text-ink shadow-[0_12px_32px_var(--ui-color-shadow)]"
+        >
+          <span slot="trigger" class="block">
+            <ui-avatar
+              name="{{ userName }}"
+              fallback-class="flex size-9 items-center justify-center rounded-lg bg-brand text-[13px] font-semibold tracking-wide text-brand-contrast"
+            ></ui-avatar>
+          </span>
+
+          <div>
+            <p class="border-b border-ui-border px-4 py-2.5">
+              <span class="block font-semibold">{{ userName }}</span>
+              <span class="block text-[12px] text-muted">{{ t(roleKey) }}</span>
+            </p>
+            <a
+              href="/settings/profile"
+              class="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-canvas"
+            >
+              <svg
+                class="size-4 text-muted"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path [d]="iconPath('user')"></path>
+              </svg>
+              {{ t('nav.settingsProfile') }}
+            </a>
+            <button
+              type="button"
+              class="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2.5 text-start transition-colors hover:bg-canvas"
+              (click)="signOut()"
+            >
+              <svg
+                class="size-4 text-muted"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path [d]="iconPath('logout')"></path>
+              </svg>
+              {{ t('user.signOut') }}
+            </button>
+          </div>
+        </ui-menu>
+      </div>
+    </ui-topbar>
+
+    <div
+      class="flex min-h-[52px] shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-ui-border bg-surface px-4 py-2 sm:px-6"
+    >
+      <span class="h-7 w-[5px] shrink-0 rounded-sm bg-accent" aria-hidden="true"></span>
+      <h1 class="truncate text-[19px] font-bold text-brand">{{ pageTitle }}</h1>
+
+      <ui-breadcrumb
+        class="ms-auto hidden sm:block"
+        [.items]="breadcrumbs"
+        label="{{ t('a11y.breadcrumb') }}"
+        separator="›"
+        list-class="flex items-center gap-2 text-[13px]"
+        item-class="flex items-center gap-2"
+        link-class="text-muted transition-colors hover:text-accent-strong"
+        current-class="text-muted"
+        separator-class="text-muted/60"
+      ></ui-breadcrumb>
+    </div>
+
+    <!--
+      Where every child route renders. `display: contents` by default, so this
+      element does not become a box between the flex column and the page; the class
+      makes it one deliberately, because every screen inside wants to grow.
+    -->
+    <x-route-outlet class="block min-w-0 flex-1"></x-route-outlet>
+  </div>
+</ui-app-shell>

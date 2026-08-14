@@ -1,0 +1,51 @@
+<div class="space-y-3">
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="load()"
+  ></app-notice>
+
+  <ui-table
+    pagination="none"
+    [.rows]="rows"
+    [.loading]="loading"
+    [.row-key]="rowKey"
+    caption="{{ t('orders.tabLines') }}"
+    empty-label="{{ t('orders.linesEmpty') }}"
+  >
+    <ui-table-column key="line" label="#" width="60" sortable></ui-table-column>
+    <ui-table-column key="sku" label="{{ t('products.sku') }}" width="130" sortable></ui-table-column>
+    <ui-table-column key="name" label="{{ t('products.name') }}" sortable></ui-table-column>
+    <ui-table-column
+      key="quantity"
+      label="{{ t('orders.quantity') }}"
+      width="110"
+      sortable
+      header-class="text-end"
+      cell-class="text-end tabular-nums"
+      [.renderer]="renderQuantity"
+    ></ui-table-column>
+    <ui-table-column
+      key="unitPrice"
+      label="{{ t('orders.unitPrice') }}"
+      width="130"
+      sortable
+      header-class="text-end"
+      cell-class="text-end tabular-nums"
+      [.renderer]="renderUnitPrice"
+    ></ui-table-column>
+    <ui-table-column
+      key="total"
+      label="{{ t('orders.total') }}"
+      width="140"
+      sortable
+      header-class="text-end"
+      cell-class="text-end tabular-nums"
+      [.renderer]="renderTotal"
+    ></ui-table-column>
+  </ui-table>
+
+  <p class="text-end text-[13px] font-semibold text-ink">{{ totalLabel }}</p>
+</div>

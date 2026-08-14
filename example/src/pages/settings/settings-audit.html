@@ -1,0 +1,38 @@
+<div class="space-y-3">
+  <div class="flex flex-wrap items-center gap-3">
+    <p class="text-[13px] text-muted">{{ t('settings.auditLead') }}</p>
+    <button
+      type="button"
+      class="ms-auto cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+      [?disabled]="loading"
+      (click)="load()"
+    >
+      {{ loading ? t('common.loading') : t('common.refresh') }}
+    </button>
+  </div>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="load()"
+  ></app-notice>
+
+  <p *if="entries.length === 0" class="text-[13px] text-muted">{{ t('settings.auditEmpty') }}</p>
+
+  <ul *else class="divide-y divide-ui-border">
+    <li *for="entry of entries; key: entry.id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+      <app-badge [tone]="tone(entry)">{{ actionLabel(entry) }}</app-badge>
+
+      <span class="min-w-0 flex-1 text-[13px] text-ink">
+        <span class="font-medium">{{ entry.actor }}</span>
+        <span class="text-muted"> · {{ entry.target }} · {{ entry.detail }}</span>
+      </span>
+
+      <time class="shrink-0 text-[12px] text-muted" [datetime]="entry.at" [title]="when(entry)">
+        {{ since(entry) }}
+      </time>
+    </li>
+  </ul>
+</div>

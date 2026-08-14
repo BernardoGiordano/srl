@@ -1,0 +1,77 @@
+<div class="p-4 sm:p-6">
+  <app-card
+    flush
+    eyebrow="{{ t('nav.people') }}"
+    heading="{{ t('nav.peopleEmployees') }}"
+    lead="{{ t('people.lead') }}"
+  >
+    <ui-dynamic-filter
+      slot="toolbar"
+      class="block max-w-3xl"
+      name="people-employees"
+      persist
+      [.rules]="rules"
+      label="{{ t('table.filter') }}"
+      placeholder="{{ t('table.filterPlaceholder') }}"
+      (filter-ready)="applyFilters($event)"
+      (filter-change)="applyFilters($event)"
+    ></ui-dynamic-filter>
+
+    <app-notice
+      *if="failed"
+      variant="error"
+      message="{{ t('common.loadFailed') }}"
+      action="{{ t('common.retry') }}"
+      (action)="load()"
+    ></app-notice>
+
+    <ui-table
+      state-id="people-employees"
+      pagination="client"
+      page-size="12"
+      page-sizes="12,25,50"
+      column-chooser
+      reorderable-columns
+      resizable-columns
+      [.rows]="rows"
+      [.filters]="filters"
+      [.loading]="loading"
+      [.row-key]="rowKey"
+      caption="{{ t('nav.peopleEmployees') }}"
+      empty-label="{{ t('people.empty') }}"
+    >
+      <ui-table-column
+        key="name"
+        label="{{ t('people.name') }}"
+        sortable
+        sticky="start"
+        width="260"
+        locked
+        [.renderer]="renderName"
+        [.sort-value]="nameValue"
+        [.filter-value]="nameValue"
+      ></ui-table-column>
+      <ui-table-column key="role" label="{{ t('people.role') }}" sortable hideable width="190"></ui-table-column>
+      <ui-table-column key="team" label="{{ t('people.team') }}" sortable hideable width="150"></ui-table-column>
+      <ui-table-column key="location" label="{{ t('people.location') }}" sortable hideable width="150"></ui-table-column>
+      <ui-table-column
+        key="hiredOn"
+        label="{{ t('people.hiredOn') }}"
+        sortable
+        hideable
+        width="140"
+        [.renderer]="renderHiredOn"
+      ></ui-table-column>
+      <ui-table-column
+        key="status"
+        label="{{ t('people.status') }}"
+        sortable
+        hideable
+        width="120"
+        [.renderer]="renderStatus"
+      ></ui-table-column>
+      <ui-table-column key="manager" label="{{ t('people.manager') }}" sortable hideable hidden width="170"></ui-table-column>
+      <ui-table-column key="phone" label="{{ t('people.phone') }}" hideable hidden width="170"></ui-table-column>
+    </ui-table>
+  </app-card>
+</div>

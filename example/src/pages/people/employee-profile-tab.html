@@ -1,0 +1,28 @@
+<div>
+  <app-notice *if="pending" variant="loading" message="{{ t('common.loading') }}"></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="load()"
+  ></app-notice>
+
+  <div *if="record" class="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+    <app-field label="{{ t('people.role') }}">{{ record.role }}</app-field>
+    <app-field label="{{ t('people.team') }}">{{ record.team }}</app-field>
+    <app-field label="{{ t('people.location') }}">{{ record.location }}</app-field>
+    <app-field label="{{ t('people.manager') }}">{{ record.manager }}</app-field>
+    <app-field label="{{ t('people.phone') }}">
+      <a class="text-brand hover:text-accent-strong" [href]="'tel:' + record.phone">{{ record.phone }}</a>
+    </app-field>
+    <app-field label="{{ t('people.status') }}">{{ statusLabel }}</app-field>
+    <app-field label="{{ t('people.hiredOn') }}">
+      {{ hiredOn }} <span class="text-muted">({{ tenure }})</span>
+    </app-field>
+    <app-field label="{{ t('people.id') }}">
+      <span class="font-mono text-[12.5px]">{{ record.id }}</span>
+    </app-field>
+  </div>
+</div>

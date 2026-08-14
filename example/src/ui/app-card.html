@@ -1,0 +1,37 @@
+<section
+  class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_3px_var(--ui-color-shadow)]"
+>
+  <!--
+    The header is unconditional, and that is load-bearing rather than lazy.
+
+    A projection marker inside a structural directive is a marker that appears and
+    disappears: `heading` arrives as an attribute during the *caller's* render commit, so a
+    header behind `*if="heading"` is absent on this component's first render and present on
+    its second — and projected content moved into a marker that no longer exists is a
+    HierarchyRequestError, not an empty slot. Markers stay put; `*if` guards only the text
+    around them, and `:empty` hides what has nothing in it.
+  -->
+  <header class="border-b border-ui-border px-5 py-4">
+    <p *if="eyebrow" class="text-[11px] font-semibold uppercase tracking-wider text-muted">
+      {{ eyebrow }}
+    </p>
+
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <h2 *if="heading" class="text-[16px] font-bold text-brand">{{ heading }}</h2>
+      <!-- Actions belong on the heading's line, pushed to the end. -->
+      <div class="ms-auto flex items-center gap-2">
+        <x-content name="actions"></x-content>
+      </div>
+    </div>
+
+    <p *if="lead" class="mt-1.5 max-w-3xl text-[13.5px] leading-relaxed text-muted">{{ lead }}</p>
+
+    <div class="mt-3 empty:hidden">
+      <x-content name="toolbar"></x-content>
+    </div>
+  </header>
+
+  <div class="{{ bodyClasses }} text-[13.5px] text-ink">
+    <x-content></x-content>
+  </div>
+</section>

@@ -1,0 +1,81 @@
+<div class="space-y-6">
+  <section>
+    <h3 class="text-[14px] font-bold text-ink">{{ t('theme.label') }}</h3>
+    <p class="mt-1 text-[13px] text-muted">{{ t('settings.themeLead') }}</p>
+
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button
+        *for="option of themes; key: option.name"
+        type="button"
+        class="cursor-pointer rounded-lg border px-3.5 py-2 text-[13px] font-medium transition-colors {{ isCurrentTheme(option.name) ? 'border-accent bg-accent/10 text-brand' : 'border-ui-border text-muted hover:bg-canvas' }}"
+        [aria-pressed]="isCurrentTheme(option.name) ? 'true' : 'false'"
+        (click)="chooseTheme(option.name)"
+      >
+        {{ option.label }}
+      </button>
+    </div>
+
+    <p class="mt-2 flex items-center gap-2 text-[12.5px] text-muted">
+      {{ t('settings.resolvedTheme') }}
+      <app-badge tone="info">{{ resolved }}</app-badge>
+    </p>
+  </section>
+
+  <section>
+    <h3 class="text-[14px] font-bold text-ink">{{ t('app.language') }}</h3>
+    <p class="mt-1 text-[13px] text-muted">{{ t('settings.localeLead') }}</p>
+
+    <div class="mt-3 flex flex-wrap items-center gap-3">
+      <label>
+        <span class="sr-only">{{ t('app.language') }}</span>
+        <select
+          class="cursor-pointer rounded-md border border-ui-border bg-surface-raised px-3 py-2 text-[13px] font-medium text-ink outline-none"
+          [aria-label]="t('app.language')"
+          (change)="selectLocale($event)"
+        >
+          <option
+            *for="option of locales; key: option.code"
+            [value]="option.code"
+            [.selected]="option.code === localeCode"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <span class="flex items-center gap-2 text-[12.5px] text-muted">
+        {{ t('settings.direction') }}
+        <app-badge tone="neutral">{{ textDirection }}</app-badge>
+      </span>
+    </div>
+  </section>
+
+  <section>
+    <h3 class="text-[14px] font-bold text-ink">{{ t('settings.storedState') }}</h3>
+    <p class="mt-1 text-[13px] leading-relaxed text-muted">{{ t('settings.storedStateLead') }}</p>
+
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button
+        type="button"
+        class="cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+        (click)="resetTables()"
+      >
+        {{ t('settings.clearTables') }}
+      </button>
+      <button
+        type="button"
+        class="cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+        (click)="resetSidebar()"
+      >
+        {{ t('settings.clearSidebar') }}
+      </button>
+    </div>
+
+    <app-notice
+      *if="cleared"
+      class="mt-3 block"
+      variant="empty"
+      message="{{ cleared }}"
+    ></app-notice>
+  </section>
+</div>

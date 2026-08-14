@@ -1,0 +1,95 @@
+/*
+ * Tailwind entry point for the production CSS build.
+ *
+ *   npm run css:example   ->  ../app.css
+ *
+ * Swap the @tailwindcss/browser script tag in index.html for the <link> to app.css when
+ * deploying. Nothing else in this application knows which of the two is in use.
+ */
+
+@import '../../source/components/theme.css';
+@import 'tailwindcss' source(none);
+
+/*
+ * Tailwind names for the component library's semantic design tokens.
+ *
+ * Kept in step with the inline <style type="text/tailwindcss"> block in index.html by
+ * hand: the browser JIT reads the document, this file is read only by the CLI, and neither
+ * can see the other. The values themselves live once, in /components/theme.css; these
+ * lines only make Tailwind utilities for them.
+ */
+@theme inline {
+  --color-canvas: var(--ui-color-canvas);
+  --color-surface: var(--ui-color-surface);
+  --color-surface-raised: var(--ui-color-surface-raised);
+  --color-ink: var(--ui-color-text);
+  --color-muted: var(--ui-color-text-muted);
+  --color-ui-border: var(--ui-color-border);
+  --color-brand: var(--ui-color-primary);
+  --color-brand-hover: var(--ui-color-primary-hover);
+  --color-brand-contrast: var(--ui-color-primary-contrast);
+  --color-accent: var(--ui-color-accent);
+  --color-accent-strong: var(--ui-color-accent-strong);
+  --color-sidebar: var(--ui-color-sidebar);
+  --color-sidebar-text: var(--ui-color-sidebar-text);
+  --color-sidebar-muted: var(--ui-color-sidebar-muted);
+  --color-sidebar-hover: var(--ui-color-sidebar-hover);
+  --color-sidebar-active: var(--ui-color-sidebar-active);
+  --color-overlay: var(--ui-color-overlay);
+}
+
+/*
+ * What box each of this application's components is.
+ *
+ * A custom element is `display: inline` until something says otherwise, and an inline
+ * box drops every rule that only block boxes obey. Two of those cost real layout here:
+ * a vertical margin is ignored, so `space-y-*` between two cards produces no gap at
+ * all; and the box sits on a line box, so the surrounding font's strut makes it taller
+ * than its content and leaves that content sitting low inside it.
+ *
+ * The panels are blocks. A badge is `inline-flex` rather than `inline-block` so the
+ * host hugs the pill inside it — that half-strut is exactly the amount a badge looks
+ * low by when it is centred against a button beside it.
+ *
+ * A component that is always a grid or flex child is blockified by its parent and
+ * would survive without a rule here. It gets one anyway: which box a component is
+ * belongs to the component, not to the layout it happens to be dropped into.
+ *
+ * Kept in step with the same rules in index.html by hand, for the reason the theme
+ * block above gives.
+ */
+app-card,
+app-notice,
+app-stat,
+app-field,
+app-tabs {
+  display: block;
+}
+
+app-badge {
+  display: inline-flex;
+}
+
+/*
+ * Where to scan for class names. Miss a directory and its utilities are absent from the
+ * generated sheet with no error anywhere, which looks exactly like Tailwind being broken.
+ *
+ * Remote artifacts compile their own utilities. Keeping those sources out of the shell
+ * means a remote can add classes and publish without rebuilding this stylesheet.
+ */
+@source '../src/**/*.js';
+@source '../src/**/*.html';
+@source '../index.html';
+
+@source '../../source/components/**/*.js';
+@source '../../source/components/**/*.html';
+@source '../../source/lib/core/**/*.js';
+@source '../../source/lib/auth/**/*.js';
+@source '../../source/lib/host/**/*.js';
+
+/*
+ * `source(none)` above disables automatic content detection. Without it Tailwind walks the
+ * repository, finds source/lib/vendor/tailwind-browser.js — its own engine, which names
+ * every utility it can generate — and emits all of them. The trap is specific to vendoring
+ * a CSS framework's compiler.
+ */

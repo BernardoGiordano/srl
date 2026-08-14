@@ -1,0 +1,31 @@
+<div>
+  <app-notice *if="pending" variant="loading" message="{{ t('common.loading') }}"></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="load()"
+  ></app-notice>
+
+  <p *if="contracts.length === 0 && !pending" class="text-[13px] text-muted">
+    {{ t('people.contractsEmpty') }}
+  </p>
+
+  <ul *else class="space-y-3">
+    <li
+      *for="contract of contracts; key: contract.id"
+      class="rounded-lg border border-ui-border bg-canvas px-4 py-3"
+    >
+      <div class="flex flex-wrap items-center gap-2">
+        <app-badge [tone]="tone(contract)">{{ kindLabel(contract) }}</app-badge>
+        <span class="font-mono text-[12px] text-muted">{{ contract.id }}</span>
+        <span class="ms-auto text-[12.5px] font-semibold text-ink">{{ hours(contract) }}</span>
+      </div>
+      <p class="mt-2 text-[13px] text-muted">
+        {{ t('people.contractPeriod', { since: since(contract), until: until(contract) }) }}
+      </p>
+    </li>
+  </ul>
+</div>

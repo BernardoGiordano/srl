@@ -1,0 +1,27 @@
+<div class="mx-auto max-w-xl px-4 py-14 text-center sm:px-6">
+  <svg
+    class="mx-auto size-12 text-accent-strong"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M12 3l7 3v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z"></path>
+    <path d="M12 9v3.5"></path>
+    <path d="M12 15.4v.2"></path>
+  </svg>
+
+  <h1 class="mt-4 text-[20px] font-bold text-ink">{{ t('forbidden.title') }}</h1>
+  <p class="mt-2 text-[13.5px] leading-relaxed text-muted">{{ t('forbidden.body') }}</p>
+  <p class="mt-1 text-[13px] text-muted">{{ signedInAs }}</p>
+
+  <a
+    href="/"
+    class="mt-6 inline-block rounded-md bg-brand px-4 py-2 text-[13.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover"
+  >
+    {{ t('common.goHome') }}
+  </a>
+</div>

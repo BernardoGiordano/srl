@@ -1,0 +1,23 @@
+<div
+  class="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-[13px] {{ toneClasses }}"
+  role="status"
+  [aria-live]="liveness"
+  [aria-busy]="busy ? 'true' : 'false'"
+>
+  <span
+    *if="busy"
+    class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+    aria-hidden="true"
+  ></span>
+
+  <span class="min-w-0 flex-1">{{ message }}</span>
+
+  <button
+    *if="action"
+    type="button"
+    class="cursor-pointer rounded-md border border-current px-2.5 py-1 text-[12px] font-semibold transition-colors hover:bg-current/10"
+    (click)="emitAction()"
+  >
+    {{ action }}
+  </button>
+</div>

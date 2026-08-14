@@ -1,0 +1,76 @@
+<div class="p-4 sm:p-6">
+  <app-card
+    flush
+    eyebrow="{{ t('nav.inventory') }}"
+    heading="{{ t('nav.inventoryMovements') }}"
+    lead="{{ t('movements.lead') }}"
+  >
+    <span slot="actions" class="flex items-center gap-2 text-[12.5px] text-muted">
+      <span
+        class="size-2 shrink-0 rounded-full {{ connected ? 'bg-emerald-500' : 'animate-pulse bg-amber-500' }}"
+        aria-hidden="true"
+      ></span>
+      <span aria-live="polite">{{ streamLabel }}</span>
+    </span>
+
+    <app-notice
+      *if="failed"
+      variant="error"
+      message="{{ t('common.loadFailed') }}"
+      action="{{ t('common.retry') }}"
+      (action)="load()"
+    ></app-notice>
+
+    <ui-table
+      state-id="inventory-movements"
+      pagination="client"
+      page-size="15"
+      page-sizes="15,30,60"
+      column-chooser
+      [.rows]="rows"
+      [.loading]="loading"
+      [.row-key]="rowKey"
+      caption="{{ t('nav.inventoryMovements') }}"
+      empty-label="{{ t('movements.empty') }}"
+    >
+      <ui-table-column
+        key="kind"
+        label="{{ t('movements.kindLabel') }}"
+        sortable
+        width="130"
+        [.renderer]="renderKind"
+        [.filter-value]="filterKind"
+      ></ui-table-column>
+      <ui-table-column key="sku" label="{{ t('products.sku') }}" sortable hideable width="130"></ui-table-column>
+      <ui-table-column key="warehouse" label="{{ t('products.warehouse') }}" sortable hideable width="130"></ui-table-column>
+      <ui-table-column
+        key="quantity"
+        label="{{ t('movements.quantity') }}"
+        sortable
+        hideable
+        width="120"
+        header-class="text-end"
+        cell-class="text-end tabular-nums"
+        [.renderer]="renderQuantity"
+      ></ui-table-column>
+      <ui-table-column
+        key="at"
+        label="{{ t('movements.at') }}"
+        sortable
+        hideable
+        width="180"
+        sort-start="desc"
+        [.renderer]="renderAt"
+      ></ui-table-column>
+      <ui-table-column
+        key="ago"
+        label="{{ t('movements.ago') }}"
+        hideable
+        width="140"
+        sort-key="at"
+        [.renderer]="renderAgo"
+      ></ui-table-column>
+      <ui-table-column key="actor" label="{{ t('movements.actor') }}" sortable hideable width="150"></ui-table-column>
+    </ui-table>
+  </app-card>
+</div>

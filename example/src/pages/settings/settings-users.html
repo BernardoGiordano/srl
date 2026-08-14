@@ -1,0 +1,70 @@
+<div class="space-y-3">
+  <p class="text-[13px] leading-relaxed text-muted">{{ t('settings.usersLead') }}</p>
+
+  <app-notice
+    *if="!canWrite"
+    variant="empty"
+    message="{{ t('settings.readOnlyNotice') }}"
+  ></app-notice>
+
+  <app-notice
+    *if="errorMessage"
+    variant="error"
+    message="{{ errorMessage }}"
+  ></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="load()"
+  ></app-notice>
+
+  <ui-table
+    pagination="client"
+    page-size="10"
+    page-sizes="10,25"
+    [.rows]="rows"
+    [.loading]="loading"
+    [.row-key]="rowKey"
+    caption="{{ t('nav.settingsUsers') }}"
+    empty-label="{{ t('settings.usersEmpty') }}"
+  >
+    <ui-table-column key="name" label="{{ t('settings.name') }}" sortable width="200"></ui-table-column>
+    <ui-table-column key="email" label="{{ t('settings.email') }}" sortable width="240"></ui-table-column>
+    <ui-table-column
+      key="role"
+      label="{{ t('settings.role') }}"
+      sortable
+      width="150"
+      [.renderer]="renderRole"
+    ></ui-table-column>
+    <ui-table-column
+      key="status"
+      label="{{ t('settings.status') }}"
+      sortable
+      width="130"
+      [.renderer]="renderStatus"
+      [.filter-value]="filterStatus"
+    ></ui-table-column>
+    <ui-table-column
+      key="lastSeen"
+      label="{{ t('settings.lastSeen') }}"
+      sortable
+      width="150"
+      sort-start="desc"
+      [.renderer]="renderLastSeen"
+    ></ui-table-column>
+    <!-- No `key`: the cell is a control, so there is no field behind it to sort. -->
+    <ui-table-column
+      key="action"
+      label="{{ t('settings.action') }}"
+      locked
+      width="130"
+      header-class="text-end"
+      cell-class="text-end"
+      [.renderer]="renderAction"
+    ></ui-table-column>
+  </ui-table>
+</div>

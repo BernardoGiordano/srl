@@ -1,0 +1,33 @@
+{
+  "billing": {
+    "remoteLabel": "Micro-frontend · stesso stack",
+    "title": "Fatturazione",
+    "lead": "Servito da /remotes/billing/, caricato alla prima navigazione nel suo mount path, con routing delle proprie sotto-viste e traduzioni proprie.",
+    "view": {
+      "overview": "Panoramica",
+      "invoices": "Fatture",
+      "plans": "Piani"
+    },
+    "body": "Questo remote importa lit, la libreria dei signal e due elementi della collezione condivisa con gli stessi specifier dichiarati dalla shell: sulla pagina esistono una sola istanza di Lit, un solo grafo di signal e una sola implementazione della tabella. Nel manifest non riceve alcun accesso alle API e non ne ha bisogno: tutto qui è locale.",
+    "signedInAs": "Il contesto host porta un'identità e nessun token: accesso come {name}.",
+    "source": "remotes/billing/billing-root.js",
+    "total": "Da incassare: {amount}",
+    "number": "Numero",
+    "customer": "Cliente",
+    "issuedOn": "Emessa",
+    "dueOn": "Scadenza",
+    "statusLabel": "Stato",
+    "amount": "Importo",
+    "status": {
+      "open": "Aperta",
+      "paid": "Pagata",
+      "overdue": "Scaduta"
+    },
+    "plan": {
+      "starter": "Base",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "planBody": "Testo segnaposto. Un catalogo di piani non è ciò che questo remote deve dimostrare."
+  }
+}

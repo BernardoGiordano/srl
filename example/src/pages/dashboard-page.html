@@ -1,0 +1,87 @@
+<div class="space-y-5 p-4 sm:p-6">
+  <app-notice
+    *if="pending"
+    variant="loading"
+    message="{{ t('common.loading') }}"
+  ></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="load()"
+  ></app-notice>
+
+  <!--
+    Four tiles from one payload. `[.value]` and `[.delta]` are property bindings:
+    an attribute would arrive as a string and the tile would format the string.
+  -->
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <app-stat
+      *for="kpi of kpis; key: kpi.key"
+      label="{{ kpiLabel(kpi) }}"
+      [.value]="kpi.value"
+      [.delta]="kpi.delta"
+      currency="{{ kpi.currency }}"
+    ></app-stat>
+  </div>
+
+  <div class="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <app-card
+      eyebrow="{{ t('nav.dashboard') }}"
+      heading="{{ t('dashboard.panelsTitle') }}"
+      lead="{{ t('dashboard.panelsLead') }}"
+    >
+      <div slot="actions" class="flex flex-wrap gap-1.5">
+        <button
+          *for="option of panels; key: option.id"
+          type="button"
+          class="cursor-pointer rounded-md border px-3 py-1.5 text-[12.5px] font-medium transition-colors {{ isSelected(option.target) ? 'border-accent bg-accent/10 text-brand' : 'border-ui-border text-muted hover:bg-canvas' }}"
+          [aria-pressed]="isSelected(option.target) ? 'true' : 'false'"
+          (click)="select(option.target)"
+        >
+          {{ t(option.labelKey) }}
+        </button>
+      </div>
+
+      <!--
+        `&panel` hands the outlet the signal itself rather than its current value, so
+        the outlet subscribes directly and choosing a panel re-renders nothing here.
+        Each panel's module is fetched the first time it is selected.
+      -->
+      <x-outlet [.target]="&panel"></x-outlet>
+    </app-card>
+
+    <app-card heading="{{ t('dashboard.alertsTitle') }}" lead="{{ t('dashboard.alertsLead') }}">
+      <p *if="alerts.length === 0" class="text-[13px] text-muted">{{ t('dashboard.alertsEmpty') }}</p>
+
+      <ul *else class="divide-y divide-ui-border">
+        <li *for="alert of alerts; key: alert.sku" class="flex items-start gap-3 py-2.5">
+          <svg
+            class="mt-0.5 size-4 shrink-0 text-amber-500"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 4l9 16H3z M12 10v4.5 M12 17.2v.2"></path>
+          </svg>
+          <span class="min-w-0">
+            <a
+              class="block truncate font-medium text-brand hover:text-accent-strong"
+              [href]="'/inventory/products?sku=' + alert.sku"
+              >{{ alert.name }}</a
+            >
+            <span class="block text-[12.5px] text-muted">{{ alertText(alert) }}</span>
+          </span>
+        </li>
+      </ul>
+
+      <p *if="generatedAt" class="mt-3 text-[11.5px] text-muted">{{ generatedAt }}</p>
+    </app-card>
+  </div>
+</div>

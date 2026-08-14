@@ -1,0 +1,92 @@
+<div class="space-y-5 p-4 sm:p-6">
+  <header>
+    <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">
+      {{ t('billing.remoteLabel') }}
+    </p>
+    <h1 class="mt-1 text-[19px] font-bold text-brand">{{ t('billing.title') }}</h1>
+    <p class="mt-1 max-w-3xl text-[13.5px] leading-relaxed text-muted">{{ t('billing.lead') }}</p>
+  </header>
+
+  <!-- Sub-views the shell's route table knows nothing about. -->
+  <div class="flex flex-wrap gap-2">
+    <button
+      *for="name of views; key: name"
+      type="button"
+      class="cursor-pointer rounded-md border px-3 py-1.5 text-[13px] font-medium transition-colors {{ isActive(name) ? 'border-accent bg-accent/10 text-brand' : 'border-ui-border text-muted hover:bg-canvas' }}"
+      [aria-pressed]="isActive(name) ? 'true' : 'false'"
+      (click)="go(name)"
+    >
+      {{ t('billing.view.' + name) }}
+    </button>
+  </div>
+
+  <section
+    class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_3px_var(--ui-color-shadow)]"
+  >
+    <header class="flex flex-wrap items-center gap-3 border-b border-ui-border px-5 py-4">
+      <h2 class="text-[16px] font-bold text-brand">{{ t('billing.view.' + view) }}</h2>
+      <p class="ms-auto text-[13px] font-semibold tabular-nums text-ink">{{ outstandingLabel }}</p>
+    </header>
+
+    <div *if="view === 'overview'" class="space-y-2 px-5 py-4 text-[13.5px] text-ink">
+      <p>{{ t('billing.body') }}</p>
+      <p class="text-muted">{{ t('billing.signedInAs', { name: userName }) }}</p>
+    </div>
+
+    <!--
+      `ui-table` from the shell's collection, inside a micro-frontend. It resolves through
+      the same import map the shell uses, so this is the one table implementation on the
+      page rather than a second copy of one.
+    -->
+    <ui-table
+      *if="view === 'invoices'"
+      pagination="none"
+      [.rows]="invoices"
+      [.row-key]="rowKey"
+      caption="{{ t('billing.view.invoices') }}"
+    >
+      <ui-table-column key="id" label="{{ t('billing.number') }}" sortable width="160"></ui-table-column>
+      <ui-table-column key="customer" label="{{ t('billing.customer') }}" sortable></ui-table-column>
+      <ui-table-column
+        key="issuedOn"
+        label="{{ t('billing.issuedOn') }}"
+        sortable
+        width="140"
+        [.renderer]="renderIssuedOn"
+      ></ui-table-column>
+      <ui-table-column
+        key="dueOn"
+        label="{{ t('billing.dueOn') }}"
+        sortable
+        width="140"
+        [.renderer]="renderDueOn"
+      ></ui-table-column>
+      <ui-table-column
+        key="status"
+        label="{{ t('billing.statusLabel') }}"
+        sortable
+        width="120"
+        [.renderer]="renderStatus"
+      ></ui-table-column>
+      <ui-table-column
+        key="amount"
+        label="{{ t('billing.amount') }}"
+        sortable
+        width="150"
+        header-class="text-end"
+        cell-class="text-end tabular-nums"
+        [.renderer]="renderAmount"
+        [.sort-value]="sortAmount"
+      ></ui-table-column>
+    </ui-table>
+
+    <div *if="view === 'plans'" class="grid gap-3 px-5 py-4 sm:grid-cols-3">
+      <div *for="plan of ['starter', 'business', 'enterprise']; key: plan" class="rounded-lg border border-ui-border bg-canvas px-4 py-3">
+        <p class="text-[13px] font-semibold text-ink">{{ t('billing.plan.' + plan) }}</p>
+        <p class="mt-1 text-[12.5px] text-muted">{{ t('billing.planBody') }}</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="text-[11.5px] text-muted">{{ t('billing.source') }}</p>
+</div>

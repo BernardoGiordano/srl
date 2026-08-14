@@ -1,0 +1,41 @@
+{
+  "$comment": "The analytics remote's own translations, registered by remote-entry.js at mount time and merged into the shell's message table. The shell's manifest does not list these keys and does not need to.",
+
+  "analytics": {
+    "remoteLabel": "Micro-frontend · foreign stack",
+    "title": "Analytics",
+    "lead": "This screen imports nothing from the shell: no Lit, no signals, no template compiler. It builds DOM by hand and reaches the session only through the capability context it was handed at mount.",
+    "anonymous": "No session. Nothing here can be fetched.",
+    "signedInAs": "Signed in as {name} ({subject}). The context carries an identity and no token.",
+    "permissions": "Permissions granted to this remote:",
+    "noPermissions": "none",
+    "mount": "Mounted at {mount}, which comes from the manifest rather than from this folder.",
+    "loading": "Loading…",
+    "failed": "The request failed.",
+    "signInFirst": "Sign in to load the summary.",
+    "metric": {
+      "orders": "Orders",
+      "value": "Value",
+      "conversion": "Conversion"
+    },
+    "column": {
+      "channel": "Channel",
+      "orders": "Orders",
+      "value": "Value",
+      "share": "Share"
+    },
+    "channel": {
+      "direct": "Direct",
+      "partner": "Partner",
+      "web": "Web",
+      "edi": "EDI"
+    },
+    "updated": "Generated at {at}, formatted with this remote's own Intl calls and the shell's locale.",
+    "refresh": "Refresh",
+    "export": "Export",
+    "exportStub": "Nothing is exported: the button exists to show that it is rendered only for a session carrying analytics:write.",
+    "probe": "Call an API this remote is not granted",
+    "leastPrivilege": "The manifest grants this remote one API prefix and two permissions. Anything else throws before a request leaves the browser, and the message names the remote, the path and the grants it does have.",
+    "source": "remotes/analytics/analytics-root.js"
+  }
+}

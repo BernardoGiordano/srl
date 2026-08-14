@@ -1,0 +1,63 @@
+<div class="space-y-5 p-4 sm:p-6">
+  <app-notice *if="pending" variant="loading" message="{{ t('common.loading') }}"></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('orders.notFound', { id: orderId }) }}"
+    action="{{ t('common.retry') }}"
+    (action)="retry()"
+  ></app-notice>
+
+  <app-card eyebrow="{{ t('nav.salesOrders') }}" heading="{{ code }}">
+    <div slot="actions" class="flex flex-wrap items-center gap-2">
+      <app-badge [tone]="statusTone">{{ statusLabel }}</app-badge>
+
+      <!--
+        Rendered for everybody, disabled with a reason for those who may not use it.
+        The server enforces the same scope, so this is usability and not access
+        control.
+      -->
+      <button
+        type="button"
+        class="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+        [?disabled]="advanceDisabled"
+        [title]="advanceHint"
+        (click)="advance()"
+      >
+        {{ saving ? t('common.saving') : advanceLabel }}
+      </button>
+    </div>
+
+    <p *if="writeError" class="mb-3 text-[13px] font-medium text-rose-700 dark:text-rose-300" role="alert">
+      {{ writeError }}
+    </p>
+
+    <div class="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
+      <app-field label="{{ t('orders.customer') }}">
+        <a class="font-medium text-brand hover:text-accent-strong" [href]="customerLink">
+          {{ customerName }}
+        </a>
+      </app-field>
+      <app-field label="{{ t('orders.total') }}">
+        <span class="font-semibold tabular-nums">{{ total }}</span>
+      </app-field>
+      <app-field label="{{ t('orders.placedOn') }}">{{ placedOn }}</app-field>
+      <app-field label="{{ t('orders.promisedOn') }}">{{ promisedOn }}</app-field>
+      <app-field label="{{ t('orders.comune') }}">{{ comune }}</app-field>
+      <app-field label="{{ t('orders.owner') }}">{{ owner }}</app-field>
+    </div>
+  </app-card>
+
+  <div
+    class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_3px_var(--ui-color-shadow)]"
+  >
+    <app-tabs [.items]="tabs" label="{{ t('orders.tabsLabel') }}"></app-tabs>
+
+    <!--
+      Where the child route renders. This element and everything above it survive a
+      tab change: only the panel below is replaced.
+    -->
+    <x-route-outlet class="block p-4 sm:p-5"></x-route-outlet>
+  </div>
+</div>

@@ -1,0 +1,113 @@
+<div class="p-4 sm:p-6">
+  <app-card
+    flush
+    eyebrow="{{ t('nav.inventory') }}"
+    heading="{{ t('nav.inventoryProducts') }}"
+    lead="{{ t('products.lead') }}"
+  >
+    <span slot="actions" class="text-[12.5px] text-muted tabular-nums">{{ countLabel }}</span>
+
+    <ui-dynamic-filter
+      slot="toolbar"
+      class="block max-w-3xl"
+      name="inventory-products"
+      persist
+      [.rules]="rules"
+      label="{{ t('table.filter') }}"
+      placeholder="{{ t('table.filterPlaceholder') }}"
+      (filter-ready)="applyFilters($event)"
+      (filter-change)="applyFilters($event)"
+    ></ui-dynamic-filter>
+
+    <app-notice
+      *if="failed"
+      variant="error"
+      message="{{ t('common.loadFailed') }}"
+      action="{{ t('common.retry') }}"
+      (action)="retry()"
+    ></app-notice>
+
+    <!--
+      `total-rows` is what tells the table there is more to ask for: it stops emitting
+      `load-more` once the rows it holds reach the collection size.
+    -->
+    <ui-table
+      state-id="inventory-products"
+      pagination="infinite"
+      page-size="25"
+      page-sizes="25,50,100"
+      column-chooser
+      reorderable-columns
+      resizable-columns
+      persist-filters
+      [.rows]="rows"
+      [.total-rows]="total"
+      [.loading]="loading"
+      [.row-key]="rowKey"
+      caption="{{ t('nav.inventoryProducts') }}"
+      empty-label="{{ t('products.empty') }}"
+      (state-restore)="restore($event)"
+      (query-change)="changeQuery($event)"
+      (load-more)="loadMore()"
+    >
+      <ui-table-column
+        key="sku"
+        label="{{ t('products.sku') }}"
+        sortable
+        sticky="start"
+        width="130"
+        locked
+      ></ui-table-column>
+      <ui-table-column key="name" label="{{ t('products.name') }}" sortable hideable width="260"></ui-table-column>
+      <ui-table-column
+        key="category"
+        label="{{ t('products.category') }}"
+        sortable
+        hideable
+        width="140"
+        [.renderer]="renderCategory"
+      ></ui-table-column>
+      <ui-table-column key="warehouse" label="{{ t('products.warehouse') }}" sortable hideable width="130"></ui-table-column>
+      <ui-table-column
+        key="stock"
+        label="{{ t('products.stock') }}"
+        sortable
+        hideable
+        width="150"
+        header-class="text-end"
+        cell-class="text-end"
+        [.renderer]="renderStock"
+        [.sort-value]="sortStock"
+      ></ui-table-column>
+      <ui-table-column
+        key="reorderPoint"
+        label="{{ t('products.reorderPoint') }}"
+        sortable
+        hideable
+        hidden
+        width="150"
+        header-class="text-end"
+        cell-class="text-end tabular-nums"
+      ></ui-table-column>
+      <ui-table-column
+        key="price"
+        label="{{ t('products.price') }}"
+        sortable
+        hideable
+        width="130"
+        header-class="text-end"
+        cell-class="text-end tabular-nums"
+        [.renderer]="renderPrice"
+        [.sort-value]="sortPrice"
+      ></ui-table-column>
+      <ui-table-column
+        key="updatedAt"
+        label="{{ t('products.updatedAt') }}"
+        sortable
+        hideable
+        width="160"
+        [.renderer]="renderUpdatedAt"
+      ></ui-table-column>
+    </ui-table>
+  </app-card>
+</div>

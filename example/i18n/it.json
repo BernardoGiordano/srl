@@ -1,0 +1,480 @@
+{
+  "app": {
+    "name": "Meridian",
+    "tagline": "Applicazione CRM di esempio, costruita con la libreria srl",
+    "language": "Lingua"
+  },
+
+  "nav": {
+    "dashboard": "Cruscotto",
+    "sales": "Vendite",
+    "salesOrders": "Ordini",
+    "salesCustomers": "Clienti",
+    "inventory": "Magazzino",
+    "inventoryProducts": "Prodotti",
+    "inventoryMovements": "Movimenti di magazzino",
+    "inventoryWarehouses": "Depositi",
+    "people": "Personale",
+    "peopleEmployees": "Dipendenti",
+    "peopleTeams": "Team",
+    "settings": "Impostazioni",
+    "settingsProfile": "Profilo",
+    "settingsAppearance": "Aspetto",
+    "settingsUsers": "Utenti",
+    "settingsAudit": "Registro attività",
+    "apps": "Applicazioni",
+    "analytics": "Analisi",
+    "billing": "Fatturazione"
+  },
+
+  "a11y": {
+    "toggleSidebar": "Comprimi o espandi la barra laterale",
+    "openMenu": "Apri il menu di navigazione",
+    "userMenu": "Menu account",
+    "breadcrumb": "Percorso",
+    "theme": "Tema colori"
+  },
+
+  "theme": {
+    "label": "Tema",
+    "system": "Sistema",
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "ocean": "Oceano"
+  },
+
+  "role": {
+    "administrator": "Amministratore",
+    "operator": "Operatore",
+    "viewer": "Sola lettura"
+  },
+
+  "user": {
+    "signOut": "Esci"
+  },
+
+  "live": {
+    "connected": {
+      "one": "In diretta · {count} evento",
+      "other": "In diretta · {count} eventi"
+    },
+    "reconnecting": "Riconnessione…",
+    "waiting": "In attesa del primo evento.",
+    "onHand": {
+      "one": "{count} in giacenza",
+      "other": "{count} in giacenza"
+    }
+  },
+
+  "common": {
+    "loading": "Caricamento…",
+    "loadFailed": "Il caricamento non è riuscito.",
+    "saveFailed": "Il salvataggio non è riuscito.",
+    "retry": "Riprova",
+    "refresh": "Aggiorna",
+    "saving": "Salvataggio…",
+    "goHome": "Vai al cruscotto"
+  },
+
+  "page": {
+    "notFound": "Non trovato",
+    "notFoundBody": "Nessuna rotta corrisponde a {path}."
+  },
+
+  "breadcrumb": {
+    "new": "Nuovo"
+  },
+
+  "stat": {
+    "up": "In crescita di {value} rispetto al periodo precedente.",
+    "down": "In calo di {value} rispetto al periodo precedente."
+  },
+
+  "table": {
+    "filter": "Filtri",
+    "filterPlaceholder": "Cerca o aggiungi un filtro"
+  },
+
+  "login": {
+    "title": "Accedi",
+    "lead": "srl è la libreria; Meridian è il CRM di esempio costruito con essa. La sessione vive in un cookie HttpOnly impostato dal server locale.",
+    "username": "Nome utente",
+    "password": "Password",
+    "passwordHint": "admin, operator oppure viewer",
+    "submit": "Accedi",
+    "submitting": "Accesso in corso…",
+    "failed": "Credenziali rifiutate.",
+    "rolesTitle": "La password determina il ruolo",
+    "roleAdmin": "tutti gli scope: scrittura sulle vendite, amministrazione utenti, registro attività e remote di analisi",
+    "roleOperator": "scrittura sulle vendite e remote di analisi, ma nessuna amministrazione utenti e nessun registro attività",
+    "roleViewer": "sola lettura, senza remote di analisi e senza le schermate di amministrazione"
+  },
+
+  "forbidden": {
+    "title": "Accesso negato",
+    "body": "La sessione non possiede il permesso richiesto da quest'area.",
+    "signedInAs": "Accesso come {name}. Rifare l'accesso non cambia nulla."
+  },
+
+  "dashboard": {
+    "kpi": {
+      "openOrders": "Ordini aperti",
+      "pipeline": "Valore in pipeline",
+      "shipped": "Spediti",
+      "belowReorder": "Sotto il punto di riordino"
+    },
+    "panelsTitle": "Operatività",
+    "panelsLead": "Il modulo di ogni pannello viene scaricato alla prima selezione. Scegliere un pannello sostituisce il figlio dell'outlet e non ridisegna nient'altro.",
+    "panel": {
+      "live": "Magazzino in diretta",
+      "targets": "Obiettivo trimestrale"
+    },
+    "alertsTitle": "Avvisi di riordino",
+    "alertsLead": "Prodotti la cui giacenza è scesa sotto il punto di riordino.",
+    "alertsEmpty": "Nessun prodotto sotto il punto di riordino.",
+    "alert": {
+      "belowReorder": "{stock} in giacenza contro un punto di riordino di {reorderPoint}."
+    },
+    "generatedAt": "Generato alle {time}.",
+    "targetTitle": "Raggiungimento del trimestre",
+    "ofTarget": "dell'obiettivo",
+    "targetCaption": "{attained} su {target}"
+  },
+
+  "orders": {
+    "lead": "Paginazione lato server: una pagina di righe e un totale per richiesta, con paginazione, ordinamento e filtri eseguiti dall'API.",
+    "code": "Ordine",
+    "customer": "Cliente",
+    "status": "Stato",
+    "channel": "Canale",
+    "comune": "Comune",
+    "city": "Città",
+    "placedOn": "Data ordine",
+    "promisedOn": "Data promessa",
+    "total": "Totale",
+    "owner": "Referente",
+    "quantity": "Quantità",
+    "unitPrice": "Prezzo unitario",
+    "empty": "Nessun ordine corrisponde ai filtri.",
+    "statusValue": {
+      "draft": "Bozza",
+      "confirmed": "Confermato",
+      "shipped": "Spedito",
+      "invoiced": "Fatturato",
+      "cancelled": "Annullato"
+    },
+    "channelValue": {
+      "direct": "Diretto",
+      "partner": "Partner",
+      "web": "Web",
+      "edi": "EDI"
+    },
+    "loadCities": "Carica l'elenco delle città",
+    "searchComune": "Cerca un comune",
+    "customRange": "Intervallo personalizzato",
+    "lastMonth": "Ultimi 30 giorni",
+    "lastQuarter": "Ultimi 90 giorni",
+    "thisYear": "Quest'anno",
+    "tabsLabel": "Sezioni dell'ordine",
+    "tabSummary": "Riepilogo",
+    "tabLines": "Righe",
+    "tabHistory": "Storico",
+    "notFound": "Nessun ordine con id {id}.",
+    "noCustomer": "Questo ordine non ha un'anagrafica cliente.",
+    "advanceTo": "Porta a {status}",
+    "noNextStatus": "Nessuno stato successivo",
+    "needsWriteScope": "Avanzare un ordine richiede lo scope sales:write.",
+    "writeForbidden": "Il server ha rifiutato: la sessione non possiede sales:write.",
+    "linesEmpty": "Questo ordine non ha righe.",
+    "linesTotal": {
+      "one": "{count} riga · {total}",
+      "other": "{count} righe · {total}"
+    },
+    "historyEmpty": "Non è ancora accaduto nulla su questo ordine.",
+    "event": {
+      "created": "Creato",
+      "confirmed": "Confermato",
+      "status": "Stato modificato"
+    }
+  },
+
+  "customers": {
+    "lead": "Paginazione lato client: quarantotto righe arrivano una volta e la tabella filtra, ordina e impagina in locale.",
+    "name": "Cliente",
+    "segment": "Segmento",
+    "city": "Città",
+    "country": "Paese",
+    "since": "Cliente dal",
+    "revenue": "Ricavi",
+    "openOrders": "Ordini aperti",
+    "empty": "Nessun cliente corrisponde ai filtri.",
+    "anySegment": "Qualsiasi segmento",
+    "actions": "Azioni",
+    "new": "Nuovo cliente",
+    "open": "Apri",
+    "needsWriteScope": "Per modificare un cliente serve l'abilitazione sales:write.",
+    "segmentValue": {
+      "enterprise": "Enterprise",
+      "midmarket": "Media impresa",
+      "smb": "Piccola impresa",
+      "public": "Settore pubblico"
+    },
+    "contactRole": {
+      "billing": "Amministrazione",
+      "technical": "Tecnico",
+      "commercial": "Commerciale"
+    }
+  },
+
+  "customerForm": {
+    "newTitle": "Nuovo cliente",
+    "edit": "Modifica",
+    "backToList": "Torna ai clienti",
+    "lead": "I campi obbligatori sono contrassegnati. Le modifiche vengono salvate all'invio.",
+    "name": "Ragione sociale",
+    "email": "Email",
+    "segment": "Segmento",
+    "country": "Paese",
+    "city": "Città",
+    "owner": "Referente commerciale",
+    "since": "Cliente dal",
+    "revenue": "Ricavi (EUR)",
+    "notes": "Note",
+    "choose": "Scegli…",
+    "notesCount": "{count} di {max}",
+    "contacts": "Contatti",
+    "contactsEmpty": "Nessun contatto.",
+    "contactName": "Nome contatto",
+    "contactEmail": "Email contatto",
+    "contactRole": "Ruolo",
+    "addContact": "Aggiungi contatto",
+    "removeContact": "Rimuovi questo contatto",
+    "remove": "Rimuovi",
+    "contactsLimit": "Un cliente può avere al massimo {max} contatti.",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "unsaved": "Modifiche non salvate",
+    "rejected": "Il server ha rifiutato questi valori. Controlla i campi sotto.",
+    "writeForbidden": "Per salvare serve l'abilitazione sales:write.",
+    "discardTitle": "Modifiche non salvate",
+    "discardPrompt": "Questo modulo contiene modifiche non salvate.",
+    "discard": "Scartale",
+    "keepEditing": "Continua a modificare",
+    "error": {
+      "taken": "Un altro cliente lo utilizza già.",
+      "duplicateContact": "Un altro contatto usa già questo indirizzo."
+    }
+  },
+
+  "products": {
+    "lead": "Scorrimento infinito: ogni pagina viene aggiunta e un cambio di filtro o ordinamento ricomincia l'elenco.",
+    "sku": "SKU",
+    "name": "Prodotto",
+    "category": "Categoria",
+    "warehouse": "Deposito",
+    "stock": "Giacenza",
+    "reorderPoint": "Punto di riordino",
+    "price": "Prezzo",
+    "updatedAt": "Aggiornato",
+    "empty": "Nessun prodotto corrisponde ai filtri.",
+    "low": "Bassa",
+    "loadedCount": "{loaded} di {total} caricati",
+    "loadWarehouses": "Carica l'elenco dei depositi",
+    "belowReorderOnly": "Solo sotto il punto di riordino",
+    "categoryValue": {
+      "cabling": "Cablaggi",
+      "enclosures": "Quadri",
+      "meters": "Contatori",
+      "modems": "Modem",
+      "routers": "Router",
+      "sensors": "Sensori"
+    }
+  },
+
+  "movements": {
+    "lead": "La prima pagina è una richiesta; tutto il resto arriva sul flusso di eventi e viene unito in testa.",
+    "kindLabel": "Movimento",
+    "quantity": "Quantità",
+    "at": "Quando",
+    "ago": "Da quanto",
+    "actor": "Da",
+    "empty": "Nessun movimento registrato.",
+    "kind": {
+      "receipt": "Carico",
+      "issue": "Scarico",
+      "transfer": "Trasferimento",
+      "adjustment": "Rettifica"
+    }
+  },
+
+  "warehouses": {
+    "capacityLabel": "{units} su {capacity} unità",
+    "skus": {
+      "one": "{count} SKU",
+      "other": "{count} SKU"
+    },
+    "alerts": {
+      "one": "{count} avviso",
+      "other": "{count} avvisi"
+    }
+  },
+
+  "people": {
+    "lead": "L'elenco del personale, filtrato e impaginato nel browser.",
+    "name": "Nome",
+    "role": "Ruolo",
+    "team": "Team",
+    "location": "Sede",
+    "hiredOn": "Assunzione",
+    "status": "Stato",
+    "manager": "Responsabile",
+    "phone": "Telefono",
+    "id": "Matricola",
+    "empty": "Nessun dipendente corrisponde ai filtri.",
+    "statusValue": {
+      "active": "In servizio",
+      "leave": "In permesso"
+    },
+    "loadRoles": "Carica l'elenco dei ruoli",
+    "onLeaveOnly": "Solo in permesso",
+    "customRange": "Intervallo personalizzato",
+    "hiredRecently": "Assunti negli ultimi due anni",
+    "hiredLongAgo": "Assunti più di cinque anni fa",
+    "notFound": "Nessun dipendente con id {id}.",
+    "tabsLabel": "Sezioni del dipendente",
+    "tabProfile": "Profilo",
+    "tabContracts": "Contratti",
+    "tabDocuments": "Documenti",
+    "contractKind": {
+      "permanent": "Tempo indeterminato",
+      "fixed-term": "Tempo determinato",
+      "apprenticeship": "Apprendistato"
+    },
+    "openEnded": "senza scadenza",
+    "hoursPerWeek": "{hours} h/settimana",
+    "contractPeriod": "Dal {since} al {until}.",
+    "contractsEmpty": "Nessun contratto in archivio.",
+    "documentsEmpty": "Nessun documento in archivio.",
+    "headcount": {
+      "one": "{count} persona",
+      "other": "{count} persone"
+    },
+    "teamLead": "Responsabile del team"
+  },
+
+  "settings": {
+    "tabsLabel": "Sezioni delle impostazioni",
+    "name": "Nome",
+    "subject": "Soggetto",
+    "email": "Email",
+    "role": "Ruolo",
+    "status": "Stato",
+    "lastSeen": "Ultimo accesso",
+    "action": "Azione",
+    "strategy": "Strategia dei token",
+    "renewsAt": "La sessione si rinnova alle",
+    "scopes": "Scope di questa sessione",
+    "strategyNote": {
+      "bff": "I token restano sul backend. Questo browser ha un cookie HttpOnly che non può leggere più un token CSRF che può leggere: nel JavaScript dell'applicazione non compare nessuna credenziale, ed è per questo che qui sopra non c'è nulla da mostrare.",
+      "memory": "Il token di accesso vive in una variabile di modulo e muore con la scheda. Niente in localStorage, e solo una CSP severa rende la cosa utile.",
+      "dpop": "Le richieste sono firmate da una chiave non estraibile. Un token rubato è inutile altrove, ma chi esegue script su questa origine può comunque farsi firmare le prove."
+    },
+    "themeLead": "La scelta è memorizzata come preferenza d'interfaccia. `Sistema` segue il sistema operativo e ridisegna quando cambia.",
+    "resolvedTheme": "Attualmente risolto in",
+    "localeLead": "Un solo deployment per tutte le lingue: il cambio ridisegna ogni componente montato partendo da un signal, senza ricaricare e senza bundle per lingua.",
+    "direction": "Direzione del testo",
+    "storedState": "Stato dell'interfaccia memorizzato",
+    "storedStateLead": "Lo stato della barra laterale, il layout di cinque tabelle e i valori di tre filtri passano tutti da un unico confine sincrono e versionato. Nulla nel framework o nella collezione chiama localStorage direttamente: per questo una sola schermata può azzerare tutto.",
+    "clearTables": "Azzera stato di tabelle e filtri",
+    "clearSidebar": "Azzera stato della barra laterale",
+    "clearedTables": "Azzerato. Le tabelle tornano ai valori predefiniti alla prossima visita di ogni schermata.",
+    "clearedSidebar": "Azzerato. Al prossimo caricamento la barra laterale sarà espansa.",
+    "usersLead": "Account, non dipendenti: un dipendente è una persona nel sistema HR, un utente è un accesso, e li amministrano persone diverse con permessi diversi.",
+    "usersEmpty": "Nessun account.",
+    "readOnlyNotice": "Questa sessione può leggere gli account ma non modificarli. I controlli restano visibili e disabilitati: un controllo che scompare è indistinguibile da una pagina rotta.",
+    "suspend": "Sospendi",
+    "activate": "Attiva",
+    "needsWriteScope": "Modificare un account richiede lo scope users:write.",
+    "writeForbidden": "Il server ha rifiutato: la sessione non possiede users:write.",
+    "userStatus": {
+      "active": "Attivo",
+      "suspended": "Sospeso"
+    },
+    "auditLead": "Ogni endpoint che modifica dati scrive qui, quindi le scritture delle altre schermate sono verificabili e non soltanto presenti.",
+    "auditEmpty": "Nessuna attività registrata."
+  },
+
+  "audit": {
+    "action": {
+      "order": {
+        "status": "Stato ordine"
+      },
+      "user": {
+        "suspend": "Account sospeso",
+        "activate": "Account attivato"
+      },
+      "product": {
+        "reorder": "Punto di riordino"
+      },
+      "session": {
+        "login": "Accesso"
+      }
+    }
+  },
+
+  "ui": {
+    "table": {
+      "empty": "Nessuna riga trovata.",
+      "loading": "Caricamento righe…",
+      "pagination": "Paginazione tabella",
+      "previous": "Pagina precedente",
+      "next": "Pagina successiva",
+      "pageSize": "Righe per pagina",
+      "loadMore": "Carica altre",
+      "sortAscending": "Ordina in modo crescente per",
+      "sortDescending": "Ordina in modo decrescente per",
+      "clearSort": "Rimuovi l'ordinamento per",
+      "columns": "Colonne",
+      "resetColumns": "Ripristina colonne",
+      "moveBefore": "Sposta la colonna a sinistra",
+      "moveAfter": "Sposta la colonna a destra",
+      "stickyStart": "Fissa la colonna all'inizio",
+      "stickyEnd": "Fissa la colonna alla fine",
+      "unstick": "Sblocca la colonna",
+      "resize": "Ridimensiona la colonna; usa le frecce",
+      "reorder": "Riordina la colonna; usa le frecce"
+    },
+    "filter": {
+      "free": "Testo",
+      "loading": "Caricamento",
+      "from": "dal",
+      "to": "al"
+    },
+    "combobox": {
+      "notFound": "Nessun risultato",
+      "addTag": "Cerca",
+      "clear": "Cancella la selezione",
+      "remove": "Rimuovi",
+      "loading": "Caricamento…"
+    },
+    "dateRange": {
+      "title": "Scegli un intervallo di date",
+      "since": "Dal",
+      "until": "Al",
+      "confirm": "Applica",
+      "cancel": "Annulla",
+      "invalid": "La data finale precede quella iniziale."
+    },
+    "field": {
+      "required": "Questo campo è obbligatorio.",
+      "tooShort": "Valore troppo corto.",
+      "tooLong": "Valore troppo lungo.",
+      "malformed": "Valore non valido.",
+      "notAllowed": "Valore non ammesso.",
+      "tooSmall": "Valore troppo piccolo.",
+      "tooLarge": "Valore troppo grande.",
+      "future": "La data è nel futuro.",
+      "past": "La data è nel passato."
+    }
+  }
+}

@@ -1,0 +1,25 @@
+<div>
+  <app-notice *if="pending" variant="loading" message="{{ t('common.loading') }}"></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="empty"
+    message="{{ t('orders.noCustomer') }}"
+  ></app-notice>
+
+  <div *if="name" class="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+    <app-field label="{{ t('customers.name') }}">
+      <span class="font-medium">{{ name }}</span>
+    </app-field>
+    <app-field label="{{ t('customers.segment') }}">{{ segmentLabel }}</app-field>
+    <app-field label="{{ t('customers.city') }}">{{ location }}</app-field>
+    <app-field label="{{ t('customers.since') }}">{{ since }}</app-field>
+    <app-field label="{{ t('customers.revenue') }}">
+      <span class="tabular-nums">{{ revenue }}</span>
+    </app-field>
+    <app-field label="{{ t('customers.openOrders') }}">
+      <span class="tabular-nums">{{ openOrders }}</span>
+    </app-field>
+    <app-field label="{{ t('orders.owner') }}">{{ owner }}</app-field>
+  </div>
+</div>

@@ -1,0 +1,29 @@
+<div>
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="load()"
+  ></app-notice>
+
+  <p *if="entries.length === 0" class="text-[13px] text-muted">{{ t('orders.historyEmpty') }}</p>
+
+  <ol *else class="relative space-y-4 ps-5">
+    <li *for="entry of entries; key: entry.at" class="relative">
+      <span
+        class="absolute -start-5 top-1.5 size-2 rounded-full bg-accent"
+        aria-hidden="true"
+      ></span>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <app-badge [tone]="tone(entry)">{{ eventLabel(entry) }}</app-badge>
+        <span class="text-[13px] text-ink">{{ entry.detail }}</span>
+      </div>
+
+      <p class="mt-0.5 text-[12px] text-muted">
+        {{ entry.actor }} · <time [datetime]="entry.at">{{ when(entry) }}</time> · {{ since(entry) }}
+      </p>
+    </li>
+  </ol>
+</div>

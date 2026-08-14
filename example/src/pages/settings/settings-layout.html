@@ -1,0 +1,8 @@
+<div class="p-4 sm:p-6">
+  <div
+    class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_3px_var(--ui-color-shadow)]"
+  >
+    <app-tabs [.items]="tabs" label="{{ t('settings.tabsLabel') }}"></app-tabs>
+    <x-route-outlet class="block p-4 sm:p-5"></x-route-outlet>
+  </div>
+</div>

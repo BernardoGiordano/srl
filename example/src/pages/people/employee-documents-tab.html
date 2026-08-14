@@ -1,0 +1,33 @@
+<div>
+  <app-notice *if="pending" variant="loading" message="{{ t('common.loading') }}"></app-notice>
+
+  <app-notice
+    *if="failed"
+    variant="error"
+    message="{{ t('common.loadFailed') }}"
+    action="{{ t('common.retry') }}"
+    (action)="load()"
+  ></app-notice>
+
+  <p *if="documents.length === 0 && !pending" class="text-[13px] text-muted">
+    {{ t('people.documentsEmpty') }}
+  </p>
+
+  <ul *else class="divide-y divide-ui-border">
+    <li *for="document of documents; key: document.id" class="flex items-center gap-3 py-2.5">
+      <span
+        class="flex size-8 shrink-0 items-center justify-center rounded-md bg-canvas text-[10px] font-bold text-muted"
+        aria-hidden="true"
+      >
+        {{ kind(document) }}
+      </span>
+
+      <span class="min-w-0 flex-1">
+        <span class="block truncate text-[13px] font-medium text-ink">{{ document.name }}</span>
+        <span class="block text-[11.5px] text-muted">{{ when(document) }}</span>
+      </span>
+
+      <span class="shrink-0 text-[12.5px] tabular-nums text-muted">{{ size(document) }}</span>
+    </li>
+  </ul>
+</div>

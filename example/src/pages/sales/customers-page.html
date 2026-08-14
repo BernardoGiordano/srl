@@ -1,0 +1,134 @@
+<div class="p-4 sm:p-6">
+  <app-card
+    flush
+    eyebrow="{{ t('nav.sales') }}"
+    heading="{{ t('nav.salesCustomers') }}"
+    lead="{{ t('customers.lead') }}"
+  >
+    <!--
+      Rendered for everyone and disabled with a reason for a session that lacks
+      `sales:write`, which is the same rule the account screen follows: a control that
+      vanishes is indistinguishable from a broken page.
+    -->
+    <button
+      slot="actions"
+      type="button"
+      [?disabled]="!canWrite"
+      [title]="writeHint"
+      class="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+      (click)="create()"
+    >
+      {{ t('customers.new') }}
+    </button>
+
+    <div slot="toolbar" class="flex flex-wrap items-start gap-3">
+      <label class="block w-full max-w-xs">
+        <span class="sr-only">{{ t('table.filterPlaceholder') }}</span>
+        <input
+          type="search"
+          class="w-full rounded-md border border-ui-border bg-surface-raised px-3 py-2 text-[13px] text-ink outline-none focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+          placeholder="{{ t('table.filterPlaceholder') }}"
+          [.value]="search"
+          (input)="changeSearch($event)"
+        />
+      </label>
+
+      <ui-combobox
+        class="block w-full max-w-xs"
+        multiple
+        searchable
+        clearable
+        [.options]="segmentOptions"
+        label="{{ t('customers.segment') }}"
+        placeholder="{{ t('customers.anySegment') }}"
+        control-class="flex min-h-[38px] w-full flex-wrap items-center gap-1.5 rounded-md border border-ui-border bg-surface-raised px-2 py-1.5 text-[13px]"
+        input-class="min-w-24 flex-1 bg-transparent text-[13px] text-ink outline-none"
+        panel-class="z-50 max-h-72 w-[min(22rem,90vw)] overflow-y-auto rounded-lg border border-ui-border bg-surface-raised py-1 text-[13px] shadow-[0_12px_32px_var(--ui-color-shadow)]"
+        chip-class="inline-flex items-center gap-1 rounded-full bg-canvas px-2 py-0.5 text-[12px] text-ink"
+        option-class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-canvas"
+        (selection-change)="changeSegments($event)"
+      ></ui-combobox>
+    </div>
+
+    <app-notice
+      *if="failed"
+      variant="error"
+      message="{{ t('common.loadFailed') }}"
+      action="{{ t('common.retry') }}"
+      (action)="load()"
+    ></app-notice>
+
+    <ui-table
+      state-id="sales-customers"
+      pagination="client"
+      page-size="10"
+      page-sizes="10,25,50"
+      column-chooser
+      resizable-columns
+      [.rows]="rows"
+      [.filters]="filters"
+      [.loading]="loading"
+      [.row-key]="rowKey"
+      caption="{{ t('nav.salesCustomers') }}"
+      empty-label="{{ t('customers.empty') }}"
+    >
+      <ui-table-column
+        key="name"
+        label="{{ t('customers.name') }}"
+        sortable
+        sticky="start"
+        width="220"
+      ></ui-table-column>
+      <ui-table-column
+        key="segment"
+        label="{{ t('customers.segment') }}"
+        sortable
+        hideable
+        width="140"
+        [.renderer]="renderSegment"
+      ></ui-table-column>
+      <ui-table-column key="city" label="{{ t('customers.city') }}" sortable hideable width="150"></ui-table-column>
+      <ui-table-column key="country" label="{{ t('customers.country') }}" sortable hideable width="110"></ui-table-column>
+      <ui-table-column
+        key="since"
+        label="{{ t('customers.since') }}"
+        sortable
+        hideable
+        width="140"
+        [.renderer]="renderSince"
+      ></ui-table-column>
+      <ui-table-column
+        key="openOrders"
+        label="{{ t('customers.openOrders') }}"
+        sortable
+        hideable
+        width="130"
+        header-class="text-end"
+        cell-class="text-end tabular-nums"
+        [.renderer]="renderOpenOrders"
+      ></ui-table-column>
+      <ui-table-column
+        key="revenue"
+        label="{{ t('customers.revenue') }}"
+        sortable
+        hideable
+        width="150"
+        header-class="text-end"
+        cell-class="text-end tabular-nums"
+        [.renderer]="renderRevenue"
+        [.sort-value]="sortRevenue"
+      ></ui-table-column>
+      <ui-table-column key="owner" label="{{ t('orders.owner') }}" sortable hideable width="170"></ui-table-column>
+      <!-- A control rather than a field, so `locked` and no sorting. -->
+      <ui-table-column
+        key="action"
+        label="{{ t('customers.actions') }}"
+        locked
+        width="110"
+        header-class="text-end"
+        cell-class="text-end"
+        [.renderer]="renderAction"
+      ></ui-table-column>
+    </ui-table>
+  </app-card>
+</div>

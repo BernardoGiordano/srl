@@ -1,0 +1,208 @@
+{
+  "$comment": [
+    "Deliberately incomplete. Fallback is per key, not per locale: what is missing here",
+    "renders in English while everything present renders in Arabic, rather than the page",
+    "reverting wholesale. `npm run verify` counts the untranslated keys and fails only on a",
+    "key that exists here and not in en.json.",
+    "",
+    "What this bundle is really for: `dir` becomes rtl from a computed signal, the logical",
+    "Tailwind utilities (ms-, me-, ps-, pe-) flip the whole layout with no per-locale",
+    "stylesheet, and the plural categories below are zero/one/two/few/many/other — six forms",
+    "for the same key English answers with two, at no extra cost to any caller."
+  ],
+
+  "app": {
+    "name": "ميريديان",
+    "tagline": "تطبيق CRM تجريبي، مبني بمكتبة srl",
+    "language": "اللغة"
+  },
+
+  "nav": {
+    "dashboard": "لوحة المعلومات",
+    "sales": "المبيعات",
+    "salesOrders": "الطلبات",
+    "salesCustomers": "العملاء",
+    "inventory": "المخزون",
+    "inventoryProducts": "المنتجات",
+    "inventoryMovements": "حركات المخزون",
+    "inventoryWarehouses": "المستودعات",
+    "people": "الموظفون",
+    "peopleEmployees": "العاملون",
+    "peopleTeams": "الفرق",
+    "settings": "الإعدادات",
+    "settingsProfile": "الملف الشخصي",
+    "settingsAppearance": "المظهر",
+    "settingsUsers": "المستخدمون",
+    "settingsAudit": "سجل التغييرات",
+    "apps": "التطبيقات",
+    "analytics": "التحليلات",
+    "billing": "الفواتير"
+  },
+
+  "a11y": {
+    "toggleSidebar": "طي الشريط الجانبي أو توسيعه",
+    "openMenu": "فتح قائمة التنقل",
+    "userMenu": "قائمة الحساب",
+    "breadcrumb": "مسار التنقل",
+    "theme": "سمة الألوان"
+  },
+
+  "theme": {
+    "label": "السمة",
+    "system": "النظام",
+    "light": "فاتح",
+    "dark": "غامق",
+    "ocean": "محيطي"
+  },
+
+  "role": {
+    "administrator": "مسؤول",
+    "operator": "مشغّل",
+    "viewer": "قارئ"
+  },
+
+  "user": {
+    "signOut": "تسجيل الخروج"
+  },
+
+  "live": {
+    "$comment": "Six plural categories for one key. Intl.PluralRules picks the form; no caller changes.",
+    "connected": {
+      "zero": "مباشر · لا أحداث",
+      "one": "مباشر · حدث واحد",
+      "two": "مباشر · حدثان",
+      "few": "مباشر · {count} أحداث",
+      "many": "مباشر · {count} حدثًا",
+      "other": "مباشر · {count} حدث"
+    },
+    "reconnecting": "جارٍ إعادة الاتصال…",
+    "waiting": "في انتظار الحدث الأول."
+  },
+
+  "common": {
+    "loading": "جارٍ التحميل…",
+    "loadFailed": "فشل التحميل.",
+    "saveFailed": "فشل الحفظ.",
+    "retry": "أعد المحاولة",
+    "refresh": "تحديث",
+    "saving": "جارٍ الحفظ…",
+    "goHome": "إلى لوحة المعلومات"
+  },
+
+  "page": {
+    "notFound": "غير موجود",
+    "notFoundBody": "لا يوجد مسار لـ {path}."
+  },
+
+  "breadcrumb": {
+    "new": "جديد"
+  },
+
+  "table": {
+    "filter": "المرشحات",
+    "filterPlaceholder": "ابحث أو أضف مرشحًا"
+  },
+
+  "login": {
+    "title": "تسجيل الدخول",
+    "lead": "srl هي المكتبة، وميريديان تطبيق CRM تجريبي مبني بها. تُحفظ الجلسة في ملف تعريف HttpOnly يضبطه الخادم المحلي.",
+    "username": "اسم المستخدم",
+    "password": "كلمة المرور",
+    "passwordHint": "admin أو operator أو viewer",
+    "submit": "تسجيل الدخول",
+    "submitting": "جارٍ تسجيل الدخول…",
+    "failed": "تم رفض بيانات الدخول."
+  },
+
+  "forbidden": {
+    "title": "غير مسموح",
+    "body": "لا تحمل جلستك الصلاحية التي تتطلبها هذه المنطقة.",
+    "signedInAs": "مسجّل الدخول باسم {name}. إعادة تسجيل الدخول لن تغيّر ذلك."
+  },
+
+  "dashboard": {
+    "kpi": {
+      "openOrders": "الطلبات المفتوحة",
+      "pipeline": "قيمة الفرص",
+      "shipped": "المُرسلة",
+      "belowReorder": "تحت حد إعادة الطلب"
+    },
+    "panelsTitle": "التشغيل",
+    "panel": {
+      "live": "المخزون المباشر",
+      "targets": "هدف الربع"
+    },
+    "alertsTitle": "تنبيهات إعادة الطلب",
+    "alertsEmpty": "لا شيء تحت حد إعادة الطلب."
+  },
+
+  "orders": {
+    "code": "الطلب",
+    "customer": "العميل",
+    "status": "الحالة",
+    "channel": "القناة",
+    "comune": "البلدية",
+    "city": "المدينة",
+    "placedOn": "تاريخ الطلب",
+    "total": "الإجمالي",
+    "owner": "مدير الحساب",
+    "statusValue": {
+      "draft": "مسودة",
+      "confirmed": "مؤكد",
+      "shipped": "مُرسل",
+      "invoiced": "مفوتر",
+      "cancelled": "ملغى"
+    },
+    "tabSummary": "الملخص",
+    "tabLines": "البنود",
+    "tabHistory": "السجل"
+  },
+
+  "people": {
+    "name": "الاسم",
+    "role": "الدور",
+    "team": "الفريق",
+    "location": "الموقع",
+    "hiredOn": "تاريخ التعيين",
+    "status": "الحالة",
+    "headcount": {
+      "zero": "لا أعضاء",
+      "one": "عضو واحد",
+      "two": "عضوان",
+      "few": "{count} أعضاء",
+      "many": "{count} عضوًا",
+      "other": "{count} عضو"
+    },
+    "teamLead": "قائد الفريق"
+  },
+
+  "ui": {
+    "table": {
+      "empty": "لا توجد صفوف.",
+      "loading": "جارٍ تحميل الصفوف…",
+      "pagination": "تصفيح الجدول",
+      "previous": "الصفحة السابقة",
+      "next": "الصفحة التالية",
+      "pageSize": "صفوف في الصفحة",
+      "loadMore": "تحميل المزيد",
+      "sortAscending": "ترتيب تصاعدي حسب",
+      "sortDescending": "ترتيب تنازلي حسب",
+      "clearSort": "إلغاء الترتيب حسب",
+      "columns": "الأعمدة",
+      "resetColumns": "إعادة ضبط الأعمدة"
+    },
+    "filter": {
+      "free": "نص",
+      "loading": "جارٍ التحميل",
+      "from": "من",
+      "to": "إلى"
+    },
+    "combobox": {
+      "notFound": "لا نتائج",
+      "addTag": "ابحث عن",
+      "clear": "مسح التحديد",
+      "remove": "إزالة",
+      "loading": "جارٍ التحميل…"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "analytics": {
+    "remoteLabel": "Micro-frontend · stack estraneo",
+    "title": "Analisi",
+    "lead": "Questa schermata non importa nulla dalla shell: né Lit, né signal, né il compilatore di template. Costruisce il DOM a mano e raggiunge la sessione solo attraverso il contesto di capacità ricevuto al mount.",
+    "anonymous": "Nessuna sessione. Qui non si può recuperare nulla.",
+    "signedInAs": "Accesso come {name} ({subject}). Il contesto porta un'identità e nessun token.",
+    "permissions": "Permessi concessi a questo remote:",
+    "noPermissions": "nessuno",
+    "mount": "Montato su {mount}, valore che arriva dal manifest e non da questa cartella.",
+    "loading": "Caricamento…",
+    "failed": "La richiesta è fallita.",
+    "signInFirst": "Accedi per caricare il riepilogo.",
+    "metric": {
+      "orders": "Ordini",
+      "value": "Valore",
+      "conversion": "Conversione"
+    },
+    "column": {
+      "channel": "Canale",
+      "orders": "Ordini",
+      "value": "Valore",
+      "share": "Quota"
+    },
+    "channel": {
+      "direct": "Diretto",
+      "partner": "Partner",
+      "web": "Web",
+      "edi": "EDI"
+    },
+    "updated": "Generato alle {at}, formattato con le chiamate Intl di questo remote e la lingua della shell.",
+    "refresh": "Aggiorna",
+    "export": "Esporta",
+    "exportStub": "Non viene esportato nulla: il pulsante esiste per mostrare che compare solo per una sessione con analytics:write.",
+    "probe": "Chiama un'API non concessa a questo remote",
+    "leastPrivilege": "Il manifest concede a questo remote un prefisso API e due permessi. Tutto il resto solleva un errore prima che la richiesta lasci il browser, e il messaggio nomina il remote, il percorso e i permessi effettivi.",
+    "source": "remotes/analytics/analytics-root.js"
+  }
+}

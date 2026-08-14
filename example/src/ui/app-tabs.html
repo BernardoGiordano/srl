@@ -1,0 +1,23 @@
+<!--
+  The rule under the strip is the panel's top edge, so it runs the full width of
+  the box: the inset belongs to the list inside, not to this element. A caller
+  padding the host instead would stop the border short of both corners.
+
+  The list's own padding is what is left of the panel's after the link's: the
+  panel below is `p-4 sm:p-5` and a link is `px-3.5`, so 2px and 6px put the first
+  label on the same vertical line as the content under it rather than 14px right
+  of it.
+-->
+<nav [aria-label]="label" class="border-b border-ui-border">
+  <ul class="-mb-px flex flex-wrap gap-1 px-0.5 sm:px-1.5">
+    <li *for="item of items; key: item.key">
+      <a
+        [href]="item.href"
+        [aria-current]="currentAttr(item)"
+        class="block border-b-2 px-3.5 py-2.5 text-[13.5px] font-medium transition-colors {{ linkClasses(item) }}"
+      >
+        {{ item.label }}
+      </a>
+    </li>
+  </ul>
+</nav>
