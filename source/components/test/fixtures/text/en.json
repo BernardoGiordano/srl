@@ -1,0 +1,14 @@
+{
+  "$comment": [
+    "Two standard keys in two locales, for the one case that must prove a locale",
+    "change re-resolves standard text in a mounted element. Everything else in",
+    "the suite injects a resolver instead; this file exists because the default",
+    "resolver is the message table, and that path has to be exercised for real."
+  ],
+  "ui": {
+    "table": {
+      "previous": "Previous page",
+      "pagination": "Table pagination"
+    }
+  }
+}
