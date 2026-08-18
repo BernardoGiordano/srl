@@ -1113,7 +1113,7 @@ function productionHtml(app) {
         pruneHtml(document, (node) => {
           if (node.nodeName === '#comment') return true;
           if (htmlAttribute(node, 'data-artifact') === 'source-only') return true;
-          if (node.tagName === 'link' && htmlAttribute(node, 'href') === '/components/theme.css') {
+          if (node.tagName === 'link' && htmlAttribute(node, 'href') === '/components/style.css') {
             removed.theme += 1;
             return true;
           }
@@ -1354,7 +1354,7 @@ async function verifyBrowserRoot(app, publicDir) {
     'data-artifact=',
     '/src/',
     '/lib/',
-    '/components/theme.css',
+    '/components/style.css',
     '/components/theme-default.css',
   ].filter((marker) => html.includes(marker));
   if (forbidden.length > 0) {

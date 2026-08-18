@@ -1,0 +1,97 @@
+/*
+ * The default palette: values for every token style.css paints with, and nothing else.
+ *
+ * Optional. style.css declares no colour of its own, so an application either links this
+ * file or supplies the same token names itself — from its own stylesheet, from a design
+ * system it already owns, or through `registerTheme` at runtime. Splitting the two means
+ * replacing the palette is deleting one <link>, not overriding a sheet that already won.
+ *
+ * Deliberately achromatic. A library palette is a stand-in for the consumer's brand, and
+ * a neutral one composes with any hue an application later introduces: greys borrow no
+ * meaning, so a single application accent reads as the accent rather than as a second
+ * blue arguing with the first.
+ *
+ * Three blocks, one set of values twice, on purpose. `:root` is the light palette;
+ * the media query answers `prefers-color-scheme` only while no theme is chosen, so
+ * `:root:not([data-theme])` stops applying the moment the theme controller writes the
+ * attribute; `[data-theme='dark']` is the explicit choice, and it must win in both
+ * directions — a document whose system is light and whose preference is dark gets the
+ * dark values from the third block alone.
+ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --ui-color-canvas: #f4f4f5;
+  --ui-color-surface: #ffffff;
+  --ui-color-surface-raised: #ffffff;
+  /* Pointer feedback. Distinct from canvas, so a hovered row and the keyboard's
+     active row are not the same colour on a surface that is already canvas. */
+  --ui-color-hover: #ebebed;
+  --ui-color-text: #18181b;
+  --ui-color-text-muted: #6b6b70;
+  --ui-color-border: #dcdcdf;
+  --ui-color-primary: #262629;
+  --ui-color-primary-hover: #0f0f11;
+  --ui-color-primary-contrast: #ffffff;
+  --ui-color-accent: #52525a;
+  --ui-color-accent-strong: #18181b;
+  --ui-color-sidebar: #18181b;
+  --ui-color-sidebar-hover: rgb(255 255 255 / 8%);
+  --ui-color-sidebar-active: rgb(255 255 255 / 14%);
+  --ui-color-sidebar-text: #ffffff;
+  --ui-color-sidebar-muted: rgb(255 255 255 / 68%);
+  --ui-color-overlay: rgb(9 9 11 / 56%);
+  --ui-color-focus-ring: #52525a;
+  --ui-color-shadow: rgb(9 9 11 / 14%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --ui-color-canvas: #0c0c0e;
+    --ui-color-surface: #17171a;
+    --ui-color-surface-raised: #1f1f23;
+    --ui-color-hover: #29292e;
+    --ui-color-text: #ededf0;
+    --ui-color-text-muted: #a1a1a8;
+    --ui-color-border: #33333a;
+    --ui-color-primary: #e4e4e8;
+    --ui-color-primary-hover: #ffffff;
+    --ui-color-primary-contrast: #0c0c0e;
+    --ui-color-accent: #a1a1a8;
+    --ui-color-accent-strong: #d4d4d9;
+    --ui-color-sidebar: #08080a;
+    --ui-color-sidebar-hover: rgb(255 255 255 / 8%);
+    --ui-color-sidebar-active: rgb(255 255 255 / 14%);
+    --ui-color-sidebar-text: #f5f5f7;
+    --ui-color-sidebar-muted: rgb(255 255 255 / 66%);
+    --ui-color-overlay: rgb(0 0 0 / 70%);
+    --ui-color-focus-ring: #a1a1a8;
+    --ui-color-shadow: rgb(0 0 0 / 50%);
+  }
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --ui-color-canvas: #0c0c0e;
+  --ui-color-surface: #17171a;
+  --ui-color-surface-raised: #1f1f23;
+  --ui-color-hover: #29292e;
+  --ui-color-text: #ededf0;
+  --ui-color-text-muted: #a1a1a8;
+  --ui-color-border: #33333a;
+  --ui-color-primary: #e4e4e8;
+  --ui-color-primary-hover: #ffffff;
+  --ui-color-primary-contrast: #0c0c0e;
+  --ui-color-accent: #a1a1a8;
+  --ui-color-accent-strong: #d4d4d9;
+  --ui-color-sidebar: #08080a;
+  --ui-color-sidebar-hover: rgb(255 255 255 / 8%);
+  --ui-color-sidebar-active: rgb(255 255 255 / 14%);
+  --ui-color-sidebar-text: #f5f5f7;
+  --ui-color-sidebar-muted: rgb(255 255 255 / 66%);
+  --ui-color-overlay: rgb(0 0 0 / 70%);
+  --ui-color-focus-ring: #a1a1a8;
+  --ui-color-shadow: rgb(0 0 0 / 50%);
+}

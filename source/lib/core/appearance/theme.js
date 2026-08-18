@@ -2,9 +2,12 @@
  * Runtime theme selection for the document and every light-DOM component in it.
  *
  * Components consume semantic custom properties such as `--ui-color-surface`;
- * this module decides which theme supplies them. The built-in light and dark
- * values live in `@components/theme.css`, so they work before JavaScript and
- * follow `prefers-color-scheme` while the preference is `system`.
+ * this module decides which theme supplies them. The `light` and `dark` names are
+ * built in but their values are not: they come from whichever palette stylesheet
+ * the document links — `@components/theme-default.css` by default — so both work
+ * before JavaScript and follow `prefers-color-scheme` while the preference is
+ * `system`. A registered theme is the third way to supply the same tokens, and the
+ * only one that needs this module at all.
  */
 
 import { computed, signal } from '@core/foundation/reactive.js';

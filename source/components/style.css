@@ -1,0 +1,378 @@
+/*
+ * Deliberately modest component defaults, written against semantic tokens this file
+ * does not define.
+ *
+ * The palette is a separate stylesheet — theme-default.css beside this one, or the
+ * consumer's own — because the two are replaced on different schedules: an application
+ * keeps these defaults for the life of the library and swaps colours whenever its brand
+ * says so. Link both and the components look like this collection; link this one and
+ * supply `--ui-color-*` from a design system, and they look like that system instead.
+ * Nothing here has to be overridden for that to happen, since there is no colour here
+ * to override.
+ *
+ * A missing token therefore renders as `unset` rather than as a wrong colour: a
+ * document that links neither palette shows unpainted components, which is a visible
+ * failure at first paint rather than one that survives review.
+ *
+ * Components render into light DOM, so variables inherit naturally and apps
+ * can scope a custom palette to any subtree. Every selector uses :where() and
+ * therefore has zero specificity: a Tailwind utility or an application class
+ * always wins without `!important` or selector games.
+ */
+
+:where(body, ui-app-shell) {
+  background-color: var(--ui-color-canvas);
+  color: var(--ui-color-text);
+}
+
+:where(ui-sidebar) {
+  background-color: var(--ui-color-sidebar);
+  color: var(--ui-color-sidebar-text);
+}
+
+:where(ui-topbar) {
+  background-color: var(--ui-color-surface);
+  color: var(--ui-color-text);
+}
+
+:where([data-ui-part='menu-panel']) {
+  border-color: var(--ui-color-border);
+  background-color: var(--ui-color-surface-raised);
+  color: var(--ui-color-text);
+  box-shadow: 0 12px 32px var(--ui-color-shadow);
+}
+
+:where([data-ui-part='menu-trigger'], [data-ui-part='sidebar-toggle']) {
+  color: inherit;
+}
+
+/*
+ * The modal layer, and the one place this stylesheet claims layout rather than
+ * colour.
+ *
+ * A `<dialog>` shown with `showModal()` is centred by the user agent's
+ * `margin: auto`, and Tailwind's preflight resets `margin` on every element in
+ * the document — author origin beats user-agent origin, so the centring is gone
+ * before any class is written. Restating it as six utilities at every call site
+ * would be six chances to get it wrong on a box the consumer never sees, so the
+ * element is a full-viewport flex container instead and `panel-class` styles the
+ * box inside it. That split is also what makes a backdrop click legible: the
+ * panel is the dialog's only child, so a click still targeting the dialog landed
+ * beside the panel.
+ *
+ * `display` is set on `[open]` only, so a closed dialog keeps the user agent's
+ * `display: none` and nothing here has to re-implement it.
+ */
+:where([data-ui-part='dialog']) {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  padding: 1rem;
+  border: 0;
+  background-color: transparent;
+}
+
+:where([data-ui-part='dialog'][open]) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/*
+ * Blurred rather than merely darkened. The overlay token alone reads as a page
+ * that has dimmed; blurring what is behind it says the page is out of reach,
+ * which is the actual state — `showModal()` has made every one of those nodes
+ * inert.
+ */
+:where([data-ui-part='dialog'])::backdrop {
+  background-color: var(--ui-color-overlay);
+  backdrop-filter: blur(3px);
+}
+
+/*
+ * Colour only, exactly as `menu-panel` above: the width, padding, radius and
+ * border width belong to the screen, and this file is unlayered, so anything
+ * claimed here could not be overridden by a utility class at the call site.
+ */
+:where([data-ui-part='dialog-panel']) {
+  border-color: var(--ui-color-border);
+  background-color: var(--ui-color-surface-raised);
+  color: var(--ui-color-text);
+  box-shadow: 0 24px 64px var(--ui-color-shadow);
+}
+
+:where([data-ui-part='sidebar-group-trigger'], [data-ui-part='sidebar-item-link']) {
+  color: var(--ui-color-sidebar-muted);
+}
+
+:where(ui-sidebar-item[data-active] [data-ui-part='sidebar-item-link']) {
+  background-color: var(--ui-color-sidebar-active);
+  color: var(--ui-color-sidebar-text);
+}
+
+:where([data-ui-part='breadcrumb-link']) {
+  color: var(--ui-color-text-muted);
+}
+
+:where([data-ui-part='breadcrumb-link']:hover) {
+  color: var(--ui-color-accent-strong);
+}
+
+:where([data-ui-part='breadcrumb-current'], [data-ui-part='breadcrumb-separator']) {
+  color: var(--ui-color-text-muted);
+}
+
+/*
+  The border is claimed only while the control is valid. This file is unlayered and
+  Tailwind's utilities are not, so an unconditional `border-color` here outranks any
+  class a caller puts on the control however specific it is — and an invalid state has
+  no token of its own to paint with. Standing aside for `[data-invalid]` leaves that
+  one colour to the application, which is where the matching error text already comes
+  from.
+*/
+:where([data-ui-part='combobox-control']:not([data-invalid='true'])) {
+  border-color: var(--ui-color-border);
+}
+
+:where([data-ui-part='combobox-control']) {
+  background-color: var(--ui-color-surface);
+  color: var(--ui-color-text);
+}
+
+:where(ui-combobox[data-open] [data-ui-part='combobox-control']:not([data-invalid='true'])) {
+  border-color: var(--ui-color-accent);
+}
+
+/* The caret points at the panel it opened. */
+:where(ui-combobox[data-open] [data-ui-part='combobox-toggle']) {
+  rotate: 180deg;
+}
+
+:where([data-ui-part='combobox-panel']) {
+  border-color: var(--ui-color-border);
+  background-color: var(--ui-color-surface-raised);
+  color: var(--ui-color-text);
+  box-shadow: 0 12px 32px var(--ui-color-shadow);
+}
+
+:where([data-ui-part='combobox-chip']) {
+  background-color: var(--ui-color-canvas);
+  color: var(--ui-color-text);
+}
+
+/*
+ * Three states a row can be in, and they must not look the same.
+ *
+ * Hover follows the pointer. Active is where the keyboard is, and carries a bar
+ * on its leading edge so it is still legible with the pointer resting somewhere
+ * else. A disabled row — which in a filter means "this ref already has a value"
+ * — gets neither, or it would offer feedback for a click that does nothing.
+ */
+:where([data-ui-part='combobox-option']:not([aria-disabled='true'])) {
+  cursor: pointer;
+}
+
+:where([data-ui-part='combobox-option']:not([aria-disabled='true']):hover),
+:where([data-ui-part='combobox-add-tag']:hover) {
+  background-color: var(--ui-color-hover);
+}
+
+:where([data-ui-part='combobox-option'][data-active]) {
+  background-color: var(--ui-color-hover);
+  box-shadow: inset 2px 0 0 var(--ui-color-accent);
+}
+
+/*
+ * A row showing its editor is a heading for the thing underneath it, not a
+ * target. Hovering it would promise a click that has nothing left to do.
+ */
+:where([data-ui-part='combobox-option'][data-expanded]) {
+  cursor: default;
+  background-color: transparent;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+:where([data-ui-part='combobox-group-label'], [data-ui-part='combobox-empty']) {
+  color: var(--ui-color-text-muted);
+}
+
+:where([data-ui-part='date-range']) {
+  border-color: var(--ui-color-border);
+  background-color: var(--ui-color-surface);
+  color: var(--ui-color-text);
+}
+
+:where([data-ui-part='avatar-fallback']) {
+  background-color: var(--ui-color-primary);
+  color: var(--ui-color-primary-contrast);
+}
+
+:where([data-ui-part='table-column-resize'])::after {
+  position: absolute;
+  inset-block: 25%;
+  inset-inline-end: 2px;
+  width: 1px;
+  content: '';
+  background: var(--ui-color-border);
+}
+
+:where([data-ui-part='table-header'][data-sticky='start'], [data-ui-part='table-cell'][data-sticky='start']) {
+  box-shadow: -1px 0 0 var(--ui-color-border) inset;
+}
+
+:where([data-ui-part='table-header'][data-sticky='end'], [data-ui-part='table-cell'][data-sticky='end']) {
+  box-shadow: 1px 0 0 var(--ui-color-border) inset;
+}
+
+:where([data-ui-part='table-row']:hover) {
+  background-color: var(--ui-color-hover);
+}
+
+/* Inset, because a row's outline sits on the cell borders and a positive offset
+   would draw it over the rows above and below. */
+:where([data-ui-part='table-row']:focus-visible) {
+  outline: 2px solid var(--ui-color-focus-ring);
+  outline-offset: -2px;
+}
+
+:where([data-ui-part='table-columns-panel'], [data-ui-part='table-columns-item']) {
+  background-color: var(--ui-color-surface-raised);
+}
+
+:where([data-ui-part='table-columns-item'] input) {
+  accent-color: var(--ui-color-primary);
+}
+
+:where([data-ui-part='table-columns-item']:hover) {
+  background-color: var(--ui-color-hover);
+}
+
+/*
+ * The page you are on, said in the control rather than only in the status text.
+ *
+ * Not a Tailwind `aria-current:` utility, which compiles to `[aria-current=true]`
+ * and so never matches the value ARIA actually asks for here — `page`. The bug
+ * that hid this was invisible in the markup: the class was right there, spelled
+ * correctly, matching nothing.
+ */
+:where([data-ui-part='table-page'][aria-current='page']) {
+  border-color: var(--ui-color-primary);
+  background-color: var(--ui-color-primary);
+  color: var(--ui-color-primary-contrast);
+  font-weight: 600;
+}
+
+/*
+ * Everything clickable says so under the pointer, and everything that refuses
+ * says that too.
+ *
+ * Listed part by part rather than as a blanket `button` rule. A blanket rule
+ * would also claim the two controls whose cursor is the whole point — the column
+ * drag handle and the resize grip — and, less obviously, every button in the
+ * consuming application: this stylesheet is unlayered, so it outranks Tailwind's
+ * layered utilities no matter how low its specificity is.
+ */
+:where(
+    :is(
+        [data-ui-part='menu-trigger'],
+        [data-ui-part='sidebar-group-trigger'],
+        [data-ui-part='sidebar-toggle'],
+        [data-ui-part='sidebar-item-link'],
+        [data-ui-part='breadcrumb-link'],
+        [data-ui-part='combobox-chip-remove'],
+        [data-ui-part='combobox-clear'],
+        [data-ui-part='combobox-toggle'],
+        [data-ui-part='combobox-add-tag'],
+        [data-ui-part='date-range-cancel'],
+        [data-ui-part='date-range-confirm'],
+        [data-ui-part='table-sort'],
+        [data-ui-part='table-page'],
+        [data-ui-part='table-previous'],
+        [data-ui-part='table-next'],
+        [data-ui-part='table-page-size'],
+        [data-ui-part='table-load-more'],
+        [data-ui-part='table-columns-trigger'],
+        [data-ui-part='table-columns-reset'],
+        [data-ui-part='table-column-before'],
+        [data-ui-part='table-column-after'],
+        [data-ui-part='table-column-sticky'],
+        [data-ui-part='table-columns-item'] label,
+        [data-ui-part='table-columns-item'] input
+      ):not(:disabled)
+  ) {
+  cursor: pointer;
+}
+
+/* `table-sort` is absent on purpose: while the table is loading it wants `wait`. */
+:where(
+    :is(
+        [data-ui-part='table-page'],
+        [data-ui-part='table-previous'],
+        [data-ui-part='table-next'],
+        [data-ui-part='table-load-more'],
+        [data-ui-part='table-column-before'],
+        [data-ui-part='table-column-after'],
+        [data-ui-part='table-columns-item'] input
+      ):disabled
+  ) {
+  cursor: not-allowed;
+}
+
+/*
+ * One spinner, for every component that has to say "wait" inside a line of text:
+ * a lazy filter row, a combobox loading its list, a table fetching a page. Sized
+ * in `em` so it matches whatever text it sits next to.
+ */
+:where([data-ui-part='spinner']) {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentcolor;
+  border-block-start-color: transparent;
+  border-radius: 50%;
+  opacity: 0.7;
+  animation: ui-spin 0.65s linear infinite;
+}
+
+@keyframes ui-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+:where(
+    [data-ui-part='menu-trigger'],
+    [data-ui-part='sidebar-group-trigger'],
+    [data-ui-part='sidebar-toggle'],
+    [data-ui-part='sidebar-item-link'],
+    [data-ui-part='breadcrumb-link'],
+    [data-ui-part='combobox-chip-remove'],
+    [data-ui-part='combobox-clear'],
+    [data-ui-part='date-range-cancel'],
+    [data-ui-part='date-range-confirm'],
+    [data-ui-part='table-page'],
+    [data-ui-part='table-previous'],
+    [data-ui-part='table-next'],
+    [data-ui-part='table-columns-trigger']
+  ):focus-visible {
+  outline: 2px solid var(--ui-color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(ui-app-shell, ui-sidebar, ui-topbar, ui-menu, ui-sidebar-group, ui-sidebar-item) *,
+  :where(ui-app-shell, ui-sidebar, ui-topbar, ui-menu, ui-sidebar-group, ui-sidebar-item) {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Still turning, because a stopped spinner reads as a hung request — just
+     slowly enough not to be the fastest thing on the screen. */
+  :where([data-ui-part='spinner']) {
+    animation-duration: 2.4s;
+  }
+}

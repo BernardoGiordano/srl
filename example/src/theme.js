@@ -1,15 +1,15 @@
 /**
  * This application's custom theme.
  *
- * `/components/theme.css` ships `light` and `dark`; `system` follows the operating
- * system. A third named theme is a token map, registered before the first render, and
- * that is the whole extension point — no stylesheet, no build step, no class names
- * anywhere in the application.
+ * `/components/theme-default.css` ships the values `light` and `dark` resolve to;
+ * `system` follows the operating system. A third named theme is a token map, registered
+ * before the first render, and that is the whole extension point — no stylesheet, no
+ * build step, no class names anywhere in the application.
  *
- * Only the tokens that differ are listed. Anything omitted falls back to the built-in
- * light palette, which is why `ocean` can be nine lines rather than a full palette,
- * and why adding a token to `theme.css` does not break a custom theme that predates
- * it.
+ * Only the tokens that differ are listed. Anything omitted falls back to the light
+ * palette that stylesheet defines, which is why `ocean` can be nine lines rather than a
+ * full palette, and why adding a token to the collection does not break a custom theme
+ * that predates it.
  *
  * Every custom token must be in the `--ui-` namespace; `registerTheme` refuses
  * anything else, because a theme that could set arbitrary custom properties could

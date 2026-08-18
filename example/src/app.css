@@ -7,7 +7,11 @@
  * deploying. Nothing else in this application knows which of the two is in use.
  */
 
-@import '../../source/components/theme.css';
+@import '../../source/components/style.css';
+/* The collection's neutral palette. style.css names these tokens and defines none of
+   them; an application with a brand imports its own file here instead. Mirrors the two
+   <link> tags in index.html, for the reason the next comment gives. */
+@import '../../source/components/theme-default.css';
 @import 'tailwindcss' source(none);
 
 /*
@@ -15,8 +19,8 @@
  *
  * Kept in step with the inline <style type="text/tailwindcss"> block in index.html by
  * hand: the browser JIT reads the document, this file is read only by the CLI, and neither
- * can see the other. The values themselves live once, in /components/theme.css; these
- * lines only make Tailwind utilities for them.
+ * can see the other. The values themselves live once, in /components/theme-default.css;
+ * these lines only make Tailwind utilities for them.
  */
 @theme inline {
   --color-canvas: var(--ui-color-canvas);

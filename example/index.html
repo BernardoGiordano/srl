@@ -7,8 +7,20 @@
          distinction can be made, and the last place it should be left implicit. -->
     <title>Meridian — a CRM example app built with srl</title>
 
-    <!-- Semantic tokens and low-specificity defaults for the shared components. -->
-    <link rel="stylesheet" href="/components/theme.css" />
+    <!--
+      Low-specificity defaults for the shared components, and the palette they paint with.
+
+      Two files because they are two decisions. style.css defines no colour at all; the
+      tokens it reads come from theme-default.css, which this application links because
+      the collection's own neutral palette is what it wants. An application with a brand
+      drops the second link and defines the same `--ui-color-*` names itself — the first
+      link is unchanged, so there is nothing to override.
+
+      Order matters only in the ordinary cascade sense: both are unlayered, and the
+      palette sets custom properties the defaults read, so either order resolves the same.
+    -->
+    <link rel="stylesheet" href="/components/style.css" />
+    <link rel="stylesheet" href="/components/theme-default.css" />
 
     <!--
       IMPORT MAP. Must appear before any module script.
@@ -88,7 +100,7 @@
 
     <!--
       Tailwind names for the component library's semantic tokens. The light, dark and
-      custom values are owned by /components/theme.css and the theme controller; this block
+      custom values are owned by /components/theme-default.css and the theme controller; this block
       only exposes them as utility classes.
 
       Duplicated in src/app.css, which is the input to the production build. The browser

@@ -38,7 +38,7 @@ import { optionalAttr } from '../internal/dom.js';
  * Every word and every class inside the panel, and the panel's own box through
  * `panel-class`. What it keeps is the layer: full-viewport, centred, transparent —
  * the one place this collection's stylesheet claims layout, and see the note in
- * `theme.css` for why.
+ * `style.css` for why.
  */
 export class UiDialog extends SignalElement {
   static properties = {

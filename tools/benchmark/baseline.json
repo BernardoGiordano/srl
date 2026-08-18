@@ -1,0 +1,1314 @@
+{
+  "version": 2,
+  "recorded": "2026-08-06T07:14:17.478Z",
+  "mode": "ci",
+  "app": "example",
+  "environment": {
+    "profile": "c3734100ece28f3e",
+    "platform": "Darwin",
+    "release": "25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M3",
+    "cores": 8,
+    "memoryGiB": 16,
+    "node": "v22.14.0",
+    "chrome": "Chrome/150.0.7871.187",
+    "dependencies": {
+      "lit": "3.3.3",
+      "@preact/signals-core": "1.14.4",
+      "@tailwindcss/browser": "4.3.3"
+    }
+  },
+  "calibration": {
+    "readings": 8,
+    "overall": {
+      "arithmetic": 23.799999997019768,
+      "layout": 21.400000005960464
+    },
+    "bySuite": {
+      "startup": {
+        "arithmetic": 23.899999998509884,
+        "layout": 22.100000001490116
+      },
+      "delivery": {
+        "arithmetic": 23.80000000447035,
+        "layout": 21.30000000447035
+      },
+      "template": {
+        "arithmetic": 23.899999998509884,
+        "layout": 21.400000005960464
+      },
+      "router": {
+        "arithmetic": 23.799999997019768,
+        "layout": 22.5
+      },
+      "collection": {
+        "arithmetic": 23.700000002980232,
+        "layout": 21.299999997019768
+      },
+      "memory": {
+        "arithmetic": 23.799999997019768,
+        "layout": 21.5
+      },
+      "tooling": {
+        "arithmetic": 23.799999997019768,
+        "layout": 21.5
+      }
+    },
+    "spread": {
+      "arithmetic": 1.080168776298353,
+      "layout": 1.0563380283168138
+    }
+  },
+  "results": [
+    {
+      "id": "startup/cold",
+      "suite": "startup",
+      "title": "Cold application start, empty cache, to first routed view",
+      "units": {
+        "duration": "ms",
+        "firstView": "ms",
+        "rootDefined": "ms",
+        "load": "ms",
+        "requests": "count",
+        "fromCache": "count"
+      },
+      "samples": 3,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 88,
+          "p95": 89.19999999552965,
+          "mean": 87.43333333233993,
+          "min": 85.10000000149012,
+          "max": 89.19999999552965
+        },
+        "firstView": {
+          "median": 88,
+          "p95": 89.19999999552965,
+          "mean": 87.43333333233993,
+          "min": 85.10000000149012,
+          "max": 89.19999999552965
+        },
+        "rootDefined": {
+          "median": 77.79999999701977,
+          "p95": 79.19999999552965,
+          "mean": 77.26666666318972,
+          "min": 74.79999999701977,
+          "max": 79.19999999552965
+        },
+        "load": {
+          "median": 60.69999999552965,
+          "p95": 62,
+          "mean": 60.56666666517655,
+          "min": 59,
+          "max": 62
+        },
+        "requests": {
+          "median": 51,
+          "p95": 51,
+          "mean": 51,
+          "min": 51,
+          "max": 51
+        },
+        "fromCache": {
+          "median": 0,
+          "p95": 0,
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "id": "startup/warm",
+      "suite": "startup",
+      "title": "Warm application start, primed cache, to first routed view",
+      "units": {
+        "duration": "ms",
+        "firstView": "ms",
+        "rootDefined": "ms",
+        "load": "ms",
+        "requests": "count",
+        "fromCache": "count"
+      },
+      "samples": 3,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 62.80000000447035,
+          "p95": 64,
+          "mean": 63.100000001490116,
+          "min": 62.5,
+          "max": 64
+        },
+        "firstView": {
+          "median": 62.80000000447035,
+          "p95": 64,
+          "mean": 63.100000001490116,
+          "min": 62.5,
+          "max": 64
+        },
+        "rootDefined": {
+          "median": 60.70000000298023,
+          "p95": 61.899999998509884,
+          "mean": 61,
+          "min": 60.399999998509884,
+          "max": 61.899999998509884
+        },
+        "load": {
+          "median": 48.5,
+          "p95": 48.69999999552965,
+          "mean": 48.43333333233992,
+          "min": 48.100000001490116,
+          "max": 48.69999999552965
+        },
+        "requests": {
+          "median": 51,
+          "p95": 51,
+          "mean": 51,
+          "min": 51,
+          "max": 51
+        },
+        "fromCache": {
+          "median": 3,
+          "p95": 3,
+          "mean": 3,
+          "min": 3,
+          "max": 3
+        }
+      }
+    },
+    {
+      "id": "delivery/entry-route",
+      "suite": "delivery",
+      "title": "Native module requests and encoded bytes for the entry route",
+      "units": {
+        "duration": "ms",
+        "requests": "count",
+        "moduleRequests": "count",
+        "templateRequests": "count",
+        "encodedBytes": "bytes",
+        "tailwindBytes": "bytes",
+        "appCssBytes": "bytes"
+      },
+      "samples": 3,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 85.79999999701977,
+          "p95": 90.79999999701977,
+          "mean": 87.09999999900658,
+          "min": 84.70000000298023,
+          "max": 90.79999999701977
+        },
+        "requests": {
+          "median": 51,
+          "p95": 51,
+          "mean": 51,
+          "min": 51,
+          "max": 51
+        },
+        "moduleRequests": {
+          "median": 40,
+          "p95": 40,
+          "mean": 40,
+          "min": 40,
+          "max": 40
+        },
+        "templateRequests": {
+          "median": 6,
+          "p95": 6,
+          "mean": 6,
+          "min": 6,
+          "max": 6
+        },
+        "encodedBytes": {
+          "median": 638479,
+          "p95": 639767,
+          "mean": 638736.6,
+          "min": 638479,
+          "max": 639767
+        },
+        "tailwindBytes": {
+          "median": 282514,
+          "p95": 282514,
+          "mean": 282514,
+          "min": 282514,
+          "max": 282514
+        },
+        "appCssBytes": {
+          "median": 0,
+          "p95": 0,
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "id": "startup/definitions-100",
+      "suite": "startup",
+      "title": "Register 100 components, then build 100 instances",
+      "units": {
+        "duration": "ms",
+        "define": "ms",
+        "instantiate": "ms"
+      },
+      "samples": 8,
+      "warmup": 2,
+      "metrics": {
+        "duration": {
+          "median": 2.2999999970197678,
+          "p95": 2.399999998509884,
+          "mean": 2.312499998137355,
+          "min": 2.1999999955296516,
+          "max": 2.399999998509884
+        },
+        "define": {
+          "median": 0.6999999955296516,
+          "p95": 0.7000000029802322,
+          "mean": 0.6874999962747097,
+          "min": 0.5999999940395355,
+          "max": 0.7000000029802322
+        },
+        "instantiate": {
+          "median": 1.5,
+          "p95": 1.7000000029802322,
+          "mean": 1.550000000745058,
+          "min": 1.5,
+          "max": 1.7000000029802322
+        }
+      }
+    },
+    {
+      "id": "startup/definitions-1000",
+      "suite": "startup",
+      "title": "Register 1,000 components, then build 100 instances",
+      "units": {
+        "duration": "ms",
+        "define": "ms",
+        "instantiate": "ms"
+      },
+      "samples": 8,
+      "warmup": 2,
+      "metrics": {
+        "duration": {
+          "median": 7.200000002980232,
+          "p95": 7.399999998509884,
+          "mean": 7.2250000005587935,
+          "min": 7,
+          "max": 7.399999998509884
+        },
+        "define": {
+          "median": 5.399999998509884,
+          "p95": 5.600000001490116,
+          "mean": 5.4500000001862645,
+          "min": 5.299999997019768,
+          "max": 5.600000001490116
+        },
+        "instantiate": {
+          "median": 1.6999999955296516,
+          "p95": 1.8999999985098839,
+          "mean": 1.724999999627471,
+          "min": 1.6000000014901161,
+          "max": 1.8999999985098839
+        }
+      }
+    },
+    {
+      "id": "startup/definitions-5000",
+      "suite": "startup",
+      "title": "Register 5,000 components, then build 100 instances",
+      "units": {
+        "duration": "ms",
+        "define": "ms",
+        "instantiate": "ms"
+      },
+      "samples": 4,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 24.200000002980232,
+          "p95": 24.899999998509884,
+          "mean": 24.350000001490116,
+          "min": 24,
+          "max": 24.899999998509884
+        },
+        "define": {
+          "median": 22.399999998509884,
+          "p95": 23.100000001490116,
+          "mean": 22.52500000037253,
+          "min": 22.200000002980232,
+          "max": 23.100000001490116
+        },
+        "instantiate": {
+          "median": 1.7000000029802322,
+          "p95": 1.7999999970197678,
+          "mean": 1.7250000014901161,
+          "min": 1.7000000029802322,
+          "max": 1.7999999970197678
+        }
+      }
+    },
+    {
+      "id": "template/compile-small",
+      "suite": "template",
+      "title": "Compile a small template (10 bindings)",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 0.3999999985098839,
+          "p95": 0.6999999955296516,
+          "mean": 0.41749999951571226,
+          "min": 0.09999999403953552,
+          "max": 0.7999999970197678
+        }
+      }
+    },
+    {
+      "id": "template/first-render-small",
+      "suite": "template",
+      "title": "Render a small template for the first time",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 0.30000000447034836,
+          "p95": 0.6000000014901161,
+          "mean": 0.3525000002235174,
+          "min": 0,
+          "max": 0.7000000029802322
+        }
+      }
+    },
+    {
+      "id": "template/compile-medium",
+      "suite": "template",
+      "title": "Compile a medium template (50 bindings)",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 1,
+          "p95": 1.7000000029802322,
+          "mean": 1.0199999997392297,
+          "min": 0.3999999985098839,
+          "max": 1.7999999970197678
+        }
+      }
+    },
+    {
+      "id": "template/first-render-medium",
+      "suite": "template",
+      "title": "Render a medium template for the first time",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 0.3999999985098839,
+          "p95": 0.5,
+          "mean": 0.37750000022351743,
+          "min": 0.19999999552965164,
+          "max": 0.7000000029802322
+        }
+      }
+    },
+    {
+      "id": "template/compile-large",
+      "suite": "template",
+      "title": "Compile a large template (200 bindings)",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 2,
+          "p95": 3.2999999970197678,
+          "mean": 2.2099999997764828,
+          "min": 1.0999999940395355,
+          "max": 4.600000001490116
+        }
+      }
+    },
+    {
+      "id": "template/first-render-large",
+      "suite": "template",
+      "title": "Render a large template for the first time",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 1,
+          "p95": 1.3999999985098839,
+          "mean": 1.0824999997392297,
+          "min": 0.6000000014901161,
+          "max": 1.6000000014901161
+        }
+      }
+    },
+    {
+      "id": "template/update-one-of-50",
+      "suite": "template",
+      "title": "Update one binding among 50 unrelated ones",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 0,
+          "p95": 0.10000000149011612,
+          "mean": 0.03250000011175871,
+          "min": 0,
+          "max": 0.10000000149011612
+        }
+      }
+    },
+    {
+      "id": "template/update-one-of-200",
+      "suite": "template",
+      "title": "Update one binding among 200 unrelated ones",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 0,
+          "p95": 0,
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "id": "template/keyed-create-1000",
+      "suite": "template",
+      "title": "Keyed *for list: create at 1,000 rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 3.899999998509884,
+          "p95": 4.300000004470348,
+          "mean": 3.955000000447035,
+          "min": 3.600000001490116,
+          "max": 5
+        }
+      }
+    },
+    {
+      "id": "template/keyed-update-1000",
+      "suite": "template",
+      "title": "Keyed *for list: update at 1,000 rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.6000000014901161,
+          "p95": 1.3999999985098839,
+          "mean": 0.7100000005215407,
+          "min": 0.3999999985098839,
+          "max": 1.6000000014901161
+        }
+      }
+    },
+    {
+      "id": "template/keyed-reverse-1000",
+      "suite": "template",
+      "title": "Keyed *for list: reverse at 1,000 rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 1,
+          "p95": 1.6999999955296516,
+          "mean": 1.1049999993294477,
+          "min": 0.7999999970197678,
+          "max": 1.8999999985098839
+        }
+      }
+    },
+    {
+      "id": "template/keyed-shrink-1000",
+      "suite": "template",
+      "title": "Keyed *for list: shrink at 1,000 rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.5,
+          "p95": 0.6000000014901161,
+          "mean": 0.47500000074505805,
+          "min": 0.30000000447034836,
+          "max": 0.6999999955296516
+        }
+      }
+    },
+    {
+      "id": "template/keyed-regrow-1000",
+      "suite": "template",
+      "title": "Keyed *for list: regrow at 1,000 rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 2.5,
+          "p95": 3.2000000029802322,
+          "mean": 2.555000000074506,
+          "min": 2.100000001490116,
+          "max": 3.2000000029802322
+        }
+      }
+    },
+    {
+      "id": "template/keyed-reverse-10000",
+      "suite": "template",
+      "title": "Keyed *for list: reverse 10,000 rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 4,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 11.699999995529652,
+          "p95": 14.899999998509884,
+          "mean": 12.574999999254942,
+          "min": 10.899999998509884,
+          "max": 14.899999998509884
+        }
+      }
+    },
+    {
+      "id": "router/attach-10",
+      "suite": "router",
+      "title": "Configure 10 routes and settle the entry URL",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.10000000149011612,
+          "p95": 0.20000000298023224,
+          "mean": 0.13499999977648258,
+          "min": 0,
+          "max": 0.20000000298023224
+        }
+      }
+    },
+    {
+      "id": "router/attach-100",
+      "suite": "router",
+      "title": "Configure 100 routes and settle the entry URL",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.10000000149011612,
+          "p95": 0.30000000447034836,
+          "mean": 0.15500000081956386,
+          "min": 0.09999999403953552,
+          "max": 0.30000000447034836
+        }
+      }
+    },
+    {
+      "id": "router/attach-1000",
+      "suite": "router",
+      "title": "Configure 1,000 routes and settle the entry URL",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 8,
+      "warmup": 2,
+      "metrics": {
+        "duration": {
+          "median": 0.5,
+          "p95": 0.8999999985098839,
+          "mean": 0.6125000007450581,
+          "min": 0.5,
+          "max": 0.8999999985098839
+        }
+      }
+    },
+    {
+      "id": "router/navigate-first-100",
+      "suite": "router",
+      "title": "Navigate to the first route of 100",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.09999999403953552,
+          "p95": 0.10000000149011612,
+          "mean": 0.06999999955296517,
+          "min": 0,
+          "max": 0.20000000298023224
+        }
+      }
+    },
+    {
+      "id": "router/navigate-middle-100",
+      "suite": "router",
+      "title": "Navigate to the middle route of 100",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.10000000149011612,
+          "p95": 0.10000000149011612,
+          "mean": 0.08500000052154064,
+          "min": 0,
+          "max": 0.20000000298023224
+        }
+      }
+    },
+    {
+      "id": "router/navigate-last-100",
+      "suite": "router",
+      "title": "Navigate to the last route of 100",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.19999999552965164,
+          "p95": 0.20000000298023224,
+          "mean": 0.1549999989569187,
+          "min": 0,
+          "max": 0.29999999701976776
+        }
+      }
+    },
+    {
+      "id": "router/navigate-param-100",
+      "suite": "router",
+      "title": "Navigate to the param route of 100",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.19999999552965164,
+          "p95": 0.20000000298023224,
+          "mean": 0.15999999940395354,
+          "min": 0.10000000149011612,
+          "max": 0.20000000298023224
+        }
+      }
+    },
+    {
+      "id": "router/navigate-wildcard-100",
+      "suite": "router",
+      "title": "Navigate to the wildcard route of 100",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.10000000149011612,
+          "p95": 0.20000000298023224,
+          "mean": 0.11999999992549419,
+          "min": 0,
+          "max": 0.29999999701976776
+        }
+      }
+    },
+    {
+      "id": "router/navigate-catch-all-100",
+      "suite": "router",
+      "title": "Navigate to the catch-all route of 100",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.10000000149011612,
+          "p95": 0.20000000298023224,
+          "mean": 0.11999999992549419,
+          "min": 0,
+          "max": 0.20000000298023224
+        }
+      }
+    },
+    {
+      "id": "router/navigate-last-1000",
+      "suite": "router",
+      "title": "Navigate to the last route of 1,000",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.30000000447034836,
+          "p95": 0.5,
+          "mean": 0.325,
+          "min": 0.19999999552965164,
+          "max": 0.5
+        }
+      }
+    },
+    {
+      "id": "router/sibling-cycle-10",
+      "suite": "router",
+      "title": "Ten navigations between sibling child routes under one layout",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 1.2999999970197678,
+          "p95": 1.6000000014901161,
+          "mean": 1.3549999993294477,
+          "min": 1.1000000014901161,
+          "max": 1.6999999955296516
+        }
+      }
+    },
+    {
+      "id": "collection/table-mount-10000-50",
+      "suite": "collection",
+      "title": "Mount a client table of 10,000 rows with 50 visible",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 3,
+          "p95": 3.399999998509884,
+          "mean": 2.9800000000745057,
+          "min": 2.399999998509884,
+          "max": 3.600000001490116
+        }
+      }
+    },
+    {
+      "id": "collection/table-filter-100",
+      "suite": "collection",
+      "title": "Filter 100 client rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 0.7000000029802322,
+          "p95": 0.8000000044703484,
+          "mean": 0.7475000005215406,
+          "min": 0.5,
+          "max": 3
+        }
+      }
+    },
+    {
+      "id": "collection/table-sort-100",
+      "suite": "collection",
+      "title": "Sort 100 client rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 2.600000001490116,
+          "p95": 4.100000001490116,
+          "mean": 2.845000000298023,
+          "min": 2.399999998509884,
+          "max": 4.800000004470348
+        }
+      }
+    },
+    {
+      "id": "collection/table-filter-1000",
+      "suite": "collection",
+      "title": "Filter 1,000 client rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 2.2999999970197678,
+          "p95": 2.8000000044703484,
+          "mean": 2.345000000111759,
+          "min": 1.8999999985098839,
+          "max": 3.600000001490116
+        }
+      }
+    },
+    {
+      "id": "collection/table-sort-1000",
+      "suite": "collection",
+      "title": "Sort 1,000 client rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 40,
+      "warmup": 5,
+      "metrics": {
+        "duration": {
+          "median": 3.9000000059604645,
+          "p95": 5.399999998509884,
+          "mean": 4.150000000186265,
+          "min": 3.600000001490116,
+          "max": 7.399999998509884
+        }
+      }
+    },
+    {
+      "id": "collection/table-filter-10000",
+      "suite": "collection",
+      "title": "Filter 10,000 client rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 3.2999999970197678,
+          "p95": 4.5,
+          "mean": 3.475000000372529,
+          "min": 3,
+          "max": 6
+        }
+      }
+    },
+    {
+      "id": "collection/table-sort-10000",
+      "suite": "collection",
+      "title": "Sort 10,000 client rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 17.399999998509884,
+          "p95": 20.899999998509884,
+          "mean": 18.21499999985099,
+          "min": 16.899999998509884,
+          "max": 27.600000001490116
+        }
+      }
+    },
+    {
+      "id": "collection/table-full-render-10000",
+      "suite": "collection",
+      "title": "Render 10,000 rows and 40,000 cells at once",
+      "units": {
+        "duration": "ms",
+        "render": "ms",
+        "cells": "count"
+      },
+      "samples": 4,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 466.6000000014901,
+          "p95": 496.59999999403954,
+          "mean": 474.72499999962747,
+          "min": 460.5,
+          "max": 496.59999999403954
+        },
+        "render": {
+          "median": 463.6000000014901,
+          "p95": 493.5,
+          "mean": 471.75000000186265,
+          "min": 457.70000000298023,
+          "max": 493.5
+        },
+        "cells": {
+          "median": 40000,
+          "p95": 40000,
+          "mean": 40000,
+          "min": 40000,
+          "max": 40000
+        }
+      }
+    },
+    {
+      "id": "collection/table-reorder-10000",
+      "suite": "collection",
+      "title": "Keyed reverse of a fully rendered 10,000-row table",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 4,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 340.79999999701977,
+          "p95": 388,
+          "mean": 351.7999999988824,
+          "min": 321.3999999985099,
+          "max": 388
+        }
+      }
+    },
+    {
+      "id": "collection/table-sticky-realistic",
+      "suite": "collection",
+      "title": "Eight columns, four sticky, 1,000 rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 6.100000001490116,
+          "p95": 7.600000001490116,
+          "mean": 6.304999999701977,
+          "min": 5.5,
+          "max": 8.5
+        }
+      }
+    },
+    {
+      "id": "collection/table-sticky-worst-case",
+      "suite": "collection",
+      "title": "Twenty-four columns, twelve sticky, 1,000 rows",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 19,
+          "p95": 22.299999997019768,
+          "mean": 19.329999999701975,
+          "min": 16.69999999552965,
+          "max": 24.700000002980232
+        }
+      }
+    },
+    {
+      "id": "collection/combobox-filter-100",
+      "suite": "collection",
+      "title": "Type into a combobox holding 100 local options",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 0.6999999955296516,
+          "p95": 0.8999999985098839,
+          "mean": 0.7050000004470348,
+          "min": 0.5,
+          "max": 0.9000000059604645
+        }
+      }
+    },
+    {
+      "id": "collection/combobox-filter-1000",
+      "suite": "collection",
+      "title": "Type into a combobox holding 1,000 local options",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 20,
+      "warmup": 3,
+      "metrics": {
+        "duration": {
+          "median": 2.399999998509884,
+          "p95": 2.899999998509884,
+          "mean": 2.399999998882413,
+          "min": 1.8999999985098839,
+          "max": 3.0999999940395355
+        }
+      }
+    },
+    {
+      "id": "memory/route-cycles",
+      "suite": "memory",
+      "title": "Fifty route mount and release cycles",
+      "units": {
+        "duration": "ms",
+        "heapGrowthBytes": "bytes",
+        "nodeGrowth": "count",
+        "listenerGrowth": "count",
+        "cycles": "count"
+      },
+      "samples": 2,
+      "warmup": 0,
+      "metrics": {
+        "duration": {
+          "median": 2606,
+          "p95": 2613,
+          "mean": 2609.5,
+          "min": 2606,
+          "max": 2613
+        },
+        "heapGrowthBytes": {
+          "median": 513292,
+          "p95": 513292,
+          "mean": 513292,
+          "min": 513292,
+          "max": 513292
+        },
+        "nodeGrowth": {
+          "median": 13,
+          "p95": 13,
+          "mean": 13,
+          "min": 13,
+          "max": 13
+        },
+        "listenerGrowth": {
+          "median": 0,
+          "p95": 0,
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "cycles": {
+          "median": 50,
+          "p95": 50,
+          "mean": 50,
+          "min": 50,
+          "max": 50
+        }
+      }
+    },
+    {
+      "id": "memory/outlet-swaps",
+      "suite": "memory",
+      "title": "Fifty outlet swaps whose first target loses the race",
+      "units": {
+        "duration": "ms",
+        "heapGrowthBytes": "bytes",
+        "nodeGrowth": "count",
+        "listenerGrowth": "count",
+        "cycles": "count"
+      },
+      "samples": 2,
+      "warmup": 0,
+      "metrics": {
+        "duration": {
+          "median": 910,
+          "p95": 928,
+          "mean": 919,
+          "min": 910,
+          "max": 928
+        },
+        "heapGrowthBytes": {
+          "median": 451368,
+          "p95": 451368,
+          "mean": 451368,
+          "min": 451368,
+          "max": 451368
+        },
+        "nodeGrowth": {
+          "median": 9,
+          "p95": 9,
+          "mean": 9,
+          "min": 9,
+          "max": 9
+        },
+        "listenerGrowth": {
+          "median": 0,
+          "p95": 0,
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "cycles": {
+          "median": 50,
+          "p95": 50,
+          "mean": 50,
+          "min": 50,
+          "max": 50
+        }
+      }
+    },
+    {
+      "id": "memory/table-10000",
+      "suite": "memory",
+      "title": "Heap while 10,000 rows are mounted, and after release",
+      "units": {
+        "duration": "ms",
+        "mountedHeapBytes": "bytes",
+        "recoveredHeapBytes": "bytes",
+        "cells": "count"
+      },
+      "samples": 2,
+      "warmup": 0,
+      "metrics": {
+        "duration": {
+          "median": 1132,
+          "p95": 1148,
+          "mean": 1140,
+          "min": 1132,
+          "max": 1148
+        },
+        "mountedHeapBytes": {
+          "median": 138114264,
+          "p95": 138205236,
+          "mean": 138159750,
+          "min": 138114264,
+          "max": 138205236
+        },
+        "recoveredHeapBytes": {
+          "median": 1279244,
+          "p95": 1280192,
+          "mean": 1279718,
+          "min": 1279244,
+          "max": 1280192
+        },
+        "cells": {
+          "median": 40000,
+          "p95": 40000,
+          "mean": 40000,
+          "min": 40000,
+          "max": 40000
+        }
+      }
+    },
+    {
+      "id": "tooling/typecheck",
+      "suite": "tooling",
+      "title": "Whole-project typecheck",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 3,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 217.29466699999466,
+          "p95": 218.85516699998698,
+          "mean": 213.34731966666004,
+          "min": 203.8921249999985,
+          "max": 218.85516699998698
+        }
+      }
+    },
+    {
+      "id": "tooling/template-check",
+      "suite": "tooling",
+      "title": "Static template checking for every application",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 3,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 3108.032250000004,
+          "p95": 3119.2187910000066,
+          "mean": 3062.867625000004,
+          "min": 2961.351834000001,
+          "max": 3119.2187910000066
+        }
+      }
+    },
+    {
+      "id": "tooling/verify",
+      "suite": "tooling",
+      "title": "Architecture, integrity and dependency verification",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 3,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 426.9017920000042,
+          "p95": 434.81508400000166,
+          "mean": 427.53425033333286,
+          "min": 420.88587499999267,
+          "max": 434.81508400000166
+        }
+      }
+    },
+    {
+      "id": "tooling/lint",
+      "suite": "tooling",
+      "title": "Type-aware lint",
+      "units": {
+        "duration": "ms"
+      },
+      "samples": 2,
+      "warmup": 1,
+      "metrics": {
+        "duration": {
+          "median": 3602.545499999993,
+          "p95": 3750.1745000000083,
+          "mean": 3676.3600000000006,
+          "min": 3602.545499999993,
+          "max": 3750.1745000000083
+        }
+      }
+    }
+  ]
+}
