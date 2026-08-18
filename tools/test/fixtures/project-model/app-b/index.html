@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- A second fixture application, with a different import map: no @components/, and
+     @app/ pointing somewhere else. Two applications must not share one model. -->
+<html lang="en">
+  <head>
+    <script type="importmap">
+      {
+        "imports": {
+          "@core/": "/lib/core/",
+          "@app/": "/source/"
+        }
+      }
+    </script>
+    <script type="module" src="/source/start.js"></script>
+  </head>
+  <body></body>
+</html>
