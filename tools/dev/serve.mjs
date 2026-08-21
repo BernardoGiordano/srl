@@ -5,7 +5,7 @@
  * dependency of the application: any static server that can mount two directories
  * on one origin serves the same folders with no Node at all.
  *
- *   node tools/serve.mjs [--app <name>] [--port 8000] [--no-watch] [--open]
+ *   node tools/dev/serve.mjs [--app <name>] [--port 8000] [--no-watch] [--open]
  *
  * `--app` names a directory in the repository root: the application to serve at
  * /. Required when the repository holds more than one, and unnecessary when it
@@ -72,7 +72,7 @@ const clients = new Set();
  */
 const RELOAD_CLIENT = `
 <script>
-  // Development only, injected by tools/serve.mjs. Not present in the file on disk.
+  // Development only, injected by tools/dev/serve.mjs. Not present in the file on disk.
   new EventSource('/__reload').addEventListener('message', (event) => {
     if (event.data === 'reload') location.reload();
   });

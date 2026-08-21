@@ -14,7 +14,7 @@
  * fast connection is not worth optimising; twelve templates over a high-latency
  * link, or a hundred templates in a real application, is.
  *
- *   node tools/bundle-templates.mjs [--app example]
+ *   node tools/delivery/bundle-templates.mjs [--app example]
  *
  * Then set `"templateBundle": "/templates.json"` in that application's
  * app.manifest.json. Its main.js seeds the template cache from it before the first

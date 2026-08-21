@@ -249,23 +249,96 @@ export function vendorReferences(html, where) {
 }
 
 /**
- * The `exports` map the manifest's specifier table implies.
+ * The registry half of the interface: one emitted bundle per entry.
+ *
+ * `imports` names the specifier prefixes a bundle is a barrel over, and `extends`
+ * names the bundle whose prefixes stay external to it. Both are prefixes rather
+ * than directories so that this table and `srl.imports` cannot describe different
+ * sets of files.
+ *
+ * @typedef {{
+ *   name: string,
+ *   subpath: string,
+ *   imports: string[],
+ *   extends?: string,
+ *   exclude?: string[],
+ *   file: string,
+ *   minified: string,
+ *   roots: string[],
+ *   excluded: string[],
+ *   external: string[],
+ * }} PackageBundle
+ */
+
+/** @type {PackageBundle[]} */
+export const BUNDLES = Object.entries(
+  /** @type {Record<string, { subpath: string, imports: string[], extends?: string, exclude?: string[] }>} */ (
+    MANIFEST.srl.bundles ?? {}
+  ),
+).map(([name, entry]) => {
+  const inherited = entry.extends;
+  const parent =
+    inherited === undefined
+      ? undefined
+      : /** @type {{ imports: string[] } | undefined} */ (
+          /** @type {Record<string, { imports: string[] }>} */ (MANIFEST.srl.bundles)[inherited]
+        );
+  if (inherited !== undefined && parent === undefined) {
+    throw new Error(`Bundle "${name}" extends "${inherited}", which the manifest does not declare.`);
+  }
+
+  return {
+    name,
+    subpath: entry.subpath,
+    imports: entry.imports,
+    extends: inherited,
+    exclude: entry.exclude,
+    file: `dist/${name}.js`,
+    minified: `dist/${name}.min.js`,
+    roots: entry.imports.map((prefix) => requirePrefixDir(name, prefix)),
+    excluded: (entry.exclude ?? []).map((dir) => join(PACKAGE, dir)),
+    external: parent?.imports ?? [],
+  };
+});
+
+/**
+ * @param {string} bundle
+ * @param {string} prefix
+ * @returns {string}
+ */
+function requirePrefixDir(bundle, prefix) {
+  const dir = SPECIFIER_DIRS[prefix];
+  if (dir === undefined) {
+    throw new Error(
+      `Bundle "${bundle}" claims specifier prefix "${prefix}", which \`srl.imports\` does not ` +
+        `declare. A bundle is a barrel over prefixes, so it cannot claim one that resolves nowhere.`,
+    );
+  }
+  return dir;
+}
+
+/**
+ * The `exports` map the manifest implies.
  *
  * Derived rather than authoritative: package.json states `exports` literally,
  * because npm reads that file and not this one, and tools/checks/verify-deps.mjs
- * compares the two. A layer added to `srl.imports` and forgotten in `exports`
+ * compares the two. A bundle added to `srl.bundles` and forgotten in `exports`
  * fails a check instead of shipping a package whose registry consumers cannot
  * reach half of it.
+ *
+ * The raw `lib/` and `components/` trees are deliberately *not* here. They ship —
+ * they are what the import-map consumer loads — but every module in them names
+ * `@core/` and friends, so an `exports` entry pointing a bundler at one would
+ * advertise a subpath that throws on its first import. The bundles are that
+ * consumer's entry, and `./dist/*` reaches the minified pair by name.
  *
  * @returns {Record<string, string>}
  */
 export function packageExports() {
-  return Object.fromEntries(
-    Object.entries(MANIFEST.srl.imports).map(([prefix, dir]) => [
-      `./${prefix.replace(/^@/u, '').replace(/\/$/u, '')}/*`,
-      `./${/** @type {string} */ (dir)}/*`,
-    ]),
-  );
+  return {
+    ...Object.fromEntries(BUNDLES.map((bundle) => [bundle.subpath, `./${bundle.file}`])),
+    './dist/*': './dist/*',
+  };
 }
 
 /**

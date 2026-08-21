@@ -25,6 +25,35 @@ the single thing a bare file server cannot do. Every real static host can — ng
 npm is still how the *tooling* is installed: tsc, ESLint, the test runner, the Tailwind
 CLI. None of it is needed to serve the application.
 
+## Publishing the package
+
+The other delivery direction: `source/` is the package `@srljs/core`, and a consumer
+installs it rather than deploying it.
+
+```bash
+npm run package                          # source/dist: the four bundles exports names
+npm run check                            # runs the above, then verifies the map matches
+cd source && npm pack --dry-run          # what the tarball would contain
+cd source && npm publish                 # publishConfig already sets --access public
+```
+
+Two shapes go out in one tarball, because there are two ways to resolve the library and
+only one of them exists in a browser:
+
+| Consumer | Reaches the library through | What ships |
+|---|---|---|
+| A browser with an import map | `lib/importmap.json`, pasted or fetched | `lib/` and `components/` as source, templates fetched beside their modules |
+| Node, or a bundler | `exports` | `dist/srl-core.js` and `dist/srl-components.js`, minified pairs beside them, templates inlined |
+
+`dist/` is generated and not committed, exactly like an application's `app.css`. It has to
+exist before `npm publish`, and `npm run verify` fails naming the command when `exports`
+points at a file that is not there, so a release cannot ship a map that reaches outside its
+own tarball. Why the second shape exists at all, and what it deliberately does not carry
+(TypeScript declarations), is
+[ADR-0066](../adr/0066-the-registry-consumer-gets-bundles.md). What a version bump means is
+[the changelog](../../CHANGELOG.md).
+
+
 ## Vendored dependencies
 
 ```

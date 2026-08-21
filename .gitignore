@@ -1,16 +1,9 @@
 node_modules/
 dist/
 
-# The repository's own positioning note: what this is proven for, what is
-# deliberately absent, and what would reopen each. A working document rather than
-# repository content, so it stays local and nothing in the tree links to it.
+# Two working documents rather than repository content
 docs/position-and-non-goals.md
-
-# app.css is NOT ignored, deliberately, and this is a change from the first pass.
-# It is the production stylesheet, and the premise of this repository is that the
-# folder itself is the deployable artefact: pointing any static server at a clone
-# has to work with no npm install and no build. Regenerating app.css needs the
-# Tailwind CLI; having it needs nothing.
+docs/known-gaps.md
 
 # templates.json is ignored, because it is an optional optimisation that is off by
 # default and derived entirely from the .html files the application can reach.
@@ -42,10 +35,25 @@ build.json
 .claude
 .idea
 
+# Per-developer coding-assistant instructions, beside .claude above. They configure
+# somebody's tooling rather than describing this repository, and CONTRIBUTING.md is
+# where a rule that applies to everybody goes.
+/AGENTS.md
+/RTK.md
+/CLAUDE.md
+
 # An application's runtime state: a database, a signing key, anything an import
 # step derives. None of it is repository content, and an application that keeps
 # any is expected to keep it under its own server/data/.
 */server/data/
 
-# Redundant example artifacts
-example/app.css
+# An application's compiled stylesheet, and the one thing in a clone that has to be
+# built before it exists. Development does not need it: index.html loads the Tailwind
+# browser JIT, which compiles the same utilities in the page. Production does, and
+# `npm run css` writes it from <app>/src/app.css with the Tailwind CLI, which is why
+# it is a generated artefact rather than repository content — committing it would put
+# a minified build product in every diff that touched a class name.
+#
+# One level below the root rather than a bare wildcard, because the CLI's *input* is
+# <app>/src/app.css and an unanchored pattern would ignore that too.
+/*/app.css

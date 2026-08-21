@@ -86,11 +86,13 @@ import { basename, dirname, join, relative, sep } from 'node:path';
 import { REPO, apps, exists, readText, repoPath, walk } from '../layout.mjs';
 import {
   COMPONENTS,
+  BUNDLES,
   IMPORT_MAP_FILE,
   LIB,
   MANIFEST,
   PACKAGE,
   SPECIFIER_DIRS,
+  SPECIFIERS,
   VENDOR,
   extractImportMap,
   fileToUrl,
@@ -223,22 +225,60 @@ if (fragmentOnDisk === null) {
   console.log('  ok   %s matches the manifest and the vendored bytes', show(IMPORT_MAP_FILE));
 }
 
+/**
+ * Every specifier prefix belongs to exactly one bundle.
+ *
+ * This is what makes the two halves of the interface the same surface. A layer
+ * added to `srl.imports` reaches a browser the moment the import map is
+ * regenerated; it reaches a registry consumer only if some bundle is a barrel
+ * over it, and a prefix in no bundle is a layer half the consumers cannot see.
+ */
+const claimedBy = /** @type {Map<string, string[]>} */ (new Map());
+for (const bundle of BUNDLES) {
+  for (const prefix of bundle.imports) claimedBy.set(prefix, [...(claimedBy.get(prefix) ?? []), bundle.name]);
+}
+for (const prefix of Object.keys(SPECIFIERS)) {
+  const claims = claimedBy.get(prefix) ?? [];
+  if (claims.length === 1) continue;
+  fail(
+    claims.length === 0
+      ? `source/package.json declares the specifier prefix "${prefix}" but no entry in ` +
+          `\`srl.bundles\` is a barrel over it, so a consumer who resolves through a bundler ` +
+          `cannot reach that layer at all.`
+      : `source/package.json puts "${prefix}" in ${String(claims.length)} bundles ` +
+          `(${claims.join(', ')}). Two barrels over one directory means two copies of every ` +
+          `module in it, and two custom element registries in one page.`,
+  );
+}
+
 const declaredExports = /** @type {Record<string, string>} */ (MANIFEST.exports ?? {});
 for (const [subpath, target] of Object.entries(packageExports())) {
   if (declaredExports[subpath] !== target) {
     fail(
-      `source/package.json declares \`srl.imports\` for "${subpath}" but its \`exports\` says ` +
+      `source/package.json declares \`srl.bundles\` for "${subpath}" but its \`exports\` says ` +
         `${declaredExports[subpath] ?? 'nothing'} rather than ${target}. A consumer installing ` +
         `the package cannot reach a layer the browser resolves.`,
     );
   }
 }
 for (const [subpath, target] of Object.entries(declaredExports)) {
-  if (!(await exists(join(PACKAGE, target.replace(/\*.*$/u, ''))))) {
-    fail(`source/package.json exports "${subpath}" from ${target}, which does not exist.`);
-  }
+  const file = join(PACKAGE, target.replace(/\*.*$/u, ''));
+  if (await exists(file)) continue;
+  // `dist/` is generated, so its absence is "you have not built it yet" rather than
+  // "the map is wrong". Saying which is the difference between a one-command fix and
+  // a hunt through package.json.
+  fail(
+    target.startsWith('./dist/')
+      ? `source/package.json exports "${subpath}" from ${target}, which is generated and not ` +
+          `there. Run \`npm run package\`; \`npm publish\` without it ships an exports map ` +
+          `pointing at files the tarball does not contain.`
+      : `source/package.json exports "${subpath}" from ${target}, which does not exist.`,
+  );
 }
-console.log('  ok   the exports map and the browser prefixes describe the same surface');
+console.log(
+  '  ok   %s bundle(s) cover every browser prefix, and the exports map names them',
+  String(BUNDLES.length),
+);
 
 /**
  * tsconfig paths are the type checker's copy of the same table. They stay a
@@ -741,7 +781,7 @@ for (const app of applications) {
       // The set compared is the one the bundler ships — `shippedTemplates`, from the
       // project model — and that is a fix, not a refactor. This check used to walk the
       // four template directories itself and included `source/lib/test/fixtures/*.html`,
-      // which tools/bundle-templates.mjs deliberately leaves out of an application's
+      // which tools/delivery/bundle-templates.mjs deliberately leaves out of an application's
       // bundle. Any application that enabled templateBundle would have failed
       // verification with a fixture it was right not to ship.
       const bundle = JSON.parse(await readFile(bundlePath, 'utf8'));
@@ -900,6 +940,31 @@ if (strayDocs.length > 0) {
   );
 } else {
   console.log('\ndocumentation\n  ok   no documentation surface under source/ competes with docs/');
+}
+
+/**
+ * The two files a registry page is made of, which the rule above deliberately does
+ * not forbid: they sit at the package root rather than inside `lib/` or
+ * `components/`, and they address the consumer who is reading npm rather than this
+ * repository. README.md is the package's landing page and has to exist or the
+ * listing is blank; LICENSE has to be a copy rather than a link, because a tarball
+ * carries no repository around it — so the copy is checked byte for byte instead of
+ * trusted.
+ */
+const packageReadme = join(PACKAGE, 'README.md');
+const packageLicense = join(PACKAGE, 'LICENSE');
+
+if (!(await exists(packageReadme))) {
+  fail(`${show(packageReadme)} is missing, so the package would publish with a blank npm page.`);
+} else if (!(await exists(packageLicense))) {
+  fail(`${show(packageLicense)} is missing: the tarball ships no copy of the MIT grant.`);
+} else if ((await readText(packageLicense)) !== (await readText(join(REPO, 'LICENSE')))) {
+  fail(
+    `${show(packageLicense)} differs from the repository's LICENSE. One project, one grant: ` +
+      `copy the root file over it.`,
+  );
+} else {
+  console.log('  ok   the package carries its own README and a LICENSE identical to the root');
 }
 
 /* ── 5c. The CSP hashes a deployment has to carry ──────────────────────── */

@@ -65,7 +65,7 @@
       "development-only": true,
       "license": "MIT",
       "licenseCovers": ["@tailwindcss/browser"],
-      "note": "Browser JIT for development. Contains no fetch, XHR or WebAssembly, so it needs no network of its own. Production uses the committed app.css instead and never loads this."
+      "note": "Browser JIT for development. Contains no fetch, XHR or WebAssembly, so it needs no network of its own. Production links the compiled app.css instead and never loads this."
     }
   ]
 }

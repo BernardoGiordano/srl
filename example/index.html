@@ -90,8 +90,9 @@
 
       Production: `npm run css:example` runs the Tailwind CLI once over this application's
       src/ and remotes/ and emits app.css. Comment out the script, uncomment the link. That
-      CSS step is the only build in the project, and app.css is committed, so a deployment
-      that never runs npm still has it.
+      CSS step is the only build in the project, and app.css is the one file a clone does
+      not come with: it is generated, so it is not committed, and a deployment that wants
+      it runs that command. `npm run build` does both edits for you (ADR-0041).
     -->
     <script
       src="/lib/vendor/tailwind-browser.js"

@@ -5,11 +5,11 @@
  * runs with no npm install, no network and no tooling. This exists for the two
  * maintenance operations that do need the network:
  *
- *   node tools/vendor.mjs                verify committed bytes against the hashes
- *   node tools/vendor.mjs --fetch        re-download and verify before writing
- *   node tools/vendor.mjs --fetch --accept-new
+ *   node tools/delivery/vendor.mjs                verify committed bytes against the hashes
+ *   node tools/delivery/vendor.mjs --fetch        re-download and verify before writing
+ *   node tools/delivery/vendor.mjs --fetch --accept-new
  *                                        accept new bytes and print the new hash
- *   node tools/vendor.mjs --write-licenses
+ *   node tools/delivery/vendor.mjs --write-licenses
  *                                        regenerate LICENSES.md from node_modules
  *
  * The verify mode is offline and is what `npm run verify` calls. It answers one

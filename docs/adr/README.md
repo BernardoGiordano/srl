@@ -64,6 +64,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0045](0045-the-benchmark-drives-chrome-directly.md) | The benchmark drives Chrome directly and blocks the network without disabling the cache | accepted | `tools/benchmark/browser.mjs`, `tools/benchmark/browser/support.js` |
 | [ADR-0063](0063-a-remote-shares-the-stack-not-the-state.md) | A remote shares the stack, never the shell's state | accepted | `example/remotes/billing/`, `example/remotes/analytics/` |
 | [ADR-0065](0065-the-session-guard-sits-on-one-shell-route.md) | The session guard sits on one shell route; scope guards are affordances | accepted | `example/src/routes.js`, `example/server/api.mjs` |
+| [ADR-0066](0066-the-registry-consumer-gets-bundles.md) | The registry consumer gets bundles; the browser consumer still gets source | accepted | `source/package.json`, `tools/delivery/package-bundle.mjs`, `tools/package/interface.mjs`, `tools/checks/verify-deps.mjs` |
 
 <!-- /generated:adr-index -->
 

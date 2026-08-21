@@ -259,7 +259,7 @@ describe('ui-avatar', () => {
     await ready(avatar);
 
     const fallback = present(avatar.querySelector('span[role="img"]'));
-    assert.equal(fallback.textContent?.trim(), 'SE');
+    assert.equal(fallback.textContent?.trim(), 'NS');
     assert.equal(fallback.getAttribute('aria-label'), 'Name Surname');
     assert.equal(fallback.getAttribute('data-ui-part'), 'avatar-fallback');
   });

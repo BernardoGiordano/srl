@@ -93,6 +93,12 @@
   "exclude": [
     "node_modules",
     "source/lib/vendor",
+    // source/dist is the same case one step later: the published bundles, generated
+    // by `npm run package` from the sources already in this program. They carry the
+    // JSDoc of thirty modules concatenated into one scope, where a `@template T` from
+    // one file is out of scope in the next, so type-checking the output would report
+    // hundreds of errors about code that type-checks perfectly as input.
+    "source/dist",
     "**/app.css",
     // tools/test/fixtures holds fixture projects for the project model's own tests:
     // a computed tag, a `uses` naming a class nothing defines, a definition whose

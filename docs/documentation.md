@@ -6,9 +6,16 @@ where everything else lives. `docs/` is the implementation of that interface —
 one subject per page. `docs/adr/` is the reasoning behind both — one decision per file,
 each with a number that never changes.
 
-Nothing else. There are still no READMEs under `source/` — a manual in the directory
-somebody edits first is the one that goes stale — and no fourth surface: knowledge lives
-in a page here, in a record, in a type, in a test, or in an executable check.
+Two more exist for one reason, and it is a different reader rather than a different
+subject: `source/` is the published package, and somebody installing `@srljs/core` from a
+registry has a tarball rather than this repository. `source/README.md` is that listing's
+landing page and `CHANGELOG.md` is what a version bump means, both scoped to the published
+interface and nothing behind it.
+
+Nothing else. There are no READMEs *under* `source/lib` or `source/components` — a manual
+in the directory somebody edits first is the one that goes stale, and `npm run verify`
+refuses one — and no further surface: knowledge lives in a page here, in a record, in a
+type, in a test, or in an executable check.
 
 All of it is generated against reality where it can be:
 
@@ -30,6 +37,8 @@ Where knowledge goes, and why each destination is the one that keeps it true:
 | Kind of knowledge | Destination |
 |---|---|
 | What this is, and the first thing to run | `README.md`, and nothing longer |
+| The same, for somebody who installed the package instead | `source/README.md`, shorter still, linking back here |
+| What changed in the published interface, and what a bump means | `CHANGELOG.md`, one entry per version |
 | Caller-facing interface rule | The page in `docs/guide/` that owns the subject |
 | A fact derived from the source | A generated block in `docs/reference/`, never typed by hand |
 | How a decision was reached, and what would reopen it | A record in `docs/adr/`, cited by number |

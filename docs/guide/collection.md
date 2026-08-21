@@ -197,7 +197,9 @@ layer neither applies.
 
 Two layers, split where the DOM starts. `@core/forms` holds the state and knows nothing
 about elements; `<ui-field>` is the element and holds no state of its own. Both exist
-because the alternative was measured first — see [the measurement](../known-gaps.md#forms-measurement).
+because the alternative was measured first: a nine-field screen written with nothing but
+native inputs and the template dialect cost 321 lines of component JavaScript and 236 of
+markup, about 21 lines per field.
 
 ```js
 import { field } from '@core/forms/field.js';

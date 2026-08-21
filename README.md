@@ -11,12 +11,34 @@ Everything expensive is opt-in and behaviour-preserving: the CSS generation step
 ## Repository structure
 
 ```
+source/             the published package, @srljs/core: its own package.json declares
+                    what it publishes, and extracting it is a file move
 source/lib/         the framework: core, auth, host, vendored deps, its own suite
 source/components/  the shared collection: the frame of an internal application
 example/            the example application: four sections, auth over a real backend,
                     micro-frontends, i18n
 tools/              discovery, static checks, delivery, dev server, benchmarks
 ```
+
+## Install it
+
+Two shapes, and the first is the point.
+
+```html
+<!-- a browser with an import map: serve the package's lib/ and components/, paste
+     node_modules/@srljs/core/lib/importmap.json, and import @core/… as the library does -->
+```
+
+```js
+// Node or a bundler, which have no import map: two pre-resolved bundles
+import { defineComponent, SignalElement } from '@srljs/core';
+import { UiTable } from '@srljs/core/components';
+```
+
+Why there are two, and what the second costs, is
+[ADR-0066](docs/adr/0066-the-registry-consumer-gets-bundles.md). The package's own README
+is [source/README.md](source/README.md), and what changed between versions is
+[the changelog](CHANGELOG.md).
 
 ## Run it
 
@@ -83,7 +105,7 @@ describing [the template language](docs/guide/templates.md).
 ## Check it
 
 ```bash
-npm run check                 # typecheck + templates + lint + tool tests + vendor + verify + docs + browser tests
+npm run check                 # typecheck + templates + lint + tool tests + vendor + package + verify + docs + browser tests
 APP=example npm test          # the library, the collection and that application's suite
 npm run benchmark:ci          # the performance gate, against the checked-in baseline
 ```
@@ -100,10 +122,10 @@ The README is the interface. The manual is `docs/`, and the reasoning is `docs/a
 | [Getting started](docs/getting-started.md) | Run, check, test, and what to run after changing X |
 | [Architecture map](docs/architecture.md) | Glossary, the dependency rule, the seams and what proves each |
 | [Invariants](docs/invariants.md) | What a change may not break, and the check that enforces it |
-| [Known gaps](docs/known-gaps.md) | Open questions and the rule for deciding each |
 | [Guide](docs/guide/) | Startup, components, templates, routing, i18n, preferences, auth, the collection, performance, delivery, testing |
 | [Reference](docs/reference/) | The generated project index, the source layout, the Angular map |
 | [Decision records](docs/adr/) | One decision per file, cited from source by number |
+| [Changelog](CHANGELOG.md) | What changed in the published interface, and what a bump means |
 
 Every generated table is built from `tools/project-model/`, the one AST pass over the
 source that the template checker, the dependency verifier and the template bundler also

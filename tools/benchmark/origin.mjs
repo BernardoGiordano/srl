@@ -2,7 +2,7 @@
  * The origin under measurement.
  *
  * A benchmark that serves the application differently from production measures
- * the benchmark's server. So this is the same mount table tools/serve.mjs uses,
+ * the benchmark's server. So this is the same mount table tools/dev/serve.mjs uses,
  * imported rather than restated, with the two deliberate differences a
  * measurement needs:
  *
@@ -14,7 +14,7 @@
  *      way a production reload does.
  *
  * One extra mount exists, at /__benchmark/, and it is why this file is not simply
- * tools/serve.mjs with a flag: the workload modules the page imports are tooling,
+ * tools/dev/serve.mjs with a flag: the workload modules the page imports are tooling,
  * they must not sit inside an application or the library, and they still have to
  * arrive over the same origin as the code they measure. The harness page itself is
  * generated rather than checked in, because its import map is the application's

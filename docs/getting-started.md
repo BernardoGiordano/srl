@@ -17,7 +17,7 @@ history fallback and watch-reload, with no npm install and no process behind `/a
 is checked to be a plain static folder.
 
 ```bash
-npm run check                 # typecheck + templates + lint + tool tests + vendor + verify + docs + browser tests
+npm run check                 # typecheck + templates + lint + tool tests + vendor + package + verify + docs + browser tests
 APP=example npm test          # the library, the collection and that application's suite
 npm run benchmark:ci          # the performance gate, against the checked-in baseline
 ```
@@ -31,6 +31,7 @@ Everything `check` runs, individually:
 | `npm run lint` | Type-aware ESLint |
 | `npm run test:tools` | The Node-side suites: project model, checkers, benchmark integrity, frozen interfaces, docs |
 | `npm run vendor` | A vendored byte that does not match its recorded hash |
+| `npm run package` | A published bundle that will not build, or still names a specifier only an import map resolves |
 | `npm run verify` | Layering, dependencies, import maps, template ownership, translations, storage access |
 | `npm run docs:check` | A generated reference table that no longer matches the project model |
 | `npm test` | The browser suites, in real Chrome, for the library, the collection and one application |
@@ -44,6 +45,7 @@ Everything `check` runs, individually:
 | A `defineComponent` declaration, a tag, or a module path | `npm run verify && npm run docs:check` |
 | An import map, a manifest, or a remote's bytes | `npm run verify` (integrity, CSP hash, grants) |
 | A vendored dependency | `npm run vendor` then `npm run verify` |
+| Anything under `source/`, before publishing | `npm run package` then `npm run verify` (the `exports` map names files it emits) |
 | Anything in the render, router, table or startup path | `npm run benchmark:ci` |
 | Tailwind input or a component's example classes | `npm run css`, then re-read the delivery numbers in [the performance envelope](guide/performance.md) |
 | Documentation prose | nothing; generated tables: `npm run docs:write` |

@@ -9,7 +9,7 @@ import {
 
 /**
  * The dialect is the one place that answers "what is legal in a template", and
- * both the runtime evaluator and tools/template-check.mjs read their answers
+ * both the runtime evaluator and tools/checks/template-check.mjs read their answers
  * from here. These tests pin the answers themselves, so a change to the grammar
  * is a change to a test rather than a silent change to one of the two adapters.
  */

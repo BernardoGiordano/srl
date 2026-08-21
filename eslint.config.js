@@ -25,10 +25,14 @@ export default tseslint.config(
     // source/lib/vendor holds third-party bytes verbatim. Linting them says
     // nothing about this codebase, and they are excluded from tsconfig, so the
     // type-aware rules cannot parse them anyway. Their integrity is checked by
-    // tools/vendor.mjs and enforced by the browser.
+    // tools/delivery/vendor.mjs and enforced by the browser.
     ignores: [
       'node_modules/**',
+      // Both spellings: an application's build output at the root, and the
+      // package bundles `npm run package` writes into source/dist. A flat-config
+      // pattern is anchored at the config file, so `dist/**` alone misses the second.
       'dist/**',
+      '**/dist/**',
       'source/lib/vendor/**',
       '**/app.css',
       '**/templates.json',
