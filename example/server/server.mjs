@@ -10,7 +10,7 @@
  * `--api-only` drops the static half, for the deployment where nginx already
  * serves the files and this process sits behind it on /auth and /api. It is not
  * only an optimisation: static.mjs reads the mount table from tools/layout.mjs,
- * and tools/ is a development directory that deploy.sh deliberately never uploads,
+ * and tools/ is a development directory the released tree deliberately omits,
  * so importing it on the server is a startup crash. Hence the dynamic import
  * below rather than a flag checked inside serveStatic.
  *

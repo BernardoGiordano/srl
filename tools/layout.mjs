@@ -59,9 +59,9 @@ export const LIB_MOUNT_ROUTES = /** @type {Array<[string, string]>} */ (
  * The mounts as `<source directory> <remote subdirectory>` pairs — `source/lib
  * lib` — one per line.
  *
- * A deploy script needs both halves of each mount and cannot import, so it asks:
- * `node tools/layout.mjs --deploy-pairs`. That is what keeps the deployed tree
- * the shape the import map already assumes.
+ * A consumer outside JavaScript needs both halves of each mount and cannot
+ * import, so it asks: `node tools/layout.mjs --deploy-pairs`. That is what keeps
+ * the delivered tree the shape the import map already assumes.
  *
  * @returns {string}
  */

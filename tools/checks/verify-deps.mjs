@@ -932,41 +932,82 @@ const vendoredVersions = new Map(
   ]),
 );
 
-/** Specifier in the import map -> npm package whose types must match it. */
+/**
+ * Specifier in the import map -> npm package whose types must match it. A
+ * vendored package absent here is not type-backed: @tailwindcss/browser is a
+ * classic script no source file imports, so nothing asks tsc to type it. It is
+ * still checked below, for the other two reasons every vendored package is.
+ */
 const TYPE_BACKED = {
   lit: 'lit',
   '@preact/signals-core': '@preact/signals-core',
 };
 
-for (const [specifier, packageName] of Object.entries(TYPE_BACKED)) {
+/** npm package -> the import-map specifier tsc has to type, when there is one. */
+const typedSpecifier = new Map(
+  Object.entries(TYPE_BACKED).map(([specifier, packageName]) => [packageName, specifier]),
+);
+
+/*
+ * Every vendored package is a devDependency pinned exactly at the version
+ * source/lib/vendor serves. Three things need that, and each breaks on its own:
+ *
+ *   Types. node_modules is where tsc reads the API the browser will have, so a
+ *   different version there validates source against an API that does not ship.
+ *   Only the two type-backed specifiers care.
+ *   Notices. `npm run vendor` copies each notice out of the LICENSE of the
+ *   installed version. An undeclared package has no LICENSE to copy, so the
+ *   notice this repository redistributes would be whatever was typed by hand.
+ *   The version itself. A caret would let npm resolve something else, and both of
+ *   the above would then be checked against bytes that are not the vendored ones.
+ */
+for (const entry of provenance.files) {
+  const packageName = String(entry.package);
+  const vendoredVersion = String(entry.version);
+  const specifier = typedSpecifier.get(packageName);
   const declared = devDeps[packageName];
+
   if (declared === undefined) {
-    fail(`No devDependency on ${packageName}, so tsc cannot type "${specifier}".`);
+    fail(
+      `No devDependency on ${packageName}, which source/lib/vendor serves at ${vendoredVersion}. ` +
+        (specifier === undefined
+          ? `Its LICENSE is what \`npm run vendor\` copies the notice from, so without it the ` +
+            `notice this repository ships cannot be verified against anything.`
+          : `tsc cannot type "${specifier}", and its LICENSE is what \`npm run vendor\` copies ` +
+            `the notice from.`),
+    );
     continue;
   }
   if (/^[\^~]/u.test(declared)) {
     fail(
       `devDependency ${packageName}@${declared} uses a range. It must be pinned exactly, or ` +
-        `npm can install types for a different version than source/lib/vendor serves.`,
+        `npm can install types and a notice for a different version than source/lib/vendor serves.`,
     );
-    continue;
-  }
-  const vendoredVersion = vendoredVersions.get(packageName);
-  if (vendoredVersion === undefined) {
-    fail(`source/lib/vendor/provenance.json has no entry for ${packageName}.`);
     continue;
   }
   if (vendoredVersion !== declared) {
     fail(
-      `Version drift for "${specifier}":\n    types (package.json):        ${declared}\n` +
+      `Version drift for ${packageName}:\n    node_modules (package.json): ${declared}\n` +
         `    runtime (vendor/provenance): ${vendoredVersion}`,
     );
     continue;
   }
-  console.log('  ok   %s types %s match source/lib/vendor', packageName.padEnd(22), declared);
+  console.log(
+    '  ok   %s %s pinned, matches source/lib/vendor',
+    packageName.padEnd(22),
+    declared.padEnd(8),
+  );
 }
 
-console.log('  note vendored byte hashes are verified by `npm run vendor`');
+for (const [specifier, packageName] of Object.entries(TYPE_BACKED)) {
+  if (vendoredVersions.has(packageName)) continue;
+  fail(
+    `source/lib/vendor/provenance.json has no entry for ${packageName}, so nothing ties the ` +
+      `types tsc reads for "${specifier}" to the bytes the browser gets.`,
+  );
+}
+
+console.log('  note vendored byte hashes and notices are verified by `npm run vendor`');
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 

@@ -16,7 +16,17 @@
     ".min.js it synthesises are built on demand, and jsDelivr's own output warns",
     "against SRI-pinning them. @tailwindcss/browser is therefore pinned to",
     "dist/index.global.js, the real published file, and not to the bare package",
-    "URL that resolves to a generated dist/index.global.min.js."
+    "URL that resolves to a generated dist/index.global.min.js.",
+    "",
+    "`license` is the SPDX identifier the upstream package declares, and",
+    "`licenseCovers` names every package whose code the vendored file contains —",
+    "one for a single-package file, four for the Lit bundle. Both MIT and",
+    "BSD-3-Clause require the notice to travel with the copy, and these files are",
+    "committed, so the copy is this repository. LICENSES.md holds the texts.",
+    "`npm run vendor` checks that every entry here has a section there and that",
+    "its text still matches the LICENSE in node_modules for the same pinned",
+    "version, which is the same shape as the hash check: a notice somebody can",
+    "edit without touching the bytes it covers is not a control."
   ],
 
   "files": [
@@ -28,6 +38,8 @@
       "integrity": "sha384-qSoE0anPDAzsBuoT95C270Wd5oKtOOlLdEvSXEk9bRYTg+5ygjyt20ZuhzH0oNbt",
       "bytes": 29370,
       "loadedAs": "module",
+      "license": "BSD-3-Clause",
+      "licenseCovers": ["lit", "lit-html", "lit-element", "@lit/reactive-element"],
       "note": "The all-in-one bundle, so the shell and every remote share one Lit instance and `repeat` is included."
     },
     {
@@ -38,6 +50,8 @@
       "integrity": "sha384-keryyWsAJJ2UD+2G3I6cCzzXkFvp97AwDUCMKAOYrVGK2iwcrnTYMpWMrq9xkPSm",
       "bytes": 5357,
       "loadedAs": "module",
+      "license": "MIT",
+      "licenseCovers": ["@preact/signals-core"],
       "note": "Imported only by source/lib/core/foundation/reactive.js, which is the seam for replacing it."
     },
     {
@@ -49,6 +63,8 @@
       "bytes": 282289,
       "loadedAs": "classic-script",
       "development-only": true,
+      "license": "MIT",
+      "licenseCovers": ["@tailwindcss/browser"],
       "note": "Browser JIT for development. Contains no fetch, XHR or WebAssembly, so it needs no network of its own. Production uses the committed app.css instead and never loads this."
     }
   ]

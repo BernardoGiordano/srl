@@ -67,7 +67,7 @@ const APP = process.env.APP ?? 'example';
 const PINNED_APP = 'example';
 
 /**
- * URL prefix -> URL, exactly as tools/dev/serve.mjs and deploy.sh mount them: the
+ * URL prefix -> URL, exactly as tools/dev/serve.mjs and the release tree mount them: the
  * library mounts are imported from tools/layout.mjs rather than restated, so the
  * test origin cannot drift from the served one. What remains here is the part
  * that is genuinely per application.

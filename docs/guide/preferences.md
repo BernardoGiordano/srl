@@ -87,16 +87,24 @@ from them. The selected name is a UI preference like any other and is stored thr
 module above. The resolved name is reflected as `data-theme` on `<html>`, and a
 `themechange` event lets a framework-independent micro-frontend follow along. Custom
 themes may override any property in the `--ui-` namespace; unspecified tokens fall back
-to the built-in light palette.
+to whichever palette the document links.
 
-`source/components/theme.css` ships the semantic token palette, light and dark values,
-and modest zero-specificity defaults for the elements a component renders itself. Link
-it once after the import map:
+The stylesheets are two files, because the defaults and the colours are replaced on
+different schedules. `source/components/style.css` holds modest zero-specificity defaults
+for the elements a component renders itself and defines no colour at all — it only reads
+`--ui-color-*`. `source/components/theme-default.css` defines those tokens, light and
+dark, in a deliberately achromatic palette. Link both after the import map:
 
 ```html
-<link rel="stylesheet" href="/components/theme.css" />
+<link rel="stylesheet" href="/components/style.css" />
+<link rel="stylesheet" href="/components/theme-default.css" />
 ```
 
-Every selector in it is wrapped in `:where()`, so a Tailwind utility or an ordinary
-application class wins without `!important`. Layout, sizing and spacing stay entirely
-the consumer's.
+The second link is the optional one. An application with a brand drops it and defines the
+same token names from its own stylesheet — or registers them as a theme through the module
+above — with nothing in the first file to override, since there is no colour in it. Omit
+both and the components render unpainted, which fails visibly at first paint.
+
+Every selector in `style.css` is wrapped in `:where()`, so a Tailwind utility or an
+ordinary application class wins without `!important`. Layout, sizing and spacing stay
+entirely the consumer's.

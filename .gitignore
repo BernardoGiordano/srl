@@ -1,0 +1,51 @@
+node_modules/
+dist/
+
+# The repository's own positioning note: what this is proven for, what is
+# deliberately absent, and what would reopen each. A working document rather than
+# repository content, so it stays local and nothing in the tree links to it.
+docs/position-and-non-goals.md
+
+# app.css is NOT ignored, deliberately, and this is a change from the first pass.
+# It is the production stylesheet, and the premise of this repository is that the
+# folder itself is the deployable artefact: pointing any static server at a clone
+# has to work with no npm install and no build. Regenerating app.css needs the
+# Tailwind CLI; having it needs nothing.
+
+# templates.json is ignored, because it is an optional optimisation that is off by
+# default and derived entirely from the .html files the application can reach.
+# Turn it on by running `npm run templates` in a deploy step and setting
+# templateBundle in that application's app.manifest.json. Written per application,
+# hence the wildcard rather than a root path.
+templates.json
+
+# Deployment scripts, all of them, at the repository root.
+#
+# A deploy script here is a target and a credential path — a host, an ssh
+# identity, a remote directory — wrapped around an rsync of subtrees this
+# repository already defines. The shape it pushes is repository content and lives
+# in docs/guide/delivery.md; where it pushes is not, and committing one would
+# publish somebody's infrastructure and invite the next person to deploy to it.
+# Anchored to the root and matching the whole family, so the second script (a
+# staging target, a per-application variant) is ignored without another edit here.
+/deploy*.sh
+/push-*.sh
+
+# build.json is written at deploy time and read by nobody: it is a
+# "which commit is on the server" stamp you curl, not application input. Derived
+# from git, so committing it would only ever be out of date. Per application, like
+# templates.json.
+build.json
+
+.DS_Store
+*.log
+.claude
+.idea
+
+# An application's runtime state: a database, a signing key, anything an import
+# step derives. None of it is repository content, and an application that keeps
+# any is expected to keep it under its own server/data/.
+*/server/data/
+
+# Redundant example artifacts
+example/app.css

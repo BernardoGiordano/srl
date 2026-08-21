@@ -65,7 +65,7 @@ edit(
 );
 
 // 2. Link the compiled stylesheet, by uncommenting the line that is already
-//    there. `npm run css:space` writes it; deploy-space.sh runs that first.
+//    there. `npm run css` writes it, and has to run before this transform.
 edit(
   /<!--\s*(<link rel="stylesheet" href="\/app\.css"\s*\/>)\s*-->/u,
   '$1',

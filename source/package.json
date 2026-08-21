@@ -1,0 +1,70 @@
+{
+  "name": "@srl/core",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Buildless reactive frontend library, its component collection, its toolchain, and the example application",
+  "//": [
+    "THE LIBRARY'S INTERFACE, IN THE LIBRARY.",
+    "",
+    "This directory is the package. The repository around it is one consumer of",
+    "it, not its owner: `source/` here is the root of a standalone srl checkout,",
+    "so extracting the library is a file move rather than an interface redesign.",
+    "",
+    "Two audiences, one table. `exports` answers the consumer who installs from a",
+    "registry and resolves through Node or a bundler. `srl` below answers the",
+    "consumer this framework is actually for: a browser with an import map and no",
+    "build step. Both are generated from `srl.imports` by",
+    "tools/package/interface.mjs, and tools/checks/verify-deps.mjs fails when the",
+    "literal `exports` here, the generated fragment, an application's inline map or",
+    "the root tsconfig paths disagree with it.",
+    "",
+    "The import-map fragment is a file, lib/importmap.json, served at",
+    "/lib/importmap.json. A consumer pastes it into index.html or fetches it; an",
+    "application that pastes it has the library's own bytes in its map rather than",
+    "a copy somebody typed."
+  ],
+  "exports": {
+    "./core/*": "./lib/core/*",
+    "./auth/*": "./lib/auth/*",
+    "./host/*": "./lib/host/*",
+    "./components/*": "./components/*",
+    "./testing/harness.js": "./lib/test/harness.js",
+    "./importmap.json": "./lib/importmap.json",
+    "./package.json": "./package.json"
+  },
+  "files": ["lib", "components"],
+  "//srl": [
+    "The browser half of the interface, and the only place it is written down.",
+    "",
+    "  mounts   URL prefix -> directory in this package. A browser sees the",
+    "           package as these mounts on the application's origin; the dev",
+    "           server, the test runner, the benchmark origin and the deployment",
+    "           all read this table rather than restating it.",
+    "  imports  bare specifier prefix -> directory in this package. The import map",
+    "           and the `exports` map above are both derived from it, so a layer",
+    "           added here reaches every consumer with no second edit.",
+    "  vendor   the runtime dependencies, by the specifier source imports them",
+    "           under. Their integrity hashes are computed from the bytes in",
+    "           lib/vendor rather than written here: a hash somebody can edit",
+    "           without touching the file it covers is not a control."
+  ],
+  "srl": {
+    "mounts": {
+      "/lib/": "lib",
+      "/components/": "components"
+    },
+    "imports": {
+      "@core/": "lib/core",
+      "@auth/": "lib/auth",
+      "@host/": "lib/host",
+      "@components/": "components"
+    },
+    "vendor": {
+      "lit": "/lib/vendor/lit-all.min.js",
+      "lit/async-directive.js": "/lib/vendor/lit-all.min.js",
+      "lit/directives/repeat.js": "/lib/vendor/lit-all.min.js",
+      "@preact/signals-core": "/lib/vendor/signals-core.mjs"
+    }
+  }
+}

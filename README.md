@@ -118,6 +118,20 @@ npm run docs:adr        # a malformed record, or a citation resolving to nothing
 Where each kind of knowledge belongs is [the documentation
 policy](docs/documentation.md), which is itself enforced.
 
+## License
+
+MIT, in [LICENSE](LICENSE).
+
+Three runtime dependencies are vendored into `source/lib/vendor` and redistributed with
+this repository: **lit** 3.3.3 (BSD-3-Clause), **@preact/signals-core** 1.14.4 (MIT) and,
+for development only, **@tailwindcss/browser** 4.3.3 (MIT). Their notices are in
+[source/lib/vendor/LICENSES.md](source/lib/vendor/LICENSES.md), where `npm run vendor`
+checks them against the `LICENSE` of the pinned version in `node_modules`, and where each
+file came from is in
+[source/lib/vendor/provenance.json](source/lib/vendor/provenance.json). A production
+artifact carries its own generated `THIRD_PARTY_LICENSES.md` instead; both are described
+in [delivery](docs/guide/delivery.md#third-party-notices).
+
 ## Credits
 
 I've been presented the idea of a buildless SDK/framework for faster prototyping and development some time ago by coworkers; this is my shot at it, given my familiarity with Angular's ecosystem.
