@@ -1,0 +1,33 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One job, one command. `npm run check` is the contract the repository states in
+# CONTRIBUTING.md, so CI runs exactly that and nothing it does not: a pipeline that
+# checks more than the documented command is a pipeline contributors cannot reproduce.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Nothing here is shipped. The browser gets its three runtime dependencies from
+      # source/lib/vendor, which is committed; node_modules exists for tsc, eslint and
+      # the test runner.
+      - run: npm ci
+
+      # Browser suites drive the Chrome the runner already has, rather than downloading
+      # one: the image ships a stable build and the harness reads CHROME_PATH.
+      - name: Locate Chrome
+        run: echo "CHROME_PATH=$(which google-chrome)" >> "$GITHUB_ENV"
+
+      - run: npm run check
