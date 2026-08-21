@@ -8,6 +8,15 @@ Everything expensive is opt-in and behaviour-preserving: the CSS generation step
 
 **Note**: this SDK has been designed, built and tested with some help from AI coding assistants. This repository is structured to serve as insightful documentation for both humans and AI coding assistants, to speed up the generation and the prototyping of new software.
 
+## Live demo
+
+The example application runs at **[srl-example.santella.dev](https://srl-example.santella.dev)**.
+
+It is served as vanilla, unminified source: the same files that are in `example/` and
+`source/`, loaded directly by the browser through an import map. No bundler, no minifier,
+no transpiler in between, so every file the demo runs is readable in the browser's
+devtools exactly as it is checked into this repository.
+
 ## Repository structure
 
 ```
