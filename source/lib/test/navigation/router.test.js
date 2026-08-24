@@ -975,6 +975,14 @@ describe('router attachment', () => {
     const link = document.createElement('a');
     link.href = '/users/9';
     document.body.append(link);
+
+    // Insurance, not part of what is asserted: the router is expected to claim this
+    // click, and if it ever stopped doing so the browser would load /users/9 for
+    // real and this file would lose its results instead of reporting one failure.
+    /** @param {Event} event */
+    const blockDefault = (event) => event.preventDefault();
+    window.addEventListener('click', blockDefault);
+
     try {
       link.click();
       // Let the click handler's navigate() settle.
@@ -984,6 +992,7 @@ describe('router attachment', () => {
       assert.equal(location.pathname, '/users/9');
       assert.equal(outlet.querySelector('.view')?.textContent, 'user:9');
     } finally {
+      window.removeEventListener('click', blockDefault);
       link.remove();
     }
   });
@@ -991,22 +1000,43 @@ describe('router attachment', () => {
   it('leaves links alone that opt out', async () => {
     await startAt([{ path: '/', component: 'test-home-view' }], '/');
 
-    for (const configure of [
-      /** @param {HTMLAnchorElement} a */ (a) => a.setAttribute('download', ''),
-      /** @param {HTMLAnchorElement} a */ (a) => (a.target = '_blank'),
-      /** @param {HTMLAnchorElement} a */ (a) => (a.rel = 'external'),
-      /** @param {HTMLAnchorElement} a */ (a) => (a.dataset.routerIgnore = ''),
-    ]) {
-      const link = document.createElement('a');
-      link.href = '/users/1';
-      configure(link);
-      document.body.append(link);
+    /**
+     * What the browser would do with a link the router declines is exactly the
+     * problem: a real page load, a popup or a download, any of which takes the
+     * test page with it and loses every result this file has produced. The
+     * router's listener is on `document`, so this one goes on `window`: it reads
+     * the verdict after the router has had its say, then stops the browser from
+     * acting on it.
+     *
+     * @type {boolean[]}
+     */
+    const claimed = [];
+    /** @param {Event} event */
+    const blockDefault = (event) => {
+      claimed.push(event.defaultPrevented);
+      event.preventDefault();
+    };
+    window.addEventListener('click', blockDefault);
 
-      const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
-      link.dispatchEvent(event);
-      link.remove();
+    try {
+      for (const configure of [
+        /** @param {HTMLAnchorElement} a */ (a) => a.setAttribute('download', ''),
+        /** @param {HTMLAnchorElement} a */ (a) => (a.target = '_blank'),
+        /** @param {HTMLAnchorElement} a */ (a) => (a.rel = 'external'),
+        /** @param {HTMLAnchorElement} a */ (a) => (a.dataset.routerIgnore = ''),
+      ]) {
+        const link = document.createElement('a');
+        link.href = '/users/1';
+        configure(link);
+        document.body.append(link);
 
-      assert.notOk(event.defaultPrevented, `router must not claim this link: ${link.outerHTML}`);
+        link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+        link.remove();
+
+        assert.notOk(claimed.at(-1), `router must not claim this link: ${link.outerHTML}`);
+      }
+    } finally {
+      window.removeEventListener('click', blockDefault);
     }
   });
 
