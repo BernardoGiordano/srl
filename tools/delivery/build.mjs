@@ -942,7 +942,43 @@ function totalsOf(files) {
  */
 async function productionCss(app, stage, entry) {
   const temporary = join(stage, '.production.css');
-  return compileProductionCss(app, join(app.dir, 'src', 'app.css'), temporary, entry);
+  return compileProductionCss(app, join(app.dir, 'src', 'app.css'), temporary, entry, await shellUtilities(app));
+}
+
+/**
+ * The utility classes an application's own shell names: every plain class token
+ * on `<html>` and `<body>` in its index.html.
+ *
+ * What the compiled stylesheet is checked against, and derived from the
+ * application rather than named in this file, because the class one application
+ * happens to put on its body is not a fact about the tool. The check itself is
+ * for the trap in docs/guide/delivery.md: a Tailwind run whose `@source` globs
+ * resolved against the wrong directory emits a stylesheet, exits 0, and has
+ * scanned nothing — a build that looks like it worked and a site with no styles.
+ * The shell's own classes are the ones every page of that application renders,
+ * so a stylesheet carrying none of them cannot have read the application.
+ *
+ * Tokens with a variant or an opacity — `sm:flex`, `text-ink/50` — are left out:
+ * they are escaped in the emitted selector, and matching them would mean
+ * reproducing Tailwind's escaping here to test something the plain tokens beside
+ * them already answer.
+ *
+ * @param {BuildApplication} app
+ * @returns {Promise<string[]>}
+ */
+async function shellUtilities(app) {
+  const document = /** @type {HtmlNode} */ (
+    /** @type {unknown} */ (parse(await readText(join(app.dir, 'index.html'))))
+  );
+  /** @type {Set<string>} */
+  const names = new Set();
+  visitHtml(document, (node) => {
+    if (node.tagName !== 'html' && node.tagName !== 'body') return;
+    for (const token of (htmlAttribute(node, 'class') ?? '').split(/\s+/u)) {
+      if (/^[a-z][a-z0-9-]*$/u.test(token)) names.add(token);
+    }
+  });
+  return [...names];
 }
 
 /**
@@ -950,7 +986,7 @@ async function productionCss(app, stage, entry) {
  * @param {string} input
  * @param {string} temporary
  * @param {string} entry
- * @param {string} [requiredUtility]
+ * @param {ReadonlyArray<string>} requiredUtilities
  * @param {string} [sourceBase]
  */
 async function compileProductionCss(
@@ -958,7 +994,7 @@ async function compileProductionCss(
   input,
   temporary,
   entry,
-  requiredUtility = '.bg-canvas',
+  requiredUtilities,
   sourceBase = REPO,
 ) {
   const cli = join(REPO, 'node_modules', '.bin', 'tailwindcss');
@@ -971,10 +1007,18 @@ async function compileProductionCss(
   }
 
   const source = await readFile(temporary, 'utf8');
+  // One of them, not all: the shell may well name a class of its own alongside
+  // the utilities, and one utility emitted is already proof that the scan read
+  // the application. An empty list means the shell names no plain utility at
+  // all, which is a stylesheet this check has nothing to say about rather than
+  // a failure — the four checks around it still apply.
+  const scanned =
+    requiredUtilities.length === 0 ||
+    requiredUtilities.some((name) => source.includes(`.${name}`));
   const problems = [
     ...(source.length === 0 ? ['empty'] : []),
     ...(!source.includes('--ui-color-canvas') ? ['shared tokens'] : []),
-    ...(!source.includes(requiredUtility) ? [`utility ${requiredUtility}`] : []),
+    ...(scanned ? [] : [`none of the application's own utilities: ${requiredUtilities.join(', ')}`]),
     ...(source.includes('@source') ? ['@source directive'] : []),
     ...(source.includes('tailwind-browser') ? ['browser compiler marker'] : []),
   ];
@@ -1044,12 +1088,15 @@ async function productionRemoteCss(app, remoteDir, stage, entry) {
   const remoteSource = remoteDir.split(sep).join('/');
   source += `\n@source '${remoteSource}';\n`;
   await writeFile(input, source);
+  // Not the shell's classes: this stylesheet is compiled from one remote's
+  // sources alone, and the body the shell renders is not among them. What every
+  // remote in the collection does draw is muted text.
   const compiled = await compileProductionCss(
     app,
     input,
     temporary,
     entry,
-    '.text-muted',
+    ['text-muted'],
     remoteDir,
   );
   return { ...compiled, input };
