@@ -16,6 +16,19 @@ export class TemplateCheckHost extends HTMLElement {
   choose(id) {
     void id;
   }
+
+  /**
+   * A move-up/move-down pair, typed the ordinary way. The literal union is the
+   * point: `-1` satisfies it only if the checker emits the minus against the
+   * literal itself.
+   *
+   * @param {number} id
+   * @param {1 | -1} direction
+   */
+  move(id, direction) {
+    void id;
+    void direction;
+  }
 }
 
 /** A typed custom element input used by the property-binding test. */

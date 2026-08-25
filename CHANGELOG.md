@@ -11,6 +11,17 @@
   through untouched, and the check sits ahead of the 405 and the history fallback so a
   `POST` reaches the backend and an upstream 404 does not come back as `index.html`
   ([ADR-0069](docs/adr/0069-the-dev-server-proxies-the-backend.md)).
+- **A plain custom element is declared by importing it.** `uses` resolves each entry to a
+  component definition and throws on a class that has none, so an element defined with
+  `customElements.define` — one that owns its own children, and so cannot be a component
+  whose template would wipe them — could never appear in one. The template checker
+  nonetheless reported such an element as missing from `uses`, which is advice that breaks
+  the application at runtime. A side-effect import is now what the model reads for those,
+  because running the module is what makes the element exist.
+- **`-1` keeps its literal type in a template.** TypeScript gives a numeric literal type to
+  `-` applied directly to a numeric literal and to nothing else, and the checker emitted
+  `-(1)`. A handler typed `(direction: 1 | -1)` — an ordinary move-up/move-down pair —
+  rejected `(move-up)="move(row, -1)"` while accepting `(move-down)="move(row, 1)"`.
 
 ## 0.2.0
 

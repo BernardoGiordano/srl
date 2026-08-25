@@ -696,7 +696,16 @@ class ShimBuilder {
         return wrap(`${callee}(${node.args.map((arg) => this.emit(arg, scope, true, at)).join(', ')})`);
       }
       case 'unary':
-        return `${node.operator}(${this.emit(node.operand, scope, true, at)})`;
+        // `-1` is emitted without the parentheses, and that is not cosmetic.
+        // TypeScript gives a numeric literal type to `-` applied directly to a
+        // numeric literal and to nothing else, so `-(1)` is `number` where `-1` is
+        // `-1`. A handler typed `(direction: 1 | -1)` — an ordinary way to write a
+        // move-up/move-down pair — would reject `(move-up)="move(row, -1)"` and
+        // accept `(move-down)="move(row, 1)"`, which reads as a bug in the template
+        // rather than in the checker.
+        return node.operator === '-' && node.operand.kind === 'literal' && typeof node.operand.value === 'number'
+          ? `-${JSON.stringify(node.operand.value)}`
+          : `${node.operator}(${this.emit(node.operand, scope, true, at)})`;
       case 'binary':
         // `strictOperator`, so `==` type-checks as the `===` the evaluator runs.
         return `(${this.emit(node.left, scope, true, at)} ${strictOperator(node.operator)} ${this.emit(node.right, scope, true, at)})`;

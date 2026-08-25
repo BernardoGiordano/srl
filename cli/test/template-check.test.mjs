@@ -170,3 +170,16 @@ void test('an element the component does not import is an error naming the class
   );
   assert.deepEqual(checkWithUses('<x-content></x-content>', []), [], 'the projection marker');
 });
+
+void test('a negated numeric literal keeps its literal type', () => {
+  // TypeScript gives a numeric literal type to `-` applied directly to a numeric
+  // literal and to nothing else: `-1` is `-1`, and `-(1)` is `number`. Emitting the
+  // parenthesised form made a handler typed `(id, direction: 1 | -1)` reject
+  // `move(1, -1)` while accepting `move(1, 1)` — a checker bug that reads as a bug
+  // in the template, and one every move-up/move-down pair in an application hits.
+  assert.deepEqual(check('<button (click)="move(1, -1)"></button>'), []);
+  assert.deepEqual(check('<button (click)="move(1, 1)"></button>'), []);
+
+  // Everything else the operator applies to still goes through the general path.
+  assert.deepEqual(check('<span>{{ -rows.length }}</span>'), []);
+});

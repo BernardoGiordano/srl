@@ -119,6 +119,15 @@ export interface ModuleRecord {
   path: string;
   /** Local name -> absolute path of the module it was imported from. */
   imports: Map<string, string>;
+  /**
+   * Absolute paths of the modules imported for their side effect alone.
+   *
+   * A component declares the components it renders in `uses`. A plain custom
+   * element cannot be declared that way — `uses` resolves to component definitions
+   * and throws on a class that has none — so importing its module is the whole of
+   * its declaration, and this is where the template checker reads it.
+   */
+  sideEffectImports: Set<string>;
   /** Class name -> whether it is exported. */
   classes: Map<string, boolean>;
   /**

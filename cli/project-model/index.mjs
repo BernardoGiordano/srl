@@ -85,6 +85,7 @@ export async function readProject(app, options = {}) {
     modules.set(parsed.path, {
       path: parsed.path,
       imports: parsed.imports,
+      sideEffectImports: parsed.sideEffectImports,
       classes: parsed.classes,
       storage: parsed.storage,
     });
@@ -186,6 +187,29 @@ export async function readProject(app, options = {}) {
   }
   for (const record of elements.values()) {
     if (record.usesTags.length === 0) record.usesTags = [record.tag];
+  }
+
+  // And the elements a module makes exist by importing them for the side effect.
+  //
+  // `uses` is how a component declares another component, and it is not available
+  // for a plain `customElements.define` element: `uses` resolves each entry to a
+  // component definition and throws on a class that has none. For those, running
+  // the module is the definition, so the import is the declaration — and without
+  // this the checker reports the element as missing from a `uses` list that could
+  // not accept it, which is advice that breaks the application at runtime.
+  for (const record of elements.values()) {
+    const sideEffects = modules.get(record.module)?.sideEffectImports;
+    if (sideEffects === undefined || sideEffects.size === 0) continue;
+
+    const reachable = [...elements.values()]
+      .filter((candidate) => candidate.kind === 'customElements.define')
+      .filter((candidate) => sideEffects.has(candidate.module))
+      .map((candidate) => candidate.tag);
+    if (reachable.length === 0) continue;
+
+    record.usesTags = [...new Set([...record.usesTags, ...reachable])].sort((left, right) =>
+      left.localeCompare(right),
+    );
   }
 
   const templates = await readTemplates(app, elements, roots);

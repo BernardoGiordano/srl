@@ -263,3 +263,24 @@ void test('this repository has no unreadable declaration and no orphan template'
     assert.ok(model.entry !== null);
   }
 });
+
+void test('a side-effect import makes a plain custom element available to the template', async () => {
+  // `uses` resolves each entry to a component definition and throws on a class that
+  // has none, so a plain `customElements.define` element can never appear in one.
+  // Importing its module is therefore the only declaration there is, and the model
+  // has to read it — otherwise the template checker reports the element as missing
+  // from a list that could not have accepted it, and following that advice throws.
+  const model = await fixtureProject(APP_A);
+  const host = model.elements.get('fx-side-effect-host');
+  assert.ok(host !== undefined, 'the host is discovered');
+  assert.ok(
+    host.usesTags.includes('fx-plain'),
+    `fx-plain is available to it, got ${host.usesTags.join(', ')}`,
+  );
+
+  // And only for the module that imports it: availability is per component, the same
+  // way `uses` is.
+  const other = model.elements.get('fx-host');
+  assert.ok(other !== undefined);
+  assert.ok(!other.usesTags.includes('fx-plain'), 'not available to a component that does not import it');
+});
