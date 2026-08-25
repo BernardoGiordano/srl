@@ -22,7 +22,7 @@ templates.json
 # Anchored to the root and matching the whole family, so the second script (a
 # staging target, a per-application variant) is ignored without another edit here.
 /deploy*.sh
-/push-*.sh
+/publish.sh
 
 # build.json is written at deploy time and read by nobody: it is a
 # "which commit is on the server" stamp you curl, not application input. Derived
