@@ -48,6 +48,14 @@
     "prefixes (cli/package/interface.mjs), and imports three of its modules",
     "outright, so the pair is one interface split across two tarballs."
   ],
+  "//bin": [
+    "One name, and a dispatcher behind it. Every tool is still a module runnable by",
+    "path — the bin adds a name rather than a layer, and cli/bin/srl.mjs parses",
+    "nothing a tool would parse for itself."
+  ],
+  "bin": {
+    "srl": "bin/srl.mjs"
+  },
   "//files": [
     "The tool directories, minus the suite. cli/test/ tests this package rather",
     "than being it, and its fixtures are whole projects a consumer has no use for.",
@@ -61,6 +69,7 @@
     "the same directory listing."
   ],
   "files": [
+    "bin",
     "layout.mjs",
     "package",
     "project-model",

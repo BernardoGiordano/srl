@@ -69,6 +69,10 @@
     "the map means a stray `await import()` of one fails at the resolver instead of",
     "loading a declaration file as a module.",
     "",
+    "tsconfig.base.json is the same table in the form tsc reads, and is published for",
+    "the same reason: a consumer extends it instead of copying four path mappings",
+    "that would then type-check against files the browser does not load.",
+    "",
     "The import-map fragment is a file, lib/importmap.json, served at",
     "/lib/importmap.json. A consumer pastes it into index.html or fetches it; an",
     "application that pastes it has the library's own bytes in its map rather than",
@@ -91,6 +95,7 @@
     "./lib/core/template/types.js": { "types": "./lib/core/template/types.d.ts" },
     "./testing/harness.js": "./lib/test/harness.js",
     "./importmap.json": "./lib/importmap.json",
+    "./tsconfig.base.json": "./tsconfig.base.json",
     "./package.json": "./package.json"
   },
   "//sideEffects": [
@@ -117,6 +122,7 @@
     "dist",
     "lib",
     "components",
+    "tsconfig.base.json",
     "!**/test/**",
     "lib/test/harness.js"
   ],

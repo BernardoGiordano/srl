@@ -83,7 +83,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 
-import { REPO, apps, exists, readText, repoPath, walk } from '../../cli/layout.mjs';
+import { REPO, apps, exists, readText, walk } from '../../cli/layout.mjs';
 import {
   COMPONENTS,
   BUNDLES,
@@ -306,23 +306,38 @@ console.log(
 );
 
 /**
- * tsconfig paths are the type checker's copy of the same table. They stay a
- * literal in tsconfig.json because tsc reads that file and not this one, so what
- * this can do is refuse to let the copy differ.
+ * tsconfig paths are the type checker's copy of the same table, and they live in
+ * the package — source/tsconfig.base.json — for the same reason the import-map
+ * fragment does: a consumer extends one file instead of copying four mappings that
+ * are then free to drift. ADR-0068. They stay a literal there because tsc reads
+ * that file and not this one, so what this can do is refuse to let the copy differ.
+ *
+ * Package-relative, not repository-relative. Path targets in an extended config
+ * resolve against the file that declares them, which is inside the package wherever
+ * it was installed — the whole point of publishing it.
  */
-const tsconfig = /** @type {{ compilerOptions?: { paths?: Record<string, string[]> } }} */ (
-  parseJsonc(await readText(join(REPO, 'tsconfig.json')))
+const baseTsconfigFile = join(PACKAGE, 'tsconfig.base.json');
+if (!(await exists(baseTsconfigFile))) {
+  fail(
+    `${show(baseTsconfigFile)} does not exist. It is the type checker's half of the published ` +
+      `interface, and without it a consumer has nothing to extend and this repository's own ` +
+      `tsconfig.json resolves no library prefix at all.`,
+  );
+}
+
+const baseTsconfig = /** @type {{ compilerOptions?: { paths?: Record<string, string[]> } }} */ (
+  parseJsonc(await readText(baseTsconfigFile))
 );
-const tsPaths = tsconfig.compilerOptions?.paths ?? {};
+const tsPaths = baseTsconfig.compilerOptions?.paths ?? {};
 for (const [prefix, dir] of Object.entries(SPECIFIER_DIRS)) {
   const pattern = `${prefix}*`;
-  const expected = `./${repoPath(dir)}/*`;
+  const expected = `./${relative(PACKAGE, dir).split(sep).join('/')}/*`;
   const declared = tsPaths[pattern]?.[0];
   if (declared !== expected) {
     fail(
-      `tsconfig.json maps "${pattern}" to ${declared ?? 'nothing'}, and the library's import map ` +
-        `resolves it to ${expected}. The type checker would validate one set of files and the ` +
-        `browser would load another.`,
+      `${show(baseTsconfigFile)} maps "${pattern}" to ${declared ?? 'nothing'}, and the library's ` +
+        `import map resolves it to ${expected}. The type checker would validate one set of files ` +
+        `and the browser would load another.`,
     );
   }
 }
@@ -330,12 +345,38 @@ for (const pattern of Object.keys(tsPaths)) {
   const prefix = pattern.replace(/\*$/u, '');
   if (SPECIFIER_DIRS[prefix] === undefined) {
     fail(
-      `tsconfig.json declares the path "${pattern}", which no import map provides. It type-checks ` +
-        `here and 404s in the browser.`,
+      `${show(baseTsconfigFile)} declares the path "${pattern}", which no import map provides. ` +
+        `It type-checks here and 404s in the browser.`,
     );
   }
 }
-console.log('  ok   tsconfig paths resolve where the import map does');
+
+/**
+ * And this repository extends it rather than keeping its own copy, so the
+ * arrangement it type-checks under is the arrangement a consumer gets.
+ *
+ * `paths` does not merge: a block here would replace the inherited one wholesale
+ * and be free to drift, which is exactly what moving the table into the package
+ * was meant to end.
+ */
+const rootTsconfig =
+  /** @type {{ extends?: string, compilerOptions?: { paths?: Record<string, string[]> } }} */ (
+    parseJsonc(await readText(join(REPO, 'tsconfig.json')))
+  );
+const wantedExtends = '@srljs/core/tsconfig.base.json';
+if (rootTsconfig.extends !== wantedExtends) {
+  fail(
+    `tsconfig.json extends ${rootTsconfig.extends ?? 'nothing'} rather than "${wantedExtends}". ` +
+      `This repository is supposed to type-check through the same file it publishes.`,
+  );
+} else if (rootTsconfig.compilerOptions?.paths !== undefined) {
+  fail(
+    `tsconfig.json declares its own \`paths\`, which replaces the inherited block rather than ` +
+      `adding to it. Delete it: the mappings come from ${show(baseTsconfigFile)}.`,
+  );
+} else {
+  console.log('  ok   tsconfig paths resolve where the import map does, from the package');
+}
 
 /* ── Per application ───────────────────────────────────────────────────── */
 
@@ -1114,6 +1155,84 @@ for (const [specifier, packageName] of Object.entries(TYPE_BACKED)) {
 }
 
 console.log('  note vendored byte hashes and notices are verified by `npm run vendor`');
+
+/* ── 17. The two packages release together ─────────────────────────────── */
+
+/**
+ * @srljs/cli reads the library's manifest and imports three of its modules, so the
+ * pair is one interface split across two tarballs and is pinned to itself rather
+ * than to a range. ADR-0067. Four ways that can go wrong, and none of them is
+ * visible at runtime in this repository:
+ *
+ *   - the versions diverge, so a release publishes a toolchain and a library that
+ *     were never a pair;
+ *   - the peer range stops naming the library's actual version, which is an
+ *     unsatisfiable install for everyone and an error for nobody here;
+ *   - the toolchain's own pins drift from the ones this repository runs the build
+ *     with, so what a consumer gets is a build nobody tested;
+ *   - a pin becomes a range, which is the same thing arriving later.
+ */
+console.log('\ntoolchain');
+
+const cliManifest =
+  /** @type {{ version?: string, peerDependencies?: Record<string, string>, dependencies?: Record<string, string>, devDependencies?: Record<string, string> }} */ (
+    JSON.parse(await readText(join(REPO, 'cli', 'package.json')))
+  );
+const libraryVersion = String(MANIFEST.version);
+const cliVersion = String(cliManifest.version);
+
+if (cliVersion !== libraryVersion) {
+  fail(
+    `cli/package.json is ${cliVersion} and source/package.json is ${libraryVersion}. The two ` +
+      `are released together at one version: the toolchain reads the library's manifest and ` +
+      `imports three of its modules, so a pair that was never built together is a build the ` +
+      `consumer gets and nobody ran.`,
+  );
+} else {
+  console.log('  ok   @srljs/core and @srljs/cli are both %s', libraryVersion);
+}
+
+const peer = cliManifest.peerDependencies?.['@srljs/core'];
+if (peer !== libraryVersion) {
+  fail(
+    `cli/package.json names @srljs/core@${peer ?? 'nothing'} as a peer, and the library is ` +
+      `${libraryVersion}. Exact, not a range: a range would let a consumer pair a template ` +
+      `checker with a dialect it does not describe, and the build would pass what the browser ` +
+      `then rejects.`,
+  );
+} else {
+  console.log("  ok   the peer range names the library's own version, exactly");
+}
+
+/**
+ * And the toolchain's pins are the ones this repository runs. They are `dependencies`
+ * there because that package ships them, and devDependencies here because nothing in
+ * this repository is shipped; the versions have to be the same number either way.
+ */
+for (const [field, declared] of /** @type {Array<[string, Record<string, string>]>} */ ([
+  ['dependencies', cliManifest.dependencies ?? {}],
+  ['devDependencies', cliManifest.devDependencies ?? {}],
+])) {
+  for (const [name, version] of Object.entries(declared)) {
+    if (/^[\^~]/u.test(version)) {
+      fail(
+        `cli/package.json pins ${name}@${version} as a range. The point of publishing the ` +
+          `toolchain is that a consumer gets the versions it was tested against; a range hands ` +
+          `that decision back to their lockfile.`,
+      );
+      continue;
+    }
+    if (devDeps[name] !== version) {
+      fail(
+        `cli/package.json declares ${name}@${version} in \`${field}\` and the root ` +
+          `devDependencies say ${devDeps[name] ?? 'nothing'}. This repository would run the ` +
+          `build against one version and publish another.`,
+      );
+      continue;
+    }
+    console.log('  ok   %s %s matches the root devDependency', name.padEnd(22), version.padEnd(8));
+  }
+}
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 

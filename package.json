@@ -31,6 +31,8 @@
     "package": "node tools/delivery/package-bundle.mjs",
     "package:check": "node tools/delivery/package-bundle.mjs --check",
     "templates:check": "node cli/checks/template-check.mjs",
+    "importmap:check": "node cli/checks/importmap-check.mjs",
+    "pack:check": "node tools/checks/pack-check.mjs",
     "typecheck": "node_modules/tsgo/bin/tsc --noEmit",
     "typecheck:watch": "node_modules/tsgo/bin/tsc --noEmit --watch",
     "typecheck:compat": "tsc --noEmit",
@@ -50,7 +52,7 @@
     "docs:adr:write": "node tools/checks/adr-check.mjs --write",
     "benchmark": "node tools/benchmark/run.mjs",
     "benchmark:ci": "node tools/benchmark/run.mjs --ci",
-    "check": "npm run typecheck && npm run templates:check && npm run lint && npm run test:tools && npm run vendor && npm run package && npm run verify && npm run docs:check && npm run docs:adr && npm run test"
+    "check": "npm run typecheck && npm run templates:check && npm run lint && npm run test:tools && npm run vendor && npm run package && npm run verify && npm run pack:check && npm run docs:check && npm run docs:adr && npm run test"
   },
   "//layout": [
     "  source/             the library, and a package of its own: source/package.json",
@@ -92,6 +94,7 @@
     "  APP=example npm test                  lib suite + that application's suite",
     "  npm run importmap                     regenerate the published import map",
     "  npm run package                       the four bundles source/package.json exports",
+    "  npm run pack:check                    both tarballs, installed, driving an app",
     "  npm run build -- --app example        verified artifact for one application"
   ],
   "//running-it": [

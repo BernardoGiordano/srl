@@ -66,6 +66,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0065](0065-the-session-guard-sits-on-one-shell-route.md) | The session guard sits on one shell route; scope guards are affordances | accepted | `example/src/routes.js`, `example/server/api.mjs` |
 | [ADR-0066](0066-the-registry-consumer-gets-bundles.md) | The registry consumer gets bundles; the browser consumer still gets source | accepted | `source/package.json`, `tools/delivery/package-bundle.mjs`, `cli/package/interface.mjs`, `tools/checks/verify-deps.mjs` |
 | [ADR-0067](0067-the-toolchain-is-a-second-package.md) | The toolchain is a second package, pinned to the first | accepted | `cli/package.json`, `cli/layout.mjs`, `cli/package/interface.mjs`, `source/package.json`, `package.json` |
+| [ADR-0068](0068-the-installed-shape-is-checked-by-installing.md) | The installed shape is checked by installing, and the type table ships with the library | accepted | `tools/checks/pack-check.mjs`, `source/tsconfig.base.json`, `cli/bin/srl.mjs`, `cli/checks/importmap-check.mjs`, `tools/checks/verify-deps.mjs` |
 
 <!-- /generated:adr-index -->
 

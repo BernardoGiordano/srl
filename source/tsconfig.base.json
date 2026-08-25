@@ -1,0 +1,82 @@
+{
+  // THE TYPE CHECKER'S HALF OF THE PUBLISHED INTERFACE.
+  //
+  // A browser resolves `@core/` through the import map this package publishes. tsc
+  // ignores import maps, so it needs the same table in the form it does read, and
+  // that table is here rather than in every consumer's tsconfig.json — a copy
+  // somebody typed is a copy that type-checks against files the browser will not
+  // load.
+  //
+  // Extend it from the root of a repository built on srl:
+  //
+  //   {
+  //     "extends": "@srljs/core/tsconfig.base.json",
+  //     "compilerOptions": { "types": ["node"] },
+  //     "include": ["web/**/*.js", "web/**/*.mjs"]
+  //   }
+  //
+  // Relative path targets in an extended config resolve against the file that
+  // declares them, which is this one, so the four below point into this package
+  // wherever it was installed. Nothing here needs editing per consumer.
+  //
+  // `srl check templates` reads the extending config: the templates are checked
+  // against the same options and the same JSDoc types as the JavaScript around them,
+  // which is the whole reason a dialect can be statically checked without a compiler.
+  //
+  // tools/checks/verify-deps.mjs fails when these paths and the import map the
+  // library publishes disagree.
+  "compilerOptions": {
+    // Type checking only. Nothing in an srl project is ever compiled: the browser
+    // runs the same .js files tsc reads, and the types live in JSDoc comments plus
+    // .d.ts files that are erased at zero cost because nothing imports them at
+    // runtime. A consumer who does bundle still does not emit through this config.
+    "noEmit": true,
+
+    // Check the JavaScript. Without these two, extending this file buys the paths
+    // and nothing else: tsc would parse the application's modules for types and
+    // never look inside them, and `srl check templates` would have no types to
+    // check a template's expressions against.
+    "allowJs": true,
+    "checkJs": true,
+
+    // And read the library's JSDoc where the library actually is.
+    //
+    // This package publishes no `.d.ts`: the types are JSDoc in the `.js` files the
+    // browser runs, which is what makes one set of bytes both the runtime and the
+    // contract. tsc will not look inside a `.js` file under `node_modules` unless
+    // told to — `maxNodeModuleJsDepth` defaults to 0 — so without this line every
+    // `@core/` import in a consumer's application is `any`, `srl check templates`
+    // reports each one as TS7016, and a typed buildless library is typed only in its
+    // own repository.
+    //
+    // Depth 1 is the package's own modules and not their dependencies' internals.
+    // The cost is that other installed packages' top-level JavaScript enters the
+    // program too; the alternative is no types at all for the thing being extended.
+    "maxNodeModuleJsDepth": 1,
+
+    // What the library's own source is written against. A consumer is free to
+    // override any of them; the effect of a lower `lib` is spurious errors from
+    // library JSDoc rather than a runtime difference, because none of this is
+    // emitted.
+    "target": "es2022",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+
+    // `@app/` is deliberately absent, here and in the import map. A prefix can mean
+    // exactly one directory, so it could point into at most one application, and a
+    // repository with two would have a specifier that means different things
+    // depending on which file you are reading. An application imports its own files
+    // relatively, which is also what lets one program check every application in a
+    // repository.
+    //
+    // No `baseUrl`: TypeScript 7.0 removed it (error TS5102), and path targets are
+    // resolved relative to the declaring file, which is what these already assume.
+    "paths": {
+      "@core/*": ["./lib/core/*"],
+      "@auth/*": ["./lib/auth/*"],
+      "@host/*": ["./lib/host/*"],
+      "@components/*": ["./components/*"]
+    }
+  }
+}

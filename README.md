@@ -53,11 +53,26 @@ Why there are two, and what the second costs, is
 is [source/README.md](source/README.md), and what changed between versions is
 [the changelog](CHANGELOG.md).
 
+A repository that *deploys* an application installs the toolchain beside the library, and
+then owns none of it:
+
+```bash
+npm install --save-dev @srljs/cli
+srl build --app web
+```
+
+`@srljs/cli` is this repository's `cli/` directory, published: the dev server, the project
+model, the template checker, the artifact build and the release pipeline. It is separate
+from the library because the build needs Vite, parse5 and tsc, and a page that loads the
+framework as source must not have to install a bundler
+([ADR-0067](docs/adr/0067-the-toolchain-is-a-second-package.md)). Its README is
+[cli/README.md](cli/README.md).
+
 ## Run it
 
 ```bash
 npm run example                                 # the application, http://localhost:8100
-node cli/dev/serve.mjs --open                 # any application, statically, http://localhost:8000
+node cli/dev/serve.mjs --open                   # any application, statically, http://localhost:8000
 ```
 
 Nothing is installed to run the application: the browser loads the files directly.

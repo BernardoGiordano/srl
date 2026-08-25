@@ -997,13 +997,22 @@ async function compileProductionCss(
   requiredUtilities,
   sourceBase = REPO,
 ) {
-  const cli = join(REPO, 'node_modules', '.bin', 'tailwindcss');
+  const cli = await requireTailwind(app);
   try {
     await execFileAsync(cli, ['-i', input, '-o', temporary, '--minify', '--cwd', sourceBase], {
       cwd: REPO,
     });
   } catch (error) {
-    throw artifactError(app, 'css', 'Tailwind production compilation failed.', { cause: error });
+    // The compiler's own message, not just "it failed". A missing `@import`, an unknown
+    // `@source` glob and a syntax error in the application's stylesheet all arrive here,
+    // and the useful half is on the child's stderr — which `execFile` puts on the error
+    // object and nowhere a caller would look.
+    throw artifactError(
+      app,
+      'css',
+      `Tailwind production compilation failed.\n${tailwindOutput(error)}`,
+      { cause: error },
+    );
   }
 
   const source = await readFile(temporary, 'utf8');
@@ -1053,6 +1062,84 @@ async function compileProductionCss(
       },
     }),
   };
+}
+
+/**
+ * Tailwind belongs to the repository being built, not to this package, and these are
+ * the four files the build reaches for. Checked together and up front, because the
+ * failure otherwise is an ENOENT on a path nobody chose, one stage into a build.
+ *
+ * Not a dependency of `@srljs/cli` on purpose: the stylesheet being compiled is the
+ * application's, written against its config and its version, and a copy pinned here
+ * would compile somebody's CSS with a compiler they did not choose.
+ *
+ * @param {BuildApplication} app
+ * @returns {Promise<string>} the CLI's path
+ */
+async function requireTailwind(app) {
+  const cli = join(REPO, 'node_modules', '.bin', 'tailwindcss');
+  const pkg = join(REPO, 'node_modules', 'tailwindcss');
+  const needed = [
+    [cli, '@tailwindcss/cli'],
+    [join(pkg, 'index.css'), 'tailwindcss'],
+    [join(pkg, 'package.json'), 'tailwindcss'],
+    // Read to build THIRD_PARTY_LICENSES.md, which the artifact ships. A build that
+    // got this far and then could not write the notice would have to be thrown away.
+    [join(pkg, 'LICENSE'), 'tailwindcss'],
+  ];
+
+  /** @type {Set<string>} */
+  const install = new Set();
+  /** @type {string[]} */
+  const missing = [];
+  for (const [path, from] of needed) {
+    if (path === undefined || from === undefined) continue;
+    try {
+      await access(path);
+    } catch {
+      missing.push(relative(REPO, path).split(sep).join('/'));
+      install.add(from);
+    }
+  }
+
+  if (missing.length > 0) {
+    throw artifactError(
+      app,
+      'css',
+      `the production stylesheet is compiled by this repository's own Tailwind, and ` +
+        `${missing.length === 1 ? 'one file it needs is' : `${String(missing.length)} files it needs are`} ` +
+        `not there:\n      ${missing.join('\n      ')}\n` +
+        `    Run \`npm install --save-dev ${[...install].join(' ')}\`. Tailwind is deliberately ` +
+        `not a dependency of @srljs/cli: the stylesheet is yours, written against your config ` +
+        `and your version.`,
+    );
+  }
+  return cli;
+}
+
+/**
+ * The child process's own diagnostics, indented under the failure that reports them.
+ *
+ * @param {unknown} error
+ * @returns {string}
+ */
+function tailwindOutput(error) {
+  const detail = /** @type {{ stderr?: unknown, stdout?: unknown }} */ (error);
+  const streams = [detail.stderr, detail.stdout]
+    .filter((stream) => typeof stream === 'string')
+    .join('\n');
+  const text = streams
+    // The CLI colours its output, and an escape sequence inside a thrown message is
+    // noise in a log file and a lie in a terminal that does not decode it. The rule
+    // exists because a control character in a pattern is usually a typo; here it is
+    // the thing being matched.
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b\[[0-9;]*m/gu, '')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line !== '')
+    .join('\n      ');
+  return text === '' ? '    (the compiler printed nothing)' : `      ${text}`;
 }
 
 /**

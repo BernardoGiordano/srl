@@ -74,4 +74,7 @@ the reason is recorded in the module that owns it.
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
 | What static discovery knows about the project | `cli/project-model/` |
 | A dependency or layering rule | `tools/checks/verify-deps.mjs` |
+| Whether an application's import map still matches the library it installed | `cli/checks/importmap-check.mjs` — the one check a consumer runs, because the failures are blank pages |
+| What tsc has to know to resolve `@core/` | `source/tsconfig.base.json` — published, extended rather than copied |
+| Whether the published tarballs work when installed | `tools/checks/pack-check.mjs` — packs both, installs them, drives an application |
 | A performance budget | `tools/benchmark/budgets.json` |

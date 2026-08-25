@@ -57,8 +57,20 @@ Component templates are inlined into the components bundle, so a bundled applica
 no template request. The buildless path fetches each `.html` beside its module instead,
 and both run the same compiler over the same bytes.
 
-Types are not published with the bundles in this version: the sources are annotated in
-JSDoc against the `@core/` prefixes, which a consumer's TypeScript cannot resolve either.
+Types are not published as `.d.ts`. The sources are annotated in JSDoc against the
+`@core/` prefixes, and this package publishes the table that resolves them:
+
+```json
+{
+  "extends": "@srljs/core/tsconfig.base.json",
+  "include": ["web/**/*.js"]
+}
+```
+
+Extend it from the root of your repository and `@core/…` resolves for tsc where it resolves
+for the browser, from one declaration rather than a copy. That covers the buildless path.
+The bundles above are still untyped: a rolled-up `.d.ts` needs the same resolution problem
+solved again for the type layer.
 
 ## A component, end to end
 

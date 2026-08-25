@@ -12,6 +12,7 @@
  * divergence waiting to happen.
  */
 
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -826,7 +827,29 @@ let compiler;
 function compilerState() {
   if (compiler !== undefined) return compiler;
 
-  const config = ts.readConfigFile(resolve(REPO, 'tsconfig.json'), (file) => ts.sys.readFile(file));
+  const configFile = resolve(REPO, 'tsconfig.json');
+
+  // Before anything else, because the alternative is worse than useless. A missing
+  // config used to arrive as one TypeScript diagnostic per template, counted in the
+  // "N template type error(s)" total — so a repository with no tsconfig.json was told
+  // its templates had type errors, once per application, and the actual problem was a
+  // file that is not there. This is setup, not a finding.
+  if (!existsSync(configFile)) {
+    throw new Error(
+      `No tsconfig.json at ${REPO}.\n\n` +
+        `The template checker type-checks each template against the same options and the same ` +
+        `JSDoc types as the JavaScript around it, so it needs the configuration that describes ` +
+        `them — including the path mappings that make \`@core/\` resolve, which tsc cannot get ` +
+        `from an import map.\n\n` +
+        `Extend the one the library publishes:\n\n` +
+        `  {\n` +
+        `    "extends": "@srljs/core/tsconfig.base.json",\n` +
+        `    "include": ["<app>/**/*.js"]\n` +
+        `  }\n`,
+    );
+  }
+
+  const config = ts.readConfigFile(configFile, (file) => ts.sys.readFile(file));
   const parsed =
     config.error === undefined
       ? ts.parseJsonConfigFileContent(config.config, ts.sys, REPO)
@@ -940,6 +963,31 @@ export function checkTemplateSource(input) {
   ];
 }
 
+/**
+ * Whether a component's own template is this repository's to check.
+ *
+ * The project model reads the library and the shared collection alongside the
+ * application, and it has to: a template that names `<ui-table>` is only checkable
+ * against the element `ui-table` actually declares. What comes out of that is the
+ * *elements* every template may use, not a work list.
+ *
+ * In a checkout the two coincide — the library is in the repository, and checking its
+ * templates here is checking them where they are written. Installed from the registry
+ * they do not: those templates belong to a package, they were checked in its own
+ * repository before it was published, and tsc will not read the JSDoc of a `.js` file
+ * under `node_modules` at all (`maxNodeModuleJsDepth` is 0 by default). Checking them
+ * would report every module of the library as implicitly `any` — dozens of errors
+ * about code the consumer did not write and cannot fix.
+ *
+ * @param {Component} component
+ * @returns {boolean}
+ */
+function isOurs(component) {
+  const inside = relative(REPO, component.module);
+  if (inside.startsWith('..')) return false;
+  return !inside.split(sep).includes('node_modules');
+}
+
 /** @param {Application} app */
 async function checkApplication(app) {
   const discovered = await discover(app);
@@ -947,8 +995,10 @@ async function checkApplication(app) {
   const generated = new Map();
   /** @type {{ template: string, source: string, generated: GeneratedFile, problems: { at: number, message: string }[] }[]} */
   const details = [];
+  const ours = discovered.components.filter((component) => isOurs(component));
+  const skipped = discovered.components.length - ours.length;
 
-  for (const component of discovered.components) {
+  for (const component of ours) {
     let source;
     try {
       source = await readFile(component.template, 'utf8');
@@ -997,7 +1047,15 @@ async function checkApplication(app) {
   }
 
   if (failures === 0) {
-    console.log(`  ok   ${app.name}: ${String(discovered.components.length)} template(s) typechecked`);
+    console.log(`  ok   ${app.name}: ${String(ours.length)} template(s) typechecked`);
+    if (skipped > 0) {
+      // Said out loud, because a check that silently covers less than it looks like it
+      // covers is worse than one that covers less.
+      console.log(
+        `  note ${String(skipped)} installed-package template(s) not checked here; they were ` +
+          `checked in the package's own repository`,
+      );
+    }
   }
   return failures;
 }
@@ -1009,6 +1067,16 @@ export async function main() {
   const selected = requested === undefined ? all : all.filter((app) => app.name === requested);
   if (selected.length === 0) {
     console.error(`Unknown application ${JSON.stringify(requested)}. Found: ${all.map((app) => app.name).join(', ')}`);
+    return 1;
+  }
+
+  // Once, before any application, and reported as configuration rather than as a
+  // stack: nothing below can run without a compiler, and the same missing file would
+  // otherwise be reported once per application.
+  try {
+    compilerState();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
     return 1;
   }
 

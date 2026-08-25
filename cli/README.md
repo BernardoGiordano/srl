@@ -55,30 +55,59 @@ below its own root.
 ```bash
 # Static server for one application: the library's two mounts, history fallback,
 # watch and live reload. Plain Node, no dependencies of its own.
-node node_modules/@srljs/cli/dev/serve.mjs --app web --open
+srl serve --app web --open
+
+# The application's inline import map against the library it installed: entries
+# the library publishes and the map omits or hand-edited, prefixes resolving to
+# a second copy of the framework, integrity hashes that no longer match their
+# bytes. Every one of those is a blank page rather than a build error, so this is
+# the check to put in CI. Prints the script-src hash a CSP has to allow.
+srl check importmap
 
 # Type-check every template against the same JSDoc types as the JavaScript,
 # without compiling anything. Needs a tsconfig.json at the repository root.
-node node_modules/@srljs/cli/checks/template-check.mjs
+srl check templates
 
 # The production artifact: minified, hash-named chunks, a production index.html
 # whose import map pins a sha384 for every one of them, the compiled stylesheet,
 # and dist/<app>/artifact.json describing what was emitted and what Cache-Control
 # each file expects.
-node node_modules/@srljs/cli/delivery/build.mjs --app web
+srl build --app web
 
 # Every element, global and template the project model can see.
-node node_modules/@srljs/cli/project-model/index.mjs --app web --json
+srl model --app web --json
 ```
 
-Each is also a module. `buildArtifact()` takes one options object and returns one artifact
-report; callers supply no Vite configuration and never see its output object.
+`srl --help` lists the rest: the release pipeline, the template bundle, the import-map
+fragment, the mount table.
+
+Each command is also a module, and still runs by path — the bin adds a name, not a layer.
+
+```bash
+node node_modules/@srljs/cli/delivery/build.mjs --app web
+```
 
 ```js
 import { buildArtifact } from '@srljs/cli/delivery/build.mjs';
 
 const report = await buildArtifact({ app: { name: 'web', dir: '/abs/path/web' } });
 ```
+
+## Types
+
+The library publishes the type checker's half of its interface too. Extend it rather than
+copying four path mappings that would then be free to drift from the import map:
+
+```json
+{
+  "extends": "@srljs/core/tsconfig.base.json",
+  "include": ["web/**/*.js"]
+}
+```
+
+That is what makes `@core/` resolve for tsc, and what `srl check templates` reads. The
+library ships no `.d.ts`: its types are JSDoc in the same `.js` files the browser runs, and
+the base config is what lets tsc read them where they are installed.
 
 ## What the build expects of you
 
@@ -90,18 +119,19 @@ const report = await buildArtifact({ app: { name: 'web', dir: '/abs/path/web' } 
   own map and admits only the bare specifiers already declared there. A module importing
   something the map does not name fails the build rather than 404ing on one route.
 - **A git repository.** The artifact records the commit it was built from.
+- **At least two JavaScript chunks.** An application with nothing behind an `import()`
+  carries every route in its entry, which is the shape the chunking exists to avoid.
 
 ## Release
 
 The build is separate from the transport, and consumes only the verified report and bytes.
 
 ```bash
-node node_modules/@srljs/cli/delivery/release.mjs --artifact dist/web --out staged \
-  --remote-root /srv/www/example.com
+srl release --artifact dist/web --out staged --remote-root /srv/www/example.com
 ```
 
-`delivery/verify-release.mjs` and `delivery/verify-http.mjs` check a staged tree and a live
-origin against the report; `delivery/retention.mjs` prunes superseded releases.
+`srl verify-release` and `srl verify-http` check a staged tree and a live origin against the
+report; `srl retention` prunes superseded releases.
 
 ## Dependencies
 

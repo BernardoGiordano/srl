@@ -7,7 +7,14 @@
   TypeScript and parse5 as its own pinned dependencies rather than the library's. It names
   `@srljs/core` as an exact peer, so a repository that deploys an application installs both
   and needs no srl checkout of its own
-  ([ADR-0067](docs/adr/0067-the-toolchain-is-a-second-package.md)).
+  ([ADR-0067](docs/adr/0067-the-toolchain-is-a-second-package.md)). One bin, `srl`, with
+  `serve`, `build`, `model`, `check importmap`, `check templates` and the release pipeline
+  behind it; every command is still a module runnable by path.
+- **Types for the buildless path.** `@srljs/core/tsconfig.base.json` is the type checker's
+  half of the published interface — the four path mappings that make `@core/` resolve, plus
+  the JS-checking options the library's JSDoc assumes. A consumer extends it instead of
+  copying a table that would drift from the import map
+  ([ADR-0068](docs/adr/0068-the-installed-shape-is-checked-by-installing.md)).
 
 ## 0.1.0
 
