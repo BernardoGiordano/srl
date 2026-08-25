@@ -57,6 +57,12 @@ below its own root.
 # watch and live reload. Plain Node, no dependencies of its own.
 srl serve --app web --open
 
+# --proxy forwards a prefix to a backend instead of serving it from disk, so an
+# application whose session is a cookie its backend sets develops on one origin —
+# the arrangement it is deployed into — rather than on two. Repeatable. Routes
+# only: the prefix is not stripped, and status and headers pass through untouched.
+srl serve --app web --proxy /api/=http://127.0.0.1:8001 --proxy /auth/=http://127.0.0.1:8001
+
 # The application's inline import map against the library it installed: entries
 # the library publishes and the map omits or hand-edited, prefixes resolving to
 # a second copy of the framework, integrity hashes that no longer match their

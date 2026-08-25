@@ -6,6 +6,7 @@
  * on one origin serves the same folders with no Node at all.
  *
  *   node cli/dev/serve.mjs [--app <name>] [--port 8000] [--no-watch] [--open]
+ *                          [--proxy <prefix>=<origin>]...
  *
  * `--app` names a directory in the repository root: the application to serve at
  * /. Required when the repository holds more than one, and unnecessary when it
@@ -15,11 +16,16 @@
  * Live reload is a full page reload rather than component hot-swapping, on
  * purpose: `customElements.define` is permanent, so a component class cannot be
  * redefined.
+ *
+ * `--proxy` forwards a URL prefix to a backend instead of serving it from disk,
+ * which is what lets an application with an API develop on one origin — the
+ * arrangement it is deployed into — rather than on two.
  */
 
 import { createReadStream } from 'node:fs';
 import { readFile, stat, watch } from 'node:fs/promises';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { REPO, selectedApp } from '../layout.mjs';
@@ -38,10 +44,83 @@ function flag(name, fallback) {
   return process.argv[index + 1] ?? fallback;
 }
 
+/**
+ * Every value given for a repeatable flag, in the order given. `--proxy` is the
+ * only one: an application can have more than one backend, and the alternative —
+ * one flag holding a comma-separated list — puts a second parser in a string
+ * whose contents are already URLs.
+ *
+ * @param {string} name
+ * @returns {string[]}
+ */
+function flags(name) {
+  /** @type {string[]} */
+  const values = [];
+  for (let index = 0; index < process.argv.length; index += 1) {
+    if (process.argv[index] !== `--${name}`) continue;
+    const value = process.argv[index + 1];
+    if (value !== undefined && !value.startsWith('--')) values.push(value);
+  }
+  return values;
+}
+
 const { name: APP, dir: APP_DIR } = await selectedApp();
 const PORT = Number(flag('port', '8000'));
 const WATCH = !process.argv.includes('--no-watch');
 const OPEN = process.argv.includes('--open');
+
+/**
+ * `--proxy /api/=http://127.0.0.1:8001`, repeatable: a URL prefix this server
+ * forwards instead of serving from disk.
+ *
+ * An application with a backend needs it on this origin rather than a second one.
+ * A session cookie is returned only to the origin that set it, so a dev server
+ * that cannot forward /api/ leaves two options, and both have the application
+ * developed against an arrangement it does not ship: a CORS and third-party-cookie
+ * dance that production never performs, or a hand-written server beside this one
+ * that re-implements the mounts in order to add ten lines of proxy.
+ *
+ * Routes only, no rewriting. In production the same prefixes are a location block
+ * in nginx, and a flag that could rewrite paths would be a second routing table to
+ * keep in step with that one.
+ *
+ * @type {Array<{ prefix: string, origin: URL }>}
+ */
+const PROXIES = flags('proxy').map((value) => {
+  const separator = value.indexOf('=');
+  if (separator === -1) {
+    console.error('\n  --proxy %s is not <prefix>=<origin>.', value);
+    console.error('  For example: --proxy /api/=http://127.0.0.1:8001\n');
+    process.exit(1);
+  }
+
+  const prefix = value.slice(0, separator);
+  const target = value.slice(separator + 1);
+
+  if (!prefix.startsWith('/')) {
+    console.error('\n  --proxy prefix %s does not start with "/".\n', prefix);
+    process.exit(1);
+  }
+
+  let origin;
+  try {
+    origin = new URL(target);
+  } catch {
+    console.error('\n  --proxy origin %s is not a URL.', target);
+    console.error('  For example: --proxy %s=http://127.0.0.1:8001\n', prefix);
+    process.exit(1);
+  }
+
+  if (origin.protocol !== 'http:' && origin.protocol !== 'https:') {
+    console.error('\n  --proxy origin %s is not http or https.\n', target);
+    process.exit(1);
+  }
+
+  // Stored without its trailing slash and matched on a segment boundary below,
+  // so that --proxy /api/ and --proxy /api mean the same thing and neither
+  // catches /apiary.
+  return { prefix: prefix.endsWith('/') ? prefix.slice(0, -1) : prefix, origin };
+});
 
 /**
  * URL prefix -> directory. The library mounts come from cli/layout.mjs, which
@@ -118,6 +197,78 @@ async function startWatching() {
   }
 }
 
+/* ── Proxying ──────────────────────────────────────────────────────────── */
+
+/**
+ * The proxy a path belongs to, or null when it belongs to the filesystem.
+ *
+ * Matched on a segment boundary for the same reason the mounts are: /api must
+ * not claim /apiary. First match wins, so a more specific prefix works by being
+ * given first.
+ *
+ * @param {string} pathname
+ * @returns {{ prefix: string, origin: URL } | null}
+ */
+function proxyFor(pathname) {
+  for (const proxy of PROXIES) {
+    if (pathname === proxy.prefix || pathname.startsWith(`${proxy.prefix}/`)) return proxy;
+  }
+  return null;
+}
+
+/**
+ * Forward one request upstream and stream the answer back, headers and status
+ * untouched.
+ *
+ * Untouched is the point. Set-Cookie arrives with whatever Path, SameSite and
+ * HttpOnly the backend chose, a 401 stays a 401, and a redirect is followed by
+ * the browser rather than by this server — the application sees what it will see
+ * through nginx. The one header rewritten is Host, which has to name the upstream
+ * for a backend that routes on it.
+ *
+ * The request body is piped rather than buffered, so an upload is not held in
+ * this process's memory, and the method is passed through: the static branch
+ * below answers 405 to anything but GET, which is correct for files and wrong
+ * for an API.
+ *
+ * @param {import('node:http').IncomingMessage} request
+ * @param {import('node:http').ServerResponse} response
+ * @param {URL} origin
+ */
+function forward(request, response, origin) {
+  const send = origin.protocol === 'https:' ? httpsRequest : httpRequest;
+
+  const upstream = send(
+    {
+      protocol: origin.protocol,
+      hostname: origin.hostname,
+      port: origin.port,
+      path: request.url,
+      method: request.method,
+      headers: { ...request.headers, host: origin.host },
+    },
+    (upstreamResponse) => {
+      response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
+      upstreamResponse.pipe(response);
+    },
+  );
+
+  // A backend that is not running is the ordinary case — it is a separate process
+  // a developer starts separately — so it reads as one line naming the origin
+  // nothing answered on, not a stack trace.
+  upstream.on('error', (cause) => {
+    console.error('  502  %s  %s', request.url, String(cause));
+    if (!response.headersSent) {
+      response.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    }
+    response.end(
+      JSON.stringify({ error: 'backend_unavailable', detail: `nothing answered on ${origin.origin}` }),
+    );
+  });
+
+  request.pipe(upstream);
+}
+
 /* ── Serving ───────────────────────────────────────────────────────────── */
 
 /**
@@ -161,6 +312,16 @@ async function handle(request, response) {
     response.write(': connected\n\n');
     clients.add(response);
     request.on('close', () => clients.delete(response));
+    return;
+  }
+
+  // Ahead of the method check and the history fallback, both of which are rules
+  // about files: a POST to /api/session must reach the backend, and a GET of a
+  // path the backend owns must 404 from the backend rather than quietly return
+  // index.html.
+  const proxy = proxyFor(url.pathname);
+  if (proxy !== null) {
+    forward(request, response, proxy.origin);
     return;
   }
 
@@ -256,6 +417,9 @@ server.listen(PORT, () => {
   console.log('\n  %s', `http://localhost:${String(PORT)}`);
   for (const [prefix, dir] of MOUNTS) {
     console.log('  %s -> %s', prefix.padEnd(13), dir.slice(REPO.length + 1) || '.');
+  }
+  for (const { prefix, origin } of PROXIES) {
+    console.log('  %s -> %s', `${prefix}/`.padEnd(13), origin.origin);
   }
   console.log('  %s\n', WATCH ? 'watching for changes' : 'watch disabled');
   if (OPEN) {

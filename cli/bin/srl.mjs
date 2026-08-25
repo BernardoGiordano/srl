@@ -52,8 +52,13 @@ const USAGE = `usage: srl <command> [options]
 
 Development
   serve [--app <name>] [--port <n>] [--no-watch] [--open]
+        [--proxy <prefix>=<origin>]...
                             static server for one application: the library's
-                            mounts, history fallback, watch and live reload
+                            mounts, history fallback, watch and live reload.
+                            --proxy forwards a prefix to a backend instead of
+                            serving it from disk, so an application with an API
+                            develops on one origin:
+                              --proxy /api/=http://127.0.0.1:8001
   model [--app <name>] [--element <tag> | --json]
                             every element, global and template static discovery
                             can see

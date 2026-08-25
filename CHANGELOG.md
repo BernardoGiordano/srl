@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- **`srl serve --proxy <prefix>=<origin>`.** A URL prefix the development server forwards to
+  a backend instead of serving it from disk, repeatable. An application whose session is a
+  cookie its backend sets is deployed behind one origin, and until now could only be
+  developed behind two — which means `SameSite=None` and a CORS preflight that production
+  never performs, or a hand-written server beside this one that re-implements the mounts in
+  order to add the proxy. Routes only: the prefix is not stripped, status and headers pass
+  through untouched, and the check sits ahead of the 405 and the history fallback so a
+  `POST` reaches the backend and an upstream 404 does not come back as `index.html`
+  ([ADR-0069](docs/adr/0069-the-dev-server-proxies-the-backend.md)).
+
 ## 0.2.0
 
 - **Toolchain, published.** `@srljs/cli` is a second package: the dev server, the project
