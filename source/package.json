@@ -1,6 +1,6 @@
 {
   "name": "@srljs/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "MIT",
   "description": "Buildless reactive frontend library: signals, a template dialect checked without a compiler, routing, forms, i18n, auth and micro-frontends, plus a component collection built on it",
