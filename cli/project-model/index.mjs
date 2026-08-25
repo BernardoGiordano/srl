@@ -1,14 +1,14 @@
 /**
  * One interpretation of this project's source.
  *
- *   node tools/project-model/index.mjs [--app example] [--element ui-table] [--json]
+ *   node cli/project-model/index.mjs [--app example] [--element ui-table] [--json]
  *
  * WHAT IT OWNS
  *
  * Which custom elements exist, the class and module that declare each one, the markup
  * each renders, which tags each may name, which templates exist and which definition
  * claims them, which names templates may use without an import, and every declaration
- * static analysis cannot read. Applications and their mounts come from tools/layout.mjs,
+ * static analysis cannot read. Applications and their mounts come from cli/layout.mjs,
  * which stays the owner of physical layout; this module consumes it rather than
  * re-deriving it.
  *
@@ -463,7 +463,7 @@ export function projectErrors(model) {
  * to.
  *
  * Relative to the root the file was found under, never absolute, and that is not a
- * detail: this repository keeps the model's own fixture projects in `tools/test/fixtures`,
+ * detail: this repository keeps the model's own fixture projects in `cli/test/fixtures`,
  * so an absolute-path check calls every file in them test source and downgrades every
  * error the fixtures exist to produce. The same trap waits for any checkout under a
  * directory somebody named `test`.
@@ -507,7 +507,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
   if (elementIndex !== -1) {
     const tag = process.argv[elementIndex + 1];
     if (tag === undefined) {
-      console.error('usage: node tools/project-model/index.mjs --element <tag>');
+      console.error('usage: node cli/project-model/index.mjs --element <tag>');
       process.exit(1);
     }
     console.log(describeElement(model, tag));
@@ -521,7 +521,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
         `${String(model.templates.size)} template(s), ${String(model.globals.size)} template ` +
         `global(s), ${String(projectErrors(model).length)} error(s), ${String(notes)} note(s). ` +
         `Applications: ${all.map((one) => one.name).join(', ')}.\n` +
-        'usage: node tools/project-model/index.mjs [--app <name>] [--element <tag> | --json]',
+        'usage: node cli/project-model/index.mjs [--app <name>] [--element <tag> | --json]',
     );
   }
   for (const diagnostic of projectErrors(model)) console.error(`  error: ${diagnostic.message}`);

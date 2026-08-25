@@ -332,7 +332,7 @@ export const PENDING = [
   {
     id: 'delivery/edit-to-reload',
     reason:
-      'One-file edit to browser reload needs tools/dev/serve.mjs running with its watcher and a page ' +
+      'One-file edit to browser reload needs cli/dev/serve.mjs running with its watcher and a page ' +
       'listening on /__reload. That is a second origin shape, and mixing it into the measured ' +
       'origin would change the cache policy every other workload depends on.',
   },

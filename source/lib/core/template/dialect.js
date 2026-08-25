@@ -2,7 +2,7 @@
  * The template dialect: what a binding may say, and what each sink means.
  *
  * The dialect has two implementations by design — `core/template/template.js`
- * evaluates it in the browser, `tools/checks/template-check.mjs` emits TypeScript
+ * evaluates it in the browser, `cli/checks/template-check.mjs` emits TypeScript
  * for it in Node — and two adapters over one grammar is a good seam. Two *copies*
  * of the grammar is not: the tables, the directive regexes and the binding-syntax
  * dispatch were restated on both sides and had already drifted three ways.

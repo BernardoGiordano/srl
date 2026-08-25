@@ -6,8 +6,8 @@
  *   /lib/         source/lib/         the framework
  *   /components/  source/components/  the shared collection
  *
- * The mount table itself is not restated here — `tools/layout.mjs` owns it and
- * `urlToFile()` resolves a browser URL the same way `tools/dev/serve.mjs` and a
+ * The mount table itself is not restated here — `cli/layout.mjs` owns it and
+ * `urlToFile()` resolves a browser URL the same way `cli/dev/serve.mjs` and a
  * production static server do. That matters more than the twenty lines it
  * saves: an application whose server disagreed with the import map about where
  * `/lib/` is would fail only in this application, and only at runtime.
@@ -24,7 +24,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { extname } from 'node:path';
 
-import { contentType, urlToFile } from '../../tools/package/interface.mjs';
+import { contentType, urlToFile } from '../../cli/package/interface.mjs';
 
 /** @import { IncomingMessage, ServerResponse } from 'node:http' */
 

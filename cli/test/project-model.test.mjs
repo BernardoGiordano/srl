@@ -214,9 +214,9 @@ void test('the JSON projection is stable, relative and free of absolute paths', 
     [...index.elements.map((element) => element.tag)].sort(),
     'elements are sorted by tag',
   );
-  assert.equal(index.root, 'tools/test/fixtures/project-model/app-a');
+  assert.equal(index.root, 'cli/test/fixtures/project-model/app-a');
   const child = index.elements.find((element) => element.tag === 'fx-child');
-  assert.equal(child?.module, 'tools/test/fixtures/project-model/app-a/src/child.js');
+  assert.equal(child?.module, 'cli/test/fixtures/project-model/app-a/src/child.js');
 });
 
 void test('describing one element answers what a caller has to know', async () => {

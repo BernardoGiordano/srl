@@ -158,7 +158,7 @@ customElements.define('test-team-view', TeamView);
  * path an application actually takes, rather than from a lit template written
  * inline in this file.
  */
-// Exported because tools/checks/template-check.mjs discovers this pair like any other
+// Exported because cli/checks/template-check.mjs discovers this pair like any other
 // and type-checks the fixture template against the class, which is worth having.
 export class TemplatedLayout extends SignalElement {}
 

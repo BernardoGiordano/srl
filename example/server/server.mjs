@@ -9,8 +9,8 @@
  *
  * `--api-only` drops the static half, for the deployment where nginx already
  * serves the files and this process sits behind it on /auth and /api. It is not
- * only an optimisation: static.mjs reads the mount table from tools/layout.mjs,
- * and tools/ is a development directory the released tree deliberately omits,
+ * only an optimisation: static.mjs reads the mount table from cli/layout.mjs,
+ * and cli/ is a development directory the released tree deliberately omits,
  * so importing it on the server is a startup crash. Hence the dynamic import
  * below rather than a flag checked inside serveStatic.
  *
@@ -53,7 +53,7 @@ const OPEN = process.argv.includes('--open');
 const API_ONLY = process.argv.includes('--api-only');
 
 // Imported here rather than at the top so that --api-only never resolves the
-// module: the point of the flag is a deployment where tools/layout.mjs does not
+// module: the point of the flag is a deployment where cli/layout.mjs does not
 // exist. Top-level await, so the server is not listening before it is decided.
 const serveStatic = API_ONLY ? null : (await import('./static.mjs')).serveStatic;
 

@@ -34,10 +34,10 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { apps, readText, repoPath, REPO } from '../layout.mjs';
-import { readProject } from '../project-model/index.mjs';
+import { apps, readText, repoPath, REPO } from '../../cli/layout.mjs';
+import { readProject } from '../../cli/project-model/index.mjs';
 
-/** @import { ProjectModel } from '../project-model/types.js' */
+/** @import { ProjectModel } from '../../cli/project-model/types.js' */
 
 const OPEN = /<!-- generated:([a-z-]+) -->/gu;
 

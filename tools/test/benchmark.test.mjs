@@ -23,8 +23,8 @@ import { MEMORY_WORKLOADS } from '../benchmark/node/lifecycle.mjs';
 import { artifactWorkloads } from '../benchmark/node/startup.mjs';
 import { HARNESS_PATH, startOrigin } from '../benchmark/origin.mjs';
 import { PENDING, WORKLOADS, selectWorkloads } from '../benchmark/workloads.mjs';
-import { REPO, readText } from '../layout.mjs';
-import { extractImportMap } from '../package/interface.mjs';
+import { REPO, readText } from '../../cli/layout.mjs';
+import { extractImportMap } from '../../cli/package/interface.mjs';
 
 /**
  * The benchmark harness's own tests: not "is the framework fast", but "would this

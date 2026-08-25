@@ -26,7 +26,7 @@ export interface ComponentSpec {
   /**
    * The components this component's template may name, as classes. A real import,
    * so ES module evaluation order defines them first, and the fact
-   * tools/checks/template-check.mjs checks the template against.
+   * cli/checks/template-check.mjs checks the template against.
    */
   readonly uses?: readonly ComponentRef[];
 }

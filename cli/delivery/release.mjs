@@ -340,7 +340,7 @@ if (
     const remoteRoot = flag('remote-root');
     if (artifactRoot === undefined || outDir === undefined || remoteRoot === undefined) {
       throw new Error(
-        'usage: node tools/delivery/release.mjs --artifact <directory> --out <directory> --remote-root <absolute-path> [--experimental]',
+        'usage: node cli/delivery/release.mjs --artifact <directory> --out <directory> --remote-root <absolute-path> [--experimental]',
       );
     }
     const publication = await prepareRelease({

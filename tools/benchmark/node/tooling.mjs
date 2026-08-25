@@ -90,7 +90,7 @@ export const TOOLING_WORKLOADS = [
     samples: { local: 5, ci: 3 },
     warmup: { local: 1, ci: 1 },
     run: (context) =>
-      repeatTool(context, { command: process.execPath, args: ['tools/checks/template-check.mjs'] }),
+      repeatTool(context, { command: process.execPath, args: ['cli/checks/template-check.mjs'] }),
   },
   {
     id: 'tooling/verify',

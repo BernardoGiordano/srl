@@ -69,7 +69,9 @@ source/lib/         the framework. Depends on nothing outside itself
 source/components/  the shared collection, built on source/lib
 source/dist/        generated: the bundles `npm run package` emits. Never edited
 example/            an application. Any root directory with an index.html is one
-tools/              discovery, static checks, delivery, dev server, benchmarks
+cli/                the toolchain, and a package of its own: everything a repository
+                    built on srl needs. Extracting it is a file move
+tools/              the tools that only make sense in this repository. Published nowhere
 docs/               the manual; docs/adr/ the reasoning
 ```
 

@@ -39,7 +39,7 @@ export default tseslint.config(
       'coverage/**',
       // Fixture projects for the project model's tests: deliberately unreadable
       // declarations, which is the point of them.
-      'tools/test/fixtures/**',
+      'cli/test/fixtures/**',
     ],
   },
 
@@ -94,7 +94,13 @@ export default tseslint.config(
     // extension is the declaration: `.mjs` under an application means nothing in it ever
     // reaches a browser, which is what makes the Node globals correct here and wrong in
     // that application's `src/`.
-    files: ['tools/**/*.mjs', '*/server/**/*.mjs', '*.config.js', '*.config.mjs'],
+    files: [
+      'cli/**/*.mjs',
+      'tools/**/*.mjs',
+      '*/server/**/*.mjs',
+      '*.config.js',
+      '*.config.mjs',
+    ],
     languageOptions: { globals: { ...globals.node } },
     rules: {
       'no-console': 'off',

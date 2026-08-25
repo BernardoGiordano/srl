@@ -2,11 +2,11 @@
 
 - Status: accepted
 - Date: 2026-08-12
-- Affects: `source/package.json`, `tools/package/interface.mjs`, `tools/layout.mjs`
+- Affects: `source/package.json`, `cli/package/interface.mjs`, `cli/layout.mjs`
 
 ## Context
 
-Two unrelated facts used to share one module, `tools/layout.mjs`:
+Two unrelated facts used to share one module, `cli/layout.mjs`:
 
 - **the package's** — `/lib/` and `/components/` are where the library is served, `@core/`
   resolves into it, `lit` comes from `lib/vendor`;
@@ -23,11 +23,11 @@ server and the delivery tooling.
 
 `source/` is the package and declares its own surface in `source/package.json`: the mounts
 a browser sees, the bare specifier prefixes the source is written against, and the vendored
-runtime dependencies. `tools/package/interface.mjs` is the only module that reads that
+runtime dependencies. `cli/package/interface.mjs` is the only module that reads that
 manifest, and everything else — the dev server, the test-runner origin, the benchmark
 origin, the verifier, the build, the deployment — asks it rather than restating the table.
 
-`tools/layout.mjs` keeps what a standalone checkout would not have: where the package
+`cli/layout.mjs` keeps what a standalone checkout would not have: where the package
 happens to sit inside this repository, and which directories are applications.
 
 `npm run verify` fails when the four descriptions of the published interface disagree —

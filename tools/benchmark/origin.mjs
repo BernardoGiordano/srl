@@ -2,7 +2,7 @@
  * The origin under measurement.
  *
  * A benchmark that serves the application differently from production measures
- * the benchmark's server. So this is the same mount table tools/dev/serve.mjs uses,
+ * the benchmark's server. So this is the same mount table cli/dev/serve.mjs uses,
  * imported rather than restated, with the two deliberate differences a
  * measurement needs:
  *
@@ -14,7 +14,7 @@
  *      way a production reload does.
  *
  * One extra mount exists, at /__benchmark/, and it is why this file is not simply
- * tools/dev/serve.mjs with a flag: the workload modules the page imports are tooling,
+ * cli/dev/serve.mjs with a flag: the workload modules the page imports are tooling,
  * they must not sit inside an application or the library, and they still have to
  * arrive over the same origin as the code they measure. The harness page itself is
  * generated rather than checked in, because its import map is the application's
@@ -33,9 +33,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join, normalize, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-import { readText } from '../layout.mjs';
+import { readText } from '../../cli/layout.mjs';
 import { artifactDeclaration } from './declaration.mjs';
-import { MOUNTS, contentType, extractImportMap } from '../package/interface.mjs';
+import { MOUNTS, contentType, extractImportMap } from '../../cli/package/interface.mjs';
 
 /** Browser-side workload modules, served at /__benchmark/. */
 const BROWSER_DIR = resolve(fileURLToPath(new URL('./browser', import.meta.url)));

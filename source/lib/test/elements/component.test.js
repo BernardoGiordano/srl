@@ -28,7 +28,7 @@ await defineComponent({
 /**
  * A component whose markup is not its module's sibling.
  *
- * Exported because tools/checks/template-check.mjs type-checks the fixture template
+ * Exported because cli/checks/template-check.mjs type-checks the fixture template
  * against this class, and it reaches the class through this module's exports.
  */
 export class Borrowed extends SignalElement {}

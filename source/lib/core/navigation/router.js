@@ -76,7 +76,7 @@ export class RouteOutlet extends HTMLElement {}
 defineElementDefault(ROUTE_OUTLET_TAG, 'display:contents');
 
 // The tag is spelled out here rather than passed as the constant, because
-// tools/checks/template-check.mjs reads `defineComponent({ tag: '...' })` calls
+// cli/checks/template-check.mjs reads `defineComponent({ tag: '...' })` calls
 // statically. Through a variable the checker would not learn the tag exists and
 // would report `<x-route-outlet>` in every layout template as an unknown element.
 //

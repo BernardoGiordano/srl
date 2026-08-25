@@ -1,7 +1,7 @@
 /**
  * Turn an application's index.html into its production form, on stdout.
  *
- *   node tools/delivery/production-html.mjs application > staged/index.html
+ *   node cli/delivery/production-html.mjs application > staged/index.html
  *
  * Every index.html in this repository ships in development mode: Tailwind v4 is
  * loaded as a browser script and compiles the stylesheet from a MutationObserver
@@ -28,7 +28,7 @@ const REPO = fileURLToPath(new URL('../..', import.meta.url));
 
 const app = process.argv[2];
 if (app === undefined || app === '') {
-  process.stderr.write('Usage: node tools/delivery/production-html.mjs <app>\n');
+  process.stderr.write('Usage: node cli/delivery/production-html.mjs <app>\n');
   process.exit(2);
 }
 

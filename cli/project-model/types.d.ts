@@ -6,7 +6,7 @@
  * verifier with a line-anchored regex, the template bundler with a directory walk. Three
  * answers to one question is three chances to disagree, and the regex could not see a
  * definition written across two lines while the AST pass could. These types are the one
- * answer, and `tools/project-model/index.mjs` is the only thing that produces them.
+ * answer, and `cli/project-model/index.mjs` is the only thing that produces them.
  */
 
 /** An application: a repository-root directory with an index.html. */
@@ -15,7 +15,7 @@ export interface Application {
   dir: string;
   /**
    * Marked `.private`: excluded from the generated tables in README.md and from
-   * nothing else. See `apps()` in tools/layout.mjs.
+   * nothing else. See `apps()` in cli/layout.mjs.
    */
   private?: boolean;
 }

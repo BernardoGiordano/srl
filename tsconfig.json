@@ -32,7 +32,7 @@
     // Explicit rather than "everything in node_modules/@types", so adding a
     // dependency cannot quietly widen the global scope of browser code.
     //
-    // `node` is here for tools/*.mjs and the two config files. The cost is that
+    // `node` is here for cli/*.mjs, tools/*.mjs and the two config files. The cost is that
     // `process` and `Buffer` also type-check inside src/, where they do not
     // exist at runtime. A stricter setup splits browser and tooling into two
     // tsconfigs; that is worth doing when the tooling grows past a few files.
@@ -43,7 +43,7 @@
     // source/lib is mounted at /lib and the application at /.
     //
     // Nothing asserts that the two agree: tools/checks/verify-deps.mjs checks the import
-    // map against what the source actually imports, and tools/checks/template-check.mjs
+    // map against what the source actually imports, and cli/checks/template-check.mjs
     // type-checks through this file, so a prefix declared here and absent from the
     // map type-checks and then 404s in the browser. The map is the deployed truth;
     // keep this list following it by hand until something compares them.
@@ -73,9 +73,11 @@
     // repository. A per-application tsconfig overriding `@app/*` is the alternative,
     // and it costs a second typecheck command plus a prefix that means two different
     // directories depending on which file you are reading. Its server is Node rather
-    // than browser code and is included as .mjs, like tools/.
+    // than browser code and is included as .mjs, like cli/ and tools/.
     "example/**/*.js",
     "example/**/*.mjs",
+    "cli/**/*.mjs",
+    "cli/**/*.d.ts",
     "tools/**/*.mjs",
     "tools/**/*.d.ts",
     // tools/benchmark/browser holds the workload modules Chrome imports over the
@@ -100,10 +102,10 @@
     // hundreds of errors about code that type-checks perfectly as input.
     "source/dist",
     "**/app.css",
-    // tools/test/fixtures holds fixture projects for the project model's own tests:
+    // cli/test/fixtures holds fixture projects for the project model's own tests:
     // a computed tag, a `uses` naming a class nothing defines, a definition whose
     // spec is built elsewhere. Being unreadable is what they are for, so they are
     // read as text by a test rather than compiled as source.
-    "tools/test/fixtures"
+    "cli/test/fixtures"
   ]
 }

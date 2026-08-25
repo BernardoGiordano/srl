@@ -1,15 +1,16 @@
 /**
  * The library's own facts — the mounts, the specifier prefixes, the vendored
  * dependencies, how a URL resolves to a file — belong to the package and live in
- * source/package.json, read by tools/package/interface.mjs. ADR-0033. What is left
- * here is the part a standalone srl checkout would not have:
+ * the library's package.json, read by cli/package/interface.mjs. ADR-0033. What is
+ * left here is the part that belongs to the repository being worked on rather than
+ * to the library:
  *
- *   source/    the library, mounted at /lib/ and /components/. Where the package
- *              happens to sit inside this repository, and nothing more.
+ *   where      the repository root is. Its parent in a checkout, the working
+ *              directory when these tools were installed from the registry.
  *   <app>/     an application. Any directory in the repository root with an
  *              index.html: example today, more later.
  *
- * Zero dependencies, so it works before `npm install` like the rest of tools/.
+ * Zero dependencies, so it works before `npm install` like the rest of cli/.
  */
 
 import { readdir, readFile, stat } from 'node:fs/promises';
@@ -18,18 +19,40 @@ import { fileURLToPath } from 'node:url';
 
 import { MOUNTS } from './package/interface.mjs';
 
+const HERE = fileURLToPath(new URL('.', import.meta.url));
+
 /**
- * The repository these tools operate on.
+ * Whether these tools are running out of an installed package rather than a
+ * checkout — the one fact that decides which default below is right, and the only
+ * thing the filesystem will say about it.
  *
- * Normally the one they live in: `tools/` sits at its root. `SRL_ROOT` is for the
- * other arrangement — a repository that consumes this checkout rather than
- * containing it, with the library vendored or submoduled somewhere below its root
- * and its own applications beside it. The package finds itself either way
- * (tools/package/interface.mjs); what a consuming repository has to say is where
- * *its* root is, because that is where the applications are.
+ * A path segment rather than a substring: `/home/me/node_modules_old/x` is a
+ * checkout, and a directory named `node_modules` somewhere above an installed
+ * package is what npm, pnpm and yarn all produce.
+ */
+const INSTALLED = HERE.split(sep).includes('node_modules');
+
+/**
+ * The repository these tools operate on: the one whose applications they build,
+ * serve and deploy. Not the library's — the package finds itself separately, in
+ * cli/package/interface.mjs.
+ *
+ * Two defaults, because there are two arrangements and each has exactly one
+ * sensible answer:
+ *
+ *   a checkout      the directory above `cli/`. `npm start` in this repository,
+ *                   or in a standalone srl checkout, needs no environment.
+ *   installed       the working directory. `srl build --app web` is run from the
+ *                   root of the repository being built, which is the only place
+ *                   an installed package can look: the directory above it is
+ *                   node_modules, and above that is somebody's dependency tree.
+ *
+ * `SRL_ROOT` overrides both, for the arrangement neither default covers — a
+ * repository that vendors or submodules a checkout somewhere below its own root,
+ * and so runs a checkout's tools against a root that is not their parent.
  */
 export const REPO = resolve(
-  process.env.SRL_ROOT ?? fileURLToPath(new URL('..', import.meta.url)),
+  process.env.SRL_ROOT ?? (INSTALLED ? process.cwd() : join(HERE, '..')),
 );
 
 /**
@@ -60,7 +83,7 @@ export const LIB_MOUNT_ROUTES = /** @type {Array<[string, string]>} */ (
  * lib` — one per line.
  *
  * A consumer outside JavaScript needs both halves of each mount and cannot
- * import, so it asks: `node tools/layout.mjs --deploy-pairs`. That is what keeps
+ * import, so it asks: `node cli/layout.mjs --deploy-pairs`. That is what keeps
  * the delivered tree the shape the import map already assumes.
  *
  * @returns {string}
@@ -70,7 +93,7 @@ function deployPairs() {
 }
 
 /** Root directories that are never an application. */
-const NOT_APPS = new Set(['source', 'node_modules', 'tools', 'coverage']);
+const NOT_APPS = new Set(['source', 'cli', 'tools', 'node_modules', 'dist', 'coverage']);
 
 /**
  * @param {string} path
@@ -191,7 +214,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
   } else if (process.argv.includes('--apps')) {
     console.log((await apps()).map((app) => app.name).join('\n'));
   } else {
-    console.error('usage: node tools/layout.mjs [--deploy-pairs | --apps]');
+    console.error('usage: node cli/layout.mjs [--deploy-pairs | --apps]');
     process.exit(1);
   }
 }

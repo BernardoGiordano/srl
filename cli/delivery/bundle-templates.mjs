@@ -14,7 +14,7 @@
  * fast connection is not worth optimising; twelve templates over a high-latency
  * link, or a hundred templates in a real application, is.
  *
- *   node tools/delivery/bundle-templates.mjs [--app example]
+ *   node cli/delivery/bundle-templates.mjs [--app example]
  *
  * Then set `"templateBundle": "/templates.json"` in that application's
  * app.manifest.json. Its main.js seeds the template cache from it before the first
@@ -40,7 +40,7 @@ const OUTPUT = join(app.dir, 'templates.json');
 
 /**
  * Which templates an application ships is a project fact, not a directory listing:
- * tools/project-model/ owns the rule and the verifier's staleness check reads the same
+ * cli/project-model/ owns the rule and the verifier's staleness check reads the same
  * list. ADR-0042.
  *
  * Keys are the URLs `new URL('./x.html', import.meta.url)` resolves to once served, which

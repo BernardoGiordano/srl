@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-21
-- Affects: `source/package.json`, `tools/delivery/package-bundle.mjs`, `tools/package/interface.mjs`, `tools/checks/verify-deps.mjs`
+- Affects: `source/package.json`, `tools/delivery/package-bundle.mjs`, `cli/package/interface.mjs`, `tools/checks/verify-deps.mjs`
 
 ## Context
 

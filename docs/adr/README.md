@@ -53,18 +53,19 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0029](0029-the-modal-is-a-native-dialog.md) | The modal is a native `<dialog>` | accepted | `source/components/overlays/ui-dialog.js` |
 | [ADR-0030](0030-a-dialog-asks-rather-than-closes.md) | Escape and a backdrop click ask to close, they do not close | accepted | `source/components/overlays/ui-dialog.js` |
 | [ADR-0032](0032-runtime-dependencies-are-vendored-and-pinned.md) | Runtime dependencies are vendored and integrity-pinned, never fetched from a CDN | accepted | `source/lib/vendor/`, `tools/delivery/vendor.mjs`, `tools/checks/verify-deps.mjs` |
-| [ADR-0033](0033-the-library-publishes-its-own-interface.md) | The library publishes its own interface; the repository keeps only repository facts | accepted | `source/package.json`, `tools/package/interface.mjs`, `tools/layout.mjs` |
+| [ADR-0033](0033-the-library-publishes-its-own-interface.md) | The library publishes its own interface; the repository keeps only repository facts | accepted | `source/package.json`, `cli/package/interface.mjs`, `cli/layout.mjs` |
 | [ADR-0037](0037-a-benchmark-result-carries-its-environment.md) | A benchmark result carries the environment that produced it | accepted | `tools/benchmark/` |
-| [ADR-0038](0038-the-project-model-parses-an-ast.md) | One project model, parsed from an AST, that refuses to guess | accepted | `tools/project-model/`, `tools/checks/` |
-| [ADR-0039](0039-the-template-checkers-compiler-is-cached.md) | The template checker keeps one compiler per process | accepted | `tools/checks/template-check.mjs` |
-| [ADR-0041](0041-production-html-is-a-transform-not-an-edit.md) | Production `index.html` is a transform, not a hand edit | accepted | `tools/delivery/production-html.mjs` |
-| [ADR-0042](0042-the-template-bundle-is-per-application.md) | The template bundle is per application and derived from the project model | accepted | `tools/delivery/bundle-templates.mjs` |
+| [ADR-0038](0038-the-project-model-parses-an-ast.md) | One project model, parsed from an AST, that refuses to guess | accepted | `cli/project-model/`, `cli/checks/`, `tools/checks/` |
+| [ADR-0039](0039-the-template-checkers-compiler-is-cached.md) | The template checker keeps one compiler per process | accepted | `cli/checks/template-check.mjs` |
+| [ADR-0041](0041-production-html-is-a-transform-not-an-edit.md) | Production `index.html` is a transform, not a hand edit | accepted | `cli/delivery/production-html.mjs` |
+| [ADR-0042](0042-the-template-bundle-is-per-application.md) | The template bundle is per application and derived from the project model | accepted | `cli/delivery/bundle-templates.mjs` |
 | [ADR-0043](0043-benchmarks-are-normalised-by-reference-workloads.md) | Benchmarks are normalised by two fixed reference workloads | accepted | `tools/benchmark/browser/calibration.js`, `tools/benchmark/measure.mjs` |
 | [ADR-0044](0044-a-regression-must-be-relatively-and-absolutely-large.md) | A regression must be both relatively and absolutely large, and the gate reads the median | accepted | `tools/benchmark/measure.mjs`, `tools/benchmark/budgets.json` |
 | [ADR-0045](0045-the-benchmark-drives-chrome-directly.md) | The benchmark drives Chrome directly and blocks the network without disabling the cache | accepted | `tools/benchmark/browser.mjs`, `tools/benchmark/browser/support.js` |
 | [ADR-0063](0063-a-remote-shares-the-stack-not-the-state.md) | A remote shares the stack, never the shell's state | accepted | `example/remotes/billing/`, `example/remotes/analytics/` |
 | [ADR-0065](0065-the-session-guard-sits-on-one-shell-route.md) | The session guard sits on one shell route; scope guards are affordances | accepted | `example/src/routes.js`, `example/server/api.mjs` |
-| [ADR-0066](0066-the-registry-consumer-gets-bundles.md) | The registry consumer gets bundles; the browser consumer still gets source | accepted | `source/package.json`, `tools/delivery/package-bundle.mjs`, `tools/package/interface.mjs`, `tools/checks/verify-deps.mjs` |
+| [ADR-0066](0066-the-registry-consumer-gets-bundles.md) | The registry consumer gets bundles; the browser consumer still gets source | accepted | `source/package.json`, `tools/delivery/package-bundle.mjs`, `cli/package/interface.mjs`, `tools/checks/verify-deps.mjs` |
+| [ADR-0067](0067-the-toolchain-is-a-second-package.md) | The toolchain is a second package, pinned to the first | accepted | `cli/package.json`, `cli/layout.mjs`, `cli/package/interface.mjs`, `source/package.json`, `package.json` |
 
 <!-- /generated:adr-index -->
 

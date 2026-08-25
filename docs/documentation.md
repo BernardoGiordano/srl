@@ -67,5 +67,5 @@ bytes. A comment states the rule and cites the record:
 Cite by record number, never by section number and never by file path. A number survives
 every reorganisation of this directory; `§12` is wrong the moment a section is inserted
 above it, and `docs/guide/auth-and-remotes.md` is wrong the moment a page is renamed —
-which is why `docs:adr` fails on a section number appearing in `source/`, `tools/` or an
+which is why `docs:adr` fails on a section number appearing in `source/`, `cli/`, `tools/` or an
 application directory.

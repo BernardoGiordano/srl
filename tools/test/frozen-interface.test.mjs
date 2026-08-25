@@ -3,8 +3,9 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { REPO, apps } from '../layout.mjs';
-import { projectIndex, readProject } from '../project-model/index.mjs';
+import { REPO, apps } from '../../cli/layout.mjs';
+import { PACKAGE, SPECIFIERS } from '../../cli/package/interface.mjs';
+import { projectIndex, readProject } from '../../cli/project-model/index.mjs';
 
 /**
  * The public facts a refactor may not change, pinned so that changing one is a
@@ -74,7 +75,7 @@ const REMOTE_FIELDS = [
  * The tags one application's model declares from library or shared-collection source,
  * with test source excluded: a suite defines a dozen elements that exist for one file.
  *
- * @param {import('../project-model/types.d.ts').ProjectIndex} index
+ * @param {import('../../cli/project-model/types.d.ts').ProjectIndex} index
  * @returns {string[]}
  */
 function frameworkTags(index) {
@@ -163,5 +164,49 @@ void test('application manifests carry the frozen fields and nothing unread', as
         assert.ok(keys.includes(required), `${app.name} has a remote with no ${required}`);
       }
     }
+  }
+});
+
+void test('the modules the toolchain imports by name stay resolvable outside a browser', async () => {
+  const manifest = /** @type {Record<string, unknown>} */ (
+    JSON.parse(await readFile(join(PACKAGE, 'package.json'), 'utf8'))
+  );
+  const exported = /** @type {Record<string, unknown>} */ (manifest.exports);
+  const prefixes = Object.keys(SPECIFIERS);
+
+  const named = Object.entries(exported)
+    .filter(([subpath, target]) => subpath.startsWith('./lib/') && typeof target === 'string')
+    .map(([, target]) => /** @type {string} */ (target));
+  assert.ok(named.length > 0, 'no lib/ module is exported by name any more');
+
+  for (const target of named) {
+    const source = await readFile(join(PACKAGE, target), 'utf8');
+
+    // An `exports` entry is a promise that Node can load the file. Every module under
+    // lib/ is written against the browser's import map, so one that imports `@core/`
+    // at runtime resolves in a page and throws in a build — one level down, on a
+    // specifier the caller never typed. ADR-0066 closed `./lib/*` for exactly that
+    // reason; these few are open because they do not, and this is what keeps it true.
+    for (const statement of source.matchAll(/^\s*(?:import|export)\s[^\n]*?from\s*'([^']+)'/gmu)) {
+      const specifier = statement[1] ?? '';
+      const prefix = prefixes.find((candidate) => specifier.startsWith(candidate));
+      assert.equal(
+        prefix,
+        undefined,
+        `${target} is exported by name but imports "${specifier}" at runtime. Node cannot ` +
+          `resolve ${String(prefix)} — only the browser's import map can — so a consumer ` +
+          `reaching this subpath gets a module that throws on its own first import.`,
+      );
+    }
+
+    // The declaration-only siblings are exported under a `types` condition alone, so
+    // a JSDoc `@import` of one is fine. A runtime import is not, and the loop above
+    // cannot tell them apart: `@import` lives in a comment, which is the point.
+    assert.doesNotMatch(
+      source,
+      /^\s*(?:import|export)\s[^\n]*?from\s*'[^']*types\.js'/mu,
+      `${target} imports a declaration file at runtime; \`@import\` in a comment is the ` +
+        `only form that survives being loaded by Node.`,
+    );
   }
 });

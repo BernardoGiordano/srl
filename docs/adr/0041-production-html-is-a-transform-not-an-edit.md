@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-12
-- Affects: `tools/delivery/production-html.mjs`
+- Affects: `cli/delivery/production-html.mjs`
 
 ## Context
 

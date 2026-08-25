@@ -45,8 +45,8 @@ import { basename, join, relative, sep } from 'node:path';
 import { build as viteBuild } from 'vite';
 import ts from 'typescript';
 
-import { REPO, exists, walk } from '../layout.mjs';
-import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../package/interface.mjs';
+import { REPO, exists, walk } from '../../cli/layout.mjs';
+import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
 
 /** Where the four files land. Generated, so `dist/` is ignored and never committed. */
 export const DIST = join(PACKAGE, 'dist');
@@ -83,7 +83,7 @@ function isTestSource(path) {
  * The modules one bundle is a barrel over, sorted so the emitted entry is stable
  * byte for byte across machines.
  *
- * @param {import('../package/interface.mjs').PackageBundle} bundle
+ * @param {import('../../cli/package/interface.mjs').PackageBundle} bundle
  * @returns {Promise<string[]>}
  */
 async function membersOf(bundle) {
@@ -300,7 +300,7 @@ async function siblingTemplate(module, declared) {
 /**
  * One bundle, one minification setting, one file.
  *
- * @param {import('../package/interface.mjs').PackageBundle} bundle
+ * @param {import('../../cli/package/interface.mjs').PackageBundle} bundle
  * @param {string[]} members
  * @param {boolean} minify
  * @returns {Promise<string>}

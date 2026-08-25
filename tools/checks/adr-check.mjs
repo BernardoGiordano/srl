@@ -29,7 +29,7 @@
 import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
-import { REPO, apps, readText, repoPath, walk } from '../layout.mjs';
+import { REPO, apps, readText, repoPath, walk } from '../../cli/layout.mjs';
 
 /** Records live here. One file per decision, `NNNN-kebab-title.md`. */
 const ADR_DIR = join(REPO, 'docs/adr');
@@ -71,7 +71,7 @@ const RULE_OWNERS = new Set(['tools/checks/adr-check.mjs', 'tools/test/adr-check
 async function sourceFiles() {
   /** @type {string[]} */
   const found = [];
-  const dirs = ['source', 'tools', ...(await apps()).map((app) => app.name)];
+  const dirs = ['source', 'cli', 'tools', ...(await apps()).map((app) => app.name)];
   for (const dir of dirs) {
     found.push(...(await walk(join(REPO, dir), /\.(?:js|mjs)$/u)));
   }

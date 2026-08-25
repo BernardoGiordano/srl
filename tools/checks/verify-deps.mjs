@@ -50,7 +50,7 @@
  *     `element` that is not a class, a `uses` entry naming a class nothing defines,
  *     two modules claiming one tag. Such a declaration may work in the browser, and
  *     every tool here is blind to it — this one, the template checker and the
- *     template bundler alike. tools/project-model/ finds them; this fails on them.
+ *     template bundler alike. cli/project-model/ finds them; this fails on them.
  * 14. A library or shared-collection module reaching for `localStorage` or
  *     `sessionStorage` itself instead of going through @core/preferences/persistence.js.
  *     Invisible until an application configures its own store — a memory store under
@@ -83,7 +83,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 
-import { REPO, apps, exists, readText, repoPath, walk } from '../layout.mjs';
+import { REPO, apps, exists, readText, repoPath, walk } from '../../cli/layout.mjs';
 import {
   COMPONENTS,
   BUNDLES,
@@ -100,14 +100,14 @@ import {
   importMapText,
   packageExports,
   urlToFile,
-} from '../package/interface.mjs';
+} from '../../cli/package/interface.mjs';
 import {
   missingTemplates,
   orphanTemplates,
   projectErrors,
   readProject,
   shippedTemplates,
-} from '../project-model/index.mjs';
+} from '../../cli/project-model/index.mjs';
 import { admitManifest } from '../../source/lib/core/remotes/manifest-policy.js';
 
 /**
@@ -251,17 +251,42 @@ for (const prefix of Object.keys(SPECIFIERS)) {
   );
 }
 
-const declaredExports = /** @type {Record<string, string>} */ (MANIFEST.exports ?? {});
+/**
+ * An `exports` target as the paths it can resolve to.
+ *
+ * A target is a string or a conditional object, and both shapes are in use here:
+ * the bundles and the tooling entry points are plain strings, the three
+ * declaration-only subpaths are `{ "types": "./…d.ts" }` so that the type checker
+ * resolves them and Node refuses to. Every branch of a conditional has to exist —
+ * a condition nobody's resolver selects is still a promise this package made.
+ *
+ * @param {string | Record<string, unknown>} target
+ * @returns {string[]}
+ */
+function exportTargets(target) {
+  if (typeof target === 'string') return [target];
+  return Object.values(target).flatMap((nested) =>
+    typeof nested === 'string' || (typeof nested === 'object' && nested !== null)
+      ? exportTargets(/** @type {string | Record<string, unknown>} */ (nested))
+      : [],
+  );
+}
+
+const declaredExports = /** @type {Record<string, string | Record<string, unknown>>} */ (
+  MANIFEST.exports ?? {}
+);
 for (const [subpath, target] of Object.entries(packageExports())) {
   if (declaredExports[subpath] !== target) {
     fail(
       `source/package.json declares \`srl.bundles\` for "${subpath}" but its \`exports\` says ` +
-        `${declaredExports[subpath] ?? 'nothing'} rather than ${target}. A consumer installing ` +
-        `the package cannot reach a layer the browser resolves.`,
+        `${JSON.stringify(declaredExports[subpath]) ?? 'nothing'} rather than ${target}. A ` +
+        `consumer installing the package cannot reach a layer the browser resolves.`,
     );
   }
 }
-for (const [subpath, target] of Object.entries(declaredExports)) {
+for (const [subpath, target] of Object.entries(declaredExports).flatMap(([subpath, target]) =>
+  exportTargets(target).map((resolved) => /** @type {[string, string]} */ ([subpath, resolved])),
+)) {
   const file = join(PACKAGE, target.replace(/\*.*$/u, ''));
   if (await exists(file)) continue;
   // `dist/` is generated, so its absence is "you have not built it yet" rather than
@@ -655,7 +680,7 @@ for (const app of applications) {
 
   /**
    * One question, one answer. Which elements exist, which markup each renders and which
-   * template files are claimed all come from tools/project-model/, which reads the same
+   * template files are claimed all come from cli/project-model/, which reads the same
    * `defineComponent` declaration the browser reads. This check used to match
    * `/^await defineComponent\(\{...\}\);$/gm` and therefore agreed with the template
    * checker only by luck: a definition indented inside a block, or a `template` key on a
@@ -781,7 +806,7 @@ for (const app of applications) {
       // The set compared is the one the bundler ships — `shippedTemplates`, from the
       // project model — and that is a fix, not a refactor. This check used to walk the
       // four template directories itself and included `source/lib/test/fixtures/*.html`,
-      // which tools/delivery/bundle-templates.mjs deliberately leaves out of an application's
+      // which cli/delivery/bundle-templates.mjs deliberately leaves out of an application's
       // bundle. Any application that enabled templateBundle would have failed
       // verification with a fixture it was right not to ship.
       const bundle = JSON.parse(await readFile(bundlePath, 'utf8'));
@@ -943,28 +968,44 @@ if (strayDocs.length > 0) {
 }
 
 /**
- * The two files a registry page is made of, which the rule above deliberately does
- * not forbid: they sit at the package root rather than inside `lib/` or
- * `components/`, and they address the consumer who is reading npm rather than this
- * repository. README.md is the package's landing page and has to exist or the
+ * The two files a registry page is made of, per published package, which the rule
+ * above deliberately does not forbid: they sit at a package root rather than inside
+ * `lib/` or `components/`, and they address the consumer who is reading npm rather
+ * than this repository. README.md is a package's landing page and has to exist or the
  * listing is blank; LICENSE has to be a copy rather than a link, because a tarball
  * carries no repository around it — so the copy is checked byte for byte instead of
  * trusted.
+ *
+ * Two packages, so two of each: source/ is @srljs/core and cli/ is @srljs/cli. The
+ * second is spelled out rather than discovered, because `workspaces` in the root
+ * manifest is a list of directories and this check is about which of them a stranger
+ * installs.
  */
-const packageReadme = join(PACKAGE, 'README.md');
-const packageLicense = join(PACKAGE, 'LICENSE');
+const rootLicense = await readText(join(REPO, 'LICENSE'));
+let publishedPages = 0;
 
-if (!(await exists(packageReadme))) {
-  fail(`${show(packageReadme)} is missing, so the package would publish with a blank npm page.`);
-} else if (!(await exists(packageLicense))) {
-  fail(`${show(packageLicense)} is missing: the tarball ships no copy of the MIT grant.`);
-} else if ((await readText(packageLicense)) !== (await readText(join(REPO, 'LICENSE')))) {
-  fail(
-    `${show(packageLicense)} differs from the repository's LICENSE. One project, one grant: ` +
-      `copy the root file over it.`,
+for (const dir of [PACKAGE, join(REPO, 'cli')]) {
+  const readme = join(dir, 'README.md');
+  const license = join(dir, 'LICENSE');
+
+  if (!(await exists(readme))) {
+    fail(`${show(readme)} is missing, so the package would publish with a blank npm page.`);
+  } else if (!(await exists(license))) {
+    fail(`${show(license)} is missing: the tarball ships no copy of the MIT grant.`);
+  } else if ((await readText(license)) !== rootLicense) {
+    fail(
+      `${show(license)} differs from the repository's LICENSE. One project, one grant: ` +
+        `copy the root file over it.`,
+    );
+  } else {
+    publishedPages += 1;
+  }
+}
+
+if (publishedPages === 2) {
+  console.log(
+    '  ok   both packages carry their own README and a LICENSE identical to the root',
   );
-} else {
-  console.log('  ok   the package carries its own README and a LICENSE identical to the root');
 }
 
 /* ── 5c. The CSP hashes a deployment has to carry ──────────────────────── */

@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-12
-- Affects: `tools/delivery/bundle-templates.mjs`
+- Affects: `cli/delivery/bundle-templates.mjs`
 
 ## Context
 
@@ -25,7 +25,7 @@ The bundle belongs to an application and is written into its directory. Only an
 application knows both mounts, so a library-only bundle would have to guess one and would
 be wrong the first time somebody changed it.
 
-Which templates it contains comes from `tools/project-model/` (ADR-0038), which is the
+Which templates it contains comes from `cli/project-model/` (ADR-0038), which is the
 same list the verifier's staleness check reads. Keys are built with the same mount table
 the dev server and the deployment use, so a shared component's template is keyed
 `/components/…` and not by its path on disk.

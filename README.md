@@ -26,7 +26,11 @@ source/lib/         the framework: core, auth, host, vendored deps, its own suit
 source/components/  the shared collection: the frame of an internal application
 example/            the example application: four sections, auth over a real backend,
                     micro-frontends, i18n
-tools/              discovery, static checks, delivery, dev server, benchmarks
+cli/                the published toolchain, @srljs/cli: dev server, project model,
+                    template checker, artifact build and release. Its own package.json,
+                    the same way source/ has one
+tools/              this repository's own tools, published nowhere: the vendor refresh,
+                    the bundle build, the interface and docs checks, the benchmarks
 ```
 
 ## Install it
@@ -53,7 +57,7 @@ is [source/README.md](source/README.md), and what changed between versions is
 
 ```bash
 npm run example                                 # the application, http://localhost:8100
-node tools/dev/serve.mjs --open                 # any application, statically, http://localhost:8000
+node cli/dev/serve.mjs --open                 # any application, statically, http://localhost:8000
 ```
 
 Nothing is installed to run the application: the browser loads the files directly.
@@ -136,7 +140,7 @@ The README is the interface. The manual is `docs/`, and the reasoning is `docs/a
 | [Decision records](docs/adr/) | One decision per file, cited from source by number |
 | [Changelog](CHANGELOG.md) | What changed in the published interface, and what a bump means |
 
-Every generated table is built from `tools/project-model/`, the one AST pass over the
+Every generated table is built from `cli/project-model/`, the one AST pass over the
 source that the template checker, the dependency verifier and the template bundler also
 read:
 

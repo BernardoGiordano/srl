@@ -3,14 +3,14 @@
 The repository **is** a deployable artefact.
 
 ```bash
-node tools/dev/serve.mjs --open          # zero dependencies, watch + live reload
-node tools/dev/serve.mjs --app example   # the default; name another application
+node cli/dev/serve.mjs --open          # zero dependencies, watch + live reload
+node cli/dev/serve.mjs --app example   # the default; name another application
 npm run build -- --app example           # verified artifact: the served shape
 npm run css                              # the one build step: production Tailwind
 npm run templates                        # optional: N template requests -> 1
 ```
 
-`tools/dev/serve.mjs` exists because requiring `npm install` before the app could be
+`cli/dev/serve.mjs` exists because requiring `npm install` before the app could be
 *run* would make the project look like it has a toolchain it does not have. What a server
 has to provide is correct MIME types, a history fallback so a reload on `/users/3` returns
 `index.html`, two directories mounted on one origin, and watch-and-reload. Only the last

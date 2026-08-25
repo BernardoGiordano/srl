@@ -1,6 +1,6 @@
 # Project index
 
-Generated from `tools/project-model/`, the one AST pass over the source that the
+Generated from `cli/project-model/`, the one AST pass over the source that the
 template checker, the dependency verifier, the template bundler and this page all
 read. Regenerate with `npm run docs:write`; `npm run docs:check` fails when a table
 drifts from the source.
@@ -64,8 +64,8 @@ The applications, discovered rather than configured:
 Ask the model directly:
 
 ```bash
-node tools/project-model/index.mjs --element ui-table   # one element and its dependencies
-node tools/project-model/index.mjs --json               # the whole index, deterministic
+node cli/project-model/index.mjs --element ui-table   # one element and its dependencies
+node cli/project-model/index.mjs --json               # the whole index, deterministic
 ```
 
 The model reports what static analysis cannot read, by severity. An **error** is an

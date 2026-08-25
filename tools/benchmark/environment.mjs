@@ -11,8 +11,8 @@
 import { createHash } from 'node:crypto';
 import { cpus, totalmem, type as osType, release } from 'node:os';
 
-import { readText } from '../layout.mjs';
-import { VENDOR } from '../package/interface.mjs';
+import { readText } from '../../cli/layout.mjs';
+import { VENDOR } from '../../cli/package/interface.mjs';
 import { join } from 'node:path';
 
 /** @import { Environment } from './types.js' */

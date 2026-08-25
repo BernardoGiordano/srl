@@ -8,7 +8,7 @@
  * built bytes in a browser is that nothing about the serving is approximate.
  *
  * Not part of the published package: this is test support for repositories that consume
- * tools/, reached by path like the rest of tools/.
+ * cli/, reached by path like the rest of cli/.
  */
 
 import assert from 'node:assert/strict';

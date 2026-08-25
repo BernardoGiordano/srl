@@ -48,13 +48,13 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { REPO, apps, readText } from '../layout.mjs';
+import { REPO, apps, readText } from '../../cli/layout.mjs';
 import {
   IMPORT_MAP_FILE,
   VENDOR,
   importMapText,
   vendorReferences,
-} from '../package/interface.mjs';
+} from '../../cli/package/interface.mjs';
 
 const shouldFetch = process.argv.includes('--fetch');
 const acceptNew = process.argv.includes('--accept-new');

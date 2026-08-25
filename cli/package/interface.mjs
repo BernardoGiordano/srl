@@ -1,21 +1,22 @@
 /**
  * What the library publishes, derived from the library's own manifest.
  *
- * The package is `source/`: source/package.json declares the mounts a browser
- * sees, the bare specifier prefixes source is written against, and the vendored
- * runtime dependencies. This module is the only thing that reads that manifest,
- * and everything else — the dev server, the test-runner origin, the benchmark
- * origin, the verifier, the build, the deployment — asks here rather than
- * restating the table.
+ * The package is the library's own directory — `source/` in this repository,
+ * node_modules/@srljs/core in a repository that installed it. Its package.json
+ * declares the mounts a browser sees, the bare specifier prefixes source is
+ * written against, and the vendored runtime dependencies. This module is the only
+ * thing that reads that manifest, and everything else — the dev server, the
+ * test-runner origin, the benchmark origin, the verifier, the build, the
+ * deployment — asks here rather than restating the table.
  *
- * The split from tools/layout.mjs is the point of the file: the package's facts
+ * The split from cli/layout.mjs is the point of the file: the package's facts
  * live here, the repository's live there, and only the second are true of this
  * repository in particular. ADR-0033. That is what gives a consumer outside this
  * repository something to import, and makes extracting the library a file move.
  *
  * Zero dependencies, and the manifest is read synchronously at load, so importing
  * this module gives constants rather than promises and works before `npm install`
- * like the rest of tools/.
+ * like the rest of cli/.
  */
 
 import { createHash } from 'node:crypto';
@@ -27,15 +28,48 @@ import { fileURLToPath } from 'node:url';
 const HERE = resolve(fileURLToPath(new URL('.', import.meta.url)));
 
 /**
+ * The library's own directory, if it happens to sit beside this one.
+ *
+ * Two candidates, tried in order, because these tools travel with the library in
+ * a checkout. In a standalone srl checkout the package is the directory above
+ * `cli/`; in this repository, which holds the library plus the applications built
+ * on it, it is `source/`. A search rather than a constant so that neither shape
+ * needs an edit here.
+ */
+function neighbour() {
+  return [resolve(HERE, '..', '..'), resolve(HERE, '..', '..', 'source')];
+}
+
+/**
+ * The library's directory when this package was installed from the registry.
+ *
+ * `@srljs/cli` is published separately from `@srljs/core` — the build needs Vite,
+ * parse5 and tsc, and a browser consumer of the library must not install them —
+ * so in an installed tree the two are siblings under node_modules and neither
+ * candidate above exists. The resolver knows where the peer went; asking it is
+ * the only thing that survives npm's hoisting, pnpm's store and a linked
+ * checkout alike.
+ *
+ * Empty rather than throwing when there is no peer: a standalone checkout has
+ * none, and the neighbour candidates are the answer there.
+ */
+function installedPeer() {
+  try {
+    return [resolve(fileURLToPath(import.meta.resolve('@srljs/core/package.json')), '..')];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * The package root: the directory whose package.json carries an `srl` field.
  *
- * Two candidates, tried in order, because tools/ travels with the library. In a
- * standalone srl checkout the package is the repository root; in a repository
- * that holds the library plus the applications built on it, it is source/. A
- * search rather than a constant so that neither shape needs an edit here.
+ * The checkout candidates come first. A repository that vendors or submodules the
+ * library and also has it installed has two copies, and the one its own tooling
+ * was checked out with is the one its source was written against.
  */
 function findPackage() {
-  for (const candidate of [resolve(HERE, '..', '..'), resolve(HERE, '..', '..', 'source')]) {
+  for (const candidate of [...neighbour(), ...installedPeer()]) {
     try {
       const manifest = JSON.parse(readFileSync(join(candidate, 'package.json'), 'utf8'));
       if (manifest.srl !== undefined) return { dir: candidate, manifest };
@@ -44,18 +78,19 @@ function findPackage() {
     }
   }
   throw new Error(
-    'No package.json with an `srl` field was found next to tools/. The library manifest is ' +
-      'what declares the mounts, the specifier prefixes and the vendored dependencies; without ' +
-      'it nothing here can tell where the library is served from.',
+    'No package.json with an `srl` field was found beside cli/, and `@srljs/core` does not ' +
+      'resolve from here. The library manifest is what declares the mounts, the specifier ' +
+      'prefixes and the vendored dependencies; without it nothing here can tell where the ' +
+      'library is served from. Install `@srljs/core` alongside `@srljs/cli`.',
   );
 }
 
 const found = findPackage();
 
-/** The library's directory: the root of a standalone srl checkout. */
+/** The library's directory: the root of a standalone srl checkout, or the installed package. */
 export const PACKAGE = found.dir;
 
-/** source/package.json, parsed. The declaration every table below is derived from. */
+/** The library's package.json, parsed. The declaration every table below is derived from. */
 export const MANIFEST = found.manifest;
 
 /**

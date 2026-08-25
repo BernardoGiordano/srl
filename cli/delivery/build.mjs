@@ -30,9 +30,9 @@ import { parse, parseFragment, serialize } from 'parse5';
 import ts from 'typescript';
 import { build as viteBuild } from 'vite';
 
-import { admitManifest } from '../../source/lib/core/remotes/manifest-policy.js';
+import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
 import { REPO, readText, selectedApp, walk } from '../layout.mjs';
-import { extractImportMap, urlToFile } from '../package/interface.mjs';
+import { extractImportMap, PACKAGE, urlToFile } from '../package/interface.mjs';
 import { projectErrors, readProject } from '../project-model/index.mjs';
 import { verifyPublishedRelease } from './verify-release.mjs';
 
@@ -512,7 +512,7 @@ async function sourceManifest(app) {
  * facts with one independently verified artifact report.
  *
  * @param {BuildApplication} app
- * @param {import('../../source/lib/core/remotes/types.js').AppManifest} source
+ * @param {import('@srljs/core/lib/core/remotes/types.js').AppManifest} source
  * @param {ReadonlyArray<Readonly<Record<string, unknown>>>} reports
  */
 function composeRemotes(app, source, reports) {
@@ -796,7 +796,7 @@ function remoteImportResolver(app, shared) {
  * @param {string} remoteDir
  * @param {string} publicDir
  * @param {string} base
- * @param {import('../../source/lib/core/localization/types.js').I18nConfig} i18n
+ * @param {import('@srljs/core/lib/core/localization/types.js').I18nConfig} i18n
  * @param {readonly string[]} patterns
  */
 async function emitRemoteLocales(app, remoteDir, publicDir, base, i18n, patterns) {
@@ -1256,7 +1256,7 @@ function htmlAttribute(node, name) {
  * @param {BuildApplication} app
  * @param {string} publicDir
  * @param {{ commit: string | null, sourceDateEpoch: number | null }} release
- * @param {import('../../source/lib/core/remotes/types.js').AppManifest} admitted
+ * @param {import('@srljs/core/lib/core/remotes/types.js').AppManifest} admitted
  */
 async function emitRuntimeData(app, publicDir, release, admitted) {
   const copied = new Set();
@@ -1685,7 +1685,7 @@ async function importMapResolver(app, prefixes) {
     resolveId(source, importer) {
       if (source.startsWith('\0')) return null;
       if (source === REPO || source.startsWith(`${REPO}${sep}`)) return source;
-      if (importer?.includes(`${sep}node_modules${sep}`) === true) return null;
+      if (isDependency(importer)) return null;
       if (/^(?:https?:)?\/\//u.test(source)) {
         throw artifactError(app, 'resolve', `network module is forbidden: ${source}`);
       }
@@ -1708,6 +1708,26 @@ async function importMapResolver(app, prefixes) {
 /** @param {string} specifier */
 function isBare(specifier) {
   return !specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.startsWith('\0');
+}
+
+/**
+ * Whether a module doing the importing is a third-party dependency resolving its own
+ * internals, which the import map has nothing to say about and Vite resolves the
+ * ordinary way.
+ *
+ * Living under node_modules is the signal, and the library is the exception: when the
+ * package was installed from the registry rather than checked out beside the
+ * application, every module of it sits under node_modules and every one of them
+ * imports `@core/` — the prefixes only the import map resolves. Excluding it here on
+ * the strength of its path would leave the framework's own imports to a resolver that
+ * cannot see the map, which fails the build on the first `@core/` it meets.
+ *
+ * @param {string | undefined} importer
+ * @returns {boolean}
+ */
+function isDependency(importer) {
+  if (importer === undefined || !importer.includes(`${sep}node_modules${sep}`)) return false;
+  return !importer.startsWith(`${PACKAGE}${sep}`);
 }
 
 /**

@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-12
-- Affects: `tools/project-model/`, `tools/checks/`
+- Affects: `cli/project-model/`, `cli/checks/`, `tools/checks/`
 
 ## Context
 
@@ -21,10 +21,10 @@ over a fixture the bundler deliberately left out.
 
 ## Decision
 
-One model, in `tools/project-model/`, parsed from the TypeScript AST and consumed by every
+One model, in `cli/project-model/`, parsed from the TypeScript AST and consumed by every
 tool that needs to know what exists. It owns custom-element identity, template ownership,
 `uses` relationships and template globals. Applications and their mounts come from
-`tools/layout.mjs` (ADR-0033), which this module consumes rather than re-deriving.
+`cli/layout.mjs` (ADR-0033), which this module consumes rather than re-deriving.
 
 A declaration whose tag, class or template is computed is reported as `dynamic` rather
 than skipped. It may well work in the browser; the point is that no tool here can see it,

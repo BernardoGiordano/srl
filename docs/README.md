@@ -33,7 +33,7 @@ owns all of it.
 
 | Page | Subject |
 |---|---|
-| [Project index](reference/project-index.md) | Every element, global and application — generated from `tools/project-model/` |
+| [Project index](reference/project-index.md) | Every element, global and application — generated from `cli/project-model/` |
 | [Source layout](reference/source-layout.md) | Every directory, and what may know about what |
 | [Angular to this](reference/angular-to-this.md) | A translation table, not a parity claim |
 

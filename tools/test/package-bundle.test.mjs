@@ -15,7 +15,7 @@ import test from 'node:test';
 
 import ts from 'typescript';
 
-import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../package/interface.mjs';
+import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
 import { BUNDLE_FILES, DIST, buildPackageBundles } from '../delivery/package-bundle.mjs';
 
 // Built once for the whole file. The build is the expensive part and every

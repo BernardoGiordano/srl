@@ -35,7 +35,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 
-import { REPO, selectedApp } from '../layout.mjs';
+import { REPO, selectedApp } from '../../cli/layout.mjs';
 import {
   BASELINE_VERSION,
   DURATION,

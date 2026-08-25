@@ -28,8 +28,8 @@ import {
   securityContextFor,
   strictOperator,
   VOID_ELEMENTS,
-} from '../../source/lib/core/template/dialect.js';
-import { parseExpression } from '../../source/lib/core/template/expression-parser.js';
+} from '@srljs/core/lib/core/template/dialect.js';
+import { parseExpression } from '@srljs/core/lib/core/template/expression-parser.js';
 import { apps, REPO } from '../layout.mjs';
 import { readProject } from '../project-model/index.mjs';
 
@@ -274,7 +274,7 @@ function parseAttributes(source, absolute, from) {
 /**
  * The project's own view of its components, in the shape the shim builder needs.
  *
- * Discovery is not this tool's job any more: `tools/project-model/` reads
+ * Discovery is not this tool's job any more: `cli/project-model/` reads
  * `defineComponent({ tag, element, module, template, uses })` — the same record
  * `@core/elements/component.js` builds at runtime — and the checker asks it which elements exist.
  * That is what keeps the checker from having its own opinion about the project, and it is
@@ -625,7 +625,7 @@ class ShimBuilder {
       attr.at,
       `${this.component.template}: <${node.tag}> does not observe the attribute ${attr.name}. ` +
         (near === undefined
-          ? `Run \`node tools/project-model/index.mjs --element ${node.tag}\` for the ones it does.`
+          ? `Run \`node cli/project-model/index.mjs --element ${node.tag}\` for the ones it does.`
           : `Did you mean ${near}?`),
     );
   }
@@ -653,7 +653,7 @@ class ShimBuilder {
     }
   }
 
-  /** @param {import('../../source/lib/core/template/types.js').ExprNode} node @param {Map<string, string>} scope @param {boolean} unwrap @param {number} at @returns {string} */
+  /** @param {import('@srljs/core/lib/core/template/types.js').ExprNode} node @param {Map<string, string>} scope @param {boolean} unwrap @param {number} at @returns {string} */
   emit(node, scope, unwrap, at) {
     /** @param {string} value @returns {string} */
     const wrap = (value) => (unwrap ? `__unwrap(${value})` : value);

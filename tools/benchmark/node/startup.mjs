@@ -27,7 +27,7 @@
 
 import { join } from 'node:path';
 
-import { apps, readText } from '../../layout.mjs';
+import { apps, readText } from '../../../cli/layout.mjs';
 import { artifactDeclaration } from '../declaration.mjs';
 
 /** @import { ArtifactDeclaration, BenchmarkPage, BenchmarkSample, NodeWorkloadContext, WorkloadSpec } from '../types.js' */

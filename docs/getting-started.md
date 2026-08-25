@@ -2,7 +2,7 @@
 
 ```bash
 npm run example                                 # the application, http://localhost:8100
-node tools/dev/serve.mjs --open                 # any application, statically, http://localhost:8000
+node cli/dev/serve.mjs --open                 # any application, statically, http://localhost:8000
 ```
 
 `npm run example` is the one to use: it serves `example/` from a Node backend, so the
@@ -11,7 +11,7 @@ node tools/dev/serve.mjs --open                 # any application, statically, h
 username; the password picks the role — `admin`, `operator` or `viewer`. `/analytics` is
 the foreign-stack micro-frontend, `/billing` the same-stack one.
 
-`tools/dev/serve.mjs` is the file-server half of the same layout: the three mounts, a
+`cli/dev/serve.mjs` is the file-server half of the same layout: the three mounts, a
 history fallback and watch-reload, with no npm install and no process behind `/auth` or
 `/api`. It is how an application with no backend of its own is served, and how this one
 is checked to be a plain static folder.

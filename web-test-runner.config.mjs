@@ -46,8 +46,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { LIB_MOUNT_ROUTES, REPO } from './tools/layout.mjs';
-import { extractImportMap } from './tools/package/interface.mjs';
+import { LIB_MOUNT_ROUTES, REPO } from './cli/layout.mjs';
+import { extractImportMap } from './cli/package/interface.mjs';
 
 const APP = process.env.APP ?? 'example';
 
@@ -67,8 +67,8 @@ const APP = process.env.APP ?? 'example';
 const PINNED_APP = 'example';
 
 /**
- * URL prefix -> URL, exactly as tools/dev/serve.mjs and the release tree mount them: the
- * library mounts are imported from tools/layout.mjs rather than restated, so the
+ * URL prefix -> URL, exactly as cli/dev/serve.mjs and the release tree mount them: the
+ * library mounts are imported from cli/layout.mjs rather than restated, so the
  * test origin cannot drift from the served one. What remains here is the part
  * that is genuinely per application.
  *

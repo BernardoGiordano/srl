@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- **Toolchain, published.** `@srljs/cli` is a second package: the dev server, the project
+  model, the template checker and the artifact build and release pipeline, with Vite,
+  TypeScript and parse5 as its own pinned dependencies rather than the library's. It names
+  `@srljs/core` as an exact peer, so a repository that deploys an application installs both
+  and needs no srl checkout of its own
+  ([ADR-0067](docs/adr/0067-the-toolchain-is-a-second-package.md)).
+
 ## 0.1.0
 
 First published version.

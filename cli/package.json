@@ -1,0 +1,120 @@
+{
+  "name": "@srljs/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "The srl toolchain: dev server, project model, template checker, and the production artifact build and release pipeline",
+  "keywords": [
+    "srl",
+    "buildless",
+    "import-map",
+    "build",
+    "static-site",
+    "web-components",
+    "toolchain"
+  ],
+  "author": "Bernardo Giordano",
+  "homepage": "https://github.com/BernardoGiordano/srl#readme",
+  "bugs": "https://github.com/BernardoGiordano/srl/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BernardoGiordano/srl.git",
+    "directory": "cli"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "//": [
+    "THE TOOLCHAIN, AS A PACKAGE OF ITS OWN.",
+    "",
+    "This directory is the package, the same way source/ is: a standalone checkout",
+    "would have cli/ at its root beside the library, and extracting it is a file",
+    "move. What is in here is every tool a repository built on srl needs and none",
+    "of the tools that only make sense inside this repository — those stay in",
+    "tools/ at the root and are published nowhere.",
+    "",
+    "Separate from @srljs/core rather than folded into it, for one reason: the",
+    "build needs Vite, parse5 and the TypeScript compiler API, and the consumer",
+    "this framework is actually for — a browser with an import map and no build",
+    "step — must not have to install a hundred megabytes of bundler to load a",
+    "library that never runs one. @srljs/core keeps its two runtime dependencies.",
+    "A page installs the library; a repository that deploys one installs this too.",
+    "",
+    "The two are released together and pinned to each other, not to a range. This",
+    "package reads the library's own manifest for the mounts and specifier",
+    "prefixes (cli/package/interface.mjs), and imports three of its modules",
+    "outright, so the pair is one interface split across two tarballs."
+  ],
+  "//files": [
+    "The tool directories, minus the suite. cli/test/ tests this package rather",
+    "than being it, and its fixtures are whole projects a consumer has no use for.",
+    "README.md and LICENSE are not listed because npm ships them either way, and",
+    "source/package.json does not list them either.",
+    "",
+    "No `exports` map. Every entry point here is a module path a script names, and",
+    "npm's default — the whole tree, reachable by path — is what a `node",
+    "node_modules/@srljs/cli/delivery/build.mjs` invocation and an `import` of the",
+    "same file both already assume. Narrowing it would be a second description of",
+    "the same directory listing."
+  ],
+  "files": [
+    "layout.mjs",
+    "package",
+    "project-model",
+    "delivery",
+    "checks",
+    "dev"
+  ],
+  "//peerDependencies": [
+    "The library, exactly. cli/package/interface.mjs reads its manifest and three",
+    "of its modules are imported outright: the manifest policy the build admits",
+    "remotes against and the template dialect the checker refuses expressions with",
+    "are the same ones the runtime enforces. A range here would let a consumer pair",
+    "a checker with a dialect it does not describe, and the build would pass what",
+    "the browser then rejects.",
+    "",
+    "Not a `dependency`, because the consumer installs the library for its own",
+    "sake: it is what their application imports. A dependency here would give them",
+    "a second copy under this package the day their own pin drifted."
+  ],
+  "peerDependencies": {
+    "@srljs/core": "0.1.0"
+  },
+  "//dependencies": [
+    "Pinned exactly, and to the versions this repository's own lockfile resolves,",
+    "because that is the point of publishing the toolchain rather than telling a",
+    "consumer to copy three pins into their package.json. tools/checks/verify-deps.mjs",
+    "fails when these and the root devDependencies drift apart.",
+    "",
+    "  vite        the bundler the build drives. Implementation, not interface:",
+    "              callers get one function and one artifact report.",
+    "  typescript  the compiler API, for the template checker's program and for",
+    "              the build's own AST passes. The 6.x install, not tsgo: the",
+    "              Go-native compiler ships no public API until 7.1.",
+    "  parse5      spec HTML parsing, so a production index.html is a transform of",
+    "              a parsed tree rather than a regular expression over markup.",
+    "              ADR-0041.",
+    "",
+    "Tailwind is deliberately absent. The build shells out to the consumer's own",
+    "`node_modules/.bin/tailwindcss` because the stylesheet it compiles is theirs,",
+    "written against their config and their version. A copy pinned here would",
+    "compile their CSS with a compiler they did not choose."
+  ],
+  "dependencies": {
+    "parse5": "6.0.1",
+    "typescript": "6.0.3",
+    "vite": "8.2.1"
+  },
+  "//devDependencies": [
+    "The artifact suite drives a real Chrome over the DevTools protocol to load a",
+    "built page from a served origin, which is the only way to catch an artifact",
+    "that assembles cleanly and does not run. Nothing here ships."
+  ],
+  "devDependencies": {
+    "chrome-launcher": "0.15.2",
+    "puppeteer-core": "25.4.0"
+  }
+}

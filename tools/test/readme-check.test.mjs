@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { REPO } from '../layout.mjs';
+import { REPO } from '../../cli/layout.mjs';
 import { checkReadme } from '../checks/readme-check.mjs';
 
 /**

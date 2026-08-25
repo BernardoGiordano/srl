@@ -16,7 +16,7 @@
  *
  * Relative rather than `@core/`, and the only relative import under source/lib:
  * the alias is an import-map entry the browser resolves and Node does not, and
- * tools/checks/template-check.mjs loads this file from Node by path. A sibling
+ * cli/checks/template-check.mjs loads this file from Node by path. A sibling
  * specifier resolves to the same module in both.
  */
 

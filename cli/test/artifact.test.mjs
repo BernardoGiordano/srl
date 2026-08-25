@@ -252,7 +252,7 @@ void test('failed build leaves previous verified output untouched', async () => 
     const before = await readFile(join(output, 'artifact.json'), 'utf8');
     const broken = {
       name: 'artifact-broken',
-      dir: join(REPO, 'tools/test/fixtures/artifact-broken'),
+      dir: join(REPO, 'cli/test/fixtures/artifact-broken'),
     };
 
     await assert.rejects(
@@ -279,7 +279,7 @@ void test('dynamic component definition fails before an incomplete template arti
       buildArtifact({
         app: {
           name: 'artifact-dynamic',
-          dir: join(REPO, 'tools/test/fixtures/artifact-dynamic'),
+          dir: join(REPO, 'cli/test/fixtures/artifact-dynamic'),
         },
         outDir: join(temporary, 'output'),
         release: RELEASE,

@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-12
-- Affects: `tools/checks/template-check.mjs`
+- Affects: `cli/checks/template-check.mjs`
 
 ## Context
 
