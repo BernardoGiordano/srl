@@ -135,31 +135,68 @@ example/                    THE APPLICATION, served by its own Node backend
   test/                     the whole application in one suite; fake-server.js
                             stubs HTTP and EventSource, and nothing else
 
-tools/
-  layout.mjs                what is true of this repository: where the package sits,
-                            and which directories are applications. At the root
-                            because everything else here consumes it
-  diagnostics/              what a check found, as values: one Diagnostic type and the
-                            only two things that print one, a terminal report and a
-                            JSON document
+cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067): every tool
+                            a repository built on srl needs, pinned to the exact
+                            `@srljs/core` it was tested against. Vite, TypeScript and
+                            parse5 are dependencies here, so the consumer who only loads
+                            the library through an import map installs none of them
+  package.json              the package's interface, and cli/README.md its npm landing
+                            page, with cli/LICENSE the copy of the root grant a tarball
+                            has to carry
+  layout.mjs                what is true of a repository: where the package sits, and
+                            which directories are applications. At the root because
+                            everything else here consumes it
+  bin/srl.mjs               one entry point, `srl <command>`: a dispatcher and nothing
+                            else. Every tool below still runs by path
   package/
     interface.mjs           what the library publishes, read from source/package.json:
                             mounts, specifier prefixes, and the generated import-map
                             fragment applications paste (`npm run importmap`)
   project-model/            one AST pass over an application, shared by every tool
+  diagnostics/              what a check found, as values: one Diagnostic type and the
+                            only two things that print one, a terminal report and a
+                            JSON document
   checks/
-    verify-deps.mjs         layering, deps, import maps, templates, translations, storage
     template-check.mjs      static type checking of template expressions
-    readme-check.mjs        the generated sections of docs/reference/project-index.md
+    importmap-check.mjs     an application's inline import map against the library it
+                            installed. The one check a consumer runs, because the
+                            failures it catches are blank pages, not build errors
   delivery/
-    vendor.mjs              verify /lib/vendor against the hashes every app declares
+    build.mjs               the production artifact: chunked, minified, hash-named, one
+                            sha384 pinned per chunk, and a report describing all of it
+    production-html.mjs     an index.html's development form -> its production one
+    template-html.mjs       one template minified, and proof the minified bytes parse to
+                            the same tree the source did
     bundle-templates.mjs    optional, per application: N template requests -> 1
     release.mjs             a verified artifact -> a transport tree: assets, one
                             versioned release, one report. Knows no host
     release-target.mjs      the seam: where a release is going. `staticTarget()` is
                             the framework's own adapter, a plain directory
+    remote-release.mjs      the same for a remote, which owns its graph and its versioned
+                            URL base and publishes on its own cadence
+    activate-release.mjs    one atomic switch of the pointer a host serves
+    retention.mjs           prunes the releases that switch superseded
+    verify-release.mjs      a staged or remote tree against its immutable report
+    verify-http.mjs         a live origin against that same report: bytes and headers
   dev/
-    serve.mjs               zero-dependency dev server: mounts + fallback + watch
+    serve.mjs               zero-dependency dev server: mounts + fallback + watch, and
+                            `--proxy` for an application whose backend sets the cookie
+  test/                     the suites for everything above, over fixtures/ (whole
+                            applications, intact and broken) and support/
+
+tools/                      THIS REPOSITORY'S OWN TOOLS, published nowhere: the ones that
+                            only make sense inside the checkout
+  checks/
+    verify-deps.mjs         layering, deps, import maps, templates, translations, storage
+    pack-check.mjs          both tarballs, installed the way a stranger installs them and
+                            driven end to end
+    readme-check.mjs        the generated sections of docs/reference/project-index.md
+    adr-check.mjs           the decision records, and every citation that reaches one
+  delivery/
+    vendor.mjs              verify /lib/vendor against the hashes every app declares
+    package-bundle.mjs      source/dist/: the four files a consumer with a bundler
+                            installs, resolved out of the prefixes source is written
+                            against (ADR-0066)
   benchmark/                the performance gate: workloads, baseline, budgets
   test/                     the Node-side suites for everything above
 
