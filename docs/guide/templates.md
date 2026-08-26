@@ -46,6 +46,32 @@ array plus one closure per binding. Every render after that hands lit the same a
 no re-parse, no `innerHTML`, no string diffing. The third observation is why the
 compiled result is cached per URL and never rebuilt.
 
+## Whitespace in production
+
+A built artifact serves minified markup: comments dropped, each run of whitespace collapsed
+to one space, `class` collapsed as the token list it is. A third of the authored bytes in
+practice, and nothing rendered differently — the build proves each template parses to the
+same tree its source did, and fails naming the template if it does not
+([ADR-0070](../adr/0070-a-production-template-is-minified-and-proved-equivalent.md)).
+
+A run of whitespace is collapsed, never removed, because `a<span> </span>b` and
+`a<span></span>b` are two different renderings. Whole subtrees are left byte for byte when
+the markup says whitespace matters in them:
+
+```html
+<pre>  two spaces, and a
+   line break  </pre>                        <!-- pre, textarea, script, style -->
+
+<p class="whitespace-pre-line">{{ notes }}</p>   <!-- whitespace-pre, -pre-line, -pre-wrap,
+                                                     -break-spaces, [white-space:pre] -->
+<p style="white-space: pre-wrap">{{ notes }}</p> <!-- or say it inline -->
+```
+
+The one thing the build cannot read is a stylesheet. An element made preformatted by a
+class of the application's own — `.log { white-space: pre; }` — holding literal
+whitespace-significant text in its template has that whitespace collapsed. Say it on the
+element instead, or use `<pre>`.
+
 ## Bindings are a language, not `eval`
 
 `new Function` was rejected for two independent reasons. It requires

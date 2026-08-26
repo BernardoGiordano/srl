@@ -77,7 +77,9 @@ srl check templates
 # The production artifact: minified, hash-named chunks, a production index.html
 # whose import map pins a sha384 for every one of them, the compiled stylesheet,
 # and dist/<app>/artifact.json describing what was emitted and what Cache-Control
-# each file expects.
+# each file expects. Templates are minified too, one immutable file each, fetched
+# by the component that names it; `--templates bundle` collapses them into the
+# single JSON the manifest seeds from at startup instead.
 srl build --app web
 
 # Every element, global and template the project model can see.

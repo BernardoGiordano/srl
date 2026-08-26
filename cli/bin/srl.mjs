@@ -75,10 +75,16 @@ Checks
 
 Delivery
   build [--app <name>] [--out <dir>] [--remote <name>]
+        [--templates split|bundle]
                             the production artifact: minified, hash-named
                             chunks, a production index.html pinning a sha384
-                            for each, and artifact.json describing all of it
-  templates [--app <name>]  the optional per-application template bundle
+                            for each, and artifact.json describing all of it.
+                            Templates are minified and emitted one immutable
+                            file each, fetched by the component that needs
+                            them; --templates bundle adds the single JSON the
+                            manifest seeds from at startup instead
+  templates [--app <name>]  the per-application template bundle for a
+                            deployment with no build step
   importmap [--write]       print the import-map fragment an application pastes
 
 Release

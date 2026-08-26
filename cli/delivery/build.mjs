@@ -34,6 +34,7 @@ import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
 import { REPO, readText, selectedApp, walk } from '../layout.mjs';
 import { extractImportMap, PACKAGE, urlToFile } from '../package/interface.mjs';
 import { projectErrors, readProject } from '../project-model/index.mjs';
+import { minifyTemplate } from './template-html.mjs';
 import { verifyPublishedRelease } from './verify-release.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -48,9 +49,21 @@ const CACHE = {
 const HASHED_JAVASCRIPT = /-[A-Za-z0-9_-]{8}\.js$/u;
 
 /**
+ * How a built application's templates reach the browser. `split` is the default:
+ * each template is one immutable, hash-named file its own component asks for, so a
+ * visitor downloads the markup of the routes they open and nothing else. `bundle`
+ * additionally emits the single `templates-<hash>.json` the manifest points at, so
+ * a first paint costs one request for every template in the application, which is
+ * the right trade only on a link where a round trip costs more than the bytes.
+ * ADR-0071.
+ */
+const TEMPLATE_DELIVERY = new Set(['split', 'bundle']);
+
+/**
  * @typedef {{ name: string, dir: string }} BuildApplication
+ * @typedef {'split' | 'bundle'} TemplateDelivery
  * @typedef {{ commit?: string | null, sourceDateEpoch?: number | null }} ReleaseInput
- * @typedef {{ app: BuildApplication, outDir?: string, release?: ReleaseInput, remotes?: ReadonlyArray<Readonly<Record<string, unknown>>> }} BuildOptions
+ * @typedef {{ app: BuildApplication, outDir?: string, release?: ReleaseInput, remotes?: ReadonlyArray<Readonly<Record<string, unknown>>>, templates?: TemplateDelivery }} BuildOptions
  * @typedef {{ tag: string, module: string, template: string, url: string, path: string, source: string }} TemplateAsset
  */
 
@@ -65,8 +78,10 @@ export async function buildArtifact({
   outDir = join(DIST, app.name),
   release = {},
   remotes = [],
+  templates: delivery = 'split',
 }) {
   validateApp(app);
+  validateDelivery(app, delivery);
   const root = validateOutput(outDir, app);
   const normalizedRelease = normalizeRelease(release, app);
   const model = await readProject(app);
@@ -135,7 +150,13 @@ export async function buildArtifact({
     const shared = sharedOutputs(app, chunks, sharedEntries);
     await rm(css.temporary, { force: true });
     await emitLicenses(stage, publicDir);
-    const templateOutput = await emitTemplateFiles(app, publicDir, templates.assets(), '/');
+    const templateOutput = await emitTemplateFiles(
+      app,
+      publicDir,
+      templates.assets(),
+      '/',
+      delivery,
+    );
     const manifest = await emitApplicationManifest(
       app,
       publicDir,
@@ -337,11 +358,19 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
  * Shell policy stays outside this interface; returned transport descriptor is composed
  * into a shell artifact later.
  *
- * @param {{ app: BuildApplication, name: string, outDir?: string, base?: string, release?: ReleaseInput }} options
+ * @param {{ app: BuildApplication, name: string, outDir?: string, base?: string, release?: ReleaseInput, templates?: TemplateDelivery }} options
  * @returns {Promise<Readonly<Record<string, unknown>>>}
  */
-export async function buildRemoteArtifact({ app, name, outDir, base, release = {} }) {
+export async function buildRemoteArtifact({
+  app,
+  name,
+  outDir,
+  base,
+  release = {},
+  templates: delivery = 'split',
+}) {
   validateApp(app);
+  validateDelivery(app, delivery);
   const normalizedRelease = normalizeRelease(release, app);
   const version = normalizedRelease.commit ?? 'development';
   const publicationBase = validateRemoteBase(app, name, base ?? `/remotes/${name}/${version}/`);
@@ -414,7 +443,7 @@ export async function buildRemoteArtifact({ app, name, outDir, base, release = {
     const templateOutput =
       templateAssets.length === 0
         ? null
-        : await emitTemplateFiles(app, publicDir, templateAssets, publicationBase);
+        : await emitTemplateFiles(app, publicDir, templateAssets, publicationBase, delivery);
     const locales = await emitRemoteLocales(
       app,
       remoteDir,
@@ -452,7 +481,12 @@ export async function buildRemoteArtifact({ app, name, outDir, base, release = {
       assets,
       shared: [...policy.shared],
       locales,
-      ...(templateOutput === null ? {} : { templates: templateOutput.url }),
+      // Only a bundle is an asset the shell has to fetch before the remote's first
+      // component renders. Split templates are fetched by the components themselves,
+      // from this remote's own base, and need nothing in the descriptor.
+      ...(templateOutput === null || templateOutput.url === null
+        ? {}
+        : { templates: templateOutput.url }),
     };
     verifyRemotePayload(app, name, payload, chunks, remoteEntry, templateOutput);
 
@@ -693,14 +727,24 @@ function sharedOutputs(app, chunks, entries) {
 }
 
 /**
+ * The runtime manifest, with the remotes this build composed and the template
+ * bundle it emitted.
+ *
+ * A `null` bundle *removes* `templateBundle` rather than leaving what the source
+ * manifest said: an application that once configured `/templates.json` by hand
+ * would otherwise ship a manifest naming a file this artifact does not contain,
+ * and a startup step that fetches it, misses, and quietly costs a round trip.
+ *
  * @param {BuildApplication} app
  * @param {string} publicDir
  * @param {Record<string, unknown>} source
- * @param {string} templateBundle
+ * @param {string | null} templateBundle
  * @param {ReadonlyArray<Record<string, unknown>>} remotes
  */
 async function emitApplicationManifest(app, publicDir, source, templateBundle, remotes) {
-  const manifest = { ...source, remotes, templateBundle };
+  const { templateBundle: _configured, ...rest } = source;
+  const manifest =
+    templateBundle === null ? { ...rest, remotes } : { ...rest, remotes, templateBundle };
   const pins = Object.fromEntries(
     remotes.flatMap((remote) =>
       arrayValue(remote.assets, `remote ${String(remote.name)} assets`)
@@ -838,7 +882,7 @@ async function emitRemoteLocales(app, remoteDir, publicDir, base, i18n, patterns
  * @param {string} base
  * @param {ReturnType<typeof chunkRelationships>} chunks
  * @param {Awaited<ReturnType<typeof inventory>>} payload
- * @param {{ bundle: string, url: string } | null} templates
+ * @param {{ bundle: string | null, url: string | null } | null} templates
  */
 async function remoteAssetRecords(publicDir, base, chunks, payload, templates) {
   const records = [];
@@ -853,7 +897,7 @@ async function remoteAssetRecords(publicDir, base, chunks, payload, templates) {
     const path = file.path.replace(/^public\//u, '');
     records.push({ type: 'style', url: `${base}${path}`, integrity: await sri384(join(publicDir, path)) });
   }
-  if (templates !== null) {
+  if (templates !== null && templates.bundle !== null && templates.url !== null) {
     records.push({
       type: 'template',
       url: templates.url,
@@ -874,7 +918,7 @@ async function sri384(path) {
  * @param {Awaited<ReturnType<typeof inventory>>} files
  * @param {ReturnType<typeof chunkRelationships>} chunks
  * @param {string} entry
- * @param {{ bundle: string } | null} templates
+ * @param {{ bundle: string | null, files: string[] } | null} templates
  */
 function verifyRemotePayload(app, name, files, chunks, entry, templates) {
   const javascript = files.filter((file) => file.path.endsWith('.js'));
@@ -909,8 +953,17 @@ function verifyRemotePayload(app, name, files, chunks, entry, templates) {
   if (!files.some((file) => file.path === `${PUBLIC}/build.json`)) {
     throw artifactError(app, 'remote', `${name} emitted no build metadata.`);
   }
-  if (templates !== null && !files.some((file) => file.path === `${PUBLIC}/${templates.bundle}`)) {
+  if (
+    templates !== null &&
+    templates.bundle !== null &&
+    !files.some((file) => file.path === `${PUBLIC}/${templates.bundle}`)
+  ) {
     throw artifactError(app, 'remote', `${name} template bundle is missing.`);
+  }
+  for (const template of templates?.files ?? []) {
+    if (!files.some((file) => file.path === `${PUBLIC}/${template}`)) {
+      throw artifactError(app, 'remote', `${name} template is missing: ${template}`);
+    }
   }
   const unknown = files.filter((file) => file.cache === 'unknown').map((file) => file.path);
   if (unknown.length > 0) {
@@ -1599,7 +1652,7 @@ function templateTransform(app, model, base) {
             );
           }
 
-          const asset = await templateAsset(record, base);
+          const asset = await templateAsset(app, record, base);
           const definition = matches[0];
           if (definition === undefined) continue;
           const existing = propertyAssignment(definition, 'template');
@@ -1640,40 +1693,80 @@ function templateTransform(app, model, base) {
 }
 
 /**
+ * One template, minified, named after the bytes that will actually be served.
+ *
+ * The hash is of the emitted markup rather than of the authored file, because the
+ * name is a cache key for what the browser receives: hashing the source would
+ * hold a URL still while its bytes changed the day the minifier did.
+ * `minifyTemplate` proves the two parse to the same tree (ADR-0070).
+ *
+ * @param {BuildApplication} app
  * @param {import('../project-model/types.js').ElementRecord} record
  * @param {string} base
  * @returns {Promise<TemplateAsset>}
  */
-async function templateAsset(record, base) {
+async function templateAsset(app, record, base) {
   const template = String(record.template);
-  const source = await readFile(template, 'utf8');
+  const authored = await readFile(template, 'utf8');
+  let source;
+  try {
+    source = minifyTemplate(authored);
+  } catch (cause) {
+    throw artifactError(
+      app,
+      'templates',
+      `<${record.tag}> (${relative(REPO, template)}): ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+      { cause },
+    );
+  }
   const hash = createHash('sha256').update(source, 'utf8').digest('hex').slice(0, 16);
   const path = `assets/templates/${record.tag}-${hash}.html`;
   return { tag: record.tag, module: record.module, template, url: `${base}${path}`, path, source };
 }
 
 /**
- * Emit fallback markup, one bundle keyed by those final URLs, and the admitted runtime
- * manifest that points at it. Reading the emitted bytes back before publication makes a
- * stale or malformed bundle a build failure rather than a blank route.
+ * Emit one immutable file per template, and — under `bundle` delivery — the single
+ * JSON keyed by those final URLs that the runtime manifest points at. Reading the
+ * emitted bytes back before publication makes stale or malformed markup a build
+ * failure rather than a blank route.
+ *
+ * The per-template files are the delivery, not a fallback: a component names its
+ * own template URL and fetches it when its chunk loads, so an application ships
+ * the markup of the routes a visitor opens. The bundle is the opt-in that trades
+ * that for one request. ADR-0071.
  *
  * @param {BuildApplication} app
  * @param {string} stage
  * @param {TemplateAsset[]} assets
  * @param {string} base
+ * @param {TemplateDelivery} delivery
  */
-async function emitTemplateFiles(app, stage, assets, base) {
+async function emitTemplateFiles(app, stage, assets, base, delivery) {
   if (assets.length === 0) {
     throw artifactError(app, 'templates', 'bundled graph contains no component templates.');
   }
 
-  /** @type {Record<string, string>} */
-  const bundle = {};
   for (const asset of assets) {
     await mkdir(dirname(join(stage, asset.path)), { recursive: true });
     await writeFile(join(stage, asset.path), asset.source);
-    bundle[asset.url] = asset.source;
   }
+  for (const asset of assets) {
+    if ((await readFile(join(stage, asset.path), 'utf8')) !== asset.source) {
+      throw artifactError(app, 'templates', `template bytes drifted for <${asset.tag}>.`);
+    }
+  }
+
+  const files = assets.map((asset) => asset.path);
+  const bytes = assets.reduce((total, asset) => total + Buffer.byteLength(asset.source), 0);
+  if (delivery === 'split') {
+    return { delivery, bundle: null, url: null, count: assets.length, bytes, files };
+  }
+
+  /** @type {Record<string, string>} */
+  const bundle = {};
+  for (const asset of assets) bundle[asset.url] = asset.source;
 
   const bundleSource = `${JSON.stringify(bundle)}\n`;
   const bundleHash = createHash('sha256').update(bundleSource, 'utf8').digest('hex').slice(0, 16);
@@ -1684,9 +1777,6 @@ async function emitTemplateFiles(app, stage, assets, base) {
   for (const asset of assets) {
     if (emitted[asset.url] !== asset.source) {
       throw artifactError(app, 'templates', `template bundle bytes drifted for <${asset.tag}>.`);
-    }
-    if ((await readFile(join(stage, asset.path), 'utf8')) !== asset.source) {
-      throw artifactError(app, 'templates', `fallback bytes drifted for <${asset.tag}>.`);
     }
   }
   if (Object.keys(emitted).length !== assets.length) {
@@ -1699,11 +1789,28 @@ async function emitTemplateFiles(app, stage, assets, base) {
   }
 
   return {
+    delivery,
     bundle: bundlePath,
     url: `${base}${bundlePath}`,
     count: assets.length,
-    fallbacks: assets.map((asset) => asset.path),
+    bytes,
+    files,
   };
+}
+
+/**
+ * @param {BuildApplication} app
+ * @param {string} delivery
+ * @returns {asserts delivery is TemplateDelivery}
+ */
+function validateDelivery(app, delivery) {
+  if (!TEMPLATE_DELIVERY.has(delivery)) {
+    throw artifactError(
+      app,
+      'templates',
+      `template delivery must be ${[...TEMPLATE_DELIVERY].join(' or ')}: ${delivery}`,
+    );
+  }
 }
 
 /**
@@ -2010,21 +2117,23 @@ function verifyPayload(app, files, templates, chunks) {
       );
     }
   }
-  if (!/assets\/templates-[0-9a-f]{16}\.json$/u.test(templates.bundle)) {
-    throw artifactError(app, 'verify', `template bundle is not hash-named: ${templates.bundle}`);
-  }
   const fileByPath = new Map(files.map((file) => [file.path, file]));
-  verifyHexHash(
-    app,
-    fileByPath,
-    `${PUBLIC}/${templates.bundle}`,
-    /templates-([0-9a-f]{16})\.json$/u,
-  );
-  for (const fallback of templates.fallbacks) {
-    if (!/^assets\/templates\/[a-z0-9-]+-[0-9a-f]{16}\.html$/u.test(fallback)) {
-      throw artifactError(app, 'verify', `template fallback is not hash-named: ${fallback}`);
+  if (templates.bundle !== null) {
+    if (!/assets\/templates-[0-9a-f]{16}\.json$/u.test(templates.bundle)) {
+      throw artifactError(app, 'verify', `template bundle is not hash-named: ${templates.bundle}`);
     }
-    verifyHexHash(app, fileByPath, `${PUBLIC}/${fallback}`, /-([0-9a-f]{16})\.html$/u);
+    verifyHexHash(
+      app,
+      fileByPath,
+      `${PUBLIC}/${templates.bundle}`,
+      /templates-([0-9a-f]{16})\.json$/u,
+    );
+  }
+  for (const template of templates.files) {
+    if (!/^assets\/templates\/[a-z0-9-]+-[0-9a-f]{16}\.html$/u.test(template)) {
+      throw artifactError(app, 'verify', `template is not hash-named: ${template}`);
+    }
+    verifyHexHash(app, fileByPath, `${PUBLIC}/${template}`, /-([0-9a-f]{16})\.html$/u);
   }
 
   const unknown = files.filter((file) => file.cache === 'unknown').map((file) => file.path);
@@ -2162,6 +2271,11 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     if (remoteIndex !== -1 && remoteName === undefined) {
       throw new Error('usage: npm run build -- --app <app> --remote <name> [--out <directory>]');
     }
+    const deliveryIndex = process.argv.indexOf('--templates');
+    const delivery = deliveryIndex === -1 ? undefined : process.argv[deliveryIndex + 1];
+    if (deliveryIndex !== -1 && delivery === undefined) {
+      throw new Error('usage: --templates split|bundle');
+    }
     const baseIndex = process.argv.indexOf('--base');
     const base = baseIndex === -1 ? undefined : process.argv[baseIndex + 1];
     if (baseIndex !== -1 && base === undefined) {
@@ -2194,8 +2308,21 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
             remotes: remoteReports,
           })
         : remoteName === undefined
-        ? await buildArtifact({ app, outDir: output, release, remotes: remoteReports })
-        : await buildRemoteArtifact({ app, name: remoteName, outDir: output, base, release });
+        ? await buildArtifact({
+            app,
+            outDir: output,
+            release,
+            remotes: remoteReports,
+            templates: /** @type {TemplateDelivery | undefined} */ (delivery),
+          })
+        : await buildRemoteArtifact({
+            app,
+            name: remoteName,
+            outDir: output,
+            base,
+            release,
+            templates: /** @type {TemplateDelivery | undefined} */ (delivery),
+          });
     const totals = /** @type {{ files: number, bytes: number, gzip: number, brotli: number }} */ (
       report.totals
     );

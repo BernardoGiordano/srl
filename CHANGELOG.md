@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.0
+
+- **A built template is one immutable file, fetched by the component that needs it.**
+  `srl build` no longer points the runtime manifest at a `templates-<hash>.json` holding
+  every template in the application: each is emitted as its own hash-named, immutable file
+  and fetched when the chunk that names it loads, so a visitor downloads the markup of the
+  routes they open rather than of every route there is. The per-template files were already
+  being emitted beside the bundle and described as fallbacks; they are the delivery now.
+  `--templates bundle` restores the single request for a deployment where a round trip costs
+  more than the bytes, and a `templateBundle` an application set by hand is removed from the
+  emitted manifest rather than passed through, so an artifact cannot name a file it does not
+  contain ([ADR-0071](docs/adr/0071-a-built-template-is-fetched-by-the-component-that-needs-it.md)).
+- **Production templates are minified, and the minified bytes are proved equivalent.**
+  Comments and indentation are markup the runtime compiler discards on arrival — a third of
+  the authored bytes in one real application, 12.9 KiB of Brotli down to 7.8. The transform
+  collapses runs of whitespace rather than removing them, leaves `pre`, `textarea`, `script`,
+  `style` and anything that declares `white-space` or a Tailwind `whitespace-pre*` class byte
+  for byte, and reduces source and output to the token stream the compiler cares about to
+  prove they agree. A greedy transform now fails the build naming the template instead of
+  shipping a page that renders subtly wrong
+  ([ADR-0070](docs/adr/0070-a-production-template-is-minified-and-proved-equivalent.md)).
+- **The published bundles carry minified templates too.** `srl-components.js` inlines each
+  component's markup as a string literal for the bundler consumer, and those literals held
+  the authored bytes: `srl-components.min.js` is 77,570 bytes rather than 83,352 for the same
+  15 templates.
+- **`artifact.json` describes template delivery.** `templates` carries `delivery`, `bundle`
+  (`null` when split), `url`, `count`, `bytes` and `files` — the last replacing `fallbacks`,
+  since those files are no longer a fallback for anything.
+
 ## 0.3.0
 
 - **`srl serve --proxy <prefix>=<origin>`.** A URL prefix the development server forwards to

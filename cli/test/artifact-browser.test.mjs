@@ -140,6 +140,25 @@ void test('built example mounts independent Billing and Analytics artifacts', as
         );
         if (remote.templates !== undefined) assert.ok(requests.includes(remote.templates));
       }
+
+      // Split delivery, from the browser's side: templates arrive as their own
+      // immutable files, no bundle is fetched, and the pages the visitor never
+      // opened cost nothing. ADR-0071.
+      const shellTemplates = /** @type {{ count: number, files: string[] }} */ (shell.templates);
+      const fetched = requests.filter((path) => path.startsWith('/assets/templates/'));
+      assert.ok(fetched.length > 0, 'no template was fetched');
+      assert.ok(
+        requests.every((path) => !/\/assets\/templates-[0-9a-f]{16}\.json$/u.test(path)),
+        'a template bundle was fetched',
+      );
+      assert.ok(
+        new Set(fetched).size < shellTemplates.count,
+        `every one of the ${String(shellTemplates.count)} templates was fetched for three routes`,
+      );
+      assert.ok(
+        fetched.every((path) => shellTemplates.files.includes(path.slice(1))),
+        'a fetched template is not in the artifact report',
+      );
       assert.ok(
         requests.every((path) => !/^\/remotes\/(?:billing|analytics)\/(?:remote-entry|.+-root)\.js$/u.test(path)),
         'built shell requested source Remote modules',

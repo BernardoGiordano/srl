@@ -45,6 +45,7 @@ import { basename, join, relative, sep } from 'node:path';
 import { build as viteBuild } from 'vite';
 import ts from 'typescript';
 
+import { minifyTemplate } from '../../cli/delivery/template-html.mjs';
 import { REPO, exists, walk } from '../../cli/layout.mjs';
 import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
 
@@ -213,8 +214,15 @@ function inlineTemplates(bundleName, roots) {
             continue;
           }
 
-          const source = await siblingTemplate(module, existing);
-          if (source === null) continue;
+          const authored = await siblingTemplate(module, existing);
+          if (authored === null) continue;
+
+          // Minified, for the same reason the artifact build minifies: comments and
+          // indentation are bytes the runtime compiler discards on arrival, and here
+          // they would sit inside a published bundle's string literals forever.
+          // `minifyTemplate` proves the result parses to the same tree first
+          // (ADR-0070).
+          const source = minifyTemplate(authored);
 
           // Content-addressed, so two components whose markup happens to be
           // identical share one seeded entry and a renamed file changes nothing.

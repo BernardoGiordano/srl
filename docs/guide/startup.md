@@ -30,7 +30,7 @@ Every hook is optional and each is awaited before the next runs. The steps, in o
 |---|---|
 | `configure` | Synchronous configuration that must precede everything: themes, storage adapter |
 | `manifest` | Fetch `app.manifest.json` and admit it as policy; the admitted copy is installed, never written to a global |
-| `templates` | Seed the template cache from `manifest.templateBundle`; a missing bundle is a slower boot, not a failure |
+| `templates` | Seed the template cache from `manifest.templateBundle`, when an application configures one; a missing bundle is a slower boot, not a failure. A built artifact ships no bundle by default and each component fetches its own template ([ADR-0071](../adr/0071-a-built-template-is-fetched-by-the-component-that-needs-it.md)) |
 | `locale` | Awaited before first render, so nothing flashes untranslated |
 | `providers` | The application's own injector bindings |
 | `ready` | Anything that must settle before the root mounts, such as `AuthSession.init()` |

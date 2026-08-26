@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { buildArtifact, buildRemoteArtifact, composeArtifact } from '../delivery/build.mjs';
+import { minifyTemplate } from '../delivery/template-html.mjs';
 import { prepareRemoteRelease } from '../delivery/remote-release.mjs';
 import { REPO, apps, walk } from '../layout.mjs';
 
@@ -48,7 +49,7 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.equal(billing.kind, 'remote');
     assert.equal(analytics.kind, 'remote');
     assert.notEqual(billing.root, analytics.root);
-    const billingTransport = /** @type {{ name: string, url: string, integrity: string, assets: Array<{ type: string, url: string, integrity: string }>, shared: string[], locales: string[], templates: string }} */ (
+    const billingTransport = /** @type {{ name: string, url: string, integrity: string, assets: Array<{ type: string, url: string, integrity: string }>, shared: string[], locales: string[], templates?: string }} */ (
       billing.remote
     );
     const analyticsTransport = /** @type {{ name: string, url: string, assets: Array<{ type: string, url: string, integrity: string }>, shared: string[], locales: string[] }} */ (
@@ -59,11 +60,13 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.match(billingTransport.url, /^\/remotes\/billing\/0+\/assets\/remote-entry-[A-Za-z0-9_-]{8}\.js$/u);
     assert.match(analyticsTransport.url, /^\/remotes\/analytics\/0+\/assets\/remote-entry-[A-Za-z0-9_-]{8}\.js$/u);
     assert.ok(billingTransport.assets.some((asset) => asset.type === 'style'));
-    assert.ok(billingTransport.assets.some((asset) => asset.type === 'template'));
+    // Split delivery is the default, so a Remote's templates are files its own
+    // components fetch and there is nothing for the shell to preload. ADR-0071.
+    assert.ok(!billingTransport.assets.some((asset) => asset.type === 'template'));
     assert.ok(analyticsTransport.assets.some((asset) => asset.type === 'style'));
     assert.deepEqual(analyticsTransport.shared, []);
     assert.ok(billingTransport.shared.includes('@core/foundation/reactive.js'));
-    assert.match(billingTransport.templates, /\/assets\/templates-[0-9a-f]{16}\.json$/u);
+    assert.equal(billingTransport.templates, undefined);
     assert.deepEqual(billingTransport.locales, [
       '/remotes/billing/0000000000000000000000000000000000000000/i18n/{locale}.json',
     ]);
@@ -287,6 +290,78 @@ void test('dynamic component definition fails before an incomplete template arti
       /something other than an object literal/u,
     );
     assert.equal((await walk(temporary, /./u)).length, 0);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+void test('a template is one immutable file, and a bundle only when asked for', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'artifact-templates-'));
+  try {
+    const app = await example();
+    const [split, bundled] = await Promise.all([
+      buildRemoteArtifact({
+        app,
+        name: 'billing',
+        outDir: join(temporary, 'split'),
+        release: RELEASE,
+      }),
+      buildRemoteArtifact({
+        app,
+        name: 'billing',
+        outDir: join(temporary, 'bundled'),
+        release: RELEASE,
+        templates: 'bundle',
+      }),
+    ]);
+
+    /** @param {Readonly<Record<string, unknown>>} report */
+    const templatesOf = (report) =>
+      /** @type {{ delivery: string, bundle: string | null, url: string | null, count: number, files: string[] }} */ (
+        report.templates
+      );
+    const splitTemplates = templatesOf(split);
+    const bundledTemplates = templatesOf(bundled);
+
+    assert.equal(splitTemplates.delivery, 'split');
+    assert.equal(splitTemplates.bundle, null);
+    assert.equal(splitTemplates.url, null);
+    assert.ok(splitTemplates.count > 0);
+    assert.deepEqual(splitTemplates.files, bundledTemplates.files);
+    assert.ok(
+      filesOf(split).every((file) => !/templates-[0-9a-f]{16}\.json$/u.test(file.path)),
+      'split delivery emitted a bundle',
+    );
+
+    // Every template is a file of its own either way, hash-named after the bytes
+    // served and so cacheable forever.
+    for (const path of splitTemplates.files) {
+      const file = filesOf(split).find((candidate) => candidate.path === `public/${path}`);
+      assert.ok(file !== undefined, `${path} is not in the payload`);
+      assert.equal(file.cache, 'immutable');
+    }
+
+    assert.equal(bundledTemplates.delivery, 'bundle');
+    assert.match(String(bundledTemplates.bundle), /^assets\/templates-[0-9a-f]{16}\.json$/u);
+    const bundle = JSON.parse(
+      await readFile(join(String(bundled.root), 'public', String(bundledTemplates.bundle)), 'utf8'),
+    );
+    assert.equal(Object.keys(bundle).length, bundledTemplates.count);
+    for (const [url, markup] of Object.entries(bundle)) {
+      const path = url.slice(String(bundled.base).length);
+      assert.equal(
+        await readFile(join(String(bundled.root), 'public', path), 'utf8'),
+        markup,
+        `${url} disagrees with the file it keys`,
+      );
+    }
+
+    // The bytes are minified, and the proof is that minifying them again changes
+    // nothing: authored markup, with its indentation, is never its own output.
+    for (const path of splitTemplates.files) {
+      const markup = await readFile(join(String(split.root), 'public', path), 'utf8');
+      assert.equal(minifyTemplate(markup), markup, `${path} was served unminified`);
+    }
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

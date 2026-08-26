@@ -7,8 +7,37 @@ node cli/dev/serve.mjs --open          # zero dependencies, watch + live reload
 node cli/dev/serve.mjs --app example   # the default; name another application
 npm run build -- --app example           # verified artifact: the served shape
 npm run css                              # the one build step: production Tailwind
-npm run templates                        # optional: N template requests -> 1
+npm run templates                        # buildless deployments: N template requests -> 1
 ```
+
+## Templates in a built artifact
+
+Each template is emitted as one immutable, hash-named file, minified, and fetched by the
+component that names it when its chunk loads. A visitor downloads the markup of the routes
+they open, and a template that did not change is not re-fetched after a deploy that changed
+another.
+
+```bash
+npm run build -- --app example                      # one file per template (default)
+npm run build -- --app example --templates bundle   # plus templates-<hash>.json, and a
+                                                    # manifest that seeds from it at startup
+```
+
+`--templates bundle` is the trade the single bundle was always for: one request instead of
+one per component, on a link where a round trip costs more than the bytes — at the price of
+fetching every template in the application before the first one renders
+([ADR-0071](../adr/0071-a-built-template-is-fetched-by-the-component-that-needs-it.md)).
+
+Production markup is not the authored markup: comments and indentation are dropped, and
+every build proves the result parses to the same tree the source did before it can be
+emitted ([ADR-0070](../adr/0070-a-production-template-is-minified-and-proved-equivalent.md)).
+A third of the markup is whitespace and prose in practice. What that transform will not
+touch, and how to tell it that whitespace matters, is in
+[the template guide](templates.md#whitespace-in-production).
+
+`npm run templates` is the other path: the optional `<app>/templates.json` for a deployment
+with no build step at all. It writes authored bytes, minifies nothing, and
+[ADR-0042](../adr/0042-the-template-bundle-is-per-application.md) is why.
 
 `cli/dev/serve.mjs` exists because requiring `npm install` before the app could be
 *run* would make the project look like it has a toolchain it does not have. What a server

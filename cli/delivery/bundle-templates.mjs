@@ -14,6 +14,12 @@
  * fast connection is not worth optimising; twelve templates over a high-latency
  * link, or a hundred templates in a real application, is.
  *
+ * This is the path for a deployment with no build step. `srl build` does not use
+ * it: an artifact emits one minified, immutable file per template and lets each
+ * component fetch its own (ADR-0071), and `--templates bundle` is where the
+ * one-request trade lives there. Nothing here minifies, because nothing here
+ * verifies — the proof that makes minification safe is the build's (ADR-0070).
+ *
  *   node cli/delivery/bundle-templates.mjs [--app example]
  *
  * Then set `"templateBundle": "/templates.json"` in that application's

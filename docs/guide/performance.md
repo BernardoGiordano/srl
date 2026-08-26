@@ -76,7 +76,8 @@ The rules that make comparison meaningful. Ignoring them produces confident nons
   batch-by-batch monotonic growth rather than one before/after pair.
 - **Every run prints what it does not cover**, so a green gate cannot be mistaken for full
   coverage. Four workloads are pending with their reasons in `tools/benchmark/workloads.mjs`:
-  the template bundle (no application configures one), remote mount/revoke cycles,
+  the template bundle (no application configures one, and a built artifact ships none by
+  default), remote mount/revoke cycles,
   the typeahead path, and edit-to-reload.
 
 ## Budgets
