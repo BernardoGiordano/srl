@@ -70,6 +70,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0069](0069-the-dev-server-proxies-the-backend.md) | The development server proxies the backend, so the application develops on one origin | accepted | `cli/dev/serve.mjs`, `cli/bin/srl.mjs`, `cli/test/serve-proxy.test.mjs` |
 | [ADR-0070](0070-a-production-template-is-minified-and-proved-equivalent.md) | A production template is minified, and the minified bytes are proved equivalent | accepted | `cli/delivery/template-html.mjs`, `cli/delivery/build.mjs` |
 | [ADR-0071](0071-a-built-template-is-fetched-by-the-component-that-needs-it.md) | A built template is fetched by the component that needs it | accepted | `cli/delivery/build.mjs` |
+| [ADR-0072](0072-a-check-returns-diagnostics.md) | A check returns diagnostics, and prints nothing | accepted | `cli/diagnostics/`, `cli/checks/`, `tools/checks/` |
 
 <!-- /generated:adr-index -->
 

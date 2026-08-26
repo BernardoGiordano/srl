@@ -71,6 +71,7 @@
   "files": [
     "bin",
     "layout.mjs",
+    "diagnostics",
     "package",
     "project-model",
     "delivery",

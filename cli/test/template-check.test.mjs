@@ -17,7 +17,16 @@ const child = new Map([
   ],
 ]);
 
-/** @param {string} source */
+/**
+ * The findings as sentences.
+ *
+ * The seam answers with `Diagnostic[]` — a code, a file, a line and a column each,
+ * which is what an editor underlines. What most of these cases are about is the
+ * wording, so they read the messages; the two below this pin the rest of the shape.
+ *
+ * @param {string} source
+ * @returns {string[]}
+ */
 function check(source) {
   return checkTemplateSource({
     module,
@@ -25,7 +34,7 @@ function check(source) {
     template: 'fixture.html',
     source,
     elements: child,
-  });
+  }).map((diagnostic) => diagnostic.message);
 }
 
 /** As `check`, with the component's `uses` list resolved to the tags it allows. */
@@ -37,7 +46,7 @@ function checkWithUses(/** @type {string} */ source, /** @type {string[]} */ ava
     source,
     elements: child,
     available: new Set(available),
-  });
+  }).map((diagnostic) => diagnostic.message);
 }
 
 void test('accepts typed members, loop locals, events, booleans and custom properties', () => {
@@ -182,4 +191,40 @@ void test('a negated numeric literal keeps its literal type', () => {
 
   // Everything else the operator applies to still goes through the general path.
   assert.deepEqual(check('<span>{{ -rows.length }}</span>'), []);
+});
+
+void test('a finding carries the code, file, line and column an editor needs', () => {
+  const source = ['<p>{{ label }}</p>', '<p>{{ rows.lenght }}</p>', ''].join('\n');
+  const [found, ...rest] = checkTemplateSource({
+    module,
+    className: 'TemplateCheckHost',
+    template: 'fixture.html',
+    source,
+    elements: child,
+  });
+
+  assert.deepEqual(rest, [], 'one bad member is one finding');
+  assert.equal(found?.severity, 'error');
+  // The TypeScript error number, not the sentence beside it: the wording of
+  // "Property does not exist" is TypeScript's to change and this is not. 2551 is
+  // the did-you-mean variant, which is what a near-miss like `lenght` produces.
+  assert.equal(found?.code, 'templates/ts2551');
+  assert.equal(found?.file, 'fixture.html');
+  // The second line of the template, not a position in the generated shim.
+  assert.equal(found?.line, 2);
+  assert.ok((found?.column ?? 0) > 1);
+});
+
+void test('a dialect refusal is a finding of its own kind', () => {
+  const [found] = checkTemplateSource({
+    module,
+    className: 'TemplateCheckHost',
+    template: 'fixture.html',
+    source: '<button [onclick]="choose"></button>',
+    elements: child,
+  });
+
+  assert.equal(found?.code, 'templates/dialect');
+  assert.equal(found?.line, 1);
+  assert.match(String(found?.message), /forbidden/u);
 });

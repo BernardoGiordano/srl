@@ -139,6 +139,9 @@ tools/
   layout.mjs                what is true of this repository: where the package sits,
                             and which directories are applications. At the root
                             because everything else here consumes it
+  diagnostics/              what a check found, as values: one Diagnostic type and the
+                            only two things that print one, a terminal report and a
+                            JSON document
   package/
     interface.mjs           what the library publishes, read from source/package.json:
                             mounts, specifier prefixes, and the generated import-map

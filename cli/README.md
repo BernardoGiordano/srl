@@ -74,6 +74,12 @@ srl check importmap
 # without compiling anything. Needs a tsconfig.json at the repository root.
 srl check templates
 
+# Either check with --json prints its findings as one document instead of a
+# terminal report: a severity, a stable code, a message and the file, line and
+# column, per finding. A check returns them as values and this is the second
+# adapter over that — same findings, same exit code.
+srl check templates --json
+
 # The production artifact: minified, hash-named chunks, a production index.html
 # whose import map pins a sha384 for every one of them, the compiled stylesheet,
 # and dist/<app>/artifact.json describing what was emitted and what Cache-Control

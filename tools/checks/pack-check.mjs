@@ -32,6 +32,10 @@
  *
  * What it does not cover: remotes, i18n, the release transport. Those are checked in
  * the checkout, and none of them is where the installed shape differs.
+ *
+ * Every step's verdict is a `Diagnostic`, and cli/diagnostics/index.mjs prints them:
+ * the probe is expensive enough that a caller wanting to know which step failed should
+ * not have to scrape a terminal for it. ADR-0072.
  */
 
 import { execFile } from 'node:child_process';
@@ -41,17 +45,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { error, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { REPO, exists } from '../../cli/layout.mjs';
+
+/** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
 
 const run = promisify(execFile);
 const APP = 'app';
 
-/** @type {string[]} */
-const problems = [];
+/** The heading every finding here sits under: there is one subject, the probe. */
+const GROUP = 'packaged install';
 
-/** @param {string} message */
-function fail(message) {
-  problems.push(message);
+/** @param {string} code @param {string} message @returns {Diagnostic} */
+function refuse(code, message) {
+  return error(code, message, { group: GROUP });
 }
 
 /**
@@ -375,21 +382,29 @@ await defineComponent({
 }
 
 /**
+ * Drive the probe, and say what each step found.
+ *
  * @param {string} probe
- * @returns {Promise<void>}
+ * @returns {Promise<Diagnostic[]>}
  */
 async function check(probe) {
   /* ── The two facts that have to be found rather than written down ─────── */
 
   const resolved = await srl(probe, ['layout', '--apps']);
   if (resolved.code !== 0 || resolved.output.trim() !== APP) {
-    fail(
-      `\`srl layout --apps\` found ${JSON.stringify(resolved.output.trim())} rather than ` +
-        `"${APP}". Installed, the repository is the working directory; a default that pointed ` +
-        `at the package's own parent would find no application at all.\n${resolved.output}`,
-    );
-    return; // Nothing below can mean anything if the repository was not located.
+    // Nothing below can mean anything if the repository was not located.
+    return [
+      refuse(
+        'pack/layout-not-found',
+        `\`srl layout --apps\` found ${JSON.stringify(resolved.output.trim())} rather than ` +
+          `"${APP}". Installed, the repository is the working directory; a default that pointed ` +
+          `at the package's own parent would find no application at all.\n${resolved.output}`,
+      ),
+    ];
   }
+
+  /** @type {Diagnostic[]} */
+  const found = [];
 
   /* ── Each tool, through the published bin ─────────────────────────────── */
 
@@ -400,39 +415,54 @@ async function check(probe) {
   ])) {
     const result = await srl(probe, args);
     if (result.code === 0) {
-      console.log('  ok   %s', label);
+      found.push(info('pack/tool', label, { group: GROUP }));
       continue;
     }
-    fail(`\`${label}\` failed in an installed layout:\n\n${indent(result.output)}`);
+    found.push(
+      refuse(
+        'pack/tool-failed',
+        `\`${label}\` failed in an installed layout:\n\n${indent(result.output)}`,
+      ),
+    );
   }
 
   /* ── The artifact is real, and is the installed library's ─────────────── */
 
   const reportPath = join(probe, 'dist', APP, 'artifact.json');
   if (!(await exists(reportPath))) {
-    fail(`the build wrote no ${join('dist', APP, 'artifact.json')}.`);
-    return;
+    found.push(
+      refuse('pack/no-artifact', `the build wrote no ${join('dist', APP, 'artifact.json')}.`),
+    );
+    return found;
   }
 
-  const report = /** @type {{ chunks?: Array<{ modules?: string[] }> }} */ (
+  const artifact = /** @type {{ chunks?: Array<{ modules?: string[] }> }} */ (
     JSON.parse(await readFile(reportPath, 'utf8'))
   );
-  const modules = (report.chunks ?? []).flatMap((chunk) => chunk.modules ?? []);
+  const modules = (artifact.chunks ?? []).flatMap((chunk) => chunk.modules ?? []);
   const fromPackage = modules.filter((module) => module.includes('node_modules/@srljs/core/'));
 
   if (fromPackage.length === 0) {
-    fail(
-      `the artifact names ${String(modules.length)} source module(s) and none of them is in the ` +
-        `installed package. The build resolved the framework from somewhere else, which is the ` +
-        `two-copies problem this arrangement exists to end.`,
+    found.push(
+      refuse(
+        'pack/foreign-framework',
+        `the artifact names ${String(modules.length)} source module(s) and none of them is in ` +
+          `the installed package. The build resolved the framework from somewhere else, which ` +
+          `is the two-copies problem this arrangement exists to end.`,
+      ),
     );
   } else {
-    console.log(
-      '  ok   %s of %s artifact module(s) come from the installed package',
-      String(fromPackage.length),
-      String(modules.length),
+    found.push(
+      info(
+        'pack/from-package',
+        `${String(fromPackage.length)} of ${String(modules.length)} artifact module(s) come from ` +
+          `the installed package`,
+        { group: GROUP },
+      ),
     );
   }
+
+  return found;
 }
 
 /** @param {string} text */
@@ -444,23 +474,33 @@ function indent(text) {
     .trimEnd();
 }
 
-const probe = await mkdtemp(join(tmpdir(), 'srl-pack-'));
-const keep = process.argv.includes('--keep');
+/**
+ * Build the probe, drive it, and take it down again.
+ *
+ * @param {{ keep?: boolean }} [options]
+ * @returns {Promise<Diagnostic[]>}
+ */
+export async function checkPackagedInstall(options = {}) {
+  const probe = await mkdtemp(join(tmpdir(), 'srl-pack-'));
 
-console.log('packaged install\n  ..   %s', probe);
-try {
-  await mkdir(join(probe, 'node_modules'), { recursive: true });
-  await install(probe);
-  await writeApplication(probe);
-  await check(probe);
-} finally {
-  if (keep) console.log('  ..   kept for inspection: %s', probe);
-  else await rm(probe, { recursive: true, force: true });
+  /** @type {Diagnostic[]} */
+  const found = [info('pack/probe', probe, { group: GROUP })];
+  try {
+    await mkdir(join(probe, 'node_modules'), { recursive: true });
+    await install(probe);
+    await writeApplication(probe);
+    found.push(...(await check(probe)));
+  } finally {
+    if (options.keep === true) {
+      found.push(info('pack/kept', `kept for inspection: ${probe}`, { group: GROUP }));
+    } else {
+      await rm(probe, { recursive: true, force: true });
+    }
+  }
+  return found;
 }
 
-if (problems.length > 0) {
-  console.error('\n%s problem(s) in the packaged layout:\n', String(problems.length));
-  for (const problem of problems) console.error('  - %s\n', problem);
-  process.exit(1);
-}
-console.log('\nBoth tarballs install and drive an application end to end.');
+process.exitCode = report(await checkPackagedInstall({ keep: process.argv.includes('--keep') }), {
+  format: outputFormat(),
+  summary: 'Both tarballs install and drive an application end to end.',
+});

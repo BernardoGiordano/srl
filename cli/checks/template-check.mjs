@@ -10,6 +10,11 @@
  * evaluator, so this tool is an emitter for one grammar rather than a second
  * copy of it. Anything this file states about the dialect on its own is a
  * divergence waiting to happen.
+ *
+ * Findings are values. `checkTemplateSource()` returns `Diagnostic[]` with the file,
+ * line and column of each one rather than a formatted string, which is what makes it
+ * an editor seam and not just an in-memory entry point, and
+ * cli/diagnostics/index.mjs owns every way of printing them. ADR-0039, ADR-0072.
  */
 
 import { existsSync } from 'node:fs';
@@ -31,8 +36,11 @@ import {
   VOID_ELEMENTS,
 } from '@srljs/core/lib/core/template/dialect.js';
 import { parseExpression } from '@srljs/core/lib/core/template/expression-parser.js';
+import { error, info, outputFormat, report, warning } from '../diagnostics/index.mjs';
 import { apps, REPO } from '../layout.mjs';
 import { readProject } from '../project-model/index.mjs';
+
+/** @import { Diagnostic, Where } from '../diagnostics/types.js' */
 
 const HTML_ELEMENTS = new Set(
   `a abbr address area article aside audio b base bdi bdo blockquote body br button canvas
@@ -929,8 +937,46 @@ function typecheck(shimPaths, generated) {
 }
 
 /**
- * Check one in-memory template. This is also a small editor/tooling seam: a
- * caller can validate unsaved markup without creating a shim on disk.
+ * Where in the template a compiler diagnostic about the shim belongs.
+ *
+ * The shim is generated, so a position in it means nothing to anyone. Every mapped
+ * span carries the template offset it came from; the narrowest span containing the
+ * diagnostic is the one that names it most precisely.
+ *
+ * @param {GeneratedFile} built
+ * @param {ts.Diagnostic} diagnostic
+ * @returns {number} an offset into the template source
+ */
+function templateOffset(built, diagnostic) {
+  const start = diagnostic.start ?? 0;
+  const mapping = built.mappings
+    .filter((candidate) => candidate.start <= start && start <= candidate.end)
+    .sort((left, right) => left.end - left.start - (right.end - right.start))[0];
+  return mapping?.at ?? 0;
+}
+
+/**
+ * A compiler diagnostic as a finding of this check.
+ *
+ * The TypeScript error number becomes the code, because it is the stable name for
+ * "assignment of an incompatible type" and the sentence beside it is not.
+ *
+ * @param {ts.Diagnostic} diagnostic
+ * @param {Where} at
+ * @returns {Diagnostic}
+ */
+function fromCompiler(diagnostic, at) {
+  return error(
+    `templates/ts${String(diagnostic.code)}`,
+    ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+    at,
+  );
+}
+
+/**
+ * Check one in-memory template. This is the editor/tooling seam: a caller can
+ * validate unsaved markup without creating a shim on disk, and gets findings it
+ * can place — a file, a line and a column each — rather than sentences to parse.
  *
  * `available` is the component's `uses` list already resolved to tags. Omitted, it
  * defaults to every element in `elements`, which is what an editor checking
@@ -945,7 +991,7 @@ function typecheck(shimPaths, generated) {
  *   globals?: Map<string, TemplateGlobal>,
  *   available?: Set<string>,
  * }} input
- * @returns {string[]}
+ * @returns {Diagnostic[]}
  */
 export function checkTemplateSource(input) {
   const elements = input.elements ?? new Map();
@@ -964,10 +1010,19 @@ export function checkTemplateSource(input) {
   const generatedFile = builder.build();
   const shim = resolve(dirname(component.module), `.${component.className}.template-check.ts`);
   const diagnostics = typecheck([shim], new Map([[shim, generatedFile]]));
+
+  /** @param {number} offset @returns {Where} */
+  const at = (offset) => ({
+    file: input.template,
+    ...lineAndColumn(input.source, offset),
+  });
+
   return [
-    ...builder.problems.map((problem) => problem.message),
+    ...builder.problems.map((problem) =>
+      error('templates/dialect', problem.message, at(problem.at)),
+    ),
     ...diagnostics.map((diagnostic) =>
-      `TS${String(diagnostic.code)}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`,
+      fromCompiler(diagnostic, at(templateOffset(generatedFile, diagnostic))),
     ),
   ];
 }
@@ -997,13 +1052,15 @@ function isOurs(component) {
   return !inside.split(sep).includes('node_modules');
 }
 
-/** @param {Application} app */
+/** @param {Application} app @returns {Promise<Diagnostic[]>} */
 async function checkApplication(app) {
   const discovered = await discover(app);
   /** @type {Map<string, GeneratedFile>} */
   const generated = new Map();
   /** @type {{ template: string, source: string, generated: GeneratedFile, problems: { at: number, message: string }[] }[]} */
   const details = [];
+  /** @type {Diagnostic[]} */
+  const found = [];
   const ours = discovered.components.filter((component) => isOurs(component));
   const skipped = discovered.components.length - ours.length;
 
@@ -1011,8 +1068,13 @@ async function checkApplication(app) {
     let source;
     try {
       source = await readFile(component.template, 'utf8');
-    } catch (error) {
-      console.error(`${relative(REPO, component.template)}: cannot read template: ${String(error)}`);
+    } catch (cause) {
+      found.push(
+        error('templates/unreadable', `cannot read template: ${String(cause)}`, {
+          group: app.name,
+          file: component.template,
+        }),
+      );
       continue;
     }
     const tree = parseTemplate(source, component.template);
@@ -1024,59 +1086,73 @@ async function checkApplication(app) {
   }
 
   const diagnostics = typecheck([...generated.keys()], generated);
-  let failures = 0;
   for (const detail of details) {
     for (const problem of detail.problems) {
-      const position = lineAndColumn(detail.source, problem.at);
-      console.error(
-        `${relative(REPO, detail.template)}:${String(position.line)}:${String(position.column)} - error: ${problem.message}`,
+      found.push(
+        error('templates/dialect', problem.message, {
+          group: app.name,
+          file: detail.template,
+          ...lineAndColumn(detail.source, problem.at),
+        }),
       );
-      failures += 1;
     }
   }
   for (const diagnostic of diagnostics) {
     if (diagnostic.file === undefined || diagnostic.start === undefined) {
-      console.error(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
-      failures += 1;
+      found.push(fromCompiler(diagnostic, { group: app.name }));
       continue;
     }
     const built = generated.get(resolve(diagnostic.file.fileName));
     const detail = details.find((item) => item.generated === built);
     if (built === undefined || detail === undefined) continue;
-    const start = diagnostic.start;
-    const mapping = built.mappings
-      .filter((candidate) => candidate.start <= start && start <= candidate.end)
-      .sort((left, right) => left.end - left.start - (right.end - right.start))[0];
-    const at = mapping?.at ?? 0;
-    const position = lineAndColumn(detail.source, at);
-    console.error(
-      `${relative(REPO, detail.template)}:${String(position.line)}:${String(position.column)} - error TS${String(diagnostic.code)}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`,
+    found.push(
+      fromCompiler(diagnostic, {
+        group: app.name,
+        file: detail.template,
+        ...lineAndColumn(detail.source, templateOffset(built, diagnostic)),
+      }),
     );
-    failures += 1;
   }
 
-  if (failures === 0) {
-    console.log(`  ok   ${app.name}: ${String(ours.length)} template(s) typechecked`);
+  if (!found.some((diagnostic) => diagnostic.severity === 'error')) {
+    found.push(
+      info('templates/checked', `${String(ours.length)} template(s) typechecked`, {
+        group: app.name,
+      }),
+    );
     if (skipped > 0) {
       // Said out loud, because a check that silently covers less than it looks like it
       // covers is worse than one that covers less.
-      console.log(
-        `  note ${String(skipped)} installed-package template(s) not checked here; they were ` +
-          `checked in the package's own repository`,
+      found.push(
+        warning(
+          'templates/skipped-package',
+          `${String(skipped)} installed-package template(s) not checked here; they were checked ` +
+            `in the package's own repository`,
+          { group: app.name },
+        ),
       );
     }
   }
-  return failures;
+  return found;
 }
 
-export async function main() {
+/**
+ * Every template in every selected application, as findings.
+ *
+ * @returns {Promise<Diagnostic[]>}
+ */
+export async function checkTemplates() {
   const all = await apps();
   const appIndex = process.argv.indexOf('--app');
   const requested = appIndex === -1 ? undefined : process.argv[appIndex + 1];
   const selected = requested === undefined ? all : all.filter((app) => app.name === requested);
   if (selected.length === 0) {
-    console.error(`Unknown application ${JSON.stringify(requested)}. Found: ${all.map((app) => app.name).join(', ')}`);
-    return 1;
+    return [
+      error(
+        'templates/unknown-application',
+        `Unknown application ${JSON.stringify(requested)}. Found: ${all.map((app) => app.name).join(', ')}`,
+      ),
+    ];
   }
 
   // Once, before any application, and reported as configuration rather than as a
@@ -1084,19 +1160,22 @@ export async function main() {
   // otherwise be reported once per application.
   try {
     compilerState();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    return 1;
+  } catch (cause) {
+    return [
+      error('templates/no-compiler', cause instanceof Error ? cause.message : String(cause)),
+    ];
   }
 
-  console.log('Template typecheck');
-  let failures = 0;
-  for (const app of selected) failures += await checkApplication(app);
-  if (failures > 0) console.error(`\n${String(failures)} template type error(s).`);
-  else console.log('\nAll templates passed static type checking.');
-  return failures === 0 ? 0 : 1;
+  /** @type {Diagnostic[]} */
+  const found = [];
+  for (const app of selected) found.push(...(await checkApplication(app)));
+  return found;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = await main();
+  process.exitCode = report(await checkTemplates(), {
+    format: outputFormat(),
+    title: 'Template typecheck',
+    summary: 'All templates passed static type checking.',
+  });
 }

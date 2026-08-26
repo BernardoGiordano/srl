@@ -64,14 +64,19 @@ Development
                             can see
 
 Checks
-  check importmap [--app <name>]
+  check importmap [--app <name>] [--json]
                             an application's inline import map against the
                             installed library: missing entries, hand-edited
                             ones, hashes that no longer match their bytes, and
                             the script-src hash a CSP has to allow
-  check templates           type-check every template against the same JSDoc
+  check templates [--json]  type-check every template against the same JSDoc
                             types as the JavaScript. Needs a tsconfig.json at
                             the repository root
+
+  --json on either prints every finding as one document — severity, code,
+  message, file, line, column — instead of a terminal report. Same findings,
+  same exit code; a check returns them as values and this is the second way of
+  printing them
 
 Delivery
   build [--app <name>] [--out <dir>] [--remote <name>]

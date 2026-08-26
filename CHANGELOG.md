@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **A check returns diagnostics, and prints nothing.** Every check in the toolchain — the
+  dependency and layering verifier, `srl check importmap`, `srl check templates`, the
+  packaged-install probe, and the two documentation gates — used to report what it found by
+  writing to a terminal and answering with a count. Each now returns
+  `Diagnostic[]`: a severity, a stable namespaced code, a message, and the file, line and
+  column it belongs to. `cli/diagnostics/index.mjs` is the only module that formats one,
+  which is why `--json` now works on all of them and prints the same findings the terminal
+  report shows. `checkTemplateSource()`, the in-memory seam an editor integration calls,
+  answers with placed findings instead of formatted strings — a breaking change to that
+  function's return type, and the reason it is worth calling
+  ([ADR-0072](docs/adr/0072-a-check-returns-diagnostics.md)).
+
 ## 0.4.0
 
 - **A built template is one immutable file, fetched by the component that needs it.**
