@@ -9,9 +9,10 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { join, sep } from 'node:path';
-import test from 'node:test';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, join, sep } from 'node:path';
+import test, { after } from 'node:test';
 
 import ts from 'typescript';
 
@@ -20,14 +21,23 @@ import { moduleDoor } from '../../cli/package/door.mjs';
 import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
 import { BUNDLE_FILES, DIST, buildPackageBundles } from '../delivery/package-bundle.mjs';
 
-// Built once for the whole file. The build is the expensive part and every
-// assertion below reads the same output, so building per test would be four
-// minutes of rebuilding bytes nothing changed.
-await buildPackageBundles();
+// Built once for the whole file, into a directory of this suite's own. Once,
+// because the build is the expensive part and every assertion below reads the same
+// output. Somewhere else, because the build empties its output first and
+// `source/dist/` is what `tools/checks/verify-deps.mjs` reads to decide whether
+// `exports` points at files that exist — the two files run in parallel, and a
+// half-second window with no `dist/` failed that gate on a rule the repository
+// satisfies. Nothing here is about where the bytes landed.
+const OUT = await mkdtemp(join(tmpdir(), 'srl-bundles-'));
+after(() => rm(OUT, { force: true, recursive: true }));
+
+await buildPackageBundles({ into: OUT });
 
 /** @type {Map<string, string>} */
 const emitted = new Map();
-for (const file of BUNDLE_FILES) emitted.set(file, await readFile(join(PACKAGE, file), 'utf8'));
+for (const file of BUNDLE_FILES) {
+  emitted.set(file, await readFile(join(OUT, basename(file)), 'utf8'));
+}
 
 /**
  * Every module specifier a file actually imports, parsed rather than matched: the

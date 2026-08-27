@@ -58,7 +58,17 @@ import { REPO, exists, walk } from '../../cli/layout.mjs';
 import { barrelSource, moduleDoor } from '../../cli/package/door.mjs';
 import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
 
-/** Where the four files land. Generated, so `dist/` is ignored and never committed. */
+/**
+ * Where the four files land by default. Generated, so `dist/` is ignored and never
+ * committed.
+ *
+ * A default rather than the only answer: the build empties its output directory
+ * before writing, and `tools/test/package-bundle.test.mjs` reads the emitted bytes
+ * rather than the location, so the suite builds into a directory of its own. The
+ * dependency gate refuses a package whose `exports` names a file that is not there,
+ * and a suite that deleted `dist/` while that gate was reading it failed on a rule
+ * the repository satisfies.
+ */
 export const DIST = join(PACKAGE, 'dist');
 
 /** Same target as the application build: the browsers the library supports. */
@@ -325,9 +335,10 @@ async function siblingTemplate(module, declared) {
  * @param {import('../../cli/package/interface.mjs').PackageBundle} bundle
  * @param {string} entrySource The barrel, built once for both minification settings.
  * @param {boolean} minify
+ * @param {string} into The directory the pair is written to.
  * @returns {Promise<string>}
  */
-async function emit(bundle, entrySource, minify) {
+async function emit(bundle, entrySource, minify, into) {
   const entry = `\0srl-entry:${bundle.name}`;
   const suffix = minify ? '.min' : '';
   const fileName = `${bundle.name}${suffix}.js`;
@@ -355,7 +366,7 @@ async function emit(bundle, entrySource, minify) {
       emptyOutDir: false,
       minify: minify ? 'oxc' : false,
       modulePreload: false,
-      outDir: DIST,
+      outDir: into,
       sourcemap: false,
       target: TARGET,
       rolldownOptions: {
@@ -367,11 +378,11 @@ async function emit(bundle, entrySource, minify) {
     },
   });
 
-  const written = join(DIST, fileName);
+  const written = join(into, fileName);
   const text = await readFile(written, 'utf8');
   assertSelfContained(fileName, text, inherited);
   if (inherited !== '') {
-    await assertInheritedNames(fileName, text, inherited);
+    await assertInheritedNames(fileName, text, inherited, into);
   }
   return `  ok   ${fileName.padEnd(24)} ${String(text.length).padStart(8)} bytes${
     templates.count() === 0 ? '' : `, ${String(templates.count())} template(s) inlined`
@@ -448,10 +459,11 @@ function assertSelfContained(fileName, text, inherited) {
  * @param {string} fileName
  * @param {string} text
  * @param {string} inherited The sibling this bundle imports, as it is written.
+ * @param {string} into The directory both files are written to.
  * @returns {Promise<void>}
  */
-async function assertInheritedNames(fileName, text, inherited) {
-  const sibling = join(DIST, inherited.replace(/^\.\//u, ''));
+async function assertInheritedNames(fileName, text, inherited, into) {
+  const sibling = join(into, inherited.replace(/^\.\//u, ''));
   if (!(await exists(sibling))) {
     throw new Error(
       `${fileName} extends ${inherited}, which has not been built yet. A bundle must be emitted ` +
@@ -511,11 +523,19 @@ function bundleExports(text, fileName) {
 }
 
 /**
+ * Build every bundle the manifest declares.
+ *
+ * The output directory is emptied first, so a rename in `lib/` cannot leave a file
+ * nothing builds any more sitting in the published set. That is also why `into`
+ * exists: a caller that only wants the bytes — the suite — passes a directory of its
+ * own rather than deleting the one the dependency gate is checking.
+ *
+ * @param {{ into?: string }} [options]
  * @returns {Promise<string[]>}
  */
-export async function buildPackageBundles() {
-  await rm(DIST, { force: true, recursive: true });
-  await mkdir(DIST, { recursive: true });
+export async function buildPackageBundles({ into = DIST } = {}) {
+  await rm(into, { force: true, recursive: true });
+  await mkdir(into, { recursive: true });
 
   /** @type {string[]} */
   const lines = [];
@@ -526,13 +546,13 @@ export async function buildPackageBundles() {
     // every member is the cost, and it does not change with the minifier.
     const entrySource = await barrel(members);
     lines.push(`  ok   ${bundle.name.padEnd(24)} ${String(members.length).padStart(8)} module(s)`);
-    for (const minify of [false, true]) lines.push(await emit(bundle, entrySource, minify));
+    for (const minify of [false, true]) lines.push(await emit(bundle, entrySource, minify, into));
   }
 
   // A directory of loose files is what a consumer's tooling sees, so say what is in
   // it there too rather than only here.
   await writeFile(
-    join(DIST, 'README.md'),
+    join(into, 'README.md'),
     '# Generated\n\nBuilt by `npm run package` from the sources in `lib/` and `components/`.\n' +
       'Not committed, not edited: every change belongs in the source it was built from.\n',
     'utf8',

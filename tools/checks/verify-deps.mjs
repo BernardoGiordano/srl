@@ -1509,9 +1509,19 @@ function isPluralVariant(key, baseKeys) {
   return [...baseKeys].some((base) => base === stem || base.startsWith(`${stem}.`));
 }
 
-/* ── As a command ──────────────────────────────────────────────────────── */
+/* ── As a command ──────────────────────────────────────────────────────────
+ *
+ * Guarded, like every other check here, so importing this module stays free of
+ * output and exit codes. It was not, and the cost was a suite that could not import
+ * `verifyDependencies` without also running it: the sweep ran twice per test process,
+ * printed its whole report into the TAP stream, and — because the run is a release
+ * gate that refuses a `dist/` that has not been built — set a failing exit code on the
+ * importing process before that process had run a line.
+ */
 
-process.exitCode = report(await verifyDependencies(), {
-  format: outputFormat(),
-  summary: 'All dependency, layering, template and translation checks passed.',
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  process.exitCode = report(await verifyDependencies(), {
+    format: outputFormat(),
+    summary: 'All dependency, layering, template and translation checks passed.',
+  });
+}

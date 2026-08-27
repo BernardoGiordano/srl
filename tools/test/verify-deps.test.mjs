@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import { errors } from '../../cli/diagnostics/index.mjs';
+import { exists } from '../../cli/layout.mjs';
+import { PACKAGE } from '../../cli/package/interface.mjs';
 import { verifyDependencies } from '../checks/verify-deps.mjs';
+import { BUNDLE_FILES, buildPackageBundles } from '../delivery/package-bundle.mjs';
 
 /**
  * The dependency and layering gate, from the inside.
@@ -17,6 +21,17 @@ import { verifyDependencies } from '../checks/verify-deps.mjs';
  * One call, shared: the sweep walks every source file in the repository twice and there
  * is nothing per-case about it.
  */
+
+/**
+ * One of the rules below is that `exports` names files that are there, and the files
+ * it names are generated. Built here when they are missing rather than left to
+ * whichever suite happened to build them first — that accident is what made this file
+ * fail intermittently — and this is now the only suite that writes `source/dist/`, so
+ * there is no second process to race. A no-op after `npm run package`.
+ */
+if (!(await Promise.all(BUNDLE_FILES.map((file) => exists(join(PACKAGE, file))))).every(Boolean)) {
+  await buildPackageBundles();
+}
 
 /** @type {Awaited<ReturnType<typeof verifyDependencies>>} */
 let found;
