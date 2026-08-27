@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- **One application origin, published, and the four servers are adapters over it.** Serving
+  an srl application — resolving a URL through an ordered mount table, refusing a path that
+  climbs out of its mount, answering a directory with its `index.html`, falling back to the
+  application document for a navigation, naming a type by extension — was implemented four
+  times: the development server, the benchmark origin, the production-artifact test origin
+  and the test runner's mount rewrite. `toFilePath` was byte-identical in the first two, the
+  traversal guard was copy-pasted into the third, and the history fallback disagreed three
+  ways about what a navigation is. It is now `cli/origin/`, with four options for what an
+  adapter does differently: `route`, `transform`, `headers`, `fallback`. There is no proxy
+  option and there must not be one — `srl serve --proxy` is one adapter's `route`. The
+  history fallback is one rule (`Accept` names `text/html` and the path has no extension), a
+  malformed percent escape is a 403 rather than a 500, and the module is published: a
+  repository that installs the toolchain can now serve its own application to its own
+  browser suite in four lines, which is what
+  `@srljs/core/testing/harness.js` had nothing to run against
+  ([ADR-0075](docs/adr/0075-one-application-origin-not-four-servers.md)).
+
+  Three consequences worth knowing. `cli/dev/serve.mjs` exports `serveApplication` and
+  guards its command block, so its suite states a backend in-process instead of spawning a
+  child. The test-runner config no longer carries a hand-written import map — it reads the
+  application's own, as it already did for every application that was not the default one —
+  and check 5 of `tools/checks/verify-deps.mjs`, which existed to compare that copy, is
+  deleted along with it. `cli/test/support/artifact-origin.mjs` no longer exports
+  `listen`, `safeFile`, `isFile` or `send`; `serveOrigin` and `send` from `cli/origin/` are
+  what those were.
+
 - **The artifact report has a name.** `artifact.json` is what `srl build` produces beside
   the bytes and what the release, the composition, the HTTP verifier and the benchmark all
   read, and it was typed `Readonly<Record<string, unknown>>`: the build re-read its own

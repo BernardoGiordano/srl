@@ -75,6 +75,7 @@
     "bin",
     "layout.mjs",
     "diagnostics",
+    "origin",
     "package",
     "scaffold",
     "project-model",

@@ -1,5 +1,6 @@
 /**
- * The development server. Node only, zero dependencies, ~250 lines.
+ * The development server: one adapter over `cli/origin/`, plus the two things a
+ * development server has that no other origin does.
  *
  * Zero dependencies so that `npm start` works on a fresh clone, and not a
  * dependency of the application: any static server that can mount two directories
@@ -13,25 +14,273 @@
  * holds one. Everything else about the layout is fixed, because the URLs are
  * baked into each application's import map and into the deployment.
  *
- * Live reload is a full page reload rather than component hot-swapping, on
- * purpose: `customElements.define` is permanent, so a component class cannot be
- * redefined.
+ * The mounts, the traversal refusal, the directory index and the history fallback
+ * are not here: they are `cli/origin/index.mjs`, which the benchmark origin and
+ * the artifact test origin serve through as well. ADR-0075. What is here is the
+ * part that is only true of development:
  *
- * `--proxy` forwards a URL prefix to a backend instead of serving it from disk,
- * which is what lets an application with an API develop on one origin — the
- * arrangement it is deployed into — rather than on two.
+ *   live reload   a full page reload rather than component hot-swapping, on
+ *                 purpose: `customElements.define` is permanent, so a component
+ *                 class cannot be redefined. Injected into the response and never
+ *                 into the file, so the bytes this server sends and the bytes
+ *                 nginx sends are the same in production.
+ *   --proxy       forwards a URL prefix to a backend instead of serving it from
+ *                 disk, which is what lets an application with an API develop on
+ *                 one origin — the arrangement it is deployed into — rather than
+ *                 on two. ADR-0069.
+ *
+ * `serveApplication` is the seam: it takes an application and its proxies and
+ * returns a bound origin, so the behaviour below is assertable in-process rather
+ * than by spawning this file and parsing its stdout.
  */
 
-import { createReadStream } from 'node:fs';
 import { readFile, stat, watch } from 'node:fs/promises';
-import { createServer, request as httpRequest } from 'node:http';
+import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { REPO, selectedApp } from '../layout.mjs';
-import { MOUNTS as PACKAGE_MOUNTS, contentType } from '../package/interface.mjs';
+import { serveOrigin } from '../origin/index.mjs';
+import { MOUNTS as PACKAGE_MOUNTS } from '../package/interface.mjs';
 
-/* ── Options ───────────────────────────────────────────────────────────── */
+/** @import { IncomingMessage, ServerResponse } from 'node:http' */
+
+/**
+ * One backend this server forwards to instead of serving from disk.
+ *
+ * @typedef {{ prefix: string, origin: URL }} Proxy
+ */
+
+/** Injected into the application's index.html, and only into that, when watching. */
+const RELOAD_CLIENT = `
+<script>
+  // Development only, injected by cli/dev/serve.mjs. Not present in the file on disk.
+  new EventSource('/__reload').addEventListener('message', (event) => {
+    if (event.data === 'reload') location.reload();
+  });
+</script>
+`;
+
+/* ── Proxying ──────────────────────────────────────────────────────────── */
+
+/**
+ * The proxy a path belongs to, or null when it belongs to the filesystem.
+ *
+ * Matched on a segment boundary for the same reason the mounts are: /api must
+ * not claim /apiary. First match wins, so a more specific prefix works by being
+ * given first.
+ *
+ * @param {string} pathname
+ * @param {ReadonlyArray<Proxy>} proxies
+ * @returns {Proxy | null}
+ */
+function proxyFor(pathname, proxies) {
+  for (const proxy of proxies) {
+    if (pathname === proxy.prefix || pathname.startsWith(`${proxy.prefix}/`)) return proxy;
+  }
+  return null;
+}
+
+/**
+ * Forward one request upstream and stream the answer back, headers and status
+ * untouched.
+ *
+ * Untouched is the point. Set-Cookie arrives with whatever Path, SameSite and
+ * HttpOnly the backend chose, a 401 stays a 401, and a redirect is followed by
+ * the browser rather than by this server — the application sees what it will see
+ * through nginx. The one header rewritten is Host, which has to name the upstream
+ * for a backend that routes on it.
+ *
+ * The request body is piped rather than buffered, so an upload is not held in
+ * this process's memory, and the method is passed through: the static branch
+ * answers 405 to anything but GET, which is correct for files and wrong for an
+ * API.
+ *
+ * @param {IncomingMessage} request
+ * @param {ServerResponse} response
+ * @param {URL} origin
+ * @param {(format: string, ...values: string[]) => void} log
+ */
+function forward(request, response, origin, log) {
+  const send = origin.protocol === 'https:' ? httpsRequest : httpRequest;
+
+  const upstream = send(
+    {
+      protocol: origin.protocol,
+      hostname: origin.hostname,
+      port: origin.port,
+      path: request.url,
+      method: request.method,
+      headers: { ...request.headers, host: origin.host },
+    },
+    (upstreamResponse) => {
+      response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
+      upstreamResponse.pipe(response);
+    },
+  );
+
+  // A backend that is not running is the ordinary case — it is a separate process
+  // a developer starts separately — so it reads as one line naming the origin
+  // nothing answered on, not a stack trace.
+  upstream.on('error', (cause) => {
+    log('  502  %s  %s', request.url ?? '/', String(cause));
+    if (!response.headersSent) {
+      response.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    }
+    response.end(
+      JSON.stringify({
+        error: 'backend_unavailable',
+        detail: `nothing answered on ${origin.origin}`,
+      }),
+    );
+  });
+
+  request.pipe(upstream);
+}
+
+/* ── The server ────────────────────────────────────────────────────────── */
+
+/**
+ * Serve one application, with live reload and any number of backends behind it.
+ *
+ * @param {object} options
+ * @param {{ name: string, dir: string }} options.app
+ * @param {number} [options.port] 0 for an ephemeral one, which is what a test wants.
+ * @param {string | null} [options.host] Null, the default here, binds every interface.
+ * @param {boolean} [options.watch] Watch the mounts and reload the page.
+ * @param {ReadonlyArray<Proxy>} [options.proxies]
+ * @param {(format: string, ...values: string[]) => void} [options.log]
+ * @returns {Promise<{ url: string, port: number, mounts: Array<[string, string]>, close: () => Promise<void> }>}
+ */
+export async function serveApplication(options) {
+  const { app } = options;
+  const watching = options.watch ?? true;
+  const proxies = options.proxies ?? [];
+  const log = options.log ?? (() => undefined);
+
+  /**
+   * URL prefix -> directory. The library mounts come from the package, which is
+   * the same table the deployment and the test runner read, so this server cannot
+   * serve a layout the other two do not.
+   *
+   * The application is last because its mount is `/`, which matches everything.
+   *
+   * @type {Array<[string, string]>}
+   */
+  const mounts = [...PACKAGE_MOUNTS, ['/', app.dir]];
+  const entryDocument = join(app.dir, 'index.html');
+
+  /** Open EventSource connections, one per browser tab. */
+  /** @type {Set<ServerResponse>} */
+  const clients = new Set();
+
+  const running = await serveOrigin(
+    {
+      mounts,
+      fallback: entryDocument,
+
+      // Only the entry document, and only while watching: every other byte is the
+      // file on disk, streamed.
+      transform: async (file) => {
+        if (!watching || file !== entryDocument) return null;
+        const html = await readFile(file, 'utf8');
+        const injected = html.includes('</body>')
+          ? html.replace('</body>', `${RELOAD_CLIENT}</body>`)
+          : html + RELOAD_CLIENT;
+        return { body: Buffer.from(injected, 'utf8') };
+      },
+
+      route: (request, response, url) => {
+        if (url.pathname === '/__reload') {
+          response.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-store',
+            Connection: 'keep-alive',
+          });
+          response.write(': connected\n\n');
+          clients.add(response);
+          request.on('close', () => clients.delete(response));
+          return true;
+        }
+
+        // Ahead of the method check and the history fallback, both of which are
+        // rules about files: a POST to /api/session must reach the backend, and a
+        // GET of a path the backend owns must 404 from the backend rather than
+        // quietly return index.html.
+        const proxy = proxyFor(url.pathname, proxies);
+        if (proxy === null) return false;
+        forward(request, response, proxy.origin, log);
+        return true;
+      },
+    },
+    {
+      port: options.port ?? 8000,
+      host: options.host ?? null,
+      failed: (cause, request) => {
+        log('  500  %s  %s', request.url ?? '/', String(cause));
+      },
+    },
+  );
+
+  if (watching) await startWatching(mounts, log, clients);
+
+  return { url: running.url, port: running.port, mounts, close: running.close };
+}
+
+/* ── Live reload ───────────────────────────────────────────────────────── */
+
+/**
+ * Watch every mount and reload the page when one of them changes.
+ *
+ * @param {ReadonlyArray<readonly [string, string]>} mounts
+ * @param {(format: string, ...values: string[]) => void} log
+ * @param {Set<ServerResponse>} clients
+ */
+async function startWatching(mounts, log, clients) {
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let reloadTimer;
+
+  /** @param {string} what */
+  const scheduleReload = (what) => {
+    // Editors write a file two or three times in a few milliseconds (truncate,
+    // write, rename). Debouncing turns that into one reload instead of three
+    // half-loaded pages.
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      log('  reload  %s', what);
+      for (const client of clients) client.write('data: reload\n\n');
+    }, 40);
+  };
+
+  for (const [, target] of mounts) {
+    try {
+      await stat(target);
+    } catch {
+      continue;
+    }
+
+    void (async () => {
+      try {
+        for await (const event of watch(target, { recursive: true })) {
+          if (event.filename === null) continue;
+          if (event.filename.endsWith('~') || event.filename.startsWith('.')) continue;
+          // vendor/ changes are a `npm run vendor` away, never an edit.
+          if (event.filename.split(sep)[0] === 'vendor') continue;
+          scheduleReload(join(target.slice(REPO.length + 1), event.filename));
+        }
+      } catch (cause) {
+        log('  watch failed for %s: %s', target, String(cause));
+      }
+    })();
+  }
+}
+
+/* ── As a command ──────────────────────────────────────────────────────────
+ *
+ * Guarded, so importing `serveApplication` above costs no argument parsing, no
+ * port and no exit codes.
+ */
 
 /**
  * @param {string} name
@@ -64,14 +313,8 @@ function flags(name) {
   return values;
 }
 
-const { name: APP, dir: APP_DIR } = await selectedApp();
-const PORT = Number(flag('port', '8000'));
-const WATCH = !process.argv.includes('--no-watch');
-const OPEN = process.argv.includes('--open');
-
 /**
- * `--proxy /api/=http://127.0.0.1:8001`, repeatable: a URL prefix this server
- * forwards instead of serving from disk.
+ * `--proxy /api/=http://127.0.0.1:8001`, repeatable.
  *
  * An application with a backend needs it on this origin rather than a second one.
  * A session cookie is returned only to the origin that set it, so a dev server
@@ -84,351 +327,90 @@ const OPEN = process.argv.includes('--open');
  * in nginx, and a flag that could rewrite paths would be a second routing table to
  * keep in step with that one.
  *
- * @type {Array<{ prefix: string, origin: URL }>}
- */
-const PROXIES = flags('proxy').map((value) => {
-  const separator = value.indexOf('=');
-  if (separator === -1) {
-    console.error('\n  --proxy %s is not <prefix>=<origin>.', value);
-    console.error('  For example: --proxy /api/=http://127.0.0.1:8001\n');
-    process.exit(1);
-  }
-
-  const prefix = value.slice(0, separator);
-  const target = value.slice(separator + 1);
-
-  if (!prefix.startsWith('/')) {
-    console.error('\n  --proxy prefix %s does not start with "/".\n', prefix);
-    process.exit(1);
-  }
-
-  let origin;
-  try {
-    origin = new URL(target);
-  } catch {
-    console.error('\n  --proxy origin %s is not a URL.', target);
-    console.error('  For example: --proxy %s=http://127.0.0.1:8001\n', prefix);
-    process.exit(1);
-  }
-
-  if (origin.protocol !== 'http:' && origin.protocol !== 'https:') {
-    console.error('\n  --proxy origin %s is not http or https.\n', target);
-    process.exit(1);
-  }
-
-  // Stored without its trailing slash and matched on a segment boundary below,
-  // so that --proxy /api/ and --proxy /api mean the same thing and neither
-  // catches /apiary.
-  return { prefix: prefix.endsWith('/') ? prefix.slice(0, -1) : prefix, origin };
-});
-
-/**
- * URL prefix -> directory. The library mounts come from cli/layout.mjs, which
- * is the same table the deployment and the test runner read, so this server
- * cannot serve a layout the other two do not.
+ * Refused at startup rather than at the first request: a typo in an origin is a
+ * startup error, not a 502 half an hour later.
  *
- * The application is last because its mount is `/`, which matches everything.
- * A prefix that ends in `/` only matches a path segment boundary, so /libraries
- * cannot be mistaken for /lib/.
- *
- * @type {Array<[string, string]>}
+ * @returns {Proxy[]}
  */
-const MOUNTS = [...PACKAGE_MOUNTS, ['/', APP_DIR]];
+function proxiesFromArgv() {
+  return flags('proxy').map((value) => {
+    const separator = value.indexOf('=');
+    if (separator === -1) {
+      console.error('\n  --proxy %s is not <prefix>=<origin>.', value);
+      console.error('  For example: --proxy /api/=http://127.0.0.1:8001\n');
+      process.exit(1);
+    }
 
-/** Directories worth watching, per mount. Everything else is tooling. */
-const WATCHED = MOUNTS.map(([, dir]) => dir);
+    const prefix = value.slice(0, separator);
+    const target = value.slice(separator + 1);
 
-/* ── Live reload ───────────────────────────────────────────────────────── */
+    if (!prefix.startsWith('/')) {
+      console.error('\n  --proxy prefix %s does not start with "/".\n', prefix);
+      process.exit(1);
+    }
 
-/** Open EventSource connections, one per browser tab. */
-/** @type {Set<import('node:http').ServerResponse>} */
-const clients = new Set();
-
-/**
- * Injected into the application's index.html, and only into that, when watching.
- * Keeping it out of the file on disk means the file this server sends and the
- * file nginx sends are the same bytes in production.
- */
-const RELOAD_CLIENT = `
-<script>
-  // Development only, injected by cli/dev/serve.mjs. Not present in the file on disk.
-  new EventSource('/__reload').addEventListener('message', (event) => {
-    if (event.data === 'reload') location.reload();
-  });
-</script>
-`;
-
-/** @type {ReturnType<typeof setTimeout> | undefined} */
-let reloadTimer;
-
-/** @param {string} what */
-function scheduleReload(what) {
-  // Editors write a file two or three times in a few milliseconds (truncate,
-  // write, rename). Debouncing turns that into one reload instead of three
-  // half-loaded pages.
-  clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => {
-    console.log('  reload  %s', what);
-    for (const client of clients) client.write('data: reload\n\n');
-  }, 40);
-}
-
-async function startWatching() {
-  for (const target of WATCHED) {
+    let origin;
     try {
-      await stat(target);
+      origin = new URL(target);
     } catch {
-      continue;
+      console.error('\n  --proxy origin %s is not a URL.', target);
+      console.error('  For example: --proxy %s=http://127.0.0.1:8001\n', prefix);
+      process.exit(1);
     }
 
-    void (async () => {
-      try {
-        for await (const event of watch(target, { recursive: true })) {
-          if (event.filename === null) continue;
-          if (event.filename.endsWith('~') || event.filename.startsWith('.')) continue;
-          // vendor/ changes are a `npm run vendor` away, never an edit.
-          if (event.filename.split(sep)[0] === 'vendor') continue;
-          scheduleReload(join(target.slice(REPO.length + 1), event.filename));
-        }
-      } catch (cause) {
-        console.warn('  watch failed for %s: %s', target, String(cause));
-      }
-    })();
-  }
-}
-
-/* ── Proxying ──────────────────────────────────────────────────────────── */
-
-/**
- * The proxy a path belongs to, or null when it belongs to the filesystem.
- *
- * Matched on a segment boundary for the same reason the mounts are: /api must
- * not claim /apiary. First match wins, so a more specific prefix works by being
- * given first.
- *
- * @param {string} pathname
- * @returns {{ prefix: string, origin: URL } | null}
- */
-function proxyFor(pathname) {
-  for (const proxy of PROXIES) {
-    if (pathname === proxy.prefix || pathname.startsWith(`${proxy.prefix}/`)) return proxy;
-  }
-  return null;
-}
-
-/**
- * Forward one request upstream and stream the answer back, headers and status
- * untouched.
- *
- * Untouched is the point. Set-Cookie arrives with whatever Path, SameSite and
- * HttpOnly the backend chose, a 401 stays a 401, and a redirect is followed by
- * the browser rather than by this server — the application sees what it will see
- * through nginx. The one header rewritten is Host, which has to name the upstream
- * for a backend that routes on it.
- *
- * The request body is piped rather than buffered, so an upload is not held in
- * this process's memory, and the method is passed through: the static branch
- * below answers 405 to anything but GET, which is correct for files and wrong
- * for an API.
- *
- * @param {import('node:http').IncomingMessage} request
- * @param {import('node:http').ServerResponse} response
- * @param {URL} origin
- */
-function forward(request, response, origin) {
-  const send = origin.protocol === 'https:' ? httpsRequest : httpRequest;
-
-  const upstream = send(
-    {
-      protocol: origin.protocol,
-      hostname: origin.hostname,
-      port: origin.port,
-      path: request.url,
-      method: request.method,
-      headers: { ...request.headers, host: origin.host },
-    },
-    (upstreamResponse) => {
-      response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
-      upstreamResponse.pipe(response);
-    },
-  );
-
-  // A backend that is not running is the ordinary case — it is a separate process
-  // a developer starts separately — so it reads as one line naming the origin
-  // nothing answered on, not a stack trace.
-  upstream.on('error', (cause) => {
-    console.error('  502  %s  %s', request.url, String(cause));
-    if (!response.headersSent) {
-      response.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    if (origin.protocol !== 'http:' && origin.protocol !== 'https:') {
+      console.error('\n  --proxy origin %s is not http or https.\n', target);
+      process.exit(1);
     }
-    response.end(
-      JSON.stringify({ error: 'backend_unavailable', detail: `nothing answered on ${origin.origin}` }),
-    );
+
+    // Stored without its trailing slash and matched on a segment boundary, so that
+    // --proxy /api/ and --proxy /api mean the same thing and neither catches
+    // /apiary.
+    return { prefix: prefix.endsWith('/') ? prefix.slice(0, -1) : prefix, origin };
   });
-
-  request.pipe(upstream);
 }
 
-/* ── Serving ───────────────────────────────────────────────────────────── */
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const app = await selectedApp();
+  const port = Number(flag('port', '8000'));
+  const watching = !process.argv.includes('--no-watch');
+  const proxies = proxiesFromArgv();
 
-/**
- * Resolve a URL path to a file inside one of the mounts, or null if it escapes.
- *
- * The traversal check is not theatre, and having three mounts rather than one
- * does not weaken it: the candidate is re-checked against the directory it
- * resolved into, so `GET /lib/../../.ssh/id_rsa` leaves that mount and is
- * refused rather than climbing out of the repository.
- *
- * @param {string} pathname
- * @returns {string | null}
- */
-function toFilePath(pathname) {
-  const decoded = decodeURIComponent(pathname);
-
-  for (const [prefix, dir] of MOUNTS) {
-    if (prefix !== '/' && !decoded.startsWith(prefix)) continue;
-    const relativePath = prefix === '/' ? decoded : `/${decoded.slice(prefix.length)}`;
-    const candidate = resolve(join(dir, normalize(relativePath)));
-    if (candidate !== dir && !candidate.startsWith(dir + sep)) return null;
-    return candidate;
-  }
-
-  return null;
-}
-
-/**
- * @param {import('node:http').IncomingMessage} request
- * @param {import('node:http').ServerResponse} response
- */
-async function handle(request, response) {
-  const url = new URL(request.url ?? '/', `http://localhost:${String(PORT)}`);
-
-  if (url.pathname === '/__reload') {
-    response.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-store',
-      Connection: 'keep-alive',
-    });
-    response.write(': connected\n\n');
-    clients.add(response);
-    request.on('close', () => clients.delete(response));
-    return;
-  }
-
-  // Ahead of the method check and the history fallback, both of which are rules
-  // about files: a POST to /api/session must reach the backend, and a GET of a
-  // path the backend owns must 404 from the backend rather than quietly return
-  // index.html.
-  const proxy = proxyFor(url.pathname);
-  if (proxy !== null) {
-    forward(request, response, proxy.origin);
-    return;
-  }
-
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    response.writeHead(405, { Allow: 'GET, HEAD' }).end();
-    return;
-  }
-
-  const filePath = toFilePath(url.pathname);
-  if (filePath === null) {
-    response.writeHead(403).end('Forbidden');
-    return;
-  }
-
-  let found = filePath;
-  let info = await statOrNull(found);
-
-  if (info?.isDirectory() === true) {
-    found = join(found, 'index.html');
-    info = await statOrNull(found);
-  }
-
-  // History fallback. Only for navigations: a missing .js must stay a 404, or a
-  // typo in an import silently returns HTML and the error becomes
-  // "Unexpected token '<'" from somewhere unrelated.
-  if (info === null) {
-    const wantsHtml = (request.headers.accept ?? '').includes('text/html');
-    if (!wantsHtml || extname(url.pathname) !== '') {
-      response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
-      return;
-    }
-    found = join(APP_DIR, 'index.html');
-    info = await statOrNull(found);
-    if (info === null) {
-      response.writeHead(404).end(`No index.html in ${APP}/`);
-      return;
-    }
-  }
-
-  const type = contentType(found);
-  // No caching anywhere in development. A stale module served from memory cache
-  // after an edit is the single most confusing failure a buildless setup has.
-  const headers = { 'Content-Type': type, 'Cache-Control': 'no-store' };
-
-  if (WATCH && found === join(APP_DIR, 'index.html')) {
-    const html = await readFile(found, 'utf8');
-    const injected = html.includes('</body>')
-      ? html.replace('</body>', `${RELOAD_CLIENT}</body>`)
-      : html + RELOAD_CLIENT;
-    const body = Buffer.from(injected, 'utf8');
-    response.writeHead(200, { ...headers, 'Content-Length': String(body.byteLength) });
-    response.end(request.method === 'HEAD' ? undefined : body);
-    return;
-  }
-
-  response.writeHead(200, { ...headers, 'Content-Length': String(info.size) });
-  if (request.method === 'HEAD') {
-    response.end();
-    return;
-  }
-  createReadStream(found).pipe(response);
-}
-
-/**
- * @param {string} path
- * @returns {Promise<import('node:fs').Stats | null>}
- */
-async function statOrNull(path) {
   try {
-    return await stat(path);
+    await stat(join(app.dir, 'index.html'));
   } catch {
-    return null;
+    console.error('\n  %s/index.html does not exist.', app.name);
+    console.error('  --app names a directory in the repository root that holds an application.\n');
+    process.exit(1);
   }
-}
 
-/* ── Start ─────────────────────────────────────────────────────────────── */
-
-if ((await statOrNull(join(APP_DIR, 'index.html'))) === null) {
-  console.error('\n  %s/index.html does not exist.', APP);
-  console.error('  --app names a directory in the repository root that holds an application.\n');
-  process.exit(1);
-}
-
-const server = createServer((request, response) => {
-  void handle(request, response).catch((cause) => {
-    console.error('  500  %s  %s', request.url, String(cause));
-    if (!response.headersSent) response.writeHead(500);
-    response.end('Internal error');
+  const server = await serveApplication({
+    app,
+    port,
+    watch: watching,
+    proxies,
+    log: (format, ...values) => {
+      console.log(format, ...values);
+    },
   });
-});
 
-server.listen(PORT, () => {
-  console.log('\n  %s', `http://localhost:${String(PORT)}`);
-  for (const [prefix, dir] of MOUNTS) {
+  console.log('\n  %s', `http://localhost:${String(server.port)}`);
+  for (const [prefix, dir] of server.mounts) {
     console.log('  %s -> %s', prefix.padEnd(13), dir.slice(REPO.length + 1) || '.');
   }
-  for (const { prefix, origin } of PROXIES) {
+  for (const { prefix, origin } of proxies) {
     console.log('  %s -> %s', `${prefix}/`.padEnd(13), origin.origin);
   }
-  console.log('  %s\n', WATCH ? 'watching for changes' : 'watch disabled');
-  if (OPEN) {
+  console.log('  %s\n', watching ? 'watching for changes' : 'watch disabled');
+
+  if (process.argv.includes('--open')) {
     const opener =
       process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
     void import('node:child_process').then(({ spawn }) => {
-      spawn(opener, [`http://localhost:${String(PORT)}`], { stdio: 'ignore', detached: true }).unref();
+      spawn(opener, [`http://localhost:${String(server.port)}`], {
+        stdio: 'ignore',
+        detached: true,
+      }).unref();
     });
   }
-});
-
-if (WATCH) await startWatching();
+}

@@ -1,10 +1,12 @@
 /**
- * The origin under measurement.
+ * The origin under measurement: one adapter over `cli/origin/`.
  *
  * A benchmark that serves the application differently from production measures
- * the benchmark's server. So this is the same mount table cli/dev/serve.mjs uses,
- * imported rather than restated, with the two deliberate differences a
- * measurement needs:
+ * the benchmark's server. So the mount table, the traversal refusal, the directory
+ * index and the history fallback are the shared ones — `cli/origin/index.mjs`, the
+ * same rules the development server and the artifact test origin answer with
+ * (ADR-0075) — and what is stated here is only what a measurement needs
+ * differently:
  *
  *   1. No live-reload injection. The bytes the browser gets here are the bytes on
  *      disk, which is what nginx sends.
@@ -12,9 +14,11 @@
  *      /lib/vendor immutable, everything else `no-cache`.
  *      Warm startup only means something if the second load can revalidate the
  *      way a production reload does.
+ *   3. gzip, at nginx's default level, cached per file so the numbers are browser
+ *      delivery rather than repeated compression work.
  *
  * One extra mount exists, at /__benchmark/, and it is why this file is not simply
- * cli/dev/serve.mjs with a flag: the workload modules the page imports are tooling,
+ * `srl serve` with a flag: the workload modules the page imports are tooling,
  * they must not sit inside an application or the library, and they still have to
  * arrive over the same origin as the code they measure. The harness page itself is
  * generated rather than checked in, because its import map is the application's
@@ -26,16 +30,15 @@
  */
 
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
-import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { join, normalize, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 import { readText } from '../../cli/layout.mjs';
-import { artifactDeclaration } from './declaration.mjs';
+import { send, serveOrigin } from '../../cli/origin/index.mjs';
 import { MOUNTS, contentType, extractImportMap } from '../../cli/package/interface.mjs';
+import { artifactDeclaration } from './declaration.mjs';
 
 /** Browser-side workload modules, served at /__benchmark/. */
 const BROWSER_DIR = resolve(fileURLToPath(new URL('./browser', import.meta.url)));
@@ -88,52 +91,110 @@ function contentSecurityPolicy(importMap) {
 export async function startOrigin(app, options = {}) {
   const html = await readText(join(app.dir, 'index.html'));
   const { body: importMap } = extractImportMap(html, `${app.name}/index.html`);
-  const harness = harnessPage(importMap);
+  const harness = Buffer.from(harnessPage(importMap), 'utf8');
 
-  const root = options.artifact?.publicDir ?? app.dir;
+  const { artifact } = options;
+  const root = artifact?.publicDir ?? app.dir;
   const mounts = /** @type {Array<[string, string]>} */ (
     [...MOUNTS, ['/__benchmark/', BROWSER_DIR], ['/', root]]
   );
+  const entryDocument = join(root, 'index.html');
+
+  /** Encoded representations, keyed by file. */
   /** @type {Map<string, Buffer>} */
   const compressed = new Map();
-  const applicationBackend = await createApplicationBackend(app, options.artifact);
-  const releases = createReleaseSimulation(options.artifact);
+  const applicationBackend = await createApplicationBackend(app, artifact);
+  const releases = createReleaseSimulation(artifact);
 
-  const server = createServer((request, response) => {
-    void handle(
-      request,
-      response,
+  const running = await serveOrigin(
+    {
       mounts,
-      root,
-      harness,
-      options.artifact,
-      compressed,
-      applicationBackend,
-      releases,
-    ).catch((cause) => {
-      if (!response.headersSent) response.writeHead(500);
-      response.end(`Benchmark origin failed: ${String(cause)}`);
-    });
-  });
+      fallback: entryDocument,
 
-  await new Promise((done, failed) => {
-    server.once('error', failed);
-    server.listen(0, '127.0.0.1', () => done(undefined));
-  });
+      headers: (pathname, file) => ({
+        'Cache-Control':
+          artifact === undefined
+            ? pathname.startsWith('/lib/vendor/')
+              ? 'public, max-age=31536000, immutable'
+              : 'no-cache'
+            : pathname.startsWith('/assets/')
+              ? artifact.cache.immutable
+              : artifact.cache.revalidate,
+        ...(artifact !== undefined && file === entryDocument
+          ? { 'Content-Security-Policy': artifact.csp }
+          : {}),
+      }),
 
-  const address = server.address();
-  if (address === null || typeof address === 'string') {
-    throw new Error('The benchmark origin did not bind a TCP port.');
-  }
+      // gzip, and nothing else: the bytes are the artifact's. Only measured
+      // artifacts are compressed, because only they are what nginx would serve.
+      transform: async (file, { request, stats }) => {
+        if (artifact === undefined || stats.size < 512) return null;
+        if (!(request.headers['accept-encoding'] ?? '').includes('gzip')) return null;
+        if (!GZIP_TYPES.has(contentType(file))) return null;
+
+        let body = compressed.get(file);
+        if (body === undefined) {
+          // nginx defaults to gzip level 1. Cache the encoded representation so the
+          // benchmark measures browser delivery, not repeated compression work.
+          body = gzipSync(await readFile(file), { level: 1 });
+          compressed.set(file, body);
+        }
+        return { body, headers: { 'Content-Encoding': 'gzip' } };
+      },
+
+      route: async (request, response, url) => {
+        if (url.pathname === HARNESS_PATH) {
+          send(response, { type: 'text/html; charset=utf-8', body: harness });
+          return true;
+        }
+
+        const wantsHtml = (request.headers.accept ?? '').includes('text/html');
+        if (applicationBackend !== null && request.method === 'GET' && wantsHtml) {
+          await applicationBackend.reset(
+            url.searchParams.get('__benchmark_session') === 'authenticated',
+          );
+        }
+
+        if (
+          applicationBackend !== null &&
+          (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/api/'))
+        ) {
+          await applicationBackend.handle(request, response, url);
+          return true;
+        }
+
+        // A static artifact origin still needs the browser-facing half of the
+        // application's backend seam. Signed out is the deterministic startup state:
+        // the real endpoint 401s, which the BFF store admits as an ordinary visitor
+        // rather than a startup failure.
+        if (artifact !== undefined && url.pathname === '/auth/session' && request.method === 'GET') {
+          send(response, {
+            status: 401,
+            type: 'application/json; charset=utf-8',
+            body: Buffer.from('{"error":"no_session"}\n'),
+          });
+          return true;
+        }
+
+        if (releases !== null && url.pathname.startsWith('/assets/') && !releases.admit(url.pathname)) {
+          response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Asset is not retained');
+          return true;
+        }
+
+        return false;
+      },
+    },
+    {
+      port: 0,
+      host: '127.0.0.1',
+      failed: (cause) => `Benchmark origin failed: ${String(cause)}`,
+    },
+  );
 
   return {
-    url: `http://127.0.0.1:${String(address.port)}`,
+    url: running.url,
     ...(releases === null ? {} : { switchRelease: releases.switchRelease }),
-    close: () =>
-      new Promise((done) => {
-        server.closeAllConnections();
-        server.close(() => done(undefined));
-      }),
+    close: running.close,
   };
 }
 
@@ -158,148 +219,6 @@ function harnessPage(importMap) {
   <body></body>
 </html>
 `;
-}
-
-/**
- * @param {import('node:http').IncomingMessage} request
- * @param {import('node:http').ServerResponse} response
- * @param {ReadonlyArray<readonly [string, string]>} mounts
- * @param {string} rootDir
- * @param {string} harness
- * @param {{ publicDir: string, csp: string, cache: { immutable: string, revalidate: string }, assets?: readonly string[] } | undefined} artifact
- * @param {Map<string, Buffer>} compressed
- * @param {Awaited<ReturnType<typeof createApplicationBackend>>} applicationBackend
- * @param {ReturnType<typeof createReleaseSimulation>} releases
- * @returns {Promise<void>}
- */
-async function handle(
-  request,
-  response,
-  mounts,
-  rootDir,
-  harness,
-  artifact,
-  compressed,
-  applicationBackend,
-  releases,
-) {
-  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-
-  if (url.pathname === HARNESS_PATH) {
-    send(response, 200, 'text/html; charset=utf-8', 'no-store', Buffer.from(harness, 'utf8'));
-    return;
-  }
-
-  const wantsHtml = (request.headers.accept ?? '').includes('text/html');
-  if (applicationBackend !== null && request.method === 'GET' && wantsHtml) {
-    await applicationBackend.reset(url.searchParams.get('__benchmark_session') === 'authenticated');
-  }
-
-  if (
-    applicationBackend !== null &&
-    (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/api/'))
-  ) {
-    await applicationBackend.handle(request, response, url);
-    return;
-  }
-
-  // A static artifact origin still needs the browser-facing half of the application's
-  // backend seam. Signed out is the deterministic startup state: the real endpoint 401s,
-  // which the BFF store admits as an ordinary visitor rather than a startup failure.
-  if (artifact !== undefined && url.pathname === '/auth/session' && request.method === 'GET') {
-    send(
-      response,
-      401,
-      'application/json; charset=utf-8',
-      'no-store',
-      Buffer.from('{"error":"no_session"}\n'),
-    );
-    return;
-  }
-
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    response.writeHead(405, { Allow: 'GET, HEAD' }).end();
-    return;
-  }
-
-  if (releases !== null && url.pathname.startsWith('/assets/') && !releases.admit(url.pathname)) {
-    response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Asset is not retained');
-    return;
-  }
-
-  const filePath = toFilePath(url.pathname, mounts);
-  if (filePath === null) {
-    response.writeHead(403).end('Forbidden');
-    return;
-  }
-
-  let found = filePath;
-  let info = await statOrNull(found);
-  if (info?.isDirectory() === true) {
-    found = join(found, 'index.html');
-    info = await statOrNull(found);
-  }
-
-  // The production history fallback, and the same restriction: a missing .js stays
-  // a 404, so a workload cannot be handed HTML where it asked for a module and
-  // measure the resulting parse error as a slow load.
-  if (info === null) {
-    if (!wantsHtml || url.pathname.includes('.')) {
-      response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
-      return;
-    }
-    found = join(rootDir, 'index.html');
-    info = await statOrNull(found);
-    if (info === null) {
-      response.writeHead(404).end('No index.html');
-      return;
-    }
-  }
-
-  const cache =
-    artifact === undefined
-      ? url.pathname.startsWith('/lib/vendor/')
-        ? 'public, max-age=31536000, immutable'
-        : 'no-cache'
-      : url.pathname.startsWith('/assets/')
-        ? artifact.cache.immutable
-        : artifact.cache.revalidate;
-
-  const type = contentType(found);
-  const gzip =
-    artifact !== undefined &&
-    info.size >= 512 &&
-    (request.headers['accept-encoding'] ?? '').includes('gzip') &&
-    GZIP_TYPES.has(type);
-  let body;
-  if (gzip) {
-    body = compressed.get(found);
-    if (body === undefined) {
-      // nginx defaults to gzip level 1. Cache the encoded representation so the
-      // benchmark measures browser delivery, not repeated compression work.
-      body = gzipSync(await readFile(found), { level: 1 });
-      compressed.set(found, body);
-    }
-  }
-
-  response.writeHead(200, {
-    'Content-Type': type,
-    'Cache-Control': cache,
-    'Content-Length': String(body?.byteLength ?? info.size),
-    ...(gzip ? { 'Content-Encoding': 'gzip' } : {}),
-    ...(artifact !== undefined && found === join(rootDir, 'index.html')
-      ? { 'Content-Security-Policy': artifact.csp }
-      : {}),
-  });
-  if (request.method === 'HEAD') {
-    response.end();
-    return;
-  }
-  if (body !== undefined) {
-    response.end(body);
-    return;
-  }
-  createReadStream(found).pipe(response);
 }
 
 /**
@@ -447,49 +366,4 @@ async function requestBody(request) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return Buffer.concat(chunks);
-}
-
-/**
- * @param {import('node:http').ServerResponse} response
- * @param {number} status
- * @param {string} type
- * @param {string} cache
- * @param {Buffer} body
- */
-function send(response, status, type, cache, body) {
-  response.writeHead(status, {
-    'Content-Type': type,
-    'Cache-Control': cache,
-    'Content-Length': String(body.byteLength),
-  });
-  response.end(body);
-}
-
-/**
- * @param {string} pathname
- * @param {ReadonlyArray<readonly [string, string]>} mounts
- * @returns {string | null}
- */
-function toFilePath(pathname, mounts) {
-  const decoded = decodeURIComponent(pathname);
-  for (const [prefix, dir] of mounts) {
-    if (prefix !== '/' && !decoded.startsWith(prefix)) continue;
-    const relativePath = prefix === '/' ? decoded : `/${decoded.slice(prefix.length)}`;
-    const candidate = resolve(join(dir, normalize(relativePath)));
-    if (candidate !== dir && !candidate.startsWith(dir + sep)) return null;
-    return candidate;
-  }
-  return null;
-}
-
-/**
- * @param {string} path
- * @returns {Promise<import('node:fs').Stats | null>}
- */
-async function statOrNull(path) {
-  try {
-    return await stat(path);
-  } catch {
-    return null;
-  }
 }

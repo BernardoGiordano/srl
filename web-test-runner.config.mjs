@@ -26,18 +26,18 @@
  * application at /. The rewrite below makes the test origin look like the
  * deployed one, which buys two things worth more than the ten lines it costs:
  *
- *   1. The import map below is the same map as the application's index.html,
- *      specifier for specifier and URL for URL. tools/checks/verify-deps.mjs asserts
- *      that, so a divergence fails `npm run check` rather than producing tests
- *      that pass against different bytes than production runs.
+ *   1. The import map the page carries is the application's own, read from its
+ *      index.html — the same document production serves — so tests cannot pass
+ *      against different bytes than ship.
  *   2. Root-absolute URLs in application code — '/app.manifest.json' in
  *      main.js, the remote URLs in the manifest, the i18n bundle patterns —
  *      resolve in tests without a single test-only branch in the source.
  *
- * Remote integrity pins are duplicated below on purpose. Unlike vendor imports,
- * the runtime manifest validator requires its executable URL to be governed by
- * the page's static import map. tools/checks/verify-deps.mjs checks these copies against
- * the application map, so a stale test pin fails before the browser suite runs.
+ * The rewrite itself is `resolveMount` from cli/origin/index.mjs: the first
+ * matching prefix wins and a prefix matches on a segment boundary, which is the
+ * same rule the three file servers over that module resolve with. ADR-0075. This
+ * is the one consumer that maps a prefix to another prefix rather than to a
+ * directory, because the server being rewritten for is the runner's own.
  *
  * Templates are fetched from disk by the same code path production uses, so a
  * template that fails to compile fails a test rather than a page.
@@ -47,24 +47,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { LIB_MOUNT_ROUTES, REPO } from './cli/layout.mjs';
+import { resolveMount } from './cli/origin/index.mjs';
 import { extractImportMap } from './cli/package/interface.mjs';
 
 const APP = process.env.APP ?? 'example';
-
-/**
- * The application whose map is written out literally below.
- *
- * The literal is what `tools/checks/verify-deps.mjs` compares against that application's
- * `index.html`, specifier for specifier and pin for pin, so a divergence fails
- * `npm run check` rather than producing tests that pass against different bytes than
- * production runs. It can only be compared for one application, because two applications'
- * remotes live at the same URLs with different digests: `/remotes/billing/remote-entry.js`
- * cannot carry two hashes in one map.
- *
- * So every other application's map is read from its own `index.html` instead — see
- * `importMapFor` below. Nothing is duplicated for those, and nothing can drift.
- */
-const PINNED_APP = 'example';
 
 /**
  * URL prefix -> URL, exactly as cli/dev/serve.mjs and the release tree mount them: the
@@ -88,58 +74,26 @@ const MOUNTS = /** @type {Array<[string, string]>} */ ([
 ]);
 
 /**
- * `PINNED_APP`'s map, written out as the element the page carries.
+ * The import-map element the test page carries: the application's own map, read from
+ * its `index.html`.
  *
- * An element rather than bare JSON so that `tools/checks/verify-deps.mjs` finds it: it looks
- * for an import-map script element in this file's own text and compares what is inside
- * against `example/index.html`. Keeping the literal here is therefore not duplication for
- * its own sake — it is the copy that check exists to compare.
+ * Derived rather than written out. A literal here was a second copy of the pins, kept
+ * honest by a check in tools/checks/verify-deps.mjs that compared the two documents
+ * specifier for specifier — and a copy a check exists to compare is still a copy. Two
+ * applications could not have shared one anyway: their remotes live at the same URLs
+ * with different digests, and `/remotes/billing/remote-entry.js` cannot carry two hashes
+ * in one map.
  *
- * The tag is deliberately not spelled out anywhere above: that search takes the first match
- * in the file, so a prose mention of it would be parsed as the map and fail as invalid JSON.
- */
-const PINNED_MAP_ELEMENT = `<script type="importmap">
-      {
-        "imports": {
-          "lit": "/lib/vendor/lit-all.min.js",
-          "lit/async-directive.js": "/lib/vendor/lit-all.min.js",
-          "lit/directives/repeat.js": "/lib/vendor/lit-all.min.js",
-          "@preact/signals-core": "/lib/vendor/signals-core.mjs",
-          "@core/": "/lib/core/",
-          "@auth/": "/lib/auth/",
-          "@host/": "/lib/host/",
-          "@components/": "/components/"
-        },
-        "integrity": {
-          "/remotes/billing/remote-entry.js": "sha384-E5eqKtGjo78yF0+SPoZq6Mzz7Rg8MEavpNn/qdAhXBzeujy57OZ12Xqp0SScrzWC",
-          "/remotes/billing/billing-root.js": "sha384-BFpKJCch9q9lOTiabdlvbnstoOCrZt8N6AfA8L3djcZ6i+bD4fgFFTBie2gba6PT",
-          "/remotes/analytics/remote-entry.js": "sha384-gikXl5fGQ0JSt91gbIGS5QeVey8/CZ/dOXzGvDIIuh350ltSRN/++0TlTFf+R13O",
-          "/remotes/analytics/analytics-root.js": "sha384-UIHeDBMl71bh6r1rmjC4ki1XY9J0qJNqPtBbEVKB0xN+Z0pvrtCk7biIxz9k5rtn"
-        }
-      }
-    </script>`;
-
-/**
- * The import-map element the test page carries, for the application under test.
- *
- * For `PINNED_APP` it is the literal above. For any other application it is that
- * application's own map, read from its `index.html` — so a second application's remote pins
- * exist in exactly one place, its own document, and cannot drift from it. Two applications
- * cannot share one literal here: their remotes live at the same URLs with different digests,
- * and `/remotes/billing/remote-entry.js` cannot carry two hashes in one map.
- *
- * The vendored entries are dropped for the derived case, because the runner serves
- * `/lib/vendor` itself and the map's own pins are already asserted against those bytes by
- * `npm run vendor`. Remote artifacts keep theirs: the manifest validator requires a remote's
- * executable URL to be governed by the page's static map, and exercising that is part of what
- * an application's suite is for.
+ * The vendored entries are dropped. The runner serves `/lib/vendor` itself and the map's
+ * own pins are already asserted against those bytes by `npm run vendor`. Remote artifacts
+ * keep theirs: the manifest validator requires a remote's executable URL to be governed
+ * by the page's static map, and exercising that is part of what an application's suite is
+ * for.
  *
  * @param {string} app
  * @returns {string}
  */
 function importMapFor(app) {
-  if (app === PINNED_APP) return PINNED_MAP_ELEMENT;
-
   const html = readFileSync(join(REPO, app, 'index.html'), 'utf8');
   const { imports, integrity } = extractImportMap(html, `${app}/index.html`);
   const pins = Object.fromEntries(
@@ -161,12 +115,13 @@ export default {
 
   middleware: [
     async (ctx, next) => {
-      for (const [from, to] of MOUNTS) {
-        if (ctx.url === from || ctx.url.startsWith(from)) {
-          ctx.url = to + ctx.url.slice(from.length);
-          break;
-        }
-      }
+      // The path only. A query string is the runner's business, and percent escapes
+      // are left alone because what is being rewritten is a URL, not a file path.
+      const mark = ctx.url.indexOf('?');
+      const path = mark === -1 ? ctx.url : ctx.url.slice(0, mark);
+      const search = mark === -1 ? '' : ctx.url.slice(mark);
+      const match = resolveMount(path, MOUNTS);
+      if (match !== null) ctx.url = `${match.target}${match.rest}${search}`;
       await next();
     },
   ],

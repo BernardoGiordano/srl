@@ -134,6 +134,37 @@ const { report } = await readReport('dist/web');
 if (!isRemoteReport(report)) console.log(report.security.csp, report.totals.brotli);
 ```
 
+## An origin for your own tests
+
+`@srljs/core/testing/harness.js` renders a component and waits for it to settle; what it
+needs is an origin serving your application the way your deployment does, so that
+`/app.manifest.json`, the i18n bundles and every `@core/` specifier resolve in the browser
+without a test-only branch in your source. That origin is
+`@srljs/cli/origin/index.mjs`, and it is the same module `srl serve`, this repository's
+benchmark and its production-artifact suite all serve through — the mount table, the
+traversal refusal, the directory index, the history fallback and the MIME table
+(ADR-0075).
+
+```js
+import { serveOrigin } from '@srljs/cli/origin/index.mjs';
+import { MOUNTS } from '@srljs/cli/package/interface.mjs';
+
+const appDir = '/abs/path/web';
+const origin = await serveOrigin({
+  mounts: [...MOUNTS, ['/', appDir]],
+  fallback: `${appDir}/index.html`,
+});
+
+// origin.url is http://127.0.0.1:<ephemeral>; origin.close() when the suite ends.
+```
+
+Four options are what an adapter states: `route` for endpoints of your own — a fake
+backend, an injected module — consulted before anything static; `transform` for a body to
+send instead of the file's bytes; `headers` for a cache policy or a
+`Content-Security-Policy`; and `fallback` for the document a navigation with no file gets.
+There is deliberately no proxy option: `srl serve --proxy` is one adapter's `route`, not a
+parameter every origin carries.
+
 ## Types
 
 The library publishes the type checker's half of its interface too, and `srl new` writes a

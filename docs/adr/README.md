@@ -73,6 +73,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0072](0072-a-check-returns-diagnostics.md) | A check returns diagnostics, and prints nothing | accepted | `cli/diagnostics/`, `cli/checks/`, `tools/checks/` |
 | [ADR-0073](0073-the-application-shape-is-a-module.md) | The application shape is a module, and `srl new` is one of its two adapters | accepted | `cli/scaffold/application.mjs`, `cli/bin/srl.mjs`, `tools/checks/pack-check.mjs`, `cli/README.md` |
 | [ADR-0074](0074-the-artifact-report-is-a-named-shape.md) | The artifact report is a named shape, written and read in one place | accepted | `cli/delivery/artifact-report.mjs`, `cli/delivery/build.mjs`, `cli/delivery/release.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/verify-http.mjs`, `tools/benchmark/run.mjs` |
+| [ADR-0075](0075-one-application-origin-not-four-servers.md) | One application origin, and the four servers are adapters over it | accepted | `cli/origin/`, `cli/dev/serve.mjs`, `cli/test/support/artifact-origin.mjs`, `tools/benchmark/origin.mjs`, `web-test-runner.config.mjs`, `tools/checks/verify-deps.mjs`, `cli/test/origin.test.mjs`, `cli/test/serve-proxy.test.mjs` |
 
 <!-- /generated:adr-index -->
 

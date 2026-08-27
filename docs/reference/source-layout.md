@@ -162,6 +162,13 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
   diagnostics/              what a check found, as values: one Diagnostic type and the
                             only two things that print one, a terminal report and a
                             JSON document
+  origin/                   what "serve one srl application" is: mount resolution, the
+                            traversal refusal, the directory index, the history fallback
+                            and the MIME table, with four options for what an adapter
+                            does differently. The dev server, the benchmark origin and
+                            the artifact test origin are adapters; so is the test
+                            runner's URL rewrite. Published, so an adopter can serve
+                            their own application to their own browser suite (ADR-0075)
   checks/
     template-check.mjs      static type checking of template expressions
     importmap-check.mjs     an application's inline import map against the library it
@@ -188,7 +195,8 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
     verify-release.mjs      a staged or remote tree against its immutable report
     verify-http.mjs         a live origin against that same report: bytes and headers
   dev/
-    serve.mjs               zero-dependency dev server: mounts + fallback + watch, and
+    serve.mjs               zero-dependency dev server: one adapter over origin/, plus
+                            the two things only development has — live reload, and
                             `--proxy` for an application whose backend sets the cookie
   test/                     the suites for everything above, over fixtures/ (whole
                             applications, intact and broken) and support/

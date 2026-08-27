@@ -3,9 +3,16 @@
  *
  * Shared because two suites need the same origin: the library's own, which builds the
  * example application, and whichever repository pilots the artifact pipeline on a real
- * application of its own. A second private copy of a file server is a second place for
- * a MIME type or a fallback rule to be subtly wrong, and the whole point of driving the
- * built bytes in a browser is that nothing about the serving is approximate.
+ * application of its own.
+ *
+ * The serving itself is `cli/origin/index.mjs` — the mounts, the traversal refusal, the
+ * directory index and the history fallback, the same rules the development server and the
+ * benchmark origin answer with (ADR-0075). The whole point of driving the built bytes in a
+ * browser is that nothing about the serving is approximate, and a private copy of a file
+ * server is a second place for a MIME type or a fallback rule to be subtly wrong. What is
+ * stated here is only what a test needs and production must never have: an entry document
+ * whose module is swapped for a test starter, one deliberately unavailable path, and one
+ * deliberately tampered byte.
  *
  * Not part of the published package: this is test support for repositories that consume
  * cli/, reached by path like the rest of cli/.
@@ -13,15 +20,15 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import { join, normalize, resolve, sep } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { Launcher } from 'chrome-launcher';
 import { parse, serialize } from 'parse5';
 import puppeteer from 'puppeteer-core';
 
-import { PACKAGE, contentType } from '../../package/interface.mjs';
+import { send, serveOrigin } from '../../origin/index.mjs';
+import { MOUNTS } from '../../package/interface.mjs';
 
 /** @param {string} path */
 function artifactCache(path) {
@@ -121,184 +128,123 @@ export async function launchChrome(origin) {
 }
 
 /**
+ * The two modules the test page loads that the artifact does not contain: the starter
+ * that replaced the production entry, and the application's own HTTP fake behind it.
+ *
+ * @param {string} appDir
+ * @param {string} start
+ * @returns {(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, url: URL) => Promise<boolean>}
+ */
+function testModules(appDir, start) {
+  const fakeServer = join(appDir, 'test', 'fake-server.js');
+  return async (_request, response, url) => {
+    if (url.pathname === '/__artifact-test/start.js') {
+      send(response, { type: 'text/javascript; charset=utf-8', body: Buffer.from(start) });
+      return true;
+    }
+    if (url.pathname === '/__artifact-test/fake-server.js') {
+      send(response, {
+        type: 'text/javascript; charset=utf-8',
+        body: await readFile(fakeServer),
+      });
+      return true;
+    }
+    return false;
+  };
+}
+
+/**
  * @param {{ appDir: string, artifactDir: string, entry: string, csp: string, unavailable: string | null, tampered: string | null, session?: { username?: string, password?: string }, mounts?: Array<{ base: string, dir: string }> }} options
  */
 export async function startArtifactOrigin(options) {
-  const { html } = testEntryHtml(
-    await readFile(join(options.artifactDir, 'index.html'), 'utf8'),
-    options.entry,
-  );
-  const start = testStart(options.entry, options.session);
-  const fakeServer = join(options.appDir, 'test', 'fake-server.js');
+  const entryDocument = join(options.artifactDir, 'index.html');
+  const { html } = testEntryHtml(await readFile(entryDocument, 'utf8'), options.entry);
+  const entryBody = Buffer.from(html, 'utf8');
+  const modules = testModules(options.appDir, testStart(options.entry, options.session));
 
-  const server = createServer((request, response) => {
-    void (async () => {
-      const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  // Each Remote is published under its own base, so those mounts are declared before
+  // the artifact's own `/` — which matches everything.
+  const mounts = /** @type {Array<[string, string]>} */ ([
+    ...(options.mounts ?? []).map(({ base, dir }) => [base, dir]),
+    ['/', options.artifactDir],
+  ]);
+
+  return serveOrigin({
+    mounts,
+    fallback: entryDocument,
+
+    headers: (pathname, file) => ({
+      'Cache-Control': file === entryDocument ? 'private, no-cache' : artifactCache(pathname),
+      ...(file === entryDocument ? { 'Content-Security-Policy': options.csp } : {}),
+    }),
+
+    transform: async (file, { pathname }) => {
+      if (file === entryDocument) return { body: entryBody };
+      // One byte more than the integrity pin covers, so the browser's own
+      // subresource check is what fails rather than an assertion here.
+      if (pathname === options.tampered) {
+        return { body: Buffer.concat([await readFile(file), Buffer.from('\n')]) };
+      }
+      return null;
+    },
+
+    route: async (request, response, url) => {
       if (url.pathname === options.unavailable) {
         response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Deliberately unavailable');
-        return;
+        return true;
       }
-      if (url.pathname === '/__artifact-test/start.js') {
-        send(response, 'text/javascript; charset=utf-8', Buffer.from(start));
-        return;
-      }
-      if (url.pathname === '/__artifact-test/fake-server.js') {
-        send(response, 'text/javascript; charset=utf-8', await readFile(fakeServer));
-        return;
-      }
+      if (await modules(request, response, url)) return true;
       if (url.pathname === '/api/events') {
+        // Held open and never written to: the application's live feed must connect
+        // without the suite having to model a stream.
         response.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
         });
         response.write('retry: 60000\n\n');
-        return;
+        return true;
       }
-      if (url.pathname === '/' || (!url.pathname.includes('.') && url.pathname !== '/')) {
-        send(response, 'text/html; charset=utf-8', Buffer.from(html), {
-          'Content-Security-Policy': options.csp,
-          'Cache-Control': 'private, no-cache',
-        });
-        return;
-      }
-
-      const mount = options.mounts?.find((candidate) => url.pathname.startsWith(candidate.base));
-      const file =
-        mount === undefined
-          ? safeFile(options.artifactDir, url.pathname)
-          : safeFile(mount.dir, `/${url.pathname.slice(mount.base.length)}`);
-      if (file === null || !(await isFile(file))) {
-        response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
-        return;
-      }
-      const body = await readFile(file);
-      send(
-        response,
-        contentType(file),
-        url.pathname === options.tampered ? Buffer.concat([body, Buffer.from('\n')]) : body,
-        { 'Cache-Control': artifactCache(url.pathname) },
-      );
-    })().catch((error) => {
-      if (!response.headersSent) response.writeHead(500, { 'Content-Type': 'text/plain' });
-      response.end(String(error));
-    });
+      return false;
+    },
   });
-
-  return listen(server);
-}
-
-/** @param {import('node:http').Server} server */
-export async function listen(server) {
-  await new Promise((done, failed) => {
-    server.once('error', failed);
-    server.listen(0, '127.0.0.1', () => done(undefined));
-  });
-  const address = server.address();
-  if (address === null || typeof address === 'string') {
-    throw new Error('Production-artifact test origin did not bind a TCP port.');
-  }
-  return {
-    url: `http://127.0.0.1:${String(address.port)}`,
-    close: () =>
-      new Promise((done) => {
-        server.closeAllConnections();
-        server.close(() => done(undefined));
-      }),
-  };
-}
-
-/**
- * @param {string} root
- * @param {string} pathname
- */
-export function safeFile(root, pathname) {
-  const base = resolve(root);
-  const file = resolve(join(base, normalize(decodeURIComponent(pathname))));
-  return file === base || file.startsWith(base + sep) ? file : null;
-}
-
-/** @param {string} path */
-export async function isFile(path) {
-  try {
-    return (await stat(path)).isFile();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * @param {import('node:http').ServerResponse} response
- * @param {string} type
- * @param {Buffer} body
- */
-export function send(response, type, body, headers = {}) {
-  response.writeHead(200, {
-    'Content-Type': type,
-    'Cache-Control': 'no-cache',
-    'Content-Length': String(body.byteLength),
-    ...headers,
-  });
-  response.end(body);
 }
 
 /**
  * Source-delivery adapter used only as the visual oracle for the production artifact.
  *
+ * The library's mounts come from the package rather than from two hardcoded prefixes:
+ * they resolve inside the package wherever it sits, its own root in a standalone
+ * checkout and a submodule in a repository that consumes one. Asking the package is what
+ * lets a consuming repository run this suite at all.
+ *
  * @param {{ appDir: string, entry: string, session?: { username?: string, password?: string } }} options
  */
 export async function startSourceOrigin(options) {
-  const transformed = testEntryHtml(
-    await readFile(join(options.appDir, 'index.html'), 'utf8'),
-    options.entry,
-  );
+  const entryDocument = join(options.appDir, 'index.html');
+  const transformed = testEntryHtml(await readFile(entryDocument, 'utf8'), options.entry);
+  const entryBody = Buffer.from(transformed.html, 'utf8');
   const hashes = transformed.inlineScripts.map(
     (source) => `'sha256-${createHash('sha256').update(source, 'utf8').digest('base64')}'`,
   );
-  const start = testStart(options.entry, options.session);
-  const fakeServer = join(options.appDir, 'test', 'fake-server.js');
+  const csp =
+    `default-src 'self'; script-src 'self' ${hashes.join(' ')}; ` +
+    "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; " +
+    "object-src 'none'; base-uri 'none'; trusted-types lit-html ui-test ui-test-template; " +
+    "require-trusted-types-for 'script'";
+  const modules = testModules(options.appDir, testStart(options.entry, options.session));
 
-  const server = createServer((request, response) => {
-    void (async () => {
-      const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-      if (url.pathname === '/__artifact-test/start.js') {
-        send(response, 'text/javascript; charset=utf-8', Buffer.from(start));
-        return;
-      }
-      if (url.pathname === '/__artifact-test/fake-server.js') {
-        send(response, 'text/javascript; charset=utf-8', await readFile(fakeServer));
-        return;
-      }
-      if (url.pathname === '/' || (!url.pathname.includes('.') && url.pathname !== '/')) {
-        send(response, 'text/html; charset=utf-8', Buffer.from(transformed.html), {
-          'Content-Security-Policy':
-            `default-src 'self'; script-src 'self' ${hashes.join(' ')}; ` +
-            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; " +
-            "object-src 'none'; base-uri 'none'; trusted-types lit-html ui-test ui-test-template; " +
-            "require-trusted-types-for 'script'",
-        });
-        return;
-      }
+  return serveOrigin({
+    mounts: /** @type {Array<[string, string]>} */ ([...MOUNTS, ['/', options.appDir]]),
+    fallback: entryDocument,
 
-      // The library's mounts resolve inside the package, wherever the package sits:
-      // its own root in a standalone checkout, a submodule in a repository that
-      // consumes one. Asking the package rather than assuming `<repo>/source` is what
-      // lets a consuming repository run this suite at all.
-      const root =
-        url.pathname.startsWith('/lib/') || url.pathname.startsWith('/components/')
-          ? PACKAGE
-          : options.appDir;
-      const file = safeFile(root, url.pathname);
-      if (file === null || !(await isFile(file))) {
-        response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
-        return;
-      }
-      send(response, contentType(file), await readFile(file));
-    })().catch((error) => {
-      if (!response.headersSent) response.writeHead(500, { 'Content-Type': 'text/plain' });
-      response.end(String(error));
-    });
+    headers: (_pathname, file) => ({
+      'Cache-Control': 'no-cache',
+      ...(file === entryDocument ? { 'Content-Security-Policy': csp } : {}),
+    }),
+
+    transform: (file) => (file === entryDocument ? { body: entryBody } : null),
+
+    route: modules,
   });
-
-  return listen(server);
 }

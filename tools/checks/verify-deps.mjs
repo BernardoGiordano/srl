@@ -18,8 +18,11 @@
  *  4. Undeclared runtime dependencies. A source file imports a bare specifier the
  *     import map does not declare. It resolves to nothing, and only on the route
  *     that happens to import it.
- *  5. Test/production map divergence. web-test-runner.config.mjs carries its own
- *     import map, so tests could otherwise pass against different bytes than ship.
+ *  5. A CSP that blocks the import map. An import map is an inline script, so
+ *     `script-src 'self'` alone leaves every bare specifier unresolvable: a blank
+ *     page whose error names module resolution rather than the header that caused
+ *     it. The hash to allow is computed on every run, per application and as the
+ *     whole set a deployment has to carry.
  *  6. A layering violation: something under source/lib importing @app/, or an
  *     import map whose library prefixes do not resolve to source/lib. Either one
  *     turns "the library is a package you build on" back into "the library is
@@ -133,9 +136,6 @@ const MANIFEST_ORIGIN = 'https://manifest.invalid/';
  */
 const MANIFEST_FILE = join(PACKAGE, 'package.json');
 const ROOT_TSCONFIG = join(REPO, 'tsconfig.json');
-
-/** The second import map in this repository, and the reason check 5 exists. */
-const TEST_RUNNER_CONFIG = join(REPO, 'web-test-runner.config.mjs');
 
 /**
  * A path as this file's *prose* spells it, for the sentences that name one. Where a
@@ -783,43 +783,7 @@ export async function verifyDependencies() {
       { group },
     );
 
-    /* ── 5. Test map matches production map ──────────────────────────────── */
-
-    const testConfig = await readText(TEST_RUNNER_CONFIG);
-    const testMap = extractImportMap(testConfig, 'web-test-runner.config.mjs');
-    const testedApp = /^const APP = process\.env\.APP \?\? '([^']+)'/mu.exec(testConfig)?.[1];
-
-    if (testedApp === app.name) {
-      for (const [specifier, url] of Object.entries(imports)) {
-        if (testMap.imports[specifier] !== url) {
-          refuse(
-            'deps/test-map-diverges',
-            `diverges for "${specifier}":\n    ${app.name}/index.html: ${url}\n` +
-              `    test runner:  ${testMap.imports[specifier] ?? '(missing)'}`,
-            { group, file: TEST_RUNNER_CONFIG },
-          );
-        }
-      }
-      for (const remote of manifest.remotes) {
-        const url = String(remote.url);
-        if (testMap.integrity[url] !== integrity[url]) {
-          refuse(
-            'deps/test-map-remote-hash',
-            `remote integrity differs between index.html and the test runner for ${url}.`,
-            { group, file: TEST_RUNNER_CONFIG },
-          );
-        }
-      }
-      pass('deps/test-map', 'test import map matches this application (the default APP)', { group });
-    } else {
-      note(
-        'deps/test-map-other-application',
-        `tests default to APP=${testedApp ?? '?'}, so this map is not compared`,
-        { group },
-      );
-    }
-
-    /* ── 5b. The CSP hash this application's import map needs ────────────── */
+    /* ── 5. The CSP hash this application's import map needs ─────────────── */
 
     /**
      * An import map is an inline script, so a CSP of `script-src 'self'` blocks it.
@@ -1217,7 +1181,7 @@ export async function verifyDependencies() {
     );
   }
 
-  /* ── 5c. The CSP hashes a deployment has to carry ──────────────────────── */
+  /* ── 5b. The CSP hashes a deployment has to carry ──────────────────────── */
 
   /**
    * One hash per application, collected so a deployment configuring `script-src`

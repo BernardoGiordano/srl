@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
-import { createServer as createSocketServer } from 'node:net';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+
+import { serveApplication } from '../dev/serve.mjs';
+import { apps } from '../layout.mjs';
 
 /**
  * `srl serve --proxy`, against a real upstream over a real socket.
@@ -22,9 +24,11 @@ import test from 'node:test';
  *   /apiary                caught by a /api prefix that matched on characters
  *   a backend not running  the ordinary case, and it has to say so
  *
- * Spawned rather than imported: the module reads process.argv and listens on a
- * port at import time, so a second case in one process would inherit the first
- * one's flags.
+ * Imported rather than spawned. `serveApplication` takes the application and its
+ * proxies and binds an ephemeral port, so a case states its own backend instead of
+ * inheriting flags from a child process and waiting for a startup line on its
+ * stdout. ADR-0075. One case is still spawned, and has to be: a malformed `--proxy`
+ * is refused with an exit code, and an exit code needs a process.
  */
 
 const SERVE = fileURLToPath(new URL('../dev/serve.mjs', import.meta.url));
@@ -62,46 +66,29 @@ async function upstream() {
   return { origin: `http://127.0.0.1:${String(port)}`, close: () => { server.close(); } };
 }
 
-/** A port nothing is listening on: bind to 0, ask which one that was, release it. */
-async function freePort() {
-  const probe = createSocketServer();
-  await new Promise((resolve) => {
-    probe.listen(0, '127.0.0.1', () => { resolve(undefined); });
-  });
-  const { port } = /** @type {import('node:net').AddressInfo} */ (probe.address());
-  await new Promise((resolve) => probe.close(resolve));
-  return port;
-}
-
 /**
- * The server, on a free port, with the given --proxy arguments. Resolves once it
- * has printed its startup table, which is the only thing that says it is listening.
+ * The example application, served on an ephemeral port with the given proxies and
+ * no watching: a suite has nothing to reload and a recursive watch of the
+ * repository is the slowest thing this file could do.
  *
- * @param {string[]} proxies
+ * @param {Array<{ prefix: string, origin: string }>} proxies
  */
 async function serve(proxies) {
-  const port = await freePort();
-  const child = spawn(
-    process.execPath,
-    [SERVE, '--app', 'example', '--port', String(port), '--no-watch',
-      ...proxies.flatMap((value) => ['--proxy', value])],
-    { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-
-  await new Promise((resolve, reject) => {
-    const fail = setTimeout(() => reject(new Error('server did not start')), 10_000);
-    child.stdout.on('data', (chunk) => {
-      if (String(chunk).includes('watch disabled')) { clearTimeout(fail); resolve(undefined); }
-    });
-    child.on('exit', (code) => { clearTimeout(fail); reject(new Error(`server exited ${String(code)}`)); });
+  const app = (await apps()).find((candidate) => candidate.name === 'example');
+  assert.ok(app !== undefined, 'the example application is missing');
+  const server = await serveApplication({
+    app,
+    port: 0,
+    host: '127.0.0.1',
+    watch: false,
+    proxies: proxies.map(({ prefix, origin }) => ({ prefix, origin: new URL(origin) })),
   });
-
-  return { base: `http://127.0.0.1:${String(port)}`, close: () => { child.kill(); } };
+  return { base: server.url, close: server.close };
 }
 
 void test('--proxy forwards the method, the body, the query and the cookie', async () => {
   const api = await upstream();
-  const server = await serve([`/api/=${api.origin}`]);
+  const server = await serve([{ prefix: '/api', origin: api.origin }]);
   try {
     const response = await fetch(`${server.base}/api/posts?draft=1`, {
       method: 'POST',
@@ -116,40 +103,40 @@ void test('--proxy forwards the method, the body, the query and the cookie', asy
       cookie: 'session=opaque',
     });
   } finally {
-    server.close();
+    await server.close();
     api.close();
   }
 });
 
 void test('an upstream 404 stays a 404, rather than becoming the history fallback', async () => {
   const api = await upstream();
-  const server = await serve([`/api/=${api.origin}`]);
+  const server = await serve([{ prefix: '/api', origin: api.origin }]);
   try {
     const response = await fetch(`${server.base}/api/missing`, { headers: { Accept: 'text/html' } });
     assert.equal(response.status, 404);
     assert.equal(response.headers.get('content-type'), 'application/json');
   } finally {
-    server.close();
+    await server.close();
     api.close();
   }
 });
 
 void test('Set-Cookie reaches the browser with its attributes intact', async () => {
   const api = await upstream();
-  const server = await serve([`/auth/=${api.origin}`]);
+  const server = await serve([{ prefix: '/auth', origin: api.origin }]);
   try {
     const response = await fetch(`${server.base}/auth/session`, { redirect: 'manual' });
     assert.equal(response.status, 204);
     assert.match(response.headers.get('set-cookie') ?? '', /^session=opaque; Path=\/; HttpOnly; SameSite=Lax$/u);
   } finally {
-    server.close();
+    await server.close();
     api.close();
   }
 });
 
 void test('a prefix matches on a segment boundary, so /api does not claim /apiary', async () => {
   const api = await upstream();
-  const server = await serve([`/api=${api.origin}`]);
+  const server = await serve([{ prefix: '/api', origin: api.origin }]);
   try {
     const proxied = await fetch(`${server.base}/api/site`);
     assert.equal(proxied.status, 200);
@@ -159,13 +146,13 @@ void test('a prefix matches on a segment boundary, so /api does not claim /apiar
     const notProxied = await fetch(`${server.base}/apiary`);
     assert.equal(notProxied.status, 404);
   } finally {
-    server.close();
+    await server.close();
     api.close();
   }
 });
 
 void test('a backend that is not running is a 502 naming the origin', async () => {
-  const server = await serve(['/api/=http://127.0.0.1:9']);
+  const server = await serve([{ prefix: '/api', origin: 'http://127.0.0.1:9' }]);
   try {
     const response = await fetch(`${server.base}/api/site`);
     assert.equal(response.status, 502);
@@ -173,19 +160,19 @@ void test('a backend that is not running is a 502 naming the origin', async () =
     assert.equal(body.error, 'backend_unavailable');
     assert.match(body.detail, /127\.0\.0\.1:9/u);
   } finally {
-    server.close();
+    await server.close();
   }
 });
 
 void test('the static mounts and the history fallback are untouched by a proxy', async () => {
   const api = await upstream();
-  const server = await serve([`/api/=${api.origin}`]);
+  const server = await serve([{ prefix: '/api', origin: api.origin }]);
   try {
-    assert.equal((await fetch(`${server.base}/`)).status, 200);
+    assert.equal((await fetch(`${server.base}/`, { headers: { Accept: 'text/html' } })).status, 200);
     assert.equal((await fetch(`${server.base}/some/spa/route`, { headers: { Accept: 'text/html' } })).status, 200);
     assert.equal((await fetch(`${server.base}/does-not-exist.js`)).status, 404);
   } finally {
-    server.close();
+    await server.close();
     api.close();
   }
 });
