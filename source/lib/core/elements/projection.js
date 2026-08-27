@@ -64,6 +64,7 @@ if (!customElements.get(MARKER_TAG)) {
  *
  * @param {Element} host
  * @returns {ContentBuckets}
+ * @internal
  */
 export function captureContent(host) {
   const nodes = Array.from(host.childNodes);
@@ -119,6 +120,7 @@ export function captureContent(host) {
  *
  * @param {Element} host
  * @param {ContentBuckets} buckets
+ * @internal
  */
 export function projectContent(host, buckets) {
   if (buckets.size === 0) return;

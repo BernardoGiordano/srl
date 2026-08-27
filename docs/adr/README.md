@@ -75,6 +75,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0074](0074-the-artifact-report-is-a-named-shape.md) | The artifact report is a named shape, written and read in one place | accepted | `cli/delivery/artifact-report.mjs`, `cli/delivery/build.mjs`, `cli/delivery/release.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/verify-http.mjs`, `tools/benchmark/run.mjs` |
 | [ADR-0075](0075-one-application-origin-not-four-servers.md) | One application origin, and the four servers are adapters over it | accepted | `cli/origin/`, `cli/dev/serve.mjs`, `cli/test/support/artifact-origin.mjs`, `tools/benchmark/origin.mjs`, `web-test-runner.config.mjs`, `tools/checks/verify-deps.mjs`, `cli/test/origin.test.mjs`, `cli/test/serve-proxy.test.mjs` |
 | [ADR-0076](0076-an-asynchronous-read-is-a-resource.md) | A screen's asynchronous read is a resource, and the latest call wins | accepted | `source/lib/core/foundation/resource.js`, `example/src/pages/` |
+| [ADR-0077](0077-a-module-declares-which-exports-are-the-door.md) | A module declares which of its exports are the door | accepted | `cli/package/door.mjs`, `tools/delivery/package-bundle.mjs`, `source/lib/core/template/dialect.js` |
 
 <!-- /generated:adr-index -->
 

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **A module says which of its exports are the door.** `import { … } from '@srljs/core'`
+  autocompleted to 144 names in one flat namespace, several of which the source itself
+  documents as internal: `compileTemplate` ("Exported for tests"), `resetInjector` ("For
+  test isolation"), and the fifteen names of the template dialect, which exist so
+  `srl check templates` can implement the same grammar in Node rather than restate it. A
+  hand-written export list would have been the wrong fix — the barrel is walked, never
+  listed, so that a layer added once reaches the bundler consumer too. So the walk stays and
+  gains one input: `@internal` in the doc comment directly above an export removes that name
+  from the bundle. The surface is 123 names. Nothing became unreachable — the import-map
+  consumer loads modules by path and sees exactly what it always did — and the build refuses
+  a `srl-components` that reaches for a name `srl-core` no longer offers
+  ([ADR-0077](docs/adr/0077-a-module-declares-which-exports-are-the-door.md)).
+
 - **`resource()`: one asynchronous read whose latest call wins.**
   `@core/foundation/resource.js` is new, and it is the primitive the twenty screens in
   `example/` were each hand-rolling: an `AbortController` field, abort-the-previous on

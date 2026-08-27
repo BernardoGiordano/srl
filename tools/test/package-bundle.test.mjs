@@ -10,11 +10,13 @@
 
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import test from 'node:test';
 
 import ts from 'typescript';
 
+import { walk } from '../../cli/layout.mjs';
+import { moduleDoor } from '../../cli/package/door.mjs';
 import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
 import { BUNDLE_FILES, DIST, buildPackageBundles } from '../delivery/package-bundle.mjs';
 
@@ -109,6 +111,43 @@ function templateKeys(name, text) {
   };
   visit(tree);
   return { declared, seeded };
+}
+
+/**
+ * The names an emitted file exports and the names it imports from a sibling: the
+ * two halves of the door, read out of the bytes rather than from the tables that
+ * produced them.
+ *
+ * @param {string} name
+ * @param {string} text
+ * @returns {{ exported: string[], imported: Map<string, string[]> }}
+ */
+function surfaceOf(name, text) {
+  const tree = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  /** @type {string[]} */
+  const exported = [];
+  /** @type {Map<string, string[]>} */
+  const imported = new Map();
+
+  for (const statement of tree.statements) {
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.exportClause !== undefined &&
+      ts.isNamedExports(statement.exportClause)
+    ) {
+      for (const element of statement.exportClause.elements) exported.push(element.name.text);
+      continue;
+    }
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
+    const names = bindings.elements.map((element) => (element.propertyName ?? element.name).text);
+    imported.set(statement.moduleSpecifier.text, names);
+  }
+
+  return { exported, imported };
 }
 
 /** @param {string} file */
@@ -210,6 +249,51 @@ void test('every declared template is seeded, in the minified file as well', () 
   // Without this the test passes on a build that inlined nothing at all: every
   // `declared` list would be empty and every loop body would be skipped.
   assert.equal(inlined, 2, 'expected the collection inlined in both its readable and minified file');
+});
+
+void test('no bundle offers a name its source marks internal', async () => {
+  /** @type {string[]} */
+  const kept = [];
+  for (const bundle of BUNDLES) {
+    for (const root of bundle.roots) {
+      for (const file of await walk(root, /\.js$/u)) {
+        if (file.split(sep).includes('test') || file.endsWith('.test.js')) continue;
+        if (bundle.excluded.some((dir) => file.startsWith(dir + sep))) continue;
+        kept.push(...moduleDoor(await readFile(file, 'utf8'), file).internal);
+      }
+    }
+  }
+
+  // Without this the test passes on a library that marks nothing at all.
+  assert.ok(kept.length >= 15, `expected the library to keep names back, found ${String(kept.length)}`);
+
+  for (const file of BUNDLE_FILES) {
+    const { exported } = surfaceOf(file, textOf(file));
+    for (const name of kept) {
+      assert.ok(
+        !exported.includes(name),
+        `${file} exports ${name}, which its source marks \`@internal\``,
+      );
+    }
+  }
+});
+
+void test('a bundle built on another reaches every name it imports from it', () => {
+  for (const bundle of BUNDLES.filter((one) => one.extends !== undefined)) {
+    for (const minified of [false, true]) {
+      const suffix = minified ? '.min' : '';
+      const file = minified ? bundle.minified : bundle.file;
+      const sibling = `./${String(bundle.extends)}${suffix}.js`;
+      const offered = surfaceOf(sibling, textOf(`dist/${String(bundle.extends)}${suffix}.js`)).exported;
+
+      for (const name of surfaceOf(file, textOf(file)).imported.get(sibling) ?? []) {
+        assert.ok(
+          offered.includes(name),
+          `${file} imports ${name} from ${sibling}, whose door does not offer it`,
+        );
+      }
+    }
+  }
 });
 
 void test('the collection carries its markup rather than leaving it to a request', () => {

@@ -26,6 +26,8 @@
  * HTML void elements. Emitting `</img>` would be ignored by the document
  * parser, but lit-html's own template parse is stricter about balance, and the
  * checker needs the same list to know an unclosed `<img>` does not open a scope.
+ *
+ * @internal
  */
 export const VOID_ELEMENTS = new Set([
   'area',
@@ -73,6 +75,8 @@ const BOOLEAN_ATTRIBUTES = new Set([
  * `{{ ... }}`. Global, and both call sites are safe with a shared instance:
  * `String.prototype.replace` resets `lastIndex`, and `matchAll` iterates over a
  * clone rather than this regex.
+ *
+ * @internal
  */
 export const INTERPOLATION = /\{\{([\s\S]*?)\}\}/gu;
 
@@ -81,9 +85,13 @@ export const INTERPOLATION = /\{\{([\s\S]*?)\}\}/gu;
  *
  *     *for="user of users; key: user.id"      keyed, reorders instead of rebuilding
  *     *for="user of users; index as position" names the index
+ *
+ * @internal
  */
 export const FOR_HEAD = /^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s+of\s+([\s\S]+)$/u;
+/** @internal */
 export const FOR_KEY_CLAUSE = /^key\s*:\s*([\s\S]+)$/u;
+/** @internal */
 export const FOR_INDEX_CLAUSE = /^index\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)$/u;
 
 /**
@@ -92,6 +100,8 @@ export const FOR_INDEX_CLAUSE = /^index\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)$/u;
  * this is not a sandbox: it exists so `{{ thing.constructor }}` resolves to
  * nothing useful and a template can never be the interesting half of a gadget
  * chain.
+ *
+ * @internal
  */
 export const FORBIDDEN_MEMBERS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -109,6 +119,7 @@ export const FORBIDDEN_MEMBERS = new Set(['__proto__', 'constructor', 'prototype
  *
  * @param {string} name
  * @returns {string | undefined}
+ * @internal
  */
 export function refusedMember(name) {
   return FORBIDDEN_MEMBERS.has(name) ? `Templates may not access "${name}"` : undefined;
@@ -120,6 +131,7 @@ export function refusedMember(name) {
  *
  * @param {string} name
  * @returns {string}
+ * @internal
  */
 export function camelCase(name) {
   return name.replace(/-([a-z])/gu, (_all, char) => (typeof char === 'string' ? char.toUpperCase() : ''));
@@ -135,6 +147,7 @@ export function camelCase(name) {
  *
  * @param {string} operator
  * @returns {string}
+ * @internal
  */
 export function strictOperator(operator) {
   if (operator === '==') return '===';
@@ -156,6 +169,8 @@ export function strictOperator(operator) {
  *   | { kind: 'binding', target: string }
  *   | { kind: 'inline-handler', event: string }
  *   | { kind: 'plain' }}
+ *
+ * @internal
  */
 export function classifyAttributeName(name) {
   if (name.startsWith('(') && name.endsWith(')')) return { kind: 'event', event: name.slice(1, -1) };
@@ -177,6 +192,7 @@ export function classifyAttributeName(name) {
  *
  * @param {string} target
  * @returns {TargetClassification}
+ * @internal
  */
 export function classifyBindingTarget(target) {
   if (target === '') return { kind: 'empty-attribute', name: '' };
@@ -203,6 +219,8 @@ export function classifyBindingTarget(target) {
  * Element/attribute pairs that load an executable or embeddable resource. A
  * string is never enough for these; they require a reviewed
  * `bypassSecurityTrustResourceUrl`.
+ *
+ * @internal
  */
 export const RESOURCE_URL_SINKS = new Set([
   'base:href',
@@ -214,7 +232,7 @@ export const RESOURCE_URL_SINKS = new Set([
   'script:src',
 ]);
 
-/** Attributes browsers fetch or navigate to, in any element. */
+/** Attributes browsers fetch or navigate to, in any element. @internal */
 export const URL_ATTRIBUTES = new Set([
   'action',
   'background',
@@ -239,6 +257,7 @@ export const URL_ATTRIBUTES = new Set([
  * @param {string} tag
  * @param {string} name
  * @returns {SecurityContext | undefined}
+ * @internal
  */
 export function securityContextFor(tag, name) {
   const lower = name.toLowerCase();
@@ -257,6 +276,7 @@ export function securityContextFor(tag, name) {
  *
  * @param {string} name camelCased property name.
  * @returns {'event-property' | 'outer-html' | 'forbidden-member' | undefined}
+ * @internal
  */
 export function refusedProperty(name) {
   if (name.toLowerCase().startsWith('on')) return 'event-property';

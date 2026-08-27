@@ -146,6 +146,7 @@ export function removePreference(owner, id) {
  * @param {string} legacyKey Raw storage key an earlier build wrote.
  * @param {LegacyKeyOptions<T>} options
  * @returns {T | undefined}
+ * @internal
  */
 export function migrateLegacyKey(owner, id, legacyKey, options) {
   const schemaVersion = validVersion(options.schemaVersion ?? 1);
@@ -203,7 +204,11 @@ export function createMemoryStorage() {
   };
 }
 
-/** @param {string} owner @param {string} id */
+/**
+ * @param {string} owner
+ * @param {string} id
+ * @internal
+ */
 export function preferenceKey(owner, id) {
   return `${prefix}:${encodeURIComponent(normalizePart(owner, 'owner'))}:${encodeURIComponent(
     normalizePart(id, 'id'),

@@ -27,6 +27,14 @@
  * second `defineComponent` for a tag would throw against a registry the first
  * one filled. One copy is a correctness requirement, not a size optimisation.
  *
+ * WHAT THE BARREL SAYS
+ *
+ * The members are walked, never listed, so a layer added once reaches this consumer
+ * too — that is ADR-0033's guarantee and nothing here weakens it. What each member
+ * contributes is now the member's own answer: an export marked `@internal` stays
+ * importable by path and leaves the bundle's flat namespace. `cli/package/door.mjs`
+ * owns that rule; ADR-0077 is why.
+ *
  * TEMPLATES
  *
  * A component is a `.js` and a sibling `.html`, and `defineComponent` derives the
@@ -47,6 +55,7 @@ import ts from 'typescript';
 
 import { minifyTemplate } from '../../cli/delivery/template-html.mjs';
 import { REPO, exists, walk } from '../../cli/layout.mjs';
+import { barrelSource, moduleDoor } from '../../cli/package/door.mjs';
 import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
 
 /** Where the four files land. Generated, so `dist/` is ignored and never committed. */
@@ -98,19 +107,24 @@ async function membersOf(bundle) {
 }
 
 /**
- * The barrel itself: `export * from` each member, by absolute path.
+ * The barrel itself, read out of the members rather than written.
  *
- * `export *` rather than a curated list because the alternative is a second place
- * to forget a name. Two modules exporting the same name would be a build error
- * here rather than a silently missing export, and the one case that looks like a
- * collision — `parseExpression` in both `expression.js` and `expression-parser.js`
- * — is a re-export of one binding, which `export *` resolves to itself.
+ * Still derived — the list of members is the walk above, and no name is typed
+ * anywhere — but each member is now asked which of its exports are part of the
+ * door, so a name the source documents as test-only or internal does not become a
+ * promise to a registry consumer. `cli/package/door.mjs` owns the rule and the
+ * marker; this reads the files for it. ADR-0077.
  *
  * @param {string[]} members
- * @returns {string}
+ * @returns {Promise<string>}
  */
-function barrel(members) {
-  return members.map((file) => `export * from ${JSON.stringify(file)};\n`).join('');
+async function barrel(members) {
+  /** @type {Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>} */
+  const doors = [];
+  for (const file of members) {
+    doors.push({ file, door: moduleDoor(await readFile(file, 'utf8'), file) });
+  }
+  return barrelSource(doors);
 }
 
 /**
@@ -309,11 +323,11 @@ async function siblingTemplate(module, declared) {
  * One bundle, one minification setting, one file.
  *
  * @param {import('../../cli/package/interface.mjs').PackageBundle} bundle
- * @param {string[]} members
+ * @param {string} entrySource The barrel, built once for both minification settings.
  * @param {boolean} minify
  * @returns {Promise<string>}
  */
-async function emit(bundle, members, minify) {
+async function emit(bundle, entrySource, minify) {
   const entry = `\0srl-entry:${bundle.name}`;
   const suffix = minify ? '.min' : '';
   const fileName = `${bundle.name}${suffix}.js`;
@@ -332,7 +346,7 @@ async function emit(bundle, members, minify) {
       {
         name: 'srl-bundle-entry',
         resolveId: (source) => (source === entry ? source : null),
-        load: (id) => (id === entry ? barrel(members) : null),
+        load: (id) => (id === entry ? entrySource : null),
       },
       resolvePackageSpecifiers(bundle.external, inherited),
       templates.plugin,
@@ -356,6 +370,9 @@ async function emit(bundle, members, minify) {
   const written = join(DIST, fileName);
   const text = await readFile(written, 'utf8');
   assertSelfContained(fileName, text, inherited);
+  if (inherited !== '') {
+    await assertInheritedNames(fileName, text, inherited);
+  }
   return `  ok   ${fileName.padEnd(24)} ${String(text.length).padStart(8)} bytes${
     templates.count() === 0 ? '' : `, ${String(templates.count())} template(s) inlined`
   }`;
@@ -416,6 +433,84 @@ function assertSelfContained(fileName, text, inherited) {
 }
 
 /**
+ * Refuse a bundle whose sibling no longer offers a name it imports.
+ *
+ * This is the failure the curated door introduces. `@internal` on a name in `lib/`
+ * is invisible to a component that imports it: inside `srl-components` that import
+ * resolves to `./srl-core.js`, and a core bundle that no longer exports the name
+ * ships a pair of files that throws on the consumer's first import, in a file they
+ * never wrote. Nothing else here would see it — the browser suites resolve the same
+ * import through the import map, where every export is still reachable by path.
+ *
+ * Read out of the sibling's emitted bytes rather than from the door tables, so a
+ * barrel that narrowed for any other reason is caught by the same check.
+ *
+ * @param {string} fileName
+ * @param {string} text
+ * @param {string} inherited The sibling this bundle imports, as it is written.
+ * @returns {Promise<void>}
+ */
+async function assertInheritedNames(fileName, text, inherited) {
+  const sibling = join(DIST, inherited.replace(/^\.\//u, ''));
+  if (!(await exists(sibling))) {
+    throw new Error(
+      `${fileName} extends ${inherited}, which has not been built yet. A bundle must be emitted ` +
+        `after the one it extends.`,
+    );
+  }
+
+  const offered = new Set(bundleExports(await readFile(sibling, 'utf8'), inherited));
+  /** @type {Set<string>} */
+  const missing = new Set();
+
+  const tree = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  for (const statement of tree.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== inherited
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      const name = (element.propertyName ?? element.name).text;
+      if (!offered.has(name)) missing.add(name);
+    }
+  }
+
+  if (missing.size > 0) {
+    throw new Error(
+      `${fileName} imports ${[...missing].sort().join(', ')} from ${inherited}, which does not ` +
+        `export ${missing.size === 1 ? 'it' : 'them'}. A name marked \`@internal\` is still ` +
+        `importable by path, but it leaves the bundle's door, and a bundle built on another can ` +
+        `only reach what that door offers.`,
+    );
+  }
+}
+
+/**
+ * The names an emitted bundle exports. One `export { … }` statement, which is what
+ * rolldown writes for an entry chunk, and the exported half of each pair.
+ *
+ * @param {string} text
+ * @param {string} fileName
+ * @returns {string[]}
+ */
+function bundleExports(text, fileName) {
+  const tree = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  /** @type {string[]} */
+  const names = [];
+  for (const statement of tree.statements) {
+    if (!ts.isExportDeclaration(statement) || statement.exportClause === undefined) continue;
+    if (!ts.isNamedExports(statement.exportClause)) continue;
+    for (const element of statement.exportClause.elements) names.push(element.name.text);
+  }
+  return names;
+}
+
+/**
  * @returns {Promise<string[]>}
  */
 export async function buildPackageBundles() {
@@ -427,8 +522,11 @@ export async function buildPackageBundles() {
   for (const bundle of BUNDLES) {
     const members = await membersOf(bundle);
     if (members.length === 0) throw new Error(`${bundle.name} has no members; the roots are wrong.`);
+    // Built once and reused for both minification settings: reading and parsing
+    // every member is the cost, and it does not change with the minifier.
+    const entrySource = await barrel(members);
     lines.push(`  ok   ${bundle.name.padEnd(24)} ${String(members.length).padStart(8)} module(s)`);
-    for (const minify of [false, true]) lines.push(await emit(bundle, members, minify));
+    for (const minify of [false, true]) lines.push(await emit(bundle, entrySource, minify));
   }
 
   // A directory of loose files is what a consumer's tooling sees, so say what is in

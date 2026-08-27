@@ -363,6 +363,7 @@ function renderChunks(chunks, scope) {
  * @param {string} source
  * @param {string} where URL or label used in error messages.
  * @returns {CompiledTemplate}
+ * @internal
  */
 export function compileTemplate(source, where) {
   const { prepared, expressions } = liftInterpolations(source);

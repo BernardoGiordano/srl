@@ -82,6 +82,34 @@ own tarball. Why the second shape exists at all, and what it deliberately does n
 [ADR-0066](../adr/0066-the-registry-consumer-gets-bundles.md). What a version bump means is
 [the changelog](../../CHANGELOG.md).
 
+### Keeping a name out of the bundle
+
+The bundles are barrels the build walks, never lists, so a module added under `@core/`
+reaches the second consumer with no edit anywhere. What that consumer is *offered* is the
+module's own answer: mark an export `@internal` in the doc comment directly above it and
+the name leaves the bundle's namespace.
+
+```js
+/**
+ * Compile template source into a render function.
+ *
+ * Exported for tests; application code goes through `loadTemplate`.
+ *
+ * @internal
+ */
+export function compileTemplate(source, where) {
+```
+
+Nothing becomes unreachable. The import-map consumer loads modules by path and sees every
+export it always did, and so does `srl check templates`, which shares the template dialect
+with the runtime by importing it. It is the flat namespace of `import { … } from
+'@srljs/core'` that is curated, because that is the only place a name reads as an offer —
+[ADR-0077](../adr/0077-a-module-declares-which-exports-are-the-door.md).
+
+One thing to know before marking: a name `components/` imports is one `srl-components`
+reaches through `./srl-core.js`, so marking it there would ship a pair of bundles that
+throws on first import. `npm run package` refuses that build and names the export.
+
 
 ## Vendored dependencies
 

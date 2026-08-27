@@ -89,6 +89,8 @@ export function inject(key) {
 
 /**
  * Drop every provider and instance. For test isolation.
+ *
+ * @internal
  */
 export function resetInjector() {
   providers.clear();
