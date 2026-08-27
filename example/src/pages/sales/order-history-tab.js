@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { effect, signal } from '@core/foundation/reactive.js';
+import { effect } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
 import { dt, t } from '@core/localization/i18n.js';
@@ -22,18 +23,22 @@ import { LIVE_FEED } from '../../services/live-feed.js';
  * subscribes to anything.
  */
 export class OrderHistoryTab extends SignalElement {
-  rows = signal(/** @type {readonly OrderEvent[]} */ ([]));
-  loading = signal(false);
-  failed = signal(false);
+  #history = resource(
+    (signal) =>
+      inject(SALES_SERVICE)
+        .orderHistory(routeParams.value.id ?? '', signal)
+        .then((result) => result.rows),
+    { initial: /** @type {OrderEvent[]} */ ([]), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
+  loading = this.#history.pending;
+  failed = this.#history.failed;
 
   /** @type {(() => void) | undefined} */
   #stopWatching;
 
   get entries() {
-    return this.rows.value;
+    return this.#history.value.value;
   }
 
   onMount() {
@@ -63,32 +68,15 @@ export class OrderHistoryTab extends SignalElement {
   onDestroy() {
     this.#stopWatching?.();
     this.#stopWatching = undefined;
-    this.#request?.abort();
-    this.#request = undefined;
   }
 
-  async load() {
-    const id = routeParams.value.id ?? '';
-    if (id === '') return;
-
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.loading.value = true;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(SALES_SERVICE).orderHistory(id, request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
+  /**
+   * Mounted before the route parameter exists — a tab rendered by a layout whose own
+   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
+   * true, which is what the screen should be showing.
+   */
+  load() {
+    return (routeParams.value.id ?? '') === '' ? undefined : this.#history.reload();
   }
 
   /** @param {OrderEvent} entry */

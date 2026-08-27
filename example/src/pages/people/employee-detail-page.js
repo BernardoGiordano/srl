@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { computed, effect, signal } from '@core/foundation/reactive.js';
+import { computed, effect } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { RouteOutlet, routeParams } from '@core/navigation/router.js';
 import { t } from '@core/localization/i18n.js';
@@ -24,11 +25,13 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
  * next one is a copy rather than a decision.
  */
 export class EmployeeDetailPage extends SignalElement {
-  employee = signal(/** @type {Employee | null} */ (null));
-  failed = signal(false);
+  #employee = resource(
+    (signal) => inject(PEOPLE_SERVICE).employee(routeParams.value.id ?? '', signal),
+    { initial: /** @type {Employee | null} */ (null), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
+  pending = this.#employee.pending;
+  failed = this.#employee.failed;
 
   /** @type {(() => void) | undefined} */
   #stopWatching;
@@ -37,28 +40,34 @@ export class EmployeeDetailPage extends SignalElement {
     return routeParams.value.id ?? '';
   }
 
-  get pending() {
-    return this.employee.value === null && !this.failed.value;
+  /**
+   * The record, or nothing while the last load is failing. A resource keeps the value
+   * it had, which is right for a list that is being refreshed and wrong for a header:
+   * the previous employee's name under a "not found" notice is a worse answer than no
+   * name at all.
+   */
+  get record() {
+    return this.failed.value ? null : this.#employee.value.value;
   }
 
   get name() {
-    return this.employee.value?.name ?? this.employeeId;
+    return this.record?.name ?? this.employeeId;
   }
 
   get role() {
-    return this.employee.value?.role ?? '';
+    return this.record?.role ?? '';
   }
 
   get team() {
-    return this.employee.value?.team ?? '';
+    return this.record?.team ?? '';
   }
 
   get email() {
-    return this.employee.value?.email ?? '';
+    return this.record?.email ?? '';
   }
 
   get status() {
-    return this.employee.value?.status ?? '';
+    return this.record?.status ?? '';
   }
 
   get statusLabel() {
@@ -89,40 +98,21 @@ export class EmployeeDetailPage extends SignalElement {
       const id = this.employeeId;
       if (id === '' || id === previous) return;
       previous = id;
-      void this.load(id);
+      void this.load();
     });
   }
 
   onDestroy() {
     this.#stopWatching?.();
     this.#stopWatching = undefined;
-    this.#request?.abort();
-    this.#request = undefined;
   }
 
   retry() {
-    if (this.employeeId !== '') void this.load(this.employeeId);
+    return this.load();
   }
 
-  /** @param {string} id */
-  async load(id) {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const employee = await inject(PEOPLE_SERVICE).employee(id, request.signal);
-      if (request.signal.aborted) return;
-      this.employee.value = employee;
-    } catch {
-      if (!request.signal.aborted) {
-        this.employee.value = null;
-        this.failed.value = true;
-      }
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  load() {
+    return this.employeeId === '' ? undefined : this.#employee.reload();
   }
 }
 

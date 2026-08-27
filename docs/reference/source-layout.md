@@ -25,6 +25,7 @@ source/lib/                 THE FRAMEWORK, served at /lib/
   core/
     foundation/             what everything else is built out of, and nothing above
       reactive.js           the only import of @preact/signals-core
+      resource.js           one async read, latest call wins, bound to a lifetime
       inject.js             typed DI, root scope
       json.js               confines DOM's `any` from Response.json()
     template/

@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { computed, signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { cur, dt, num, t } from '@core/localization/i18n.js';
 import { ANY_COLUMN } from '@components/data/filter-descriptor.js';
@@ -39,10 +40,39 @@ import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
  * work out by comparing two columns.
  */
 export class ProductsPage extends SignalElement {
+  /** The query the accumulated rows belong to. */
+  #query = {
+    offset: 0,
+    limit: 25,
+    sort: /** @type {{ key: string, direction: 'asc' | 'desc' | '' }} */ ({ key: '', direction: '' }),
+  };
+
+  /**
+   * One window of the collection. The accumulated rows are this screen's, not the
+   * resource's — appending is what `pagination="infinite"` means and no other screen
+   * wants it — so `reload()`'s return value is what `fetch()` folds in.
+   */
+  #window = resource(
+    (signal) =>
+      inject(INVENTORY_SERVICE).products(
+        {
+          offset: this.#query.offset,
+          limit: this.#query.limit,
+          sort: this.#query.sort,
+          filters: this.filters.value,
+        },
+        signal,
+      ),
+    {
+      initial: { rows: /** @type {Product[]} */ ([]), total: 0, offset: 0 },
+      lifetime: () => this.lifetime,
+    },
+  );
+
   rows = signal(/** @type {readonly Product[]} */ ([]));
   total = signal(0);
-  loading = signal(false);
-  failed = signal(false);
+  loading = this.#window.pending;
+  failed = this.#window.failed;
   filters = signal(/** @type {readonly FilterState[]} */ ([]));
 
   /** @type {import('@core/foundation/types.js').ReadonlySignal<readonly FilterRule[]>} */
@@ -84,12 +114,6 @@ export class ProductsPage extends SignalElement {
   get rules() {
     return this.#rules.value;
   }
-
-  /** @type {AbortController | undefined} */
-  #request;
-
-  /** The query the accumulated rows belong to. */
-  #query = { offset: 0, limit: 25, sort: /** @type {{ key: string, direction: 'asc' | 'desc' | '' }} */ ({ key: '', direction: '' }) };
 
   get loaded() {
     return this.rows.value.length;
@@ -156,29 +180,15 @@ export class ProductsPage extends SignalElement {
    * @param {boolean} replace
    */
   async fetch(offset, replace) {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
     this.#query = { ...this.#query, offset };
-    this.loading.value = true;
-    this.failed.value = false;
 
-    try {
-      const result = await inject(INVENTORY_SERVICE).products(
-        { offset, limit: this.#query.limit, sort: this.#query.sort, filters: this.filters.value },
-        request.signal,
-      );
-      if (request.signal.aborted) return;
-      this.rows.value = replace ? result.rows : [...this.rows.value, ...result.rows];
-      this.total.value = result.total;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
+    const page = await this.#window.reload();
+    // Superseded, aborted or rejected. All three are already on the resource, and none
+    // of them may touch rows the user is still looking at.
+    if (page === undefined) return;
+
+    this.rows.value = replace ? page.rows : [...this.rows.value, ...page.rows];
+    this.total.value = page.total;
   }
 
   /** @param {Event} event */
@@ -187,11 +197,6 @@ export class ProductsPage extends SignalElement {
     if (next.length === 0 && this.filters.value.length === 0) return;
     this.filters.value = next;
     void this.reset({ limit: this.#query.limit, sort: this.#query.sort });
-  }
-
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
   }
 
   /* ── Cells ──────────────────────────────────────────────────────────────── */

@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
 import { dt, num } from '@core/localization/i18n.js';
@@ -19,49 +19,32 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
  * wrong in every language but the one it was written in.
  */
 export class EmployeeDocumentsTab extends SignalElement {
-  rows = signal(/** @type {readonly EmployeeDocument[]} */ ([]));
-  failed = signal(false);
-  loaded = signal(false);
+  #documents = resource(
+    (signal) =>
+      inject(PEOPLE_SERVICE)
+        .documents(routeParams.value.id ?? '', signal)
+        .then((result) => result.rows),
+    { initial: /** @type {EmployeeDocument[]} */ ([]), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
-
-  get pending() {
-    return !this.loaded.value && !this.failed.value;
-  }
+  pending = this.#documents.pending;
+  failed = this.#documents.failed;
 
   get documents() {
-    return this.rows.value;
+    return this.#documents.value.value;
   }
 
   onMount() {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    const id = routeParams.value.id ?? '';
-    if (id === '') return;
-
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(PEOPLE_SERVICE).documents(id, request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-      this.loaded.value = true;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  /**
+   * Mounted before the route parameter exists — a tab rendered by a layout whose own
+   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
+   * true, which is what the screen should be showing.
+   */
+  load() {
+    return (routeParams.value.id ?? '') === '' ? undefined : this.#documents.reload();
   }
 
   /** @param {EmployeeDocument} document */

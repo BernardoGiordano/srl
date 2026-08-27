@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { num, t } from '@core/localization/i18n.js';
 
@@ -20,40 +20,21 @@ import { INVENTORY_SERVICE } from '../../services/inventory-service.js';
  * native accessible value, which is what the div-with-a-width version throws away.
  */
 export class WarehousesPage extends SignalElement {
-  rows = signal(/** @type {readonly Warehouse[]} */ ([]));
-  failed = signal(false);
+  #warehouses = resource(
+    (signal) => inject(INVENTORY_SERVICE).warehouses(signal).then((result) => result.rows),
+    { initial: /** @type {Warehouse[]} */ ([]), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
-
-  get pending() {
-    return this.rows.value.length === 0 && !this.failed.value;
-  }
+  rows = this.#warehouses.value;
+  pending = this.#warehouses.pending;
+  failed = this.#warehouses.failed;
 
   onMount() {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(INVENTORY_SERVICE).warehouses(request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  load() {
+    return this.#warehouses.reload();
   }
 
   /** @param {Warehouse} warehouse */

@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
 import { dt, t } from '@core/localization/i18n.js';
@@ -20,61 +20,43 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
  * ticket, and `Intl.RelativeTimeFormat` produces the first in the active locale for free.
  */
 export class EmployeeProfileTab extends SignalElement {
-  employee = signal(/** @type {Employee | null} */ (null));
-  failed = signal(false);
+  #employee = resource(
+    (signal) => inject(PEOPLE_SERVICE).employee(routeParams.value.id ?? '', signal),
+    { initial: /** @type {Employee | null} */ (null), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
-
-  get pending() {
-    return this.employee.value === null && !this.failed.value;
-  }
+  pending = this.#employee.pending;
+  failed = this.#employee.failed;
 
   get hiredOn() {
-    const hiredOn = this.employee.value?.hiredOn;
+    const hiredOn = this.record?.hiredOn;
     return hiredOn === undefined ? '' : dt(hiredOn, { dateStyle: 'long' });
   }
 
   get tenure() {
-    const hiredOn = this.employee.value?.hiredOn;
+    const hiredOn = this.record?.hiredOn;
     return hiredOn === undefined ? '' : ago(hiredOn, 'year');
   }
 
   get record() {
-    return this.employee.value;
+    return this.#employee.value.value;
   }
 
   onMount() {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    const id = routeParams.value.id ?? '';
-    if (id === '') return;
-
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const employee = await inject(PEOPLE_SERVICE).employee(id, request.signal);
-      if (request.signal.aborted) return;
-      this.employee.value = employee;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  /**
+   * Mounted before the route parameter exists — a tab rendered by a layout whose own
+   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
+   * true, which is what the screen should be showing.
+   */
+  load() {
+    return (routeParams.value.id ?? '') === '' ? undefined : this.#employee.reload();
   }
 
   get statusLabel() {
-    const status = this.employee.value?.status;
+    const status = this.record?.status;
     return status === undefined ? '' : t(`people.statusValue.${status}`);
   }
 }

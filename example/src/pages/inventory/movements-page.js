@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { dt, num, t } from '@core/localization/i18n.js';
 import { UiTable } from '@components/data/ui-table.js';
@@ -30,12 +30,13 @@ import { LIVE_FEED } from '../../services/live-feed.js';
  * every consumer write the adapter.
  */
 export class MovementsPage extends SignalElement {
-  fetched = signal(/** @type {readonly Movement[]} */ ([]));
-  loading = signal(false);
-  failed = signal(false);
+  #fetched = resource(
+    (signal) => inject(INVENTORY_SERVICE).movements(120, signal).then((result) => result.rows),
+    { initial: /** @type {Movement[]} */ ([]), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
+  loading = this.#fetched.pending;
+  failed = this.#fetched.failed;
 
   /**
    * The fetched page with the streamed movements in front of it, de-duplicated by id: a
@@ -43,7 +44,7 @@ export class MovementsPage extends SignalElement {
    */
   get rows() {
     /** @type {Array<Movement | StockEvent>} */
-    const merged = [...inject(LIVE_FEED).movements.value, ...this.fetched.value];
+    const merged = [...inject(LIVE_FEED).movements.value, ...this.#fetched.value.value];
     /** @type {Set<string>} */
     const seen = new Set();
     return merged.filter((movement) => {
@@ -65,30 +66,8 @@ export class MovementsPage extends SignalElement {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.loading.value = true;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(INVENTORY_SERVICE).movements(120, request.signal);
-      if (request.signal.aborted) return;
-      this.fetched.value = result.rows;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
+  load() {
+    return this.#fetched.reload();
   }
 
   /** @param {unknown} row */

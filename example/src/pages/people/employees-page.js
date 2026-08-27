@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { computed, signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { dt, t } from '@core/localization/i18n.js';
 import { ANY_COLUMN, RANGE_SEPARATOR } from '@components/data/filter-descriptor.js';
@@ -32,9 +33,14 @@ import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
  * a support ticket.
  */
 export class EmployeesPage extends SignalElement {
-  rows = signal(/** @type {readonly Employee[]} */ ([]));
-  loading = signal(false);
-  failed = signal(false);
+  #employees = resource(
+    (signal) => inject(PEOPLE_SERVICE).employees(signal).then((result) => result.rows),
+    { initial: /** @type {Employee[]} */ ([]), lifetime: () => this.lifetime },
+  );
+
+  rows = this.#employees.value;
+  loading = this.#employees.pending;
+  failed = this.#employees.failed;
   filters = signal(/** @type {readonly FilterState[]} */ ([]));
 
   /** @type {import('@core/foundation/types.js').ReadonlySignal<readonly FilterRule[]>} */
@@ -95,37 +101,12 @@ export class EmployeesPage extends SignalElement {
     return this.#rules.value;
   }
 
-  /** @type {AbortController | undefined} */
-  #request;
-
   onMount() {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.loading.value = true;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(PEOPLE_SERVICE).employees(request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
+  load() {
+    return this.#employees.reload();
   }
 
   /** @param {Event} event */

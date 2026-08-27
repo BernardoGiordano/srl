@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { computed, signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { cur, dt, t } from '@core/localization/i18n.js';
 import { ANY_COLUMN, RANGE_SEPARATOR } from '@components/data/filter-descriptor.js';
@@ -42,10 +43,29 @@ import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
  *     as formatted currency, so `sort-value` gives the table the number to sort by.
  */
 export class OrdersPage extends SignalElement {
-  rows = signal(/** @type {readonly Order[]} */ ([]));
-  total = signal(0);
-  loading = signal(false);
-  failed = signal(false);
+  /**
+   * The query the next request will carry, and this screen's first-visit defaults.
+   *
+   * A field rather than a parameter threaded through three handlers: the table hands
+   * over a whole query per change, and the resource reads the current one on its way
+   * out — which is also what makes `retry()` one call with nothing to remember.
+   *
+   * @type {TableQuery}
+   */
+  #query = { page: 1, pageSize: 20, sort: { key: '', direction: '' }, filters: [] };
+
+  #page = resource(
+    (signal) => inject(SALES_SERVICE).searchOrders(this.#query, signal),
+    {
+      initial: { rows: /** @type {Order[]} */ ([]), total: 0 },
+      lifetime: () => this.lifetime,
+    },
+  );
+
+  rows = computed(() => this.#page.value.value.rows);
+  total = computed(() => this.#page.value.value.total);
+  loading = this.#page.pending;
+  failed = this.#page.failed;
   filters = signal(/** @type {readonly FilterState[]} */ ([]));
 
   /**
@@ -117,19 +137,13 @@ export class OrdersPage extends SignalElement {
     return this.#rules.value;
   }
 
-  /** @type {AbortController | undefined} */
-  #request;
-
-  /** @type {TableQuery | undefined} */
-  #lastQuery;
-
   onMount() {
     // The first page, from this screen's own defaults. `state-restore` fires only when there
     // is something stored, so a screen that waited for it would show an empty table on a
     // first visit — and one that ignored it would show page one to somebody who left the
     // table on page four. Both happen here: this request goes out now, and a restore that
     // arrives immediately afterwards aborts it and asks for the right page instead.
-    void this.load({ page: 1, pageSize: 20, sort: { key: '', direction: '' }, filters: [] });
+    void this.#page.reload();
   }
 
   /**
@@ -161,36 +175,13 @@ export class OrdersPage extends SignalElement {
   }
 
   retry() {
-    if (this.#lastQuery !== undefined) void this.load(this.#lastQuery);
+    return this.#page.reload();
   }
 
   /** @param {TableQuery} query */
-  async load(query) {
-    this.#lastQuery = query;
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.loading.value = true;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(SALES_SERVICE).searchOrders(query, request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-      this.total.value = result.total;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
-  }
-
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
+  load(query) {
+    this.#query = query;
+    return this.#page.reload();
   }
 
   /* ── Cell rendering ─────────────────────────────────────────────────────── */

@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
 import { cur, dt, num, t } from '@core/localization/i18n.js';
@@ -21,77 +21,67 @@ import { SALES_SERVICE } from '../../services/sales-service.js';
  * is repeated when the user moves between tabs.
  */
 export class OrderSummaryTab extends SignalElement {
-  customer = signal(/** @type {Customer | null} */ (null));
-  failed = signal(false);
+  /**
+   * An order with no customer record is a rejection, not a value. The screen has one
+   * failure notice — "no customer on this order" — and reaching it through `failed`
+   * rather than through a second signal is what keeps the template's two branches two.
+   */
+  #customer = resource(
+    async (signal) => {
+      const order = await inject(SALES_SERVICE).order(routeParams.value.id ?? '', signal);
+      if (order.customerDetail === null) throw new Error('The order carries no customer record.');
+      return order.customerDetail;
+    },
+    { initial: /** @type {Customer | null} */ (null), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
-
-  get pending() {
-    return this.customer.value === null && !this.failed.value;
-  }
+  pending = this.#customer.pending;
+  failed = this.#customer.failed;
 
   get name() {
-    return this.customer.value?.name ?? '';
+    return this.#customer.value.value?.name ?? '';
   }
 
   get segmentLabel() {
-    const segment = this.customer.value?.segment;
+    const segment = this.#customer.value.value?.segment;
     return segment === undefined ? '' : t(`customers.segmentValue.${segment}`);
   }
 
   get since() {
-    const since = this.customer.value?.since;
+    const since = this.#customer.value.value?.since;
     return since === undefined ? '' : dt(since, { dateStyle: 'medium' });
   }
 
   get revenue() {
-    const customer = this.customer.value;
+    const customer = this.#customer.value.value;
     return customer === null ? '' : cur(customer.revenue, 'EUR');
   }
 
   get openOrders() {
-    const customer = this.customer.value;
+    const customer = this.#customer.value.value;
     return customer === null ? '' : num(customer.openOrders);
   }
 
   get location() {
-    const customer = this.customer.value;
+    const customer = this.#customer.value.value;
     return customer === null ? '' : `${customer.city}, ${customer.country}`;
   }
 
   get owner() {
-    return this.customer.value?.owner ?? '';
+    return this.#customer.value.value?.owner ?? '';
   }
 
   onMount() {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    const id = routeParams.value.id ?? '';
-    if (id === '') return;
-
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const order = await inject(SALES_SERVICE).order(id, request.signal);
-      if (request.signal.aborted) return;
-      this.customer.value = order.customerDetail;
-      this.failed.value = order.customerDetail === null;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  /**
+   * Mounted before the route parameter exists — a tab rendered by a layout whose own
+   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
+   * true, which is what the screen should be showing.
+   */
+  load() {
+    return (routeParams.value.id ?? '') === '' ? undefined : this.#customer.reload();
   }
 }
 

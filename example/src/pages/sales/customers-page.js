@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { computed, signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { navigate } from '@core/navigation/router.js';
 import { cur, dt, num, t } from '@core/localization/i18n.js';
@@ -33,14 +34,16 @@ import { SALES_SERVICE } from '../../services/sales-service.js';
  * selecting *enterprise* in a list that also held *pre-enterprise* would match both.
  */
 export class CustomersPage extends SignalElement {
-  rows = signal(/** @type {readonly Customer[]} */ ([]));
-  loading = signal(false);
-  failed = signal(false);
+  #customers = resource(
+    (signal) => inject(SALES_SERVICE).customers(signal).then((result) => result.rows),
+    { initial: /** @type {Customer[]} */ ([]), lifetime: () => this.lifetime },
+  );
+
+  rows = this.#customers.value;
+  loading = this.#customers.pending;
+  failed = this.#customers.failed;
   search = signal('');
   segments = signal(/** @type {readonly unknown[]} */ ([]));
-
-  /** @type {AbortController | undefined} */
-  #request;
 
   /**
    * The options, translated. A computed signal so a language change relabels them
@@ -103,30 +106,8 @@ export class CustomersPage extends SignalElement {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.loading.value = true;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(SALES_SERVICE).customers(request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
+  load() {
+    return this.#customers.reload();
   }
 
   /** @param {unknown} row */

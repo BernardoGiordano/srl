@@ -2,6 +2,7 @@ import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { ComponentOutlet } from '@core/elements/outlet.js';
 import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { dt, t } from '@core/localization/i18n.js';
 
@@ -25,12 +26,18 @@ import { SALES_SERVICE } from '../services/sales-service.js';
  *  - **the panel is hot-swapped by a signal.** `[.target]="&panel"` hands the outlet the
  *    signal itself, so choosing a panel mounts a module that was never fetched before
  *    and re-renders nothing in this component.
- *  - **one request, one abort.** `onDestroy` aborts, so navigating away during a slow
- *    request does not write into an element that has left the document.
+ *  - **one request, and nothing to tear down.** The summary is a `resource` bound to
+ *    this element's lifetime, so navigating away during a slow request aborts it and
+ *    `onDestroy` has nothing to write.
  */
 export class DashboardPage extends SignalElement {
-  summary = signal(/** @type {DashboardSummary | null} */ (null));
-  failed = signal(false);
+  #summary = resource(
+    (signal) => inject(SALES_SERVICE).dashboard(signal),
+    { initial: /** @type {DashboardSummary | null} */ (null), lifetime: () => this.lifetime },
+  );
+
+  pending = this.#summary.pending;
+  failed = this.#summary.failed;
 
   /**
    * Which panel `<x-outlet>` shows. Public because the template passes the signal
@@ -65,23 +72,16 @@ export class DashboardPage extends SignalElement {
     },
   ];
 
-  /** @type {AbortController | undefined} */
-  #request;
-
   get kpis() {
-    return this.summary.value?.kpis ?? [];
+    return this.#summary.value.value?.kpis ?? [];
   }
 
   get alerts() {
-    return this.summary.value?.alerts ?? [];
-  }
-
-  get pending() {
-    return this.summary.value === null && !this.failed.value;
+    return this.#summary.value.value?.alerts ?? [];
   }
 
   get generatedAt() {
-    const at = this.summary.value?.generatedAt;
+    const at = this.#summary.value.value?.generatedAt;
     return at === undefined ? '' : t('dashboard.generatedAt', { time: dt(at, { timeStyle: 'medium' }) });
   }
 
@@ -119,27 +119,8 @@ export class DashboardPage extends SignalElement {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const summary = await inject(SALES_SERVICE).dashboard(request.signal);
-      if (request.signal.aborted) return;
-      this.summary.value = summary;
-    } catch (cause) {
-      if (!request.signal.aborted) this.failed.value = true;
-      if (!(cause instanceof Error)) throw cause;
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  load() {
+    return this.#summary.reload();
   }
 }
 

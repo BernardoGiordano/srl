@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **`resource()`: one asynchronous read whose latest call wins.**
+  `@core/foundation/resource.js` is new, and it is the primitive the twenty screens in
+  `example/` were each hand-rolling: an `AbortController` field, abort-the-previous on
+  entry, an `aborted` check after the await, a `failed` signal, and a `finally` that only
+  clears state if the request it belongs to is still the current one. Forty `abort()` calls
+  across twenty files, and copies that had already drifted over when `failed` is cleared and
+  whether a screen keeps its record on failure.
+  `resource(load, { initial, lifetime })` returns `{ value, pending, failed, reload }` —
+  three signals a template binds and one method. `reload()` aborts the request in flight and
+  drops a response that arrives for an aborted one; `lifetime: () => this.lifetime` aborts
+  with the component, so `onDestroy` has nothing to write; the loader runs untracked, so
+  reloading from an `effect` over `routeParams` subscribes that effect to nothing the request
+  read. It does not track its loader's reads the way Angular's `resource()` does — a table
+  emits one `query-change` for a page, size, sort and filter change together, and four
+  triggers would be four requests — and it is not a cache
+  ([ADR-0076](docs/adr/0076-an-asynchronous-read-is-a-resource.md)).
+
 - **One application origin, published, and the four servers are adapters over it.** Serving
   an srl application — resolving a URL through an ordered mount table, refusing a path that
   climbs out of its mount, answering a directory with its `index.html`, falling back to the

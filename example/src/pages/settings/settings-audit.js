@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { dt, t } from '@core/localization/i18n.js';
 
@@ -24,45 +24,24 @@ import { ADMIN_SERVICE } from '../../services/admin-service.js';
  * have sent it in one language.
  */
 export class SettingsAudit extends SignalElement {
-  rows = signal(/** @type {readonly AuditEntry[]} */ ([]));
-  loading = signal(false);
-  failed = signal(false);
+  #audit = resource(
+    (signal) => inject(ADMIN_SERVICE).audit(60, signal).then((result) => result.rows),
+    { initial: /** @type {AuditEntry[]} */ ([]), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
+  loading = this.#audit.pending;
+  failed = this.#audit.failed;
 
   get entries() {
-    return this.rows.value;
+    return this.#audit.value.value;
   }
 
   onMount() {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.loading.value = true;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(ADMIN_SERVICE).audit(60, request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
+  load() {
+    return this.#audit.reload();
   }
 
   /**

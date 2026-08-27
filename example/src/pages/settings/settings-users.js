@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { dt, t } from '@core/localization/i18n.js';
 import { AUTH_SESSION } from '@auth/session.js';
@@ -30,20 +31,23 @@ import { ApiError } from '@core/http/client.js';
  * that follows is "it works for me". The server enforces the scope regardless — a 403
  * comes back with `insufficient_scope` and lands in the notice above the table.
  *
- * The row is replaced with what the server returned rather than patched locally. Optimistic
- * updates are a legitimate choice, but they need a rollback path, and this screen's write
- * is one field on one row: the round trip is cheaper than the machinery.
+ * The list is re-read after a write rather than patched locally. Optimistic updates are a
+ * legitimate choice, but they need a rollback path, and this screen's write is one field on
+ * one row: two round trips are cheaper than the machinery, and the rows belong to the
+ * resource — a screen that reached in to edit them would own a second copy of the list.
  */
 export class SettingsUsers extends SignalElement {
-  rows = signal(/** @type {readonly AccountUser[]} */ ([]));
-  loading = signal(false);
-  failed = signal(false);
+  #users = resource(
+    (signal) => inject(ADMIN_SERVICE).users(signal).then((result) => result.rows),
+    { initial: /** @type {AccountUser[]} */ ([]), lifetime: () => this.lifetime },
+  );
+
+  rows = this.#users.value;
+  loading = this.#users.pending;
+  failed = this.#users.failed;
   /** Id of the row currently being written, or the empty string. */
   saving = signal('');
   errorKey = signal('');
-
-  /** @type {AbortController | undefined} */
-  #request;
 
   get canWrite() {
     return inject(AUTH_SESSION).scopes.value.includes('users:write');
@@ -57,30 +61,8 @@ export class SettingsUsers extends SignalElement {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.loading.value = true;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(ADMIN_SERVICE).users(request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
+  load() {
+    return this.#users.reload();
   }
 
   /** @param {AccountUser} user */
@@ -93,11 +75,7 @@ export class SettingsUsers extends SignalElement {
 
     void inject(ADMIN_SERVICE)
       .setUserStatus(user.id, next)
-      .then((updated) => {
-        this.rows.value = this.rows.value.map((row) =>
-          row.id === updated.id ? { ...row, status: updated.status } : row,
-        );
-      })
+      .then(() => this.#users.reload())
       .catch((cause) => {
         this.errorKey.value =
           cause instanceof ApiError && cause.forbidden ? 'settings.writeForbidden' : 'common.saveFailed';

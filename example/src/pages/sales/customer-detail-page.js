@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { computed, effect, signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { navigate, queryParams, routeParams } from '@core/navigation/router.js';
 import { t } from '@core/localization/i18n.js';
@@ -99,8 +100,20 @@ export class CustomerDetailPage extends SignalElement {
     ),
   });
 
-  loading = signal(false);
-  failed = signal(false);
+  #customer = resource(
+    (signal) => inject(SALES_SERVICE).customer(routeParams.value.id ?? '', signal),
+    { initial: /** @type {Customer | null} */ (null), lifetime: () => this.lifetime },
+  );
+
+  /**
+   * `/sales/customers/new` has nothing to read, so the resource is never asked and its
+   * own `pending` stays true — which is the right answer for a screen waiting on a
+   * record and the wrong one for a screen creating one. The mode is what tells them
+   * apart, and this is the only place that has to know.
+   */
+  loading = computed(() => this.customerId !== '' && this.#customer.pending.value);
+
+  failed = this.#customer.failed;
   saving = signal(false);
 
   /** The name the customer was loaded under. What view mode is a heading for. */
@@ -114,9 +127,6 @@ export class CustomerDetailPage extends SignalElement {
 
   /** Resolves once the user answers the discard prompt. Absent when it is closed. */
   #pendingLeave = signal(/** @type {((allowed: boolean) => void) | null} */ (null));
-
-  /** @type {AbortController | undefined} */
-  #request;
 
   /** @type {(() => void) | undefined} */
   #stopWatching;
@@ -352,7 +362,7 @@ export class CustomerDetailPage extends SignalElement {
       if (id === '') {
         this.form.reset();
         this.loadedName.value = '';
-      } else void this.load(id);
+      } else void this.load();
     });
 
     this.#beforeUnload = (event) => {
@@ -367,8 +377,6 @@ export class CustomerDetailPage extends SignalElement {
     this.#stopWatching = undefined;
     this.#stopMode?.();
     this.#stopMode = undefined;
-    this.#request?.abort();
-    this.#request = undefined;
     if (this.#beforeUnload !== undefined) globalThis.removeEventListener('beforeunload', this.#beforeUnload);
     this.#beforeUnload = undefined;
     // A prompt left open would leave the router's guard awaiting a promise
@@ -412,31 +420,24 @@ export class CustomerDetailPage extends SignalElement {
   /* ── Loading ────────────────────────────────────────────────────────────── */
 
   retry() {
-    if (this.customerId !== '') void this.load(this.customerId);
+    return this.load();
   }
 
-  /** @param {string} id */
-  async load(id) {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.loading.value = true;
-    this.failed.value = false;
+  /**
+   * The one load whose result is not what the screen renders: the fields are the form's,
+   * so a settled value is applied to it rather than bound. `reload()` hands the value
+   * back for exactly this, and `undefined` means the request was superseded, aborted or
+   * rejected — all three of which the resource has already recorded.
+   */
+  async load() {
+    if (this.customerId === '') return;
 
-    try {
-      const customer = await inject(SALES_SERVICE).customer(id, request.signal);
-      if (request.signal.aborted) return;
-      this.form.reset(toValues(customer));
-      this.loadedName.value = customer.name;
-      this.saveErrorKey.value = '';
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) {
-        this.loading.value = false;
-        this.#request = undefined;
-      }
-    }
+    const customer = await this.#customer.reload();
+    if (customer === undefined || customer === null) return;
+
+    this.form.reset(toValues(customer));
+    this.loadedName.value = customer.name;
+    this.saveErrorKey.value = '';
   }
 
   async #loadCountries() {

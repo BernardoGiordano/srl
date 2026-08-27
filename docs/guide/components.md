@@ -100,3 +100,61 @@ and writes it back through the accessor on connect.
 **A component's template surface shares a namespace with `HTMLElement`.** `id`,
 `title`, `hidden`, `lang` and `children` are taken. tsc reports the collision, so it is
 a compile-time annoyance rather than a runtime bug.
+
+## Reading one asynchronous thing
+
+A screen that fetches gets `resource()`, not an `AbortController`:
+
+```js
+import { resource } from '@core/foundation/resource.js';
+
+export class OrdersPage extends SignalElement {
+  /** @type {TableQuery} */
+  #query = { page: 1, pageSize: 20, sort: { key: '', direction: '' }, filters: [] };
+
+  #page = resource((signal) => inject(SALES_SERVICE).searchOrders(this.#query, signal), {
+    initial: { rows: [], total: 0 },
+    lifetime: () => this.lifetime,
+  });
+
+  rows = computed(() => this.#page.value.value.rows);
+  loading = this.#page.pending;      // a signal; the template unwraps it
+  failed = this.#page.failed;
+
+  onMount() {
+    void this.#page.reload();
+  }
+
+  /** @param {TableQuery} query */
+  load(query) {
+    this.#query = query;
+    return this.#page.reload();
+  }
+}
+```
+
+- **`reload()` aborts the request in flight.** The response of a superseded request is
+  dropped rather than written, which is what stops the slowest answer from winning a
+  screen where the user paged twice while typing in a filter.
+- **The inputs are read inside the loader, and the reload is the event.** `#query` is a
+  field, not a parameter threaded through three handlers, and `retry()` is
+  `this.#page.reload()` with nothing to remember. The loader runs untracked, so calling
+  `reload()` from an `effect` over `routeParams` subscribes that effect to nothing the
+  request happened to read.
+- **`initial` is required, and `pending` starts true.** Both exist so the first paint —
+  which happens before `onMount` — has something to bind and shows the loading state
+  rather than an empty one.
+- **`lifetime: () => this.lifetime`, as a function.** `SignalElement` builds a new
+  lifetime signal after every re-attach; a captured one would be permanently aborted
+  after a DOM move. Given it, `onDestroy` has nothing to write.
+- **`failed` is a boolean, and a failed reload keeps the last value.** A screen that
+  needs the server's error code catches inside its own loader and returns a value
+  carrying it. A screen that must not show a stale record under a failure notice — a
+  detail header — reads `null` while `failed`, in a getter of its own.
+- **`reload()` also resolves with the value**, or `undefined` when the request was
+  superseded, aborted or rejected. That is the path for a load whose result is not what
+  the screen binds: applying a record to a `group()`, or appending a window to rows the
+  screen accumulates itself.
+
+It is not a cache and not a store: no keying, no deduplication, no
+stale-while-revalidate. One value, one latest call. ADR-0076.

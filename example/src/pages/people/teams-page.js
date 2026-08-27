@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { num, t } from '@core/localization/i18n.js';
 import { UiAvatar } from '@components/shell/ui-avatar.js';
@@ -21,44 +21,24 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
  * with a label.
  */
 export class TeamsPage extends SignalElement {
-  rows = signal(/** @type {readonly Team[]} */ ([]));
-  failed = signal(false);
+  #teams = resource(
+    (signal) => inject(PEOPLE_SERVICE).teams(signal).then((result) => result.rows),
+    { initial: /** @type {Team[]} */ ([]), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
-
-  get pending() {
-    return this.rows.value.length === 0 && !this.failed.value;
-  }
+  pending = this.#teams.pending;
+  failed = this.#teams.failed;
 
   get teams() {
-    return this.rows.value;
+    return this.#teams.value.value;
   }
 
   onMount() {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(PEOPLE_SERVICE).teams(request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  load() {
+    return this.#teams.reload();
   }
 
   /** @param {Team} team */
@@ -68,7 +48,7 @@ export class TeamsPage extends SignalElement {
 
   /** @param {Team} team */
   share(team) {
-    const total = this.rows.value.reduce((sum, candidate) => sum + candidate.headcount, 0);
+    const total = this.teams.reduce((sum, candidate) => sum + candidate.headcount, 0);
     return total === 0 ? '' : num(team.headcount / total, { style: 'percent', maximumFractionDigits: 0 });
   }
 }

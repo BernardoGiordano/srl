@@ -10,6 +10,7 @@
 | `imports: [...]` | `uses: [UiCard]` in the component's definition |
 | `inject()` / providers | `@core/foundation/inject.js`, root scope only |
 | `DestroyRef` | `this.lifetime`, a DOM `AbortSignal` |
+| `resource()` / `rxResource()` | `resource()`, `@core/foundation/resource.js` — reloaded by a call rather than by tracking its loader's reads |
 | `ngOnInit` / `ngOnDestroy` | `onMount()` / `onDestroy()` |
 | `ng-content` / `<slot>` | `<x-content>`, `@core/elements/projection.js` |
 | `NgComponentOutlet` | `<x-outlet>`, driven by a signal |

@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
 import { dt, num, t } from '@core/localization/i18n.js';
@@ -20,49 +20,32 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
  * the point.
  */
 export class EmployeeContractsTab extends SignalElement {
-  rows = signal(/** @type {readonly Contract[]} */ ([]));
-  failed = signal(false);
-  loaded = signal(false);
+  #contracts = resource(
+    (signal) =>
+      inject(PEOPLE_SERVICE)
+        .contracts(routeParams.value.id ?? '', signal)
+        .then((result) => result.rows),
+    { initial: /** @type {Contract[]} */ ([]), lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
-
-  get pending() {
-    return !this.loaded.value && !this.failed.value;
-  }
+  pending = this.#contracts.pending;
+  failed = this.#contracts.failed;
 
   get contracts() {
-    return this.rows.value;
+    return this.#contracts.value.value;
   }
 
   onMount() {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    const id = routeParams.value.id ?? '';
-    if (id === '') return;
-
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const result = await inject(PEOPLE_SERVICE).contracts(id, request.signal);
-      if (request.signal.aborted) return;
-      this.rows.value = result.rows;
-      this.loaded.value = true;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  /**
+   * Mounted before the route parameter exists — a tab rendered by a layout whose own
+   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
+   * true, which is what the screen should be showing.
+   */
+  load() {
+    return (routeParams.value.id ?? '') === '' ? undefined : this.#contracts.reload();
   }
 
   /** @param {Contract} contract */

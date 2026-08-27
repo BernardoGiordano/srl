@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { computed, effect, signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { RouteOutlet, routeParams } from '@core/navigation/router.js';
 import { cur, dt, t } from '@core/localization/i18n.js';
@@ -42,14 +43,19 @@ import { ApiError } from '@core/http/client.js';
  * `example/server/api.mjs` — and a 403 is shown rather than swallowed.
  */
 export class OrderDetailPage extends SignalElement {
-  order = signal(/** @type {(Order & { customerDetail: Customer | null }) | null} */ (null));
-  failed = signal(false);
+  #order = resource(
+    (signal) => inject(SALES_SERVICE).order(routeParams.value.id ?? '', signal),
+    {
+      initial: /** @type {(Order & { customerDetail: Customer | null }) | null} */ (null),
+      lifetime: () => this.lifetime,
+    },
+  );
+
+  pending = this.#order.pending;
+  failed = this.#order.failed;
   saving = signal(false);
   /** Message key of a failed write, or the empty string. */
   writeErrorKey = signal('');
-
-  /** @type {AbortController | undefined} */
-  #request;
 
   /** @type {(() => void) | undefined} */
   #stopWatching;
@@ -58,16 +64,21 @@ export class OrderDetailPage extends SignalElement {
     return routeParams.value.id ?? '';
   }
 
-  get pending() {
-    return this.order.value === null && !this.failed.value;
+  /**
+   * The record, or nothing while the last load is failing. A resource keeps the value
+   * it had, which is right for a list being refreshed and wrong for a header: the
+   * previous order's code under a "not found" notice is a worse answer than none.
+   */
+  get record() {
+    return this.failed.value ? null : this.#order.value.value;
   }
 
   get code() {
-    return this.order.value?.code ?? this.orderId;
+    return this.record?.code ?? this.orderId;
   }
 
   get status() {
-    return this.order.value?.status ?? '';
+    return this.record?.status ?? '';
   }
 
   get statusLabel() {
@@ -89,7 +100,7 @@ export class OrderDetailPage extends SignalElement {
   }
 
   get customerName() {
-    return this.order.value?.customer ?? '';
+    return this.record?.customer ?? '';
   }
 
   get customerLink() {
@@ -97,26 +108,26 @@ export class OrderDetailPage extends SignalElement {
   }
 
   get total() {
-    const order = this.order.value;
+    const order = this.record;
     return order === null ? '' : cur(order.total, order.currency);
   }
 
   get placedOn() {
-    const order = this.order.value;
+    const order = this.record;
     return order === null ? '' : dt(order.placedOn, { dateStyle: 'long' });
   }
 
   get promisedOn() {
-    const order = this.order.value;
+    const order = this.record;
     return order === null ? '' : dt(order.promisedOn, { dateStyle: 'long' });
   }
 
   get comune() {
-    return this.order.value?.comune ?? '';
+    return this.record?.comune ?? '';
   }
 
   get owner() {
-    return this.order.value?.owner ?? '';
+    return this.record?.owner ?? '';
   }
 
   /** The next status in the workflow, or the empty string at the end of it. */
@@ -178,41 +189,23 @@ export class OrderDetailPage extends SignalElement {
       const id = this.orderId;
       if (id === '' || id === previous) return;
       previous = id;
-      void this.load(id);
+      void this.load();
     });
   }
 
   onDestroy() {
     this.#stopWatching?.();
     this.#stopWatching = undefined;
-    this.#request?.abort();
-    this.#request = undefined;
   }
 
   retry() {
-    if (this.orderId !== '') void this.load(this.orderId);
+    return this.load();
   }
 
-  /** @param {string} id */
-  async load(id) {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
+  load() {
+    if (this.orderId === '') return undefined;
     this.writeErrorKey.value = '';
-
-    try {
-      const order = await inject(SALES_SERVICE).order(id, request.signal);
-      if (request.signal.aborted) return;
-      this.order.value = order;
-    } catch {
-      if (!request.signal.aborted) {
-        this.order.value = null;
-        this.failed.value = true;
-      }
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+    return this.#order.reload();
   }
 
   advance() {
@@ -224,12 +217,10 @@ export class OrderDetailPage extends SignalElement {
 
     void inject(SALES_SERVICE)
       .setOrderStatus(this.orderId, next)
-      .then((order) => {
-        // The server is the authority on what the order now is, so the response
-        // replaces the row rather than this screen patching its own copy.
-        const current = this.order.value;
-        this.order.value = current === null ? null : { ...current, ...order };
-      })
+      // The server is the authority on what the order now is, and the order belongs to
+      // the resource: re-reading it is one request, and cheaper than this screen owning
+      // a second copy of the record to patch.
+      .then(() => this.load())
       .catch((cause) => {
         this.writeErrorKey.value =
           cause instanceof ApiError && cause.forbidden ? 'orders.writeForbidden' : 'common.saveFailed';

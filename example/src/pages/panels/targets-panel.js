@@ -1,6 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { signal } from '@core/foundation/reactive.js';
+import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { cur, num, t } from '@core/localization/i18n.js';
 
@@ -19,24 +19,29 @@ import { SALES_SERVICE } from '../../services/sales-service.js';
  * accessible value, and styling it costs less than reimplementing what it announces.
  */
 export class TargetsPanel extends SignalElement {
-  attained = signal(0);
-  value = signal(0);
-  currency = signal('EUR');
-  failed = signal(false);
+  #quarter = resource(
+    (signal) => inject(SALES_SERVICE).dashboard(signal).then((summary) => summary.targets.quarter),
+    { initial: { attained: 0, value: 0, currency: 'EUR' }, lifetime: () => this.lifetime },
+  );
 
-  /** @type {AbortController | undefined} */
-  #request;
+  failed = this.#quarter.failed;
+
+  get attained() {
+    return this.#quarter.value.value.attained;
+  }
 
   get percent() {
-    return num(this.attained.value, { style: 'percent', maximumFractionDigits: 1 });
+    return num(this.attained, { style: 'percent', maximumFractionDigits: 1 });
   }
 
   get amount() {
-    return cur(this.value.value, this.currency.value);
+    const quarter = this.#quarter.value.value;
+    return cur(quarter.value, quarter.currency);
   }
 
   get attainedAmount() {
-    return cur(this.value.value * this.attained.value, this.currency.value);
+    const quarter = this.#quarter.value.value;
+    return cur(quarter.value * quarter.attained, quarter.currency);
   }
 
   get caption() {
@@ -47,28 +52,8 @@ export class TargetsPanel extends SignalElement {
     void this.load();
   }
 
-  onDestroy() {
-    this.#request?.abort();
-    this.#request = undefined;
-  }
-
-  async load() {
-    this.#request?.abort();
-    const request = new AbortController();
-    this.#request = request;
-    this.failed.value = false;
-
-    try {
-      const summary = await inject(SALES_SERVICE).dashboard(request.signal);
-      if (request.signal.aborted) return;
-      this.attained.value = summary.targets.quarter.attained;
-      this.value.value = summary.targets.quarter.value;
-      this.currency.value = summary.targets.quarter.currency;
-    } catch {
-      if (!request.signal.aborted) this.failed.value = true;
-    } finally {
-      if (this.#request === request) this.#request = undefined;
-    }
+  load() {
+    return this.#quarter.reload();
   }
 }
 
