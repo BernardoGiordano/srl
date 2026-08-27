@@ -1,0 +1,227 @@
+name: deploy the example
+
+# The example is deployed the way it is developed: as source. There is no build
+# step here and no bundler — index.html, src/, i18n/, remotes/ and the two library
+# mounts are rsynced as committed, and the browser loads the same files a clone
+# serves. What deploy.local.sh does from a laptop, this does from a push, and the
+# shape both push is documented in docs/guide/delivery.md.
+#
+# It hangs off the `check` workflow rather than off the push, so nothing reaches the
+# server that `npm run check` has not already passed: the two failures that show up
+# as a blank page rather than as a build error — an import map that omits a
+# specifier, a component template that does not exist — are what `npm run verify`
+# inside that command catches, and re-running the whole suite here would only make
+# every deploy pay for it twice.
+on:
+  workflow_run:
+    workflows: [check]
+    types: [completed]
+    branches: [main]
+  # A manual redeploy, of whatever main currently holds. Deliberately not gated on
+  # `check`: it is a human asking for the tree to be pushed again, usually after
+  # something on the server changed rather than something in the repository.
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-example
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # The web root, and — because the API process is started from inside it by
+  # supervisor — the application root too:
+  #
+  #   command=… node /home/ubuntu/www/srlexample/server/server.mjs --port 8100 --api-only
+  #
+  # nginx serves this directory, proxies /auth and /api to 8100 on the site's own
+  # hostname, and the two have to be one origin: the session cookie is HttpOnly and
+  # same-site, so a second port or a second host signs every visitor out.
+  REMOTE_DIR: /home/ubuntu/www/srlexample
+  APP: example
+  SITE: https://srl-example.santella.dev
+  API_PORT: '8100'
+  PROGRAM: srlexample
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # `workflow_run` fires on every conclusion, cancelled and failed included, so the
+    # gate is here rather than in the trigger. A dispatch has no workflow_run to read.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      # The commit that passed `check`, not whatever main points at now: a
+      # workflow_run job checks out the default branch unless it is told otherwise,
+      # which on a busy branch is a different tree from the one that was verified.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      # For `node cli/layout.mjs` below, and nothing else. No `npm ci`: the deployed
+      # tree has no dependencies to install — the browser's three come from
+      # source/lib/vendor, which is committed, and the server is zero-dependency
+      # Node — so this job never builds anything and never needs node_modules.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Written into the application directory because that directory becomes the web
+      # root. Nothing in the application reads it; it exists so that
+      # `curl https://srl-example.santella.dev/build.json` answers "which commit is
+      # actually up there", which is the question you have when a demo behaves
+      # unexpectedly. Gitignored, hence generated here. UTC, unlike the local script.
+      - name: Stamp the build
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          printf '{"buildDate": "%s", "gitCommit": "%s", "app": "%s"}\n' \
+            "$(date -u +'%Y%m%d-%H%M')" "$SHA" "$APP" > "$APP/build.json"
+          echo "SHA=$SHA" >> "$GITHUB_ENV"
+          cat "$APP/build.json"
+
+      # The mount table, from the one place that holds it: "<source dir> <remote
+      # subdir>" per line. cli/dev/serve.mjs and web-test-runner.config.mjs read the
+      # same table, so /lib/ and /components/ are not spelled out in this file at all
+      # and a mount added there is deployed here with no edit. Zero dependencies,
+      # which is why it runs before any install.
+      - name: Read the mount table
+        run: |
+          node cli/layout.mjs --deploy-pairs | tee mounts.txt
+
+      # Plain ssh rather than a third-party action: the whole deployment is two
+      # rsyncs and one restart, and this way the credential never leaves the job.
+      - name: Authorise
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          HOST: ${{ secrets.HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # PASS 1: the application, at the root.
+      #
+      # An allowlist, not a denylist: a denylist would leak the next dev-only
+      # directory somebody adds. rsync applies the FIRST matching rule, so the
+      # exclusions precede the include they carve out of.
+      #
+      #   index.html          the shell, import map and integrity pins
+      #   app.manifest.json   fetched on every load; remotes, i18n and auth config
+      #   app.css             absent in a clone and not built here — the deployed
+      #                       index.html links the browser Tailwind compiler, not
+      #                       this file. Listed so a deployment that switches to the
+      #                       CLI needs no edit here.
+      #   build.json          the stamp written above
+      #   src/                application code and the .html templates beside it
+      #   i18n/               en, it, ar
+      #   remotes/            the micro-frontends this application mounts
+      #   server/            the API supervisor runs, inside the web root because
+      #                       that is where its program line points
+      #
+      # Deliberately absent: test/, templates.json (an optimisation that is off), and
+      # src/app.css, which is the Tailwind *input* rather than a served file.
+      #
+      # --delete, so a file removed from the repository is removed from the server.
+      # Two things have to survive it. The mount subdirectories are owned by pass 2
+      # and are protected by rules generated from the mount table, so a mount added
+      # there is protected here without anybody remembering to add a line. And
+      # server/data/ is an application's runtime state — gitignored, never in the
+      # tree being pushed, and not something a deploy should erase.
+      - name: Push the application
+        env:
+          TARGET: ${{ secrets.USERNAME }}@${{ secrets.HOST }}
+        run: |
+          PROTECT=()
+          while read -r _ REMOTE_SUB; do
+            PROTECT+=("--filter=protect /$REMOTE_SUB/***")
+          done < mounts.txt
+
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_deploy" \
+            --rsync-path="mkdir -p $REMOTE_DIR && rsync" \
+            "${PROTECT[@]}" \
+            --filter='protect /server/data/***' \
+            --exclude='/src/app.css' \
+            --exclude='/test/***' \
+            --exclude='/templates.json' \
+            --include='/index.html' \
+            --include='/app.manifest.json' \
+            --include='/app.css' \
+            --include='/build.json' \
+            --include='/src/***' \
+            --include='/i18n/***' \
+            --include='/remotes/***' \
+            --include='/server/***' \
+            --exclude='*' \
+            "./$APP/" "$TARGET:$REMOTE_DIR/"
+
+      # PASS 2 AND ON: the library mounts, each at the URL prefix it is served under.
+      #
+      #   source/lib        -> <remote dir>/lib/         core/ auth/ host/, and
+      #                                                  vendor/: lit, signals-core,
+      #                                                  tailwind-browser, all
+      #                                                  integrity-checked
+      #   source/components -> <remote dir>/components/  the shared collection
+      #
+      # That is not a server rewrite, it is a directory layout: each source directory
+      # is copied to the place its URL already points at, so nginx needs no alias for
+      # them and the deployed tree is a plain static folder.
+      #
+      # Absent from every pass: test/, README.md, and core/types.d.ts (types, never
+      # fetched). One exclude list for all mounts, so a new mount inherits the rule
+      # instead of shipping its own tests. A mount with no .js in it is skipped
+      # rather than rsynced empty, which is what source/components was for most of
+      # this repository's life.
+      - name: Push the library mounts
+        env:
+          TARGET: ${{ secrets.USERNAME }}@${{ secrets.HOST }}
+        run: |
+          while read -r LOCAL_DIR REMOTE_SUB; do
+            if ! compgen -G "./$LOCAL_DIR/*.js" > /dev/null && ! compgen -G "./$LOCAL_DIR/*/*.js" > /dev/null; then
+              echo "$LOCAL_DIR holds no JavaScript yet, skipping."
+              continue
+            fi
+            rsync -az --delete \
+              -e "ssh -i ~/.ssh/id_deploy" \
+              --rsync-path="mkdir -p $REMOTE_DIR/$REMOTE_SUB && rsync" \
+              --exclude='/test/***' \
+              --exclude='/README.md' \
+              --exclude='/core/types.d.ts' \
+              "./$LOCAL_DIR/" "$TARGET:$REMOTE_DIR/$REMOTE_SUB/"
+          done < mounts.txt
+
+      # The API is a long-lived process reading files that pass 1 just replaced, so it
+      # restarts after the push rather than before it. supervisor owns it:
+      # `[program:srlexample]`, `--api-only` so it never imports cli/layout.mjs (a
+      # development directory the deployed tree omits, and a startup crash if
+      # imported), stopasgroup and killasgroup so the event-stream connections go with
+      # it. The static tree needs no restart; nginx picks up files as they land.
+      - name: Restart the API
+        env:
+          TARGET: ${{ secrets.USERNAME }}@${{ secrets.HOST }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$TARGET" \
+            "sudo supervisorctl restart $PROGRAM && sudo supervisorctl status $PROGRAM"
+
+      # Three questions, and each has one decisive answer.
+      #
+      # Did the bytes land: the stamp on the server names this commit.
+      # Is the API up: /auth/session with no cookie is 401 by design — the BFF
+      # answering "no session" is the process answering at all, where a 000 is a
+      # process that did not come back and a 404 is --api-only reaching the fallback.
+      # Is the site served: nginx returns the page over TLS.
+      - name: Verify
+        env:
+          TARGET: ${{ secrets.USERNAME }}@${{ secrets.HOST }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$TARGET" \
+            bash -euo pipefail -s -- "$REMOTE_DIR" "$SHA" "$API_PORT" <<'REMOTE'
+            test -f "$1/index.html"
+            grep -q "$2" "$1/build.json" || { echo "build.json is not $2:"; cat "$1/build.json"; exit 1; }
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$3/auth/session" || true)
+            test "$CODE" = 401 || { echo "the API answered $CODE on /auth/session, expected 401" >&2; exit 1; }
+            echo "api 401, tree at $2"
+          REMOTE
+          curl -fsS -o /dev/null -w "site %{http_code}\n" "$SITE/"
