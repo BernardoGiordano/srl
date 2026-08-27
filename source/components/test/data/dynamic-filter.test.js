@@ -13,14 +13,6 @@ function storedJson() {
   return present(localStorage.getItem(STATE_KEY));
 }
 
-/** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  const combobox = element.querySelector('ui-combobox');
-  if (combobox !== null) await settled(combobox);
-  await settled(element);
-}
-
 /** @returns {UiDynamicFilter} */
 function filterFixture() {
   return mount('<ui-dynamic-filter name="test-filter"></ui-dynamic-filter>');
@@ -67,7 +59,7 @@ function pointerDown(element) {
 /** @param {UiDynamicFilter} filter */
 async function openPanel(filter) {
   pointerDown(present(filter.querySelector('[data-ui-part="combobox-control"]')));
-  await ready(filter);
+  await settled(filter);
 }
 
 /** @param {UiDynamicFilter} filter @param {string} label */
@@ -76,7 +68,7 @@ async function choose(filter, label) {
     (candidate) => candidate.textContent?.trim() === label,
   );
   pointerDown(present(option, `no option labelled ${label}`));
-  await ready(filter);
+  await settled(filter);
 }
 
 /** @param {UiDynamicFilter} filter @param {string} text */
@@ -86,7 +78,7 @@ async function type(filter, text) {
   );
   input.value = text;
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  await ready(filter);
+  await settled(filter);
 }
 
 describe('ui-dynamic-filter', () => {
@@ -102,7 +94,7 @@ describe('ui-dynamic-filter', () => {
   it('turns rules into grouped options and emits table-ready state', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     assert.sameArray(
@@ -132,7 +124,7 @@ describe('ui-dynamic-filter', () => {
   it('holds one value per ref and releases the siblings when the chip goes', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Core');
 
@@ -148,7 +140,7 @@ describe('ui-dynamic-filter', () => {
     present(filter.querySelector('[data-ui-part="combobox-chip-remove"]')).dispatchEvent(
       new MouseEvent('click', { bubbles: true }),
     );
-    await ready(filter);
+    await settled(filter);
 
     assert.equal(filter.selection.length, 0);
     assert.equal(present(optionElements(filter)[3]).getAttribute('aria-disabled'), 'false');
@@ -157,7 +149,7 @@ describe('ui-dynamic-filter', () => {
   it('allows several values for a ref marked multiple', async () => {
     const filter = filterFixture();
     filter.rules = RULES.map((rule) => (rule.ref === 'team' ? { ...rule, multiple: true } : rule));
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     await choose(filter, 'Core');
@@ -173,11 +165,11 @@ describe('ui-dynamic-filter', () => {
   it('carries a free-text entry with its predicate and drops it on removal', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
 
     await type(filter, 'milan');
     pointerDown(present(filter.querySelector('[data-ui-part="combobox-add-tag"]')));
-    await ready(filter);
+    await settled(filter);
 
     const state = present(filter.states[0]);
     assert.equal(state.ref, 'search');
@@ -192,7 +184,7 @@ describe('ui-dynamic-filter', () => {
     present(filter.querySelector('[data-ui-part="combobox-chip-remove"]')).dispatchEvent(
       new MouseEvent('click', { bubbles: true }),
     );
-    await ready(filter);
+    await settled(filter);
 
     assert.equal(filter.states.length, 0);
     assert.notOk(
@@ -204,7 +196,7 @@ describe('ui-dynamic-filter', () => {
   it('prefixes a chip with its group', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Core');
 
@@ -217,7 +209,7 @@ describe('ui-dynamic-filter', () => {
   it('restores the selection from storage and forgets values whose option is gone', async () => {
     const first = filterFixture();
     first.rules = RULES;
-    await ready(first);
+    await settled(first);
     await openPanel(first);
     await choose(first, 'Core');
     await choose(first, 'Pending');
@@ -225,7 +217,7 @@ describe('ui-dynamic-filter', () => {
 
     const second = filterFixture();
     second.rules = RULES;
-    await ready(second);
+    await settled(second);
 
     assert.sameArray(
       second.states.map((state) => state.value),
@@ -241,7 +233,7 @@ describe('ui-dynamic-filter', () => {
     // invisible filter.
     const third = filterFixture();
     third.rules = RULES.filter((rule) => rule.ref !== 'team');
-    await ready(third);
+    await settled(third);
 
     assert.sameArray(
       third.states.map((state) => state.value),
@@ -257,7 +249,7 @@ describe('ui-dynamic-filter', () => {
   it('clears everything at once', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Core');
     await choose(filter, 'Pending');
@@ -265,7 +257,7 @@ describe('ui-dynamic-filter', () => {
     present(filter.querySelector('[data-ui-part="combobox-clear"]')).dispatchEvent(
       new MouseEvent('click', { bubbles: true }),
     );
-    await ready(filter);
+    await settled(filter);
 
     assert.equal(filter.states.length, 0);
     assert.notOk(
@@ -279,7 +271,7 @@ describe('ui-dynamic-filter', () => {
     const filter = filterFixture();
     filter.persist = false;
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Core');
 
@@ -290,7 +282,7 @@ describe('ui-dynamic-filter', () => {
   it('reloads persisted state into a live element', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Core');
     assert.equal(filter.states.length, 1);
@@ -304,7 +296,7 @@ describe('ui-dynamic-filter', () => {
       }),
     );
     filter.reload();
-    await ready(filter);
+    await settled(filter);
 
     assert.sameArray(
       filter.states.map((state) => state.value),

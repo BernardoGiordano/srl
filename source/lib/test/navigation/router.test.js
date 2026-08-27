@@ -1207,23 +1207,6 @@ describe('router attachment', () => {
       built.section = 0;
     });
 
-    /**
-     * Settle every level of the mounted chain, outermost first. A level's child
-     * only exists once that level has rendered its outlet, so the walk has to go
-     * down as it goes along.
-     *
-     * @param {Element} root
-     * @returns {Promise<void>}
-     */
-    async function settleChain(root) {
-      /** @type {Element | null} */
-      let node = root;
-      while (node !== null) {
-        await settled(node);
-        node = node.querySelector('x-route-outlet')?.firstElementChild ?? null;
-      }
-    }
-
     it('renders a child in the layout outlet and keeps the layout across siblings', async () => {
       const outlet = await startAt(
         [
@@ -1240,7 +1223,7 @@ describe('router attachment', () => {
       );
 
       const layout = present(outlet.firstElementChild);
-      await settleChain(layout);
+      await settled(layout);
       const slot = present(layout.querySelector('x-route-outlet'));
 
       assert.equal(layout.localName, 'test-shell-layout');
@@ -1248,7 +1231,7 @@ describe('router attachment', () => {
       assert.equal(slot.firstElementChild?.localName, 'test-child-a-view');
 
       await navigate('/settings/roles');
-      await settleChain(layout);
+      await settled(layout);
 
       assert.equal(outlet.firstElementChild, layout, 'the layout must not remount');
       assert.equal(built.shell, 1);
@@ -1271,7 +1254,7 @@ describe('router attachment', () => {
         ],
         '/settings',
       );
-      await settleChain(present(outlet.firstElementChild));
+      await settled(present(outlet.firstElementChild));
 
       assert.equal(outlet.querySelector('.layout')?.textContent, 'shell');
       assert.equal(outlet.querySelector('.view')?.textContent, 'child-a');
@@ -1291,7 +1274,7 @@ describe('router attachment', () => {
         ],
         '/settings',
       );
-      await settleChain(present(outlet.firstElementChild));
+      await settled(present(outlet.firstElementChild));
 
       assert.equal(location.pathname, '/settings/roles');
       assert.equal(outlet.querySelector('.view')?.textContent, 'child-b');
@@ -1309,7 +1292,7 @@ describe('router attachment', () => {
         ],
         '/orgs/acme/teams/core',
       );
-      await settleChain(present(outlet.firstElementChild));
+      await settled(present(outlet.firstElementChild));
 
       assert.equal(routeParams.value.org, 'acme');
       assert.equal(routeParams.value.team, 'core');
@@ -1337,11 +1320,11 @@ describe('router attachment', () => {
         '/a/b/one',
       );
       const shell = present(outlet.firstElementChild);
-      await settleChain(shell);
+      await settled(shell);
       const section = present(shell.querySelector('test-section-layout'));
 
       await navigate('/a/b/two');
-      await settleChain(shell);
+      await settled(shell);
 
       assert.equal(outlet.firstElementChild, shell);
       assert.equal(shell.querySelector('test-section-layout'), section);
@@ -1375,14 +1358,14 @@ describe('router attachment', () => {
         ],
         '/settings/users',
       );
-      await settleChain(present(outlet.firstElementChild));
+      await settled(present(outlet.firstElementChild));
 
       await navigate('/');
       assert.sameArray(released, ['child', 'layout'], 'a child outlives nothing it renders in');
       assert.equal(outlet.firstElementChild?.localName, 'test-home-view');
 
       await navigate('/settings/users');
-      await settleChain(present(outlet.firstElementChild));
+      await settled(present(outlet.firstElementChild));
       assert.equal(built.shell, 2, 'coming back is a fresh layout, as it is for a leaf');
     });
 
@@ -1431,7 +1414,7 @@ describe('router attachment', () => {
         ],
         '/area/page',
       );
-      await settleChain(present(outlet.firstElementChild));
+      await settled(present(outlet.firstElementChild));
 
       assert.equal(
         outlet.firstElementChild?.localName,
@@ -1458,7 +1441,7 @@ describe('router attachment', () => {
         ],
         '/settings/users',
       );
-      await settleChain(present(outlet.firstElementChild));
+      await settled(present(outlet.firstElementChild));
 
       allowed = false;
       await navigate('/settings/roles');
@@ -1479,7 +1462,7 @@ describe('router attachment', () => {
         ],
         '/docs/intro',
       );
-      await settleChain(present(outlet.firstElementChild));
+      await settled(present(outlet.firstElementChild));
 
       assert.equal(outlet.querySelector('.layout-label')?.textContent, 'templated');
       assert.equal(

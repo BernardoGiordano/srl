@@ -94,7 +94,9 @@ columns, widths and sticky positions — never rows, renderers or predicates. Ad
 `persist-filters` only when the descriptors are JSON-safe. `table.state`, `saveState()`
 and `resetState()` are the imperative API: `saveState()` writes immediately, while the
 changes the element notices itself are debounced and flushed on disconnect, so holding an
-arrow key on a resize handle is one write rather than one per keypress. `state-change`,
+arrow key on a resize handle is one write rather than one per keypress. The debounce is
+scheduled through `@core/foundation/clock.js`, so a suite reaches the far side of it with
+`clock.flush()` rather than a sleep — see [writing a test here](testing.md). `state-change`,
 `state-restore` and `column-change` expose the same lifecycle as bubbling DOM events; a
 server table issues its initial fetch from `state-restore`'s `event.detail.query`.
 

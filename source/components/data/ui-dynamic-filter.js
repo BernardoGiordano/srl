@@ -1,4 +1,5 @@
 import { html, nothing } from 'lit';
+import { schedule } from '@core/foundation/clock.js';
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { loadPreference, savePreference } from '@core/preferences/persistence.js';
@@ -73,8 +74,16 @@ const STATE_COMPONENT = 'ui-dynamic-filter';
 /** Characters a `typeahead` rule wants before it will ask the server. */
 const TYPEAHEAD_MIN_CHARS = 2;
 
-/** Quiet period after the last keystroke before typeahead searches go out. */
-export const TYPEAHEAD_DEBOUNCE_MS = 300;
+/**
+ * Quiet period after the last keystroke before typeahead searches go out.
+ *
+ * Not exported. It was, for one caller: the async suite added twenty to it and
+ * slept, because a raw `setTimeout` gave it no other way to reach the far side of
+ * the debounce. The debounce now goes through the injected clock, so the suite
+ * drains that instead and this number is nobody's business but this file's.
+ * ADR-0079.
+ */
+const TYPEAHEAD_DEBOUNCE_MS = 300;
 
 /**
  * One control holding every filter a screen offers, and the rail of chips saying
@@ -184,8 +193,13 @@ export class UiDynamicFilter extends SignalElement {
 
   #searchToken = 0;
 
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  #debounce;
+  /**
+   * The call that cancels a scheduled search, while one is scheduled. From the
+   * injected clock, not `setTimeout`. ADR-0079.
+   *
+   * @type {(() => void) | undefined}
+   */
+  #cancelSearch;
 
   /** @type {AbortController | undefined} */
   #loadController;
@@ -210,7 +224,8 @@ export class UiDynamicFilter extends SignalElement {
   }
 
   onDestroy() {
-    clearTimeout(this.#debounce);
+    this.#cancelSearch?.();
+    this.#cancelSearch = undefined;
     this.#loadController?.abort();
     this.#searchController?.abort();
   }
@@ -740,7 +755,8 @@ export class UiDynamicFilter extends SignalElement {
    * with them, for the same reason.
    */
   onPanelClose() {
-    clearTimeout(this.#debounce);
+    this.#cancelSearch?.();
+    this.#cancelSearch = undefined;
     // Cancelling the pending debounce is not enough: a search already in flight
     // would land after this and put its results straight back, so a reopened panel
     // would show the leftovers this method exists to drop. Bumping the token is
@@ -768,8 +784,11 @@ export class UiDynamicFilter extends SignalElement {
   onSearch(event) {
     const term = /** @type {CustomEvent<string>} */ (event).detail;
     if (this.#typeaheadRules.length === 0) return;
-    clearTimeout(this.#debounce);
-    this.#debounce = setTimeout(() => void this.#runSearch(term), TYPEAHEAD_DEBOUNCE_MS);
+    this.#cancelSearch?.();
+    this.#cancelSearch = schedule(() => {
+      this.#cancelSearch = undefined;
+      void this.#runSearch(term);
+    }, TYPEAHEAD_DEBOUNCE_MS);
   }
 
   get #typeaheadRules() {

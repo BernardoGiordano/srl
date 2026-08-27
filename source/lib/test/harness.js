@@ -12,6 +12,13 @@
  * need no import.
  */
 
+/**
+ * When a render is finished is not this file's rule to keep. `settled` walks the
+ * element and everything it rendered, and the router awaits the same module, so a
+ * suite and the framework cannot disagree about what "rendered" means. ADR-0079.
+ */
+export { settled } from '@core/elements/settled.js';
+
 /** @type {HTMLElement | null} */
 let container = null;
 
@@ -58,20 +65,6 @@ export function unmountAll() {
   container?.remove();
   if (container !== null) container.innerHTML = trustedFixture('');
   container = null;
-}
-
-/**
- * Wait for a Lit element's pending render to complete, then for one more
- * microtask turn so signal effects scheduled during that render have run.
- *
- * @param {Element} element
- * @returns {Promise<void>}
- */
-export async function settled(element) {
-  const updatable = /** @type {{ updateComplete?: Promise<unknown> }} */ (element);
-  await updatable.updateComplete;
-  await Promise.resolve();
-  await updatable.updateComplete;
 }
 
 /**

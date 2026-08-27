@@ -19,17 +19,11 @@ import '@components/inputs/ui-combobox.js';
  * assertion below.
  */
 
-/** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  await settled(element);
-}
-
 /** @param {HTMLElement} element */
 async function tick(element) {
-  await ready(element);
+  await settled(element);
   await new Promise((resolve) => setTimeout(resolve, 0));
-  await ready(element);
+  await settled(element);
 }
 
 describe('ui-field', () => {
@@ -47,7 +41,7 @@ describe('ui-field', () => {
     );
     const city = field('Milano');
     host.field = city;
-    await ready(host);
+    await settled(host);
 
     const input = /** @type {HTMLInputElement} */ (present(host.querySelector('input')));
     assert.equal(input.value, 'Milano', 'the field fills the control');
@@ -57,7 +51,7 @@ describe('ui-field', () => {
     assert.equal(city.value.value, 'Torino', 'and the control writes back');
 
     city.setValue('Genova');
-    await ready(host);
+    await settled(host);
     assert.equal(input.value, 'Genova', 'a value set in code reaches the control');
   });
 
@@ -65,7 +59,7 @@ describe('ui-field', () => {
     const host = /** @type {UiField} */ (mount('<ui-field label="City"><input /></ui-field>'));
     const city = field('', [required()]);
     host.field = city;
-    await ready(host);
+    await settled(host);
 
     assert.notOk(city.touched.value);
     // Capture, because blur does not bubble: a listener that waited for it to
@@ -80,7 +74,7 @@ describe('ui-field', () => {
     );
     const city = field('', [required()]);
     host.field = city;
-    await ready(host);
+    await settled(host);
 
     const input = present(host.querySelector('input'));
     assert.notOk(host.querySelector('p[role="alert"]'), 'nothing is wrong yet as far as the user is concerned');
@@ -88,7 +82,7 @@ describe('ui-field', () => {
     assert.notOk(input.hasAttribute('aria-describedby'));
 
     city.touch();
-    await ready(host);
+    await settled(host);
 
     const alert = present(host.querySelector('p[role="alert"]'), 'the error must appear');
     assert.equal(present(alert.textContent).trim(), 'Required', 'resolved from standard text, not shipped here');
@@ -103,7 +97,7 @@ describe('ui-field', () => {
     host.field = name;
     host.messages = { taken: 'Another customer already uses this.' };
     name.serverError.value = 'taken';
-    await ready(host);
+    await settled(host);
 
     assert.equal(
       present(present(host.querySelector('p[role="alert"]')).textContent).trim(),
@@ -116,7 +110,7 @@ describe('ui-field', () => {
       mount('<ui-field label="City"><input id="city-input" /></ui-field>')
     );
     host.field = field('');
-    await ready(host);
+    await settled(host);
 
     assert.equal(present(host.querySelector('label')).getAttribute('for'), 'city-input');
   });
@@ -127,13 +121,13 @@ describe('ui-field', () => {
     );
     const notes = field('', [required()]);
     host.field = notes;
-    await ready(host);
+    await settled(host);
 
     const input = present(host.querySelector('input'));
     assert.equal(input.getAttribute('aria-describedby'), 'notes-input-hint');
 
     notes.touch();
-    await ready(host);
+    await settled(host);
     assert.notOk(host.querySelector('#notes-input-hint'), 'the error takes the place of the hint');
     assert.equal(input.getAttribute('aria-describedby'), 'notes-input-error');
   });
@@ -144,19 +138,19 @@ describe('ui-field', () => {
     );
     const revenue = field('120', [required()]);
     host.field = revenue;
-    await ready(host);
+    await settled(host);
 
     const input = /** @type {HTMLInputElement} */ (present(host.querySelector('input')));
     assert.notOk(input.disabled);
     assert.notOk(host.hasAttribute('data-disabled'));
 
     revenue.setDisabled(true);
-    await ready(host);
+    await settled(host);
     assert.ok(input.disabled);
     assert.ok(host.hasAttribute('data-disabled'), 'the label and the error are this element to dim');
 
     revenue.setDisabled(false);
-    await ready(host);
+    await settled(host);
     assert.notOk(input.disabled, 'the property, not the attribute: an attribute never comes back off');
     assert.notOk(host.hasAttribute('data-disabled'));
   });
@@ -166,11 +160,11 @@ describe('ui-field', () => {
     const city = field('', [required()]);
     host.field = city;
     city.touch();
-    await ready(host);
+    await settled(host);
     assert.ok(host.querySelector('p[role="alert"]'));
 
     city.setDisabled(true);
-    await ready(host);
+    await settled(host);
     assert.notOk(host.querySelector('p[role="alert"]'), 'there is no control to correct');
     assert.equal(present(host.querySelector('input')).getAttribute('aria-invalid'), 'false');
   });

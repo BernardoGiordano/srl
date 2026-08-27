@@ -77,6 +77,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0076](0076-an-asynchronous-read-is-a-resource.md) | A screen's asynchronous read is a resource, and the latest call wins | accepted | `source/lib/core/foundation/resource.js`, `example/src/pages/` |
 | [ADR-0077](0077-a-module-declares-which-exports-are-the-door.md) | A module declares which of its exports are the door | accepted | `cli/package/door.mjs`, `tools/delivery/package-bundle.mjs`, `source/lib/core/template/dialect.js` |
 | [ADR-0078](0078-an-open-panel-is-one-module.md) | An open panel is one module, not four habits | accepted | `source/components/internal/open-panel.js`, `source/components/inputs/ui-combobox.js`, `source/components/data/ui-table.js`, `source/components/shell/ui-menu.js` |
+| [ADR-0079](0079-one-settled-one-clock.md) | One `settled`, one clock | accepted | `source/lib/core/elements/settled.js`, `source/lib/core/foundation/clock.js`, `source/lib/test/harness.js`, `source/lib/core/navigation/router.js`, `source/components/data/ui-table.js`, `source/components/data/ui-dynamic-filter.js`, `source/components/shell/ui-sidebar.js` |
 
 <!-- /generated:adr-index -->
 

@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { loadPreference, savePreference } from '@core/preferences/persistence.js';
+import { schedule } from '@core/foundation/clock.js';
 import { signal } from '@core/foundation/reactive.js';
 
 /** @typedef {{ collapsed: boolean }} SidebarState */
@@ -49,8 +50,13 @@ export class UiSidebar extends SignalElement {
 
   #collapsed = signal(false);
 
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  #persistTimer;
+  /**
+   * The call that cancels a scheduled write, while one is scheduled. From the
+   * injected clock, not `setTimeout`. ADR-0079.
+   *
+   * @type {(() => void) | undefined}
+   */
+  #cancelPersist;
 
   /**
    * The state as a signal, for anything that renders from it.
@@ -91,9 +97,9 @@ export class UiSidebar extends SignalElement {
   onDestroy() {
     // Flush rather than cancel: navigating away right after collapsing must not
     // be the one case where the choice is forgotten.
-    if (this.#persistTimer === undefined) return;
-    clearTimeout(this.#persistTimer);
-    this.#persistTimer = undefined;
+    if (this.#cancelPersist === undefined) return;
+    this.#cancelPersist();
+    this.#cancelPersist = undefined;
     this.#write(this.collapsed);
   }
 
@@ -137,9 +143,9 @@ export class UiSidebar extends SignalElement {
    */
   #persist(value) {
     if (this.storageKey === '') return;
-    clearTimeout(this.#persistTimer);
-    this.#persistTimer = setTimeout(() => {
-      this.#persistTimer = undefined;
+    this.#cancelPersist?.();
+    this.#cancelPersist = schedule(() => {
+      this.#cancelPersist = undefined;
       this.#write(value);
     }, PERSIST_DEBOUNCE_MS);
   }

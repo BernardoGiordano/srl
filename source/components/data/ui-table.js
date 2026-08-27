@@ -4,6 +4,7 @@ import {
   removePreference,
   savePreference,
 } from '@core/preferences/persistence.js';
+import { schedule } from '@core/foundation/clock.js';
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { panelBinding } from '../internal/open-panel.js';
@@ -268,8 +269,15 @@ export class UiTable extends SignalElement {
     },
   });
 
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  #persistTimer;
+  /**
+   * The call that cancels a scheduled write, while one is scheduled, and
+   * `undefined` when none is. It comes from the injected clock rather than
+   * `setTimeout`, so a suite reaches the far side of the debounce by draining the
+   * clock instead of sleeping past this element's idea of "soon". ADR-0079.
+   *
+   * @type {(() => void) | undefined}
+   */
+  #cancelPersist;
 
   connectedCallback() {
     this.#restoreState();
@@ -596,8 +604,8 @@ export class UiTable extends SignalElement {
 
   /** Persist current config immediately. No-op without `state-id`/`table-name`. */
   saveState() {
-    clearTimeout(this.#persistTimer);
-    this.#persistTimer = undefined;
+    this.#cancelPersist?.();
+    this.#cancelPersist = undefined;
     const id = this.persistenceId;
     if (id === '') return false;
     const saved = savePreference('ui-table', id, this.state, {
@@ -620,15 +628,15 @@ export class UiTable extends SignalElement {
    */
   #schedulePersist() {
     if (this.persistenceId === '') return;
-    clearTimeout(this.#persistTimer);
-    this.#persistTimer = setTimeout(() => {
-      this.#persistTimer = undefined;
+    this.#cancelPersist?.();
+    this.#cancelPersist = schedule(() => {
+      this.#cancelPersist = undefined;
       this.saveState();
     }, PERSIST_DEBOUNCE_MS);
   }
 
   #flushPersist() {
-    if (this.#persistTimer === undefined) return;
+    if (this.#cancelPersist === undefined) return;
     this.saveState();
   }
 

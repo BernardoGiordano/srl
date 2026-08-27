@@ -1,12 +1,22 @@
 import { assert, mount, present, settled, unmountAll } from '../../../lib/test/harness.js';
+import { configureClock, createManualClock } from '@core/foundation/clock.js';
 import { preferenceKey } from '@core/preferences/persistence.js';
-import { TYPEAHEAD_DEBOUNCE_MS } from '@components/data/ui-dynamic-filter.js';
 import { useStandardText } from '../standard-text.js';
 import '@components/data/ui-dynamic-filter.js';
 
+/** @import { ManualClock } from '@core/foundation/types.js' */
 /** @import { FilterRule, SelectItem, UiDynamicFilter } from '@components/data/ui-dynamic-filter.js' */
 
 const STATE_KEY = preferenceKey('ui-dynamic-filter', 'async-filter');
+
+/**
+ * The clock the typeahead debounce is scheduled on. This suite used to import the
+ * element's debounce constant and sleep past it; draining the clock says the same
+ * thing without the element having to publish a number. ADR-0079.
+ *
+ * @type {ManualClock}
+ */
+let clock;
 
 /**
  * Rules hand back a promise. Returning a resolved one keeps the fixtures honest
@@ -19,24 +29,17 @@ function resolved(items) {
   return Promise.resolve(items);
 }
 
-/** @param {number} ms */
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  const combobox = element.querySelector('ui-combobox');
-  if (combobox !== null) await settled(combobox);
-  await settled(element);
-  if (combobox !== null) await settled(combobox);
-}
-
-/** Past the debounce, plus the renders the search and its results need. */
+/**
+ * Let the debounced search happen, and wait for the results to render.
+ *
+ * `flush()` runs the debounce now rather than 320 milliseconds from now. The
+ * settle afterwards covers both the rules' promises and the rebuild they cause:
+ * the walk only stops once a pass finds no element it has not already waited for,
+ * so the render the search schedules is inside it.
+ */
 async function searched(/** @type {Element} */ element) {
-  await wait(TYPEAHEAD_DEBOUNCE_MS + 20);
-  await ready(element);
+  clock.flush();
+  await settled(element);
 }
 
 /** @returns {UiDynamicFilter} */
@@ -64,7 +67,7 @@ function pointerDown(element) {
 /** @param {UiDynamicFilter} filter */
 async function openPanel(filter) {
   pointerDown(present(filter.querySelector('[data-ui-part="combobox-control"]')));
-  await ready(filter);
+  await settled(filter);
 }
 
 /** @param {UiDynamicFilter} filter @param {string} text */
@@ -74,7 +77,7 @@ async function type(filter, text) {
   );
   input.value = text;
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  await ready(filter);
+  await settled(filter);
 }
 
 /** @param {UiDynamicFilter} filter @param {string} label */
@@ -83,7 +86,7 @@ async function choose(filter, label) {
     (candidate) => candidate.textContent?.trim() === label,
   );
   pointerDown(present(option, `no option labelled ${label}`));
-  await ready(filter);
+  await settled(filter);
 }
 
 /** @param {readonly { ref: string, type: string, value: unknown }[]} state */
@@ -95,9 +98,12 @@ describe('ui-dynamic-filter async rules', () => {
   beforeEach(() => {
     localStorage.removeItem(STATE_KEY);
     useStandardText();
+    clock = createManualClock();
+    configureClock({ clock });
   });
   afterEach(() => {
     unmountAll();
+    configureClock();
     localStorage.removeItem(STATE_KEY);
   });
 
@@ -120,8 +126,8 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
     await openPanel(filter);
 
     assert.equal(calls, 1);
@@ -141,8 +147,8 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
     await openPanel(filter);
 
     assert.sameArray(optionLabels(filter), ['Open']);
@@ -169,15 +175,15 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     assert.equal(calls, 0, 'nothing is fetched before the row is clicked');
     assert.sameArray(optionLabels(filter), ['Load cities']);
 
     pointerDown(present(optionElements(filter)[0]));
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
 
     assert.equal(calls, 1);
     assert.sameArray(optionLabels(filter), ['Milano', 'Roma']);
@@ -206,17 +212,17 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     pointerDown(present(optionElements(filter)[0]));
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
     assert.sameArray(optionLabels(filter), ['Load cities'], 'the row survives the failure');
 
     pointerDown(present(optionElements(filter)[0]));
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
 
     assert.equal(attempt, 2);
     assert.sameArray(optionLabels(filter), ['Milano']);
@@ -240,8 +246,8 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
 
     assert.sameArray(
       filter.states.map((state) => state.value),
@@ -276,7 +282,7 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     assert.sameArray(optionLabels(filter), ['Type to search']);
@@ -316,7 +322,7 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     for (const term of ['mi', 'mil', 'mila', 'milan']) await type(filter, term);
@@ -339,7 +345,7 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await type(filter, '20121');
     await searched(filter);
@@ -367,8 +373,8 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
 
     assert.sameArray(present(asked[0]), ['mi']);
     assert.equal(
@@ -382,7 +388,7 @@ describe('ui-dynamic-filter async rules', () => {
     assert.includes(optionLabels(filter).join('|'), 'Roma');
 
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     assert.sameArray(
@@ -415,7 +421,7 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await type(filter, 'mo');
     await searched(filter);
@@ -462,8 +468,8 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
     await openPanel(filter);
 
     const state = optionElements(filter).map(
@@ -507,8 +513,8 @@ describe('ui-dynamic-filter async rules', () => {
       },
     ];
     filter.rules = rules;
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
 
     assert.sameArray(terms, ['Milano'], 'the persisted value is the search term');
     assert.equal(

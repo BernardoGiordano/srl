@@ -3,8 +3,18 @@
 Rules the suites already learned. They are cheap to follow and expensive to
 rediscover:
 
-- **Await `settled`, never a frame.** `source/lib/test/harness.js` exposes it; a
-  navigation is awaited through `navigate()` or `navigationSettled`. No suite sleeps.
+- **Await `settled`, never a frame.** `source/lib/test/harness.js` exposes it and
+  `@core/elements/settled.js` owns it, which is the module the router awaits too. It
+  walks the element and everything it rendered, repeatedly, because a routed layout's
+  child does not exist until that layout has rendered its outlet — so there is nothing
+  left for a suite to add. Do not declare a local `ready()`; ten of those were deleted
+  in ADR-0079. A navigation is awaited through `navigate()` or `navigationSettled`.
+- **Drain the clock, never sleep past a debounce.** Scheduled work in the library goes
+  through `@core/foundation/clock.js`. Install a test clock in `beforeEach`
+  (`configureClock({ clock: createManualClock() })`), restore real timers in `afterEach`
+  (`configureClock()`), and use `clock.flush()` to let a debounce happen and
+  `clock.pending` to assert what is still waiting. No suite sleeps, and no component
+  exports its debounce length so a suite can add to it. ADR-0079.
 - **Cross the interface an application crosses.** `AppRouter` is not exported, so a
   router test attaches a router. A test that reaches past the interface passes
   against a seam nothing else uses.

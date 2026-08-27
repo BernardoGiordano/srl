@@ -1,22 +1,19 @@
 import { assert, mount, present, settled, unmountAll } from '../../../lib/test/harness.js';
+import { configureClock, createManualClock } from '@core/foundation/clock.js';
 import { configurePreferences, removePreference } from '@core/preferences/persistence.js';
 import { useStandardText } from '../standard-text.js';
 import '@components/data/ui-table.js';
 
-/** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  for (const child of element.querySelectorAll('*')) {
-    const updatable = /** @type {{ updateComplete?: Promise<unknown> }} */ (child);
-    if (updatable.updateComplete !== undefined) await updatable.updateComplete;
-  }
-  await settled(element);
-}
+/** @import { ManualClock } from '@core/foundation/types.js' */
 
-/** @param {number} ms */
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+/**
+ * The clock the persist debounce is scheduled on. Installed for every case, so no
+ * case waits on real milliseconds and a timer this element left behind is a number
+ * to assert rather than a sleep to outlast. ADR-0079.
+ *
+ * @type {ManualClock}
+ */
+let clock;
 
 /**
  * The inline style a column's cells carry. Widths and sticky offsets are written
@@ -50,10 +47,15 @@ function tableFixture() {
 describe('ui-table', () => {
   // Every accessible name this element renders is standard text now, so a suite
   // supplies it once through the resolver instead of once per fixture.
-  beforeEach(() => useStandardText());
+  beforeEach(() => {
+    useStandardText();
+    clock = createManualClock();
+    configureClock({ clock });
+  });
 
   afterEach(() => {
     unmountAll();
+    configureClock();
     removePreference('ui-table', 'test-employees');
     removePreference('ui-table', 'test-unwritten');
   });
@@ -65,7 +67,7 @@ describe('ui-table', () => {
       { id: 2, name: 'Grace', meta: { team: 'Web' } },
       { id: 3, name: 'Linus', meta: { team: 'Core' } },
     ];
-    await ready(table);
+    await settled(table);
 
     assert.equal(table.querySelectorAll('[data-ui-part="table-row"]').length, 2);
     assert.includes(present(table.querySelector('tbody')).textContent ?? '', 'Ada');
@@ -78,7 +80,7 @@ describe('ui-table', () => {
       detail = /** @type {CustomEvent} */ (event).detail;
     });
     /** @type {HTMLButtonElement} */ (present(table.querySelector('[data-ui-part="table-next"]'))).click();
-    await ready(table);
+    await settled(table);
 
     assert.equal(table.page, 2);
     assert.equal(table.querySelectorAll('[data-ui-part="table-row"]').length, 1);
@@ -94,7 +96,7 @@ describe('ui-table', () => {
       { id: 1, name: 'CTR-1', meta: { team: 'A' } },
       { id: 2, name: 'CTR-2', meta: { team: 'B' } },
     ];
-    await ready(table);
+    await settled(table);
 
     /** @type {{ page?: number, pageSize?: number } | undefined} */
     let requested;
@@ -102,7 +104,7 @@ describe('ui-table', () => {
       requested = /** @type {CustomEvent<{ page: number, pageSize: number }>} */ (event).detail;
     });
     table.goTo(3);
-    await ready(table);
+    await settled(table);
 
     assert.equal(requested?.page, 3);
     assert.equal(requested?.pageSize, 2);
@@ -117,7 +119,7 @@ describe('ui-table', () => {
       { id: 3, name: 'Ada', meta: { team: 'Research' } },
     ];
     table.page = 2;
-    await ready(table);
+    await settled(table);
 
     /** @type {import('@components/data/ui-table.js').UiTable['query'] | undefined} */
     let query;
@@ -130,7 +132,7 @@ describe('ui-table', () => {
     );
 
     sort.click();
-    await ready(table);
+    await settled(table);
 
     assert.equal(table.page, 1);
     assert.equal(table.sortKey, 'name');
@@ -144,12 +146,12 @@ describe('ui-table', () => {
     assert.notOk((present(table.querySelector('tbody')).textContent ?? '').includes('Grace'));
 
     sort.click();
-    await ready(table);
+    await settled(table);
     assert.equal(table.sortDirection, 'desc');
     assert.includes(present(table.querySelector('tbody')).textContent ?? '', 'Grace');
 
     sort.click();
-    await ready(table);
+    await settled(table);
     assert.equal(table.sortKey, '');
     assert.equal(table.sortDirection, '');
     assert.includes(present(table.querySelector('tbody')).textContent ?? '', 'Grace');
@@ -162,9 +164,9 @@ describe('ui-table', () => {
       { id: 2, name: 'Grace', meta: { team: 'Web' } },
       { id: 3, name: 'Linus', meta: { team: 'Core' } },
     ];
-    await ready(table);
+    await settled(table);
     table.page = 2;
-    await ready(table);
+    await settled(table);
 
     /** @type {import('@components/data/ui-table.js').UiTable['query'] | undefined} */
     let query;
@@ -173,7 +175,7 @@ describe('ui-table', () => {
         .detail;
     });
     table.filters = [{ key: 'meta.team', value: 'core', match: 'equals' }];
-    await ready(table);
+    await settled(table);
 
     assert.equal(table.page, 1);
     assert.equal(query?.filters.length, 1);
@@ -187,7 +189,7 @@ describe('ui-table', () => {
     );
 
     table.filters = [{ key: '*', value: 'web' }];
-    await ready(table);
+    await settled(table);
     assert.equal(table.querySelectorAll('[data-ui-part="table-row"]').length, 1);
     assert.includes(present(table.querySelector('tbody')).textContent ?? '', 'Grace');
   });
@@ -200,7 +202,7 @@ describe('ui-table', () => {
       { id: 1, name: 'Zulu', meta: { team: 'A' } },
       { id: 2, name: 'Alpha', meta: { team: 'B' } },
     ];
-    await ready(table);
+    await settled(table);
 
     /** @type {import('@components/data/ui-table.js').UiTable['query'] | undefined} */
     let query;
@@ -209,11 +211,11 @@ describe('ui-table', () => {
         .detail;
     });
     table.filters = [{ key: 'status', value: 'open', match: 'equals' }];
-    await ready(table);
+    await settled(table);
     /** @type {HTMLButtonElement} */ (
       present(table.querySelector('[data-ui-part="table-sort"]'))
     ).click();
-    await ready(table);
+    await settled(table);
 
     assert.equal(query?.page, 1);
     assert.equal(query?.pageSize, 2);
@@ -234,7 +236,7 @@ describe('ui-table', () => {
     table.rows = [{ id: 1, name: 'Ada', meta: { team: 'Core' } }];
     table.loading = true;
     table.interactive = true;
-    await ready(table);
+    await settled(table);
 
     /** @type {{ offset?: number } | undefined} */
     let more;
@@ -250,7 +252,7 @@ describe('ui-table', () => {
     table.loading = false;
     table.requestMore();
     /** @type {HTMLElement} */ (present(table.querySelector('[data-ui-part="table-row"]'))).click();
-    await ready(table);
+    await settled(table);
 
     assert.equal(more?.offset, 1);
     assert.equal(activated?.row?.name, 'Ada');
@@ -265,7 +267,7 @@ describe('ui-table', () => {
       </ui-table>
     `));
     table.rows = [{ id: 1, name: 'Ada', team: 'Core', city: 'Rome' }];
-    await ready(table);
+    await settled(table);
 
     const name = present(table.columns[0]);
     const team = present(table.columns[1]);
@@ -280,7 +282,7 @@ describe('ui-table', () => {
     table.setColumnWidth(name, 220);
     table.cycleSticky(city);
     assert.sameArray(table.visibleColumns.map((column) => column.key), ['city', 'name']);
-    await ready(table);
+    await settled(table);
 
     assert.sameArray(
       [...table.querySelectorAll('[data-ui-part="table-header"]')].map((header) =>
@@ -307,7 +309,7 @@ describe('ui-table', () => {
       </ui-table>
     `));
     table.rows = [{ id: 1, name: 'Ada' }];
-    await ready(table);
+    await settled(table);
 
     const trigger = /** @type {HTMLElement} */ (
       present(table.querySelector('[data-ui-part="table-columns-trigger"]'))
@@ -316,7 +318,7 @@ describe('ui-table', () => {
     assert.equal(trigger.getAttribute('aria-controls'), null);
 
     trigger.click();
-    await ready(table);
+    await settled(table);
 
     const panel = present(table.querySelector('[data-ui-part="table-columns-panel"]'));
     assert.equal(trigger.getAttribute('aria-expanded'), 'true');
@@ -327,14 +329,14 @@ describe('ui-table', () => {
     present(table.querySelector('[data-ui-part="table-cell"]')).dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true }),
     );
-    await ready(table);
+    await settled(table);
     assert.notOk(table.columnsOpen);
     assert.equal(trigger.getAttribute('aria-controls'), null, 'and stops naming a panel that went');
 
     trigger.click();
-    await ready(table);
+    await settled(table);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await ready(table);
+    await settled(table);
     assert.notOk(table.columnsOpen);
     assert.equal(document.activeElement, trigger, 'focus returns to the trigger');
   });
@@ -356,7 +358,7 @@ describe('ui-table', () => {
       </ui-table>
     `));
     table.rows = [{ id: 1, name: 'Ada', team: 'Core', city: 'Rome' }];
-    await ready(table);
+    await settled(table);
 
     const name = present(table.columns[0]);
     const city = present(table.columns[2]);
@@ -364,20 +366,20 @@ describe('ui-table', () => {
     assert.includes(cellStyle(table, 'team'), 'inset-inline-start:100px', 'starts where the first ends');
 
     table.setColumnWidth(name, 140);
-    await ready(table);
+    await settled(table);
     assert.includes(cellStyle(table, 'team'), 'inset-inline-start:140px', 'a resize moves what follows');
 
     table.toggleColumn(name);
-    await ready(table);
+    await settled(table);
     assert.equal(table.querySelector('[data-column-key="name"]'), null, 'hidden means not rendered');
     assert.includes(cellStyle(table, 'team'), 'inset-inline-start:0px', 'and nothing is left in front');
 
     table.cycleSticky(city);
-    await ready(table);
+    await settled(table);
     assert.includes(cellStyle(table, 'city'), 'inset-inline-start:60px', 'a new sticky column queues up');
 
     assert.ok(table.moveColumn('city', 0));
-    await ready(table);
+    await settled(table);
     assert.sameArray(table.visibleColumns.map((column) => column.key), ['city', 'team']);
     assert.includes(cellStyle(table, 'city'), 'inset-inline-start:0px', 'reordering re-stacks them');
     assert.includes(cellStyle(table, 'team'), 'inset-inline-start:80px');
@@ -396,19 +398,19 @@ describe('ui-table', () => {
       </ui-table>
     `));
     table.rows = [{ id: 1, name: 'b' }, { id: 2, name: 'a' }, { id: 3, name: 'c' }];
-    await ready(table);
+    await settled(table);
 
     const name = present(table.columns[0]);
     table.toggleSort(name);
-    await ready(table);
+    await settled(table);
     assert.sameArray(cellValues(table), ['a', 'b', 'c']);
 
     name.sortValue = (_row, _index, value) => -String(value).charCodeAt(0);
-    await ready(table);
+    await settled(table);
     assert.sameArray(cellValues(table), ['c', 'b', 'a'], 'the same sort key, a new answer');
 
     table.filters = [{ key: 'name', value: 'b', match: 'equals' }];
-    await ready(table);
+    await settled(table);
     assert.sameArray(cellValues(table), ['b'], 'a new filters array is a new identity');
   });
 
@@ -438,7 +440,7 @@ describe('ui-table', () => {
       table.totalRows = 10;
       table.rows = [{ id: 1, name: 'Ada' }, { id: 2, name: 'Grace' }];
       table.columnsOpen = true;
-      await ready(table);
+      await settled(table);
 
       /** @type {unknown[]} */
       const requests = [];
@@ -452,7 +454,7 @@ describe('ui-table', () => {
       );
 
       table.columnsOpen = false;
-      await ready(table);
+      await settled(table);
       assert.equal(document.querySelector(':popover-open'), null, 'closing it empties the top layer');
 
       table.resizeFromKeyboard(
@@ -460,6 +462,7 @@ describe('ui-table', () => {
         new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true }),
       );
       assert.equal(writes.length, 0, 'the write is still waiting for the burst to end');
+      assert.equal(clock.pending, 1, 'and is on the clock rather than already gone');
 
       unmountAll();
       const asked = requests.length;
@@ -467,10 +470,12 @@ describe('ui-table', () => {
       assert.notOk(table.isConnected);
       assert.equal(document.querySelector('[data-ui-part="table-row"]'), null, 'and takes the rows with it');
 
-      // Longer than the persist debounce, so a timer that survived would write
-      // twice and an observer that survived would ask for another page.
-      await wait(400);
-      assert.equal(writes.length, 1, 'the flushed timer does not fire again');
+      // A timer that survived the flush would still be on the clock, and draining
+      // the clock would fire it. Both are claims about what is scheduled, which is
+      // why this no longer sleeps 400ms hoping to have outlasted one.
+      assert.equal(clock.pending, 0, 'the flush cancelled the timer rather than leaving it');
+      clock.flush();
+      assert.equal(writes.length, 1, 'so nothing writes a second time');
       assert.equal(requests.length, asked, 'the released observer asks for nothing more');
     } finally {
       configurePreferences();
@@ -497,7 +502,7 @@ describe('ui-table', () => {
       { id: 2, name: 'Grace', team: 'Web', city: 'New York' },
       { id: 3, name: 'Linus', team: 'Core', city: 'Helsinki' },
     ];
-    await ready(table);
+    await settled(table);
     const name = present(table.columns[0]);
     const team = present(table.columns[1]);
     const city = present(table.columns[2]);
@@ -508,7 +513,7 @@ describe('ui-table', () => {
     table.setColumnWidth(name, 230);
     table.cycleSticky(city);
     table.saveState();
-    await ready(table);
+    await settled(table);
 
     unmountAll();
     table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(markup));
@@ -517,7 +522,7 @@ describe('ui-table', () => {
       { id: 2, name: 'Grace', team: 'Web', city: 'New York' },
       { id: 3, name: 'Linus', team: 'Core', city: 'Helsinki' },
     ];
-    await ready(table);
+    await settled(table);
 
     assert.equal(table.page, 2);
     assert.equal(table.sortKey, 'name');
@@ -541,15 +546,15 @@ describe('ui-table', () => {
     `;
     let table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(aliased));
     table.rows = [{ id: 1, name: 'Ada' }, { id: 2, name: 'Grace' }, { id: 3, name: 'Linus' }];
-    await ready(table);
+    await settled(table);
     table.goTo(2);
     table.saveState();
-    await ready(table);
+    await settled(table);
 
     unmountAll();
     table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(aliased));
     table.rows = [{ id: 1, name: 'Ada' }, { id: 2, name: 'Grace' }, { id: 3, name: 'Linus' }];
-    await ready(table);
+    await settled(table);
     assert.equal(table.page, 2, 'table-name must reach the same stored state state-id does');
 
     unmountAll();
@@ -561,7 +566,7 @@ describe('ui-table', () => {
       `)
     );
     table.rows = [{ id: 1, name: 'Ada' }, { id: 2, name: 'Grace' }, { id: 3, name: 'Linus' }];
-    await ready(table);
+    await settled(table);
     assert.equal(table.page, 1, 'state-id wins, so the table-name entry is not read');
   });
 
@@ -591,7 +596,7 @@ describe('ui-table', () => {
         `)
       );
       table.rows = [{ id: 1, name: 'Ada' }, { id: 2, name: 'Grace' }, { id: 3, name: 'Linus' }];
-      await ready(table);
+      await settled(table);
 
       const name = present(table.columns[0]);
       for (let press = 0; press < 5; press += 1) {
@@ -600,8 +605,9 @@ describe('ui-table', () => {
           new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true }),
         );
       }
-      await ready(table);
+      await settled(table);
       assert.equal(writes.length, 0, 'a burst must not reach storage while it is still arriving');
+      assert.equal(clock.pending, 1, 'five keypresses are one scheduled write, not five');
 
       // Unmounting flushes, so the burst is not lost by navigating away.
       unmountAll();

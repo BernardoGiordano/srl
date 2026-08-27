@@ -24,16 +24,6 @@ import '@components/data/ui-dynamic-filter.js';
 const FIXTURES = `${new URL('../fixtures/text/', import.meta.url).href}{locale}.json`;
 
 /** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  for (const child of element.querySelectorAll('*')) {
-    const updatable = /** @type {{ updateComplete?: Promise<unknown> }} */ (child);
-    if (updatable.updateComplete !== undefined) await updatable.updateComplete;
-  }
-  await settled(element);
-}
-
-/** @param {Element} element */
 function pointerDown(element) {
   element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
 }
@@ -105,7 +95,7 @@ describe('collection standard text', () => {
     // And in the DOM, not only through the module interface.
     const table = tableFixture();
     table.rows = [];
-    await ready(table);
+    await settled(table);
     assert.equal(
       present(table.querySelector('[data-ui-part="table-empty"]')).textContent?.trim(),
       'ui.table.empty',
@@ -129,7 +119,7 @@ describe('collection standard text', () => {
   it('resolves what an element says about itself, in the DOM', async () => {
     const table = tableFixture();
     table.rows = [{ id: 1, name: 'Ada' }];
-    await ready(table);
+    await settled(table);
 
     assert.equal(
       present(table.querySelector('[data-ui-part="table-previous"]')).getAttribute('aria-label'),
@@ -148,7 +138,7 @@ describe('collection standard text', () => {
   it('leaves the wording that names the data to the caller', async () => {
     const table = tableFixture();
     table.rows = [];
-    await ready(table);
+    await settled(table);
 
     // The caption and the column label are the screen's, and no resolver is
     // consulted for either.
@@ -163,7 +153,7 @@ describe('collection standard text', () => {
     );
 
     table.emptyLabel = 'No employees yet';
-    await ready(table);
+    await settled(table);
     assert.equal(
       present(table.querySelector('[data-ui-part="table-empty"]')).textContent?.trim(),
       'No employees yet',
@@ -178,27 +168,27 @@ describe('collection standard text', () => {
     useStandardText({ 'ui.filter.from': '', 'ui.filter.to': '' });
 
     const filter = rangeFilterFixture();
-    await ready(filter);
+    await settled(filter);
     pointerDown(present(filter.querySelector('[data-ui-part="combobox-control"]')));
-    await ready(filter);
+    await settled(filter);
 
     assert.equal(optionLabel(filter), 'That week 03/03/2026 – 07/03/2026');
 
     useStandardText();
-    await ready(filter);
+    await settled(filter);
     assert.equal(optionLabel(filter), 'That week from 03/03/2026 to 07/03/2026');
   });
 
   it('re-resolves a mounted element when the resolver is replaced', async () => {
     const table = tableFixture();
     table.rows = [{ id: 1, name: 'Ada' }];
-    await ready(table);
+    await settled(table);
 
     const previous = present(table.querySelector('[data-ui-part="table-previous"]'));
     assert.equal(previous.getAttribute('aria-label'), 'Previous');
 
     useStandardText({ 'ui.table.previous': 'Back' });
-    await ready(table);
+    await settled(table);
 
     assert.equal(previous.getAttribute('aria-label'), 'Back');
     assert.ok(previous.isConnected, 'the button was patched, not replaced');
@@ -219,13 +209,13 @@ describe('collection standard text', () => {
 
     const table = tableFixture();
     table.rows = [{ id: 1, name: 'Ada' }];
-    await ready(table);
+    await settled(table);
 
     const previous = present(table.querySelector('[data-ui-part="table-previous"]'));
     assert.equal(previous.getAttribute('aria-label'), 'Previous page');
 
     await setLocale('it');
-    await ready(table);
+    await settled(table);
 
     assert.equal(previous.getAttribute('aria-label'), 'Pagina precedente');
     assert.ok(previous.isConnected, 'the same node, re-resolved');

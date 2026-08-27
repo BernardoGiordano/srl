@@ -14,12 +14,6 @@ import '@components/overlays/ui-dialog.js';
  * from state of its own is never contradicted.
  */
 
-/** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  await settled(element);
-}
-
 /** @param {UiDialog} host @returns {HTMLDialogElement} */
 function dialogOf(host) {
   return /** @type {HTMLDialogElement} */ (present(host.querySelector('dialog'), 'no <dialog> rendered'));
@@ -28,7 +22,7 @@ function dialogOf(host) {
 /** @param {UiDialog} host */
 async function open(host) {
   host.open = true;
-  await ready(host);
+  await settled(host);
   return dialogOf(host);
 }
 
@@ -44,7 +38,7 @@ describe('ui-dialog', () => {
 
   it('shows and hides the native dialog from `open`', async () => {
     const host = /** @type {UiDialog} */ (mount('<ui-dialog><p>Body</p></ui-dialog>'));
-    await ready(host);
+    await settled(host);
 
     const dialog = dialogOf(host);
     assert.notOk(dialog.open, 'a dialog starts closed');
@@ -54,7 +48,7 @@ describe('ui-dialog', () => {
     assert.ok(dialog.matches(':modal'), 'and shows it modally, which is what puts a backdrop behind it');
 
     host.open = false;
-    await ready(host);
+    await settled(host);
     assert.notOk(dialog.open, 'and lowering `open` closes it again');
   });
 
@@ -71,13 +65,13 @@ describe('ui-dialog', () => {
 
   it('names itself, and says which kind of dialog it is', async () => {
     const host = /** @type {UiDialog} */ (mount('<ui-dialog label="Discard?"></ui-dialog>'));
-    await ready(host);
+    await settled(host);
     const dialog = dialogOf(host);
     assert.equal(dialog.getAttribute('aria-label'), 'Discard?');
     assert.notOk(dialog.hasAttribute('role'), 'a plain dialog keeps the element’s own role');
 
     host.alert = true;
-    await ready(host);
+    await settled(host);
     assert.equal(dialog.getAttribute('role'), 'alertdialog', 'an interruption announces itself as one');
   });
 
@@ -93,7 +87,7 @@ describe('ui-dialog', () => {
     assert.equal(closes.length, 1, 'Escape is reported to the screen');
     assert.notOk(host.open, 'and lowers `open`, so a screen binding nothing still works');
 
-    await ready(host);
+    await settled(host);
     assert.notOk(dialog.open, 'the render that follows closes the native dialog');
   });
 
@@ -136,7 +130,7 @@ describe('ui-dialog', () => {
     );
 
     host.open = false;
-    await ready(host);
+    await settled(host);
     assert.equal(document.documentElement.style.overflow, '', 'and gets its scrollbar back');
   });
 

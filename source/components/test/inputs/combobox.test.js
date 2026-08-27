@@ -4,12 +4,6 @@ import '@components/inputs/ui-combobox.js';
 
 /** @import { ComboboxOption, UiCombobox } from '@components/inputs/ui-combobox.js' */
 
-/** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  await settled(element);
-}
-
 /** @returns {UiCombobox} */
 function comboboxFixture() {
   return mount('<ui-combobox multiple placeholder="Search"></ui-combobox>');
@@ -35,7 +29,7 @@ async function type(combobox, text) {
   );
   input.value = text;
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  await ready(combobox);
+  await settled(combobox);
 }
 
 /** @param {Element} element */
@@ -48,7 +42,7 @@ async function press(combobox, key) {
   present(combobox.querySelector('[data-ui-part="combobox-input"]')).dispatchEvent(
     new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
   );
-  await ready(combobox);
+  await settled(combobox);
 }
 
 describe('ui-combobox', () => {
@@ -63,12 +57,12 @@ describe('ui-combobox', () => {
   it('groups options and selects one into a chip', async () => {
     const combobox = comboboxFixture();
     combobox.options = OPTIONS;
-    await ready(combobox);
+    await settled(combobox);
 
     assert.notOk(combobox.open, 'starts closed');
 
     pointerDown(present(combobox.querySelector('[data-ui-part="combobox-control"]')));
-    await ready(combobox);
+    await settled(combobox);
 
     assert.ok(combobox.open);
     const groups = [...combobox.querySelectorAll('[data-ui-part="combobox-group-label"]')];
@@ -84,7 +78,7 @@ describe('ui-combobox', () => {
       added = /** @type {CustomEvent} */ (event).detail;
     });
     pointerDown(present(optionElements(combobox)[1]));
-    await ready(combobox);
+    await settled(combobox);
 
     assert.equal(added, OPTIONS[1]);
     assert.sameArray([...combobox.value], [OPTIONS[1]]);
@@ -98,7 +92,7 @@ describe('ui-combobox', () => {
   it('filters by term, keeps it after adding, and reports every search', async () => {
     const combobox = comboboxFixture();
     combobox.options = OPTIONS;
-    await ready(combobox);
+    await settled(combobox);
 
     /** @type {string[]} */
     const terms = [];
@@ -111,7 +105,7 @@ describe('ui-combobox', () => {
     assert.equal(optionElements(combobox).length, 1);
 
     pointerDown(present(optionElements(combobox)[0]));
-    await ready(combobox);
+    await settled(combobox);
 
     // clearSearchOnAdd is off, so a second result from the same search is reachable.
     assert.equal(combobox.searchTerm, 'gra');
@@ -122,15 +116,15 @@ describe('ui-combobox', () => {
   it('never selects a disabled option, by pointer or by keyboard', async () => {
     const combobox = comboboxFixture();
     combobox.options = OPTIONS;
-    await ready(combobox);
+    await settled(combobox);
 
     pointerDown(present(combobox.querySelector('[data-ui-part="combobox-control"]')));
-    await ready(combobox);
+    await settled(combobox);
 
     const disabled = present(optionElements(combobox)[3]);
     assert.equal(disabled.getAttribute('aria-disabled'), 'true');
     pointerDown(disabled);
-    await ready(combobox);
+    await settled(combobox);
     assert.equal(combobox.value.length, 0);
 
     // Four options, the last disabled: arrowing down four times wraps past it.
@@ -144,7 +138,7 @@ describe('ui-combobox', () => {
   it('moves the active option with the keyboard and advertises it to screen readers', async () => {
     const combobox = comboboxFixture();
     combobox.options = OPTIONS;
-    await ready(combobox);
+    await settled(combobox);
 
     await press(combobox, 'ArrowDown');
     const input = present(combobox.querySelector('[data-ui-part="combobox-input"]'));
@@ -181,7 +175,7 @@ describe('ui-combobox', () => {
       combobox.options = [...combobox.options, option];
       return option;
     };
-    await ready(combobox);
+    await settled(combobox);
 
     await type(combobox, 'Ada Lovelace');
     assert.equal(combobox.querySelector('[data-ui-part="combobox-add-tag"]'), null);
@@ -191,7 +185,7 @@ describe('ui-combobox', () => {
     assert.equal(addTag.textContent?.trim(), 'Add "milan"');
 
     pointerDown(addTag);
-    await ready(combobox);
+    await settled(combobox);
 
     assert.equal(combobox.value.length, 1);
     assert.equal(present(combobox.value[0]).value, 'milan');
@@ -201,7 +195,7 @@ describe('ui-combobox', () => {
     const combobox = comboboxFixture();
     combobox.options = OPTIONS;
     combobox.value = [present(OPTIONS[0]), present(OPTIONS[1])];
-    await ready(combobox);
+    await settled(combobox);
 
     /** @type {string[]} */
     const events = [];
@@ -216,7 +210,7 @@ describe('ui-combobox', () => {
     present(combobox.querySelector('[data-ui-part="combobox-clear"]')).dispatchEvent(
       new MouseEvent('click', { bubbles: true }),
     );
-    await ready(combobox);
+    await settled(combobox);
 
     assert.equal(combobox.value.length, 0);
     assert.sameArray(events, [
@@ -231,20 +225,20 @@ describe('ui-combobox', () => {
     const combobox = comboboxFixture();
     combobox.multiple = false;
     combobox.options = OPTIONS;
-    await ready(combobox);
+    await settled(combobox);
 
     pointerDown(present(combobox.querySelector('[data-ui-part="combobox-control"]')));
-    await ready(combobox);
+    await settled(combobox);
     pointerDown(present(optionElements(combobox)[0]));
-    await ready(combobox);
+    await settled(combobox);
 
     assert.notOk(combobox.open);
     assert.sameArray([...combobox.value], [OPTIONS[0]]);
 
     pointerDown(present(combobox.querySelector('[data-ui-part="combobox-control"]')));
-    await ready(combobox);
+    await settled(combobox);
     pointerDown(present(optionElements(combobox)[1]));
-    await ready(combobox);
+    await settled(combobox);
 
     assert.sameArray([...combobox.value], [OPTIONS[1]]);
   });
@@ -259,7 +253,7 @@ describe('ui-combobox', () => {
     combobox.multiple = false;
     combobox.options = OPTIONS;
     combobox.value = [present(OPTIONS[1])];
-    await ready(combobox);
+    await settled(combobox);
 
     const input = /** @type {HTMLInputElement} */ (
       present(combobox.querySelector('[data-ui-part="combobox-input"]'))
@@ -271,7 +265,7 @@ describe('ui-combobox', () => {
     // Open, and the same box is the search field: the label would otherwise be
     // typed into and become half a term.
     pointerDown(present(combobox.querySelector('[data-ui-part="combobox-control"]')));
-    await ready(combobox);
+    await settled(combobox);
     assert.equal(input.value, '');
     assert.equal(input.getAttribute('placeholder'), 'Search');
 
@@ -291,10 +285,10 @@ describe('ui-combobox', () => {
     combobox.optionRenderer = (option) => `» ${option.label}`;
     combobox.chipRenderer = (option) => `${String(option.group)}: ${option.label}`;
     combobox.value = [present(OPTIONS[0])];
-    await ready(combobox);
+    await settled(combobox);
 
     pointerDown(present(combobox.querySelector('[data-ui-part="combobox-control"]')));
-    await ready(combobox);
+    await settled(combobox);
 
     assert.equal(present(optionElements(combobox)[0]).textContent?.trim(), '» Ada Lovelace');
     assert.equal(
@@ -306,7 +300,7 @@ describe('ui-combobox', () => {
   it('shows the not-found message and closes on an outside pointer', async () => {
     const combobox = comboboxFixture();
     combobox.options = OPTIONS;
-    await ready(combobox);
+    await settled(combobox);
 
     await type(combobox, 'zzz');
     assert.equal(
@@ -315,7 +309,7 @@ describe('ui-combobox', () => {
     );
 
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    await ready(combobox);
+    await settled(combobox);
     assert.notOk(combobox.open);
   });
 });

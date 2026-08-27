@@ -25,15 +25,6 @@ import '@components/shell/ui-menu.js';
  * test, not theirs.
  */
 
-/** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  for (const child of element.querySelectorAll('*')) {
-    const updatable = /** @type {{ updateComplete?: Promise<unknown> }} */ (child);
-    if (updatable.updateComplete !== undefined) await updatable.updateComplete;
-  }
-}
-
 describe('ui-sidebar', () => {
   afterEach(() => {
     unmountAll();
@@ -44,16 +35,16 @@ describe('ui-sidebar', () => {
     const sidebar = /** @type {import('@components/shell/ui-sidebar.js').UiSidebar} */ (
       mount('<ui-sidebar><span>menu</span></ui-sidebar>')
     );
-    await ready(sidebar);
+    await settled(sidebar);
 
     assert.notOk(sidebar.hasAttribute('data-collapsed'), 'starts expanded');
 
     sidebar.toggle();
-    await ready(sidebar);
+    await settled(sidebar);
     assert.ok(sidebar.hasAttribute('data-collapsed'), 'collapsing must reach the DOM');
 
     sidebar.expand();
-    await ready(sidebar);
+    await settled(sidebar);
     assert.notOk(sidebar.hasAttribute('data-collapsed'));
   });
 
@@ -61,9 +52,9 @@ describe('ui-sidebar', () => {
     const first = /** @type {import('@components/shell/ui-sidebar.js').UiSidebar} */ (
       mount('<ui-sidebar storage-key="test.sidebar"><span>menu</span></ui-sidebar>')
     );
-    await ready(first);
+    await settled(first);
     first.collapse();
-    await ready(first);
+    await settled(first);
 
     // The write is debounced and unmounting flushes it, which is what leaving the
     // page does. The key is a preference id, not a raw localStorage slot, so
@@ -77,7 +68,7 @@ describe('ui-sidebar', () => {
     const second = /** @type {import('@components/shell/ui-sidebar.js').UiSidebar} */ (
       mount('<ui-sidebar storage-key="test.sidebar"><span>menu</span></ui-sidebar>')
     );
-    await ready(second);
+    await settled(second);
 
     assert.ok(second.collapsed, 'a reload must not forget');
     assert.ok(second.hasAttribute('data-collapsed'));
@@ -91,14 +82,14 @@ describe('ui-sidebar', () => {
         </ui-sidebar>
       `)
     );
-    await ready(sidebar);
+    await settled(sidebar);
 
     const button = present(sidebar.querySelector('ui-sidebar-toggle button'));
     assert.equal(button.getAttribute('aria-expanded'), 'true');
     assert.equal(button.getAttribute('aria-label'), 'Collapse');
 
     /** @type {HTMLElement} */ (button).click();
-    await ready(sidebar);
+    await settled(sidebar);
 
     assert.ok(sidebar.collapsed, 'the toggle must reach the sidebar above it');
     // The toggle owns no state: it re-renders because the sidebar's collapsed
@@ -119,7 +110,7 @@ describe('ui-sidebar-item', () => {
   it('marks itself current for its own path and its subtree', async () => {
     currentPath.value = '/settings/users';
     const item = mount('<ui-sidebar-item href="/settings">Settings</ui-sidebar-item>');
-    await ready(item);
+    await settled(item);
 
     assert.ok(item.hasAttribute('data-active'), 'a section stays lit inside its subtree');
     assert.equal(present(item.querySelector('a')).getAttribute('aria-current'), 'page');
@@ -128,7 +119,7 @@ describe('ui-sidebar-item', () => {
   it('stops at its own path when exact', async () => {
     currentPath.value = '/settings/users';
     const item = mount('<ui-sidebar-item href="/settings" exact>Settings</ui-sidebar-item>');
-    await ready(item);
+    await settled(item);
 
     assert.notOk(item.hasAttribute('data-active'));
     // Absent, not "false": aria-current="false" announces the element as a
@@ -139,11 +130,11 @@ describe('ui-sidebar-item', () => {
   it('follows navigation without a subscription', async () => {
     currentPath.value = '/';
     const item = mount('<ui-sidebar-item href="/reports">Reports</ui-sidebar-item>');
-    await ready(item);
+    await settled(item);
     assert.notOk(item.hasAttribute('data-active'));
 
     currentPath.value = '/reports';
-    await ready(item);
+    await settled(item);
     assert.ok(item.hasAttribute('data-active'));
   });
 
@@ -152,7 +143,7 @@ describe('ui-sidebar-item', () => {
     const item = mount(
       '<ui-sidebar-item href="/reports" link-class="row" active-class="on">Reports</ui-sidebar-item>',
     );
-    await ready(item);
+    await settled(item);
 
     const link = present(item.querySelector('a'));
     assert.equal(link.getAttribute('class'), 'row on');
@@ -173,7 +164,7 @@ describe('ui-sidebar-group', () => {
         <div class="panel"><a href="/settings/users">Users</a></div>
       </ui-sidebar-group>
     `);
-    await ready(group);
+    await settled(group);
 
     assert.ok(group.hasAttribute('data-open'), 'a deep link must not land on a closed menu');
     assert.ok(group.querySelector('.panel'), 'the projected panel is rendered');
@@ -188,10 +179,10 @@ describe('ui-sidebar-group', () => {
         <div class="panel">rows</div>
       </ui-sidebar-group>
     `);
-    await ready(group);
+    await settled(group);
 
     /** @type {HTMLElement} */ (present(group.querySelector('button'))).click();
-    await ready(group);
+    await settled(group);
 
     assert.notOk(group.hasAttribute('data-open'), 'the human wins over the route');
     assert.notOk(group.querySelector('.panel'));
@@ -204,19 +195,19 @@ describe('ui-sidebar-group', () => {
         <div class="panel">rows</div>
       </ui-sidebar-group>
     `);
-    await ready(group);
+    await settled(group);
 
     const button = /** @type {HTMLElement} */ (present(group.querySelector('button')));
     button.click();
-    await ready(group);
+    await settled(group);
     const panel = present(group.querySelector('.panel'));
 
     button.click();
-    await ready(group);
+    await settled(group);
     assert.notOk(group.querySelector('.panel'), 'closing removes it from the document');
 
     button.click();
-    await ready(group);
+    await settled(group);
     assert.equal(
       group.querySelector('.panel'),
       panel,
@@ -237,7 +228,7 @@ describe('ui-breadcrumb', () => {
       { label: 'Settings', href: '/settings' },
       { label: 'Users', href: '/settings/users' },
     ];
-    await ready(crumbs);
+    await settled(crumbs);
 
     assert.equal(crumbs.querySelectorAll('li').length, 3);
     assert.equal(crumbs.querySelectorAll('a').length, 2, 'the current page is not a link');
@@ -256,7 +247,7 @@ describe('ui-avatar', () => {
 
   it('derives initials from the first two words', async () => {
     const avatar = mount('<ui-avatar name="Name Surname"></ui-avatar>');
-    await ready(avatar);
+    await settled(avatar);
 
     const fallback = present(avatar.querySelector('span[role="img"]'));
     assert.equal(fallback.textContent?.trim(), 'NS');
@@ -268,11 +259,11 @@ describe('ui-avatar', () => {
     const avatar = /** @type {import('@components/shell/ui-avatar.js').UiAvatar} */ (
       mount('<ui-avatar name="Ada Lovelace" src="/nothing-here.png"></ui-avatar>')
     );
-    await ready(avatar);
+    await settled(avatar);
     assert.ok(avatar.querySelector('img'), 'starts optimistic');
 
     avatar.onImageError();
-    await ready(avatar);
+    await settled(avatar);
 
     assert.notOk(avatar.querySelector('img'), 'a broken image glyph is worse than initials');
     assert.equal(present(avatar.querySelector('span[role="img"]')).textContent?.trim(), 'AL');
@@ -294,7 +285,7 @@ describe('ui-menu', () => {
         </ui-menu>
       `)
     );
-    await ready(menu);
+    await settled(menu);
 
     const button = /** @type {HTMLElement} */ (present(menu.querySelector('button')));
     assert.equal(button.getAttribute('data-ui-part'), 'menu-trigger');
@@ -302,7 +293,7 @@ describe('ui-menu', () => {
     assert.notOk(menu.querySelector('.panel'));
 
     button.click();
-    await ready(menu);
+    await settled(menu);
     assert.ok(menu.querySelector('.panel'));
     assert.equal(
       present(menu.querySelector('div[id]')).getAttribute('data-ui-part'),
@@ -316,7 +307,7 @@ describe('ui-menu', () => {
     );
 
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    await ready(menu);
+    await settled(menu);
     assert.notOk(menu.open, 'a click anywhere else dismisses it');
   });
 
@@ -329,14 +320,14 @@ describe('ui-menu', () => {
         </ui-menu>
       `)
     );
-    await ready(menu);
+    await settled(menu);
     /** @type {HTMLElement} */ (present(menu.querySelector('button'))).click();
-    await ready(menu);
+    await settled(menu);
 
     present(menu.querySelector('.panel')).dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true }),
     );
-    await ready(menu);
+    await settled(menu);
     assert.ok(menu.open, 'clicking your own menu must not close it');
   });
 
@@ -349,22 +340,22 @@ describe('ui-menu', () => {
         </ui-menu>
       `)
     );
-    await ready(menu);
+    await settled(menu);
     const button = /** @type {HTMLElement} */ (present(menu.querySelector('button')));
 
     button.click();
-    await ready(menu);
+    await settled(menu);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await ready(menu);
+    await settled(menu);
     assert.notOk(menu.open);
     assert.equal(document.activeElement, button, 'focus returns to the trigger');
 
     button.click();
-    await ready(menu);
+    await settled(menu);
     assert.ok(menu.open);
 
     currentPath.value = '/somewhere-else';
-    await ready(menu);
+    await settled(menu);
     assert.notOk(menu.open, 'a menu left floating over the next page is the classic bug');
   });
 });
@@ -386,7 +377,7 @@ describe('ui-app-shell', () => {
         </ui-app-shell>
       `)
     );
-    await ready(shell);
+    await settled(shell);
 
     assert.notOk(shell.querySelector('.backdrop'));
 
@@ -394,25 +385,25 @@ describe('ui-app-shell', () => {
       present(shell.querySelector('ui-sidebar-toggle button'))
     );
     button.click();
-    await ready(shell);
+    await settled(shell);
 
     assert.ok(shell.hasAttribute('data-drawer-open'), 'the state is CSS-addressable');
     const backdrop = /** @type {HTMLElement} */ (present(shell.querySelector('.backdrop')));
 
     backdrop.click();
-    await ready(shell);
+    await settled(shell);
     assert.notOk(shell.drawerOpen);
 
     button.click();
-    await ready(shell);
+    await settled(shell);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await ready(shell);
+    await settled(shell);
     assert.notOk(shell.drawerOpen, 'Escape closes an overlay');
 
     button.click();
-    await ready(shell);
+    await settled(shell);
     currentPath.value = '/elsewhere';
-    await ready(shell);
+    await settled(shell);
     assert.notOk(shell.drawerOpen, 'and so does going somewhere');
   });
 
@@ -434,6 +425,6 @@ describe('ui-app-shell', () => {
       shell.querySelector('main'),
       'projected content must be in the document synchronously after connection',
     );
-    await ready(shell);
+    await settled(shell);
   });
 });

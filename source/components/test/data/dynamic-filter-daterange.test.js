@@ -11,15 +11,6 @@ const STATE_KEY = preferenceKey('ui-dynamic-filter', 'range-filter');
 /** March 3rd to 7th inclusive, which is `03..08` once the end is exclusive. */
 const MARCH_WEEK = `2026-03-03${DATE_RANGE_SEPARATOR}2026-03-08`;
 
-/** @param {Element} element */
-async function ready(element) {
-  await settled(element);
-  for (const child of element.querySelectorAll('ui-combobox, ui-date-range')) {
-    await settled(child);
-  }
-  await settled(element);
-}
-
 /** @returns {UiDynamicFilter} */
 function filterFixture() {
   return mount('<ui-dynamic-filter name="range-filter" locale="en-GB"></ui-dynamic-filter>');
@@ -54,7 +45,7 @@ function pointerDown(element) {
 /** @param {UiDynamicFilter} filter */
 async function openPanel(filter) {
   pointerDown(present(filter.querySelector('[data-ui-part="combobox-control"]')));
-  await ready(filter);
+  await settled(filter);
 }
 
 /** @param {UiDynamicFilter} filter @param {string} startsWith */
@@ -63,7 +54,7 @@ async function choose(filter, startsWith) {
     (candidate.textContent?.trim() ?? '').startsWith(startsWith),
   );
   pointerDown(present(option, `no option starting with ${startsWith}`));
-  await ready(filter);
+  await settled(filter);
 }
 
 /** @param {UiDynamicFilter} filter @param {string} part @param {string} value */
@@ -71,13 +62,13 @@ async function fill(filter, part, value) {
   const input = /** @type {HTMLInputElement} */ (present(filter.querySelector(part)));
   input.value = value;
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  await ready(filter);
+  await settled(filter);
 }
 
 /** @param {UiDynamicFilter} filter @param {string} part */
 async function click(filter, part) {
   present(filter.querySelector(part)).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  await ready(filter);
+  await settled(filter);
 }
 
 describe('date range helpers', () => {
@@ -114,7 +105,7 @@ describe('ui-dynamic-filter daterange rules', () => {
   it('offers presets plus one custom row, and labels each with its days', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     assert.sameArray(optionLabels(filter), [
@@ -127,7 +118,7 @@ describe('ui-dynamic-filter daterange rules', () => {
   it('applies a preset without opening the editor', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'That week');
 
@@ -155,7 +146,7 @@ describe('ui-dynamic-filter daterange rules', () => {
   it('asks for a custom range and stores the end exclusively', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Custom range');
 
@@ -184,7 +175,7 @@ describe('ui-dynamic-filter daterange rules', () => {
   it('collapses a hand-picked range onto the preset that already covers it', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Custom range');
 
@@ -208,7 +199,7 @@ describe('ui-dynamic-filter daterange rules', () => {
   it('leaves nothing behind when the editor is dismissed', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Custom range');
     await click(filter, '[data-ui-part="date-range-cancel"]');
@@ -221,7 +212,7 @@ describe('ui-dynamic-filter daterange rules', () => {
   it('refuses an end before the start', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Custom range');
 
@@ -240,7 +231,7 @@ describe('ui-dynamic-filter daterange rules', () => {
   it('resets the custom row when its chip is removed, but not a preset', async () => {
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
     await choose(filter, 'Custom range');
     await fill(filter, '[data-ui-part="date-range-since"]', '2026-04-10');
@@ -273,7 +264,7 @@ describe('ui-dynamic-filter daterange rules', () => {
 
     const filter = filterFixture();
     filter.rules = RULES;
-    await ready(filter);
+    await settled(filter);
     await openPanel(filter);
 
     assert.sameArray(
@@ -301,8 +292,8 @@ describe('ui-dynamic-filter daterange rules', () => {
         ],
       },
     ];
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
 
     assert.sameArray(
       filter.states.map((state) => state.value),
@@ -334,8 +325,8 @@ describe('ui-dynamic-filter daterange rules', () => {
         presets: [{ label: 'That week', value: MARCH_WEEK, default: true }],
       },
     ];
-    await ready(filter);
-    await ready(filter);
+    await settled(filter);
+    await settled(filter);
 
     assert.equal(/** @type {unknown[]} */ (detail).length, 1);
   });

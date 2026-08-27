@@ -1,6 +1,7 @@
 import { defineComponent } from '@core/elements/component.js';
 import { defineElementDefault } from '@core/elements/element-defaults.js';
 import { MountSequence, createElement } from '@core/elements/mount.js';
+import { whenRendered } from '@core/elements/settled.js';
 import { signal } from '@core/foundation/reactive.js';
 
 /** @import { MountAttempt } from '@core/elements/mount.js' */
@@ -987,30 +988,6 @@ function requestFor(route) {
     create: route.mount,
     release: route.unmount,
   };
-}
-
-/**
- * Wait until an element has finished rendering, including a render its first one
- * scheduled.
- *
- * One `updateComplete` is not enough: a component that projects content puts its
- * children back at the end of *its own* first render, which its parent's update
- * only schedules, so a `<main>` authored inside `<ui-app-shell>` does not exist
- * yet when the shell's update completes. One more turn, then the host's
- * completion again, covers it.
- *
- * @param {Element} element
- * @returns {Promise<void>}
- */
-async function whenRendered(element) {
-  const updatable = /** @type {{ updateComplete?: Promise<unknown> }} */ (
-    /** @type {unknown} */ (element)
-  );
-  if (updatable.updateComplete === undefined) return;
-
-  await updatable.updateComplete;
-  await Promise.resolve();
-  await updatable.updateComplete;
 }
 
 /**
