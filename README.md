@@ -26,9 +26,9 @@ source/lib/         the framework: core, auth, host, vendored deps, its own suit
 source/components/  the shared collection: the frame of an internal application
 example/            the example application: four sections, auth over a real backend,
                     micro-frontends, i18n
-cli/                the published toolchain, @srljs/cli: dev server, project model,
-                    template checker, artifact build and release. Its own package.json,
-                    the same way source/ has one
+cli/                the published toolchain, @srljs/cli: the application scaffold, dev
+                    server, project model, template checker, artifact build and release.
+                    Its own package.json, the same way source/ has one
 tools/              this repository's own tools, published nowhere: the vendor refresh,
                     the bundle build, the interface and docs checks, the benchmarks
 ```
@@ -58,6 +58,7 @@ then owns none of it:
 
 ```bash
 npm install --save-dev @srljs/cli
+srl new web        # the nine files a correct application is, written by the toolchain
 srl build --app web
 ```
 

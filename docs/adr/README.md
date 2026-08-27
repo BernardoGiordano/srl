@@ -71,6 +71,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0070](0070-a-production-template-is-minified-and-proved-equivalent.md) | A production template is minified, and the minified bytes are proved equivalent | accepted | `cli/delivery/template-html.mjs`, `cli/delivery/build.mjs` |
 | [ADR-0071](0071-a-built-template-is-fetched-by-the-component-that-needs-it.md) | A built template is fetched by the component that needs it | accepted | `cli/delivery/build.mjs` |
 | [ADR-0072](0072-a-check-returns-diagnostics.md) | A check returns diagnostics, and prints nothing | accepted | `cli/diagnostics/`, `cli/checks/`, `tools/checks/` |
+| [ADR-0073](0073-the-application-shape-is-a-module.md) | The application shape is a module, and `srl new` is one of its two adapters | accepted | `cli/scaffold/application.mjs`, `cli/bin/srl.mjs`, `tools/checks/pack-check.mjs`, `cli/README.md` |
 
 <!-- /generated:adr-index -->
 

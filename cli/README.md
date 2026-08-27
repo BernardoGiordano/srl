@@ -16,7 +16,16 @@ Full documentation, the guides and the decision records are in
 
 ```bash
 npm install --save-dev @srljs/cli
+srl new web
 ```
+
+`srl new` writes the smallest application that builds: the document with the library's
+import map pasted and the vendored script hashed, an entry module and a lazy chunk with
+their templates, the stylesheet, the manifest, a locale bundle, and a `tsconfig.json`
+extending the published base. Nine interdependent files, each of them a contract the tools
+below enforce — so they come from one module, the same one this toolchain's own packaged-
+install probe drives end to end on every run, rather than from prose here for you to
+retype. It refuses rather than overwrites.
 
 `@srljs/core` is a peer dependency, pinned to the exact matching version: this package reads
 the library's own manifest for the mounts and specifier prefixes, and imports three of its
@@ -53,6 +62,10 @@ below its own root.
 ## The tools
 
 ```bash
+# A new application in the repository root. Refuses an existing directory; leaves an
+# existing tsconfig.json alone and says which `include` entry to add.
+srl new web
+
 # Static server for one application: the library's two mounts, history fallback,
 # watch and live reload. Plain Node, no dependencies of its own.
 srl serve --app web --open
@@ -109,21 +122,26 @@ const report = await buildArtifact({ app: { name: 'web', dir: '/abs/path/web' } 
 
 ## Types
 
-The library publishes the type checker's half of its interface too. Extend it rather than
-copying four path mappings that would then be free to drift from the import map:
+The library publishes the type checker's half of its interface too, and `srl new` writes a
+`tsconfig.json` that extends it rather than copying four path mappings that would then be
+free to drift from the import map:
 
 ```json
 {
   "extends": "@srljs/core/tsconfig.base.json",
+  "compilerOptions": { "types": ["node"] },
   "include": ["web/**/*.js"]
 }
 ```
 
 That is what makes `@core/` resolve for tsc, and what `srl check templates` reads. The
 library ships no `.d.ts`: its types are JSDoc in the same `.js` files the browser runs, and
-the base config is what lets tsc read them where they are installed.
+the base config is what lets tsc read them where they are installed. A second application
+means one more `include` entry, which is the only edit this file needs per application.
 
 ## What the build expects of you
+
+A scaffolded application satisfies all four already; this is what they are and why.
 
 - **Tailwind, yours.** The build shells out to your own `node_modules/.bin/tailwindcss`,
   because the stylesheet it compiles is yours — written against your config and your

@@ -72,9 +72,10 @@ the reason is recorded in the module that owns it.
 | What "filtered" means | `source/components/data/filter-descriptor.js` |
 | The mounts `/lib/`, `/components/` and the specifiers they serve | `source/package.json` — the library declares them; `cli/package/interface.mjs` reads them for the dev server, the test runner, the benchmark origin and the delivery tooling |
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
+| What a correct srl application is made of | `cli/scaffold/application.mjs` — the nine files `srl new` writes, and the fixture the packaged-install probe drives |
 | What static discovery knows about the project | `cli/project-model/` |
 | A dependency or layering rule | `tools/checks/verify-deps.mjs` |
 | Whether an application's import map still matches the library it installed | `cli/checks/importmap-check.mjs` — the one check a consumer runs, because the failures are blank pages |
 | What tsc has to know to resolve `@core/` | `source/tsconfig.base.json` — published, extended rather than copied |
-| Whether the published tarballs work when installed | `tools/checks/pack-check.mjs` — packs both, installs them, drives an application |
+| Whether the published tarballs work when installed | `tools/checks/pack-check.mjs` — packs both, installs them, scaffolds an application with `srl new` and drives it |
 | A performance budget | `tools/benchmark/budgets.json` |

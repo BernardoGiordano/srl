@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
  * are not in this package at all.
  */
 const COMMANDS = {
+  new: '../scaffold/application.mjs',
   serve: '../dev/serve.mjs',
   build: '../delivery/build.mjs',
   templates: '../delivery/bundle-templates.mjs',
@@ -51,6 +52,12 @@ const COMMANDS = {
 const USAGE = `usage: srl <command> [options]
 
 Development
+  new <name>                a new application in the repository root: the
+                            document with the library's import map pasted and
+                            hashed, an entry and a lazy chunk, the stylesheet,
+                            the manifest, a locale bundle, and a tsconfig.json
+                            extending the published base. Refuses rather than
+                            overwrites
   serve [--app <name>] [--port <n>] [--no-watch] [--open]
         [--proxy <prefix>=<origin>]...
                             static server for one application: the library's

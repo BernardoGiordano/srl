@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **`srl new <name>` writes the application.** An srl application is nine interdependent
+  files — the document with the library's import map pasted and the vendored script
+  hashed, an entry module and a lazy chunk with their templates, the stylesheet reaching
+  into the installed package, the manifest, a locale bundle and a `tsconfig.json`
+  extending the published base — and every one of them is a contract the toolchain
+  enforces after the fact. That shape existed only as a fixture inside this repository's
+  packaged-install probe, published nowhere, so an adopter re-derived it from prose. It is
+  now `cli/scaffold/application.mjs`, and the probe is one of its two adapters: `npm run
+  pack:check` scaffolds with `srl new` through the published bin and drives the import-map
+  check, the template checker and the build against the result, so the thing you are given
+  is the thing that gets checked. It refuses rather than overwrites, and has no `--force`
+  ([ADR-0073](docs/adr/0073-the-application-shape-is-a-module.md)).
+
 - **A check returns diagnostics, and prints nothing.** Every check in the toolchain — the
   dependency and layering verifier, `srl check importmap`, `srl check templates`, the
   packaged-install probe, and the two documentation gates — used to report what it found by

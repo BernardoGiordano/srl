@@ -24,9 +24,10 @@
  *      resolves realpaths and every "am I installed?" test would answer no.
  *   3. Symlink every other dependency from this repository's node_modules, so the
  *      probe needs no network and pins nothing of its own.
- *   4. Write the smallest application that exercises the seam, with its import map
- *      pasted from the installed package's own lib/importmap.json — the same thing a
- *      consumer pastes, so no hash in here can go stale.
+ *   4. Scaffold the application with the published `srl new`, so the fixture is not
+ *      written here at all: the shape lives in cli/scaffold/application.mjs, the one
+ *      module `srl new` and this probe both cross, and a consumer's first command is
+ *      the thing under test. ADR-0073.
  *   5. Run the toolchain against it through the published `srl` bin: the import-map
  *      check, the template checker, the build.
  *
@@ -39,13 +40,12 @@
  */
 
 import { execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { error, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
+import { error, hasErrors, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { REPO, exists } from '../../cli/layout.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
@@ -194,182 +194,41 @@ async function bundledClosure(own) {
 }
 
 /**
- * The smallest application that puts the installed package under load: one component
- * with a template, a stylesheet that reaches into the package, and a manifest.
+ * The application, scaffolded by the published toolchain.
+ *
+ * This used to be a hundred and eighty lines of fixture: an index.html with the import map
+ * pasted and a hash computed, two components with their templates, the stylesheet, the
+ * manifest, a locale bundle and a tsconfig. All of it was the shape of a correct srl
+ * application, written down in the one place no consumer could reach, which made it a
+ * fifth description of a contract the toolchain enforces. It is now
+ * cli/scaffold/application.mjs, and this runs it as a consumer does. ADR-0073.
+ *
+ * Through the bin rather than by import, for the same reason everything else here is:
+ * imported, the scaffold would find the library beside `cli/` in this checkout and
+ * paste *that* import map. Run inside the probe, it resolves the installed package, and
+ * the fixture is made of the bytes actually under test.
+ *
+ * What stays here is what belongs to the probe rather than to an application: a
+ * package.json naming it, and the commit the artifact stamps.
  *
  * @param {string} probe
- * @returns {Promise<void>}
+ * @returns {Promise<Diagnostic[]>}
  */
-async function writeApplication(probe) {
-  const dir = join(probe, APP);
-  await mkdir(join(dir, 'src'), { recursive: true });
-
-  // The map is the package's own, pasted. A consumer does exactly this, and it means no
-  // specifier and no integrity hash in this file can drift from the library.
-  const core = join(probe, 'node_modules', '@srljs', 'core');
-  const fragment = await readFile(join(core, 'lib', 'importmap.json'), 'utf8');
-
-  // The development Tailwind build is a classic script, so its hash is an attribute
-  // rather than an integrity-map entry, and `srl check importmap` requires one on
-  // anything vendored. Computed from the installed bytes for the same reason the map is
-  // pasted rather than typed.
-  const tailwindHash = `sha384-${createHash('sha384')
-    .update(await readFile(join(core, 'lib', 'vendor', 'tailwind-browser.js')))
-    .digest('base64')}`;
-
-  // Eight facts, exactly one of each, and the production HTML transform refuses the
-  // document otherwise: the two collection stylesheets it replaces with the compiled
-  // one, the import map it replaces with pinned chunk URLs, the browser Tailwind and
-  // its inline input it replaces with the compiled sheet, the entry module, the root
-  // element and the noscript. That contract is the reason this fixture is a whole
-  // index.html rather than a stub — a consumer's page has to satisfy it, so the probe's
-  // does too. ADR-0041.
-  await writeFile(
-    join(dir, 'index.html'),
-    `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>packaged</title>
-    <link rel="stylesheet" href="/components/style.css" />
-    <link rel="stylesheet" href="/components/theme-default.css" />
-    <script type="importmap">
-${fragment.trimEnd()}
-    </script>
-    <script src="/lib/vendor/tailwind-browser.js" integrity="${tailwindHash}"></script>
-    <style type="text/tailwindcss">
-      @custom-variant dark ([data-theme='dark'] &);
-    </style>
-    <script type="module" src="/src/main.js"></script>
-  </head>
-  <body>
-    <app-root></app-root>
-    <noscript>This application needs JavaScript.</noscript>
-  </body>
-</html>
-`,
-  );
-
-  // A component, a template and a signal: the three things whose types the template
-  // checker has to resolve through the installed package rather than a relative path.
-  //
-  // Two modules, and the second is reached by `import()`, because the build refuses an
-  // artifact with fewer than two JavaScript chunks — an application with nothing lazy is
-  // one whose entry carries every route, which is the shape the chunking exists to
-  // avoid. It is also the interesting case here: a lazy chunk is where a second copy of
-  // the framework would show up if the library resolved twice.
-  await writeFile(
-    join(dir, 'src', 'main.js'),
-    `import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
-import { signal } from '@core/foundation/reactive.js';
-
-export class AppRoot extends SignalElement {
-  #count = signal(0);
-
-  get count() {
-    return this.#count.value;
-  }
-
-  increment() {
-    this.#count.value += 1;
-  }
-
-  async open() {
-    await import('./detail.js');
-  }
-}
-
-await defineComponent({
-  tag: 'app-root',
-  element: AppRoot,
-  module: import.meta.url,
-});
-`,
-  );
-
-  await writeFile(
-    join(dir, 'src', 'main.html'),
-    `<button type="button" (click)="increment()" class="font-semibold">{{ count }}</button>
-<button type="button" (click)="open()">open</button>
-`,
-  );
-
-  await writeFile(
-    join(dir, 'src', 'detail.js'),
-    `import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
-
-export class AppDetail extends SignalElement {
-  get title() {
-    return 'detail';
-  }
-}
-
-await defineComponent({
-  tag: 'app-detail',
-  element: AppDetail,
-  module: import.meta.url,
-});
-`,
-  );
-
-  await writeFile(join(dir, 'src', 'detail.html'), `<h1>{{ title }}</h1>\n`);
-
-  // Reaching into the package by node_modules path is what an application's own
-  // stylesheet does, and getting it wrong is a Tailwind resolve error rather than
-  // anything the build would otherwise catch.
-  await writeFile(
-    join(dir, 'src', 'app.css'),
-    `@import '../../node_modules/@srljs/core/components/style.css';
-@import '../../node_modules/@srljs/core/components/theme-default.css';
-@import 'tailwindcss' source(none);
-
-@source '../src/**/*.js';
-@source '../src/**/*.html';
-@source '../index.html';
-`,
-  );
-
-  // The three frozen top-level fields, at their smallest admissible values: one locale
-  // with one bundle, no API origin, no remotes. The manifest policy that admits this is
-  // the library's own — the same module the browser runs at startup — so a shape it
-  // would refuse fails here rather than in a page.
-  await mkdir(join(dir, 'i18n'), { recursive: true });
-  await writeFile(join(dir, 'i18n', 'en.json'), `${JSON.stringify({}, null, 2)}\n`);
-  await writeFile(
-    join(dir, 'app.manifest.json'),
-    `${JSON.stringify(
-      {
-        auth: { apiBaseUrl: '/api' },
-        i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: ['/i18n/{locale}.json'] },
-        remotes: [],
-      },
-      null,
-      2,
-    )}\n`,
-  );
-
-  // Extending the published base is the documented setup, and the only way `@core/`
-  // resolves for tsc. A consumer who copied four path mappings instead would have a
-  // second table to keep in step; this asserts the first one works.
-  await writeFile(
-    join(probe, 'tsconfig.json'),
-    `${JSON.stringify(
-      {
-        extends: '@srljs/core/tsconfig.base.json',
-        compilerOptions: { types: ['node'] },
-        include: [`${APP}/**/*.js`],
-      },
-      null,
-      2,
-    )}\n`,
-  );
-
+async function create(probe) {
   await writeFile(
     join(probe, 'package.json'),
     `${JSON.stringify({ name: 'pack-probe', private: true, type: 'module', version: '0.0.0' }, null, 2)}\n`,
   );
+
+  const scaffold = await srl(probe, ['new', APP]);
+  if (scaffold.code !== 0) {
+    return [
+      refuse(
+        'pack/scaffold-failed',
+        `\`srl new ${APP}\` failed in an installed layout:\n\n${indent(scaffold.output)}`,
+      ),
+    ];
+  }
 
   // The artifact stamps the commit it was built from, so the probe has to be one.
   await run('git', ['init', '-q', '.'], { cwd: probe });
@@ -379,6 +238,8 @@ await defineComponent({
     ['-c', 'user.email=pack@check', '-c', 'user.name=pack-check', 'commit', '-qm', 'probe'],
     { cwd: probe },
   );
+
+  return [info('pack/scaffold', `\`srl new ${APP}\` wrote the application`, { group: GROUP })];
 }
 
 /**
@@ -488,8 +349,12 @@ export async function checkPackagedInstall(options = {}) {
   try {
     await mkdir(join(probe, 'node_modules'), { recursive: true });
     await install(probe);
-    await writeApplication(probe);
-    found.push(...(await check(probe)));
+
+    // A scaffold that refused wrote no application, and every step below would then
+    // report the absence of one rather than the reason for it.
+    const created = await create(probe);
+    found.push(...created);
+    if (!hasErrors(created)) found.push(...(await check(probe)));
   } finally {
     if (options.keep === true) {
       found.push(info('pack/kept', `kept for inspection: ${probe}`, { group: GROUP }));

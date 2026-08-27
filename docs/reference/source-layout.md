@@ -148,6 +148,12 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
                             everything else here consumes it
   bin/srl.mjs               one entry point, `srl <command>`: a dispatcher and nothing
                             else. Every tool below still runs by path
+  scaffold/
+    application.mjs         what a correct srl application is made of, as one module:
+                            nine interdependent files, each of them a contract a tool
+                            below enforces. `srl new` writes them and pack-check.mjs
+                            drives them, so the shape and the check cannot drift
+                            (ADR-0073)
   package/
     interface.mjs           what the library publishes, read from source/package.json:
                             mounts, specifier prefixes, and the generated import-map
@@ -188,7 +194,8 @@ tools/                      THIS REPOSITORY'S OWN TOOLS, published nowhere: the 
                             only make sense inside the checkout
   checks/
     verify-deps.mjs         layering, deps, import maps, templates, translations, storage
-    pack-check.mjs          both tarballs, installed the way a stranger installs them and
+    pack-check.mjs          both tarballs, installed the way a stranger installs them,
+                            scaffolded with `srl new` through the published bin and
                             driven end to end
     readme-check.mjs        the generated sections of docs/reference/project-index.md
     adr-check.mjs           the decision records, and every citation that reaches one

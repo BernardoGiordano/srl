@@ -92,8 +92,11 @@ function deployPairs() {
   return MOUNTS.map(([prefix, dir]) => `${repoPath(dir)} ${prefix.slice(1, -1)}`).join('\n');
 }
 
-/** Root directories that are never an application. */
-const NOT_APPS = new Set(['source', 'cli', 'tools', 'node_modules', 'dist', 'coverage']);
+/**
+ * Root directories that are never an application, so `apps()` skips them and
+ * `srl new` refuses to write into one.
+ */
+export const NOT_APPS = new Set(['source', 'cli', 'tools', 'node_modules', 'dist', 'coverage']);
 
 /**
  * @param {string} path
