@@ -1,6 +1,6 @@
 {
   "name": "@srljs/cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "license": "MIT",
   "description": "The srl toolchain: application scaffold, dev server, project model, template checker, and the production artifact build and release pipeline",
@@ -96,7 +96,7 @@
     "a second copy under this package the day their own pin drifted."
   ],
   "peerDependencies": {
-    "@srljs/core": "0.4.0"
+    "@srljs/core": "0.5.0"
   },
   "//dependencies": [
     "Pinned exactly, and to the versions this repository's own lockfile resolves,",
