@@ -124,10 +124,8 @@ void test('built example mounts independent Billing and Analytics artifacts', as
       assert.deepEqual(errors, []);
 
       for (const report of [billing, analytics]) {
-        const remote = /** @type {{ url: string, locales: string[], templates?: string, assets: Array<{ type: string, url: string }> }} */ (
-          report.remote
-        );
-        assert.ok(requests.includes(remote.url), `${String(report.name)} entry was not requested`);
+        const remote = report.remote;
+        assert.ok(requests.includes(remote.url), `${report.name} entry was not requested`);
         assert.ok(
           remote.assets
             .filter((asset) => asset.type === 'style')

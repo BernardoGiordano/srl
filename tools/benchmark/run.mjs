@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 
 import { REPO, selectedApp } from '../../cli/layout.mjs';
+import { REPORT, isRemoteReport, readReport } from '../../cli/delivery/artifact-report.mjs';
 import {
   BASELINE_VERSION,
   DURATION,
@@ -333,43 +334,29 @@ async function main() {
  */
 async function readArtifactOrigin(app) {
   const root = join(REPO, 'dist', app.name);
-  let report;
+  let read;
   try {
-    report = JSON.parse(await readFile(join(root, 'artifact.json'), 'utf8'));
+    read = await readReport(root);
   } catch (cause) {
+    if (cause instanceof Error && /** @type {{ code?: unknown }} */ (cause).code !== 'ENOENT') {
+      throw cause;
+    }
     throw new Error(
       `No built artifact for ${app.name}; run \`npm run build -- --app ${app.name}\` first.`,
       { cause },
     );
   }
-  if (
-    report.app !== app.name ||
-    typeof report.public !== 'string' ||
-    typeof report.security?.csp !== 'string' ||
-    typeof report.cache?.immutable !== 'string' ||
-    typeof report.cache?.revalidate !== 'string' ||
-    !Array.isArray(report.chunks) ||
-    !Array.isArray(report.files) ||
-    typeof report.totals?.files !== 'number' ||
-    typeof report.totals?.bytes !== 'number' ||
-    typeof report.totals?.gzip !== 'number' ||
-    typeof report.totals?.brotli !== 'number'
-  ) {
-    throw new Error(`dist/${app.name}/artifact.json does not describe a benchmarkable artifact.`);
+  const report = read.report;
+  if (isRemoteReport(report) || report.app !== app.name) {
+    throw new Error(`dist/${app.name}/${REPORT} does not describe a benchmarkable artifact.`);
   }
   return {
     report,
     publicDir: join(root, report.public),
     csp: report.security.csp,
     assets: report.files
-      .filter(
-        (/** @type {{ cache: string, path: string }} */ file) =>
-          file.cache === 'immutable' && file.path.startsWith(`${report.public}/`),
-      )
-      .map(
-        (/** @type {{ path: string }} */ file) =>
-          `/${file.path.slice(report.public.length + 1)}`,
-      ),
+      .filter((file) => file.cache === 'immutable' && file.path.startsWith(`${report.public}/`))
+      .map((file) => `/${file.path.slice(report.public.length + 1)}`),
     cache: {
       immutable: report.cache.immutable,
       revalidate: report.cache.revalidate,

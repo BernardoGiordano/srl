@@ -23,17 +23,24 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { activateReleasePointer } from './activate-release.mjs';
+import { REPORT, isRemoteReport, readReport } from './artifact-report.mjs';
 import { applyRetention, planRetention } from './retention.mjs';
 import { verifyPublishedRelease } from './verify-release.mjs';
 
+/** @import { ArtifactFile, RemoteArtifactReport, RemoteTransport } from './artifact-report.mjs' */
+
 /**
- * @typedef {{ path: string, cache: string, bytes: number, sha256: string }} ArtifactFile
- * @typedef {{ type: string, url: string, integrity: string }} RemoteAsset
- * @typedef {{ name: string, url: string, integrity: string, assets: RemoteAsset[], locales?: string[], templates?: string }} RemoteDescriptor
- * @typedef {{ version: number, kind: string, experimental: boolean, app: string, name: string, public: string, base: string, entry: string, release: { commit: string }, remote: RemoteDescriptor, files: ArtifactFile[] }} RemoteArtifact
- * @typedef {{ version: number, kind: 'remote', app: string, name: string, id: string, public: { base: string, version: string, directory: 'public' }, files: Array<{ target: string, path: string }> }} RemoteReleaseReport
+ * The report retained beside a published Remote release: what was published, from
+ * which artifact, at which immutable version URL. `remote` is the Remote's own
+ * transport descriptor, carried through unchanged so that composing a shell later
+ * needs the release and not the artifact it came from.
+ *
+ * @typedef {{ version: number, kind: 'remote', app: string, name: string, id: string, artifact: { sha256: string, commit: string | null }, public: { base: string, version: string, directory: string }, remote: RemoteTransport, files: Array<{ target: string, path: string, bytes: number, sha256: string, kind: string }> }} RemoteReleaseReport
  * @typedef {{ artifactRoot: string, outDir: string, allowExperimental?: boolean }} PrepareOptions
  */
+
+/** A release names its artifact by a full commit; a build does not have to. */
+const FULL_COMMIT = /^[0-9a-f]{40}$/u;
 
 /**
  * Build a deterministic transport tree from one verified Remote artifact.
@@ -46,13 +53,12 @@ export async function prepareRemoteRelease(options) {
   const output = resolve(options.outDir);
   await requireMissing(output);
 
-  const artifactPath = join(artifactRoot, 'artifact.json');
-  const artifactBytes = await readFile(artifactPath);
-  const artifact = parseRemoteArtifact(
-    artifactBytes,
-    artifactPath,
-    options.allowExperimental === true,
-  );
+  const {
+    report,
+    bytes: artifactBytes,
+    path: artifactPath,
+  } = await readReport(artifactRoot);
+  const artifact = admitRemoteArtifact(report, artifactPath, options.allowExperimental === true);
   const browserBytes = await verifyRemoteArtifact(artifactRoot, artifact);
   const artifactSha256 = digest(artifactBytes);
   const id = `${artifact.release.commit.slice(0, 12)}-${artifactSha256.slice(0, 12)}`;
@@ -71,10 +77,10 @@ export async function prepareRemoteRelease(options) {
       kind: file.cache === 'metadata' ? 'metadata' : 'browser',
     });
   }
-  await copy(artifactPath, join(releaseOutput, 'artifact.json'));
+  await copy(artifactPath, join(releaseOutput, REPORT));
   files.push({
     target: 'release',
-    path: 'artifact.json',
+    path: REPORT,
     bytes: artifactBytes.byteLength,
     sha256: artifactSha256,
     kind: 'metadata',
@@ -242,53 +248,41 @@ export async function applyRemoteRetention(plan) {
   return { deleted: result.deleted + plan.aliases.length };
 }
 
-/** @param {Buffer} bytes @param {string} path @param {boolean} allowExperimental */
-function parseRemoteArtifact(bytes, path, allowExperimental) {
-  /** @type {RemoteArtifact} */
-  let value;
-  try {
-    value = /** @type {RemoteArtifact} */ (/** @type {unknown} */ (JSON.parse(bytes.toString('utf8'))));
-  } catch (cause) {
-    throw new Error(`remote-release: artifact cannot parse ${path}`, { cause });
+/**
+ * What a release requires of an artifact report beyond the report's own contract:
+ * a Remote rather than a shell, a full commit to name the release by, a base this
+ * module's publication layout recognises, and — unless a PoC deploy says otherwise
+ * — a build that is no longer marked experimental.
+ *
+ * @param {import('./artifact-report.mjs').ArtifactReport} report
+ * @param {string} path
+ * @param {boolean} allowExperimental
+ * @returns {RemoteArtifactReport & { release: { commit: string } }}
+ */
+function admitRemoteArtifact(report, path, allowExperimental) {
+  if (!isRemoteReport(report)) {
+    throw new Error(`remote-release: ${path} is a shell artifact, not a Remote one.`);
   }
-  if (
-    value.version !== 1 ||
-    value.kind !== 'remote' ||
-    value.public !== 'public' ||
-    !/^[a-z0-9][a-z0-9._-]*$/u.test(value.app ?? '') ||
-    !/^[a-z0-9][a-z0-9._-]*$/u.test(value.name ?? '') ||
-    !/^[0-9a-f]{40}$/u.test(value.release?.commit ?? '') ||
-    !Array.isArray(value.files) ||
-    value.remote?.name !== value.name
-  ) {
-    throw new Error('remote-release: artifact.json has an unsupported Remote contract.');
+  const commit = report.release.commit;
+  if (commit === null || !FULL_COMMIT.test(commit)) {
+    throw new Error(`remote-release: ${path} was not built from a full commit.`);
   }
-  versionFromBase(value);
-  if (value.experimental === true && !allowExperimental) {
+  versionFromBase(report);
+  if (report.experimental === true && !allowExperimental) {
     throw new Error(
       'remote-release: artifact remains experimental; pass --experimental only for an approved PoC deploy.',
     );
   }
-  return value;
+  return { ...report, release: { ...report.release, commit } };
 }
 
-/** @param {string} artifactRoot @param {RemoteArtifact} artifact */
+/** @param {string} artifactRoot @param {RemoteArtifactReport} artifact */
 async function verifyRemoteArtifact(artifactRoot, artifact) {
-  const expected = new Set(['artifact.json']);
+  const expected = new Set([REPORT]);
   /** @type {Map<string, ArtifactFile & { content: Buffer }>} */
   const byPath = new Map();
   for (const file of artifact.files) {
     validateRelative(file.path);
-    if (
-      typeof file.bytes !== 'number' ||
-      !Number.isSafeInteger(file.bytes) ||
-      file.bytes < 0 ||
-      !/^[0-9a-f]{64}$/u.test(file.sha256) ||
-      !['immutable', 'revalidate', 'metadata'].includes(file.cache) ||
-      expected.has(file.path)
-    ) {
-      throw new Error(`remote-release: invalid inventory record for ${file.path}`);
-    }
     expected.add(file.path);
     const bytes = await readFile(inside(artifactRoot, file.path));
     if (bytes.byteLength !== file.bytes || digest(bytes) !== file.sha256) {
@@ -305,24 +299,18 @@ async function verifyRemoteArtifact(artifactRoot, artifact) {
   }
 
   const remote = artifact.remote;
-  if (
-    typeof remote.url !== 'string' ||
-    typeof remote.integrity !== 'string' ||
-    !Array.isArray(remote.assets) ||
-    !remote.url.startsWith(artifact.base)
-  ) {
+  if (!remote.url.startsWith(artifact.base)) {
     throw new Error('remote-release: Remote transport descriptor is malformed.');
   }
   const seen = new Set();
   for (const asset of remote.assets) {
     if (
       !['module', 'style', 'template'].includes(asset.type) ||
-      typeof asset.url !== 'string' ||
       !asset.url.startsWith(artifact.base) ||
       !/^sha384-[A-Za-z0-9+/]{64}$/u.test(asset.integrity) ||
       seen.has(asset.url)
     ) {
-      throw new Error(`remote-release: malformed asset record for ${String(asset.url)}`);
+      throw new Error(`remote-release: malformed asset record for ${asset.url}`);
     }
     seen.add(asset.url);
     const path = `public/${asset.url.slice(artifact.base.length)}`;
@@ -349,23 +337,19 @@ async function verifyRemoteArtifact(artifactRoot, artifact) {
   ) {
     throw new Error('remote-release: template bundle is absent from Remote assets.');
   }
-  for (const pattern of remote.locales ?? []) {
-    if (typeof pattern !== 'string' || !pattern.startsWith(artifact.base) || !pattern.includes('{locale}')) {
-      throw new Error(`remote-release: malformed locale pattern ${String(pattern)}`);
+  for (const pattern of remote.locales) {
+    if (!pattern.startsWith(artifact.base) || !pattern.includes('{locale}')) {
+      throw new Error(`remote-release: malformed locale pattern ${pattern}`);
     }
   }
   return [...byPath.values()].reduce((total, file) => total + file.bytes, 0);
 }
 
-/** @param {RemoteArtifact} artifact */
+/** @param {RemoteArtifactReport} artifact */
 function versionFromBase(artifact) {
   const prefix = `/remotes/${artifact.name}/`;
-  if (
-    typeof artifact.base !== 'string' ||
-    !artifact.base.startsWith(prefix) ||
-    !artifact.base.endsWith('/')
-  ) {
-    throw new Error(`remote-release: invalid publication base ${String(artifact.base)}`);
+  if (!artifact.base.startsWith(prefix)) {
+    throw new Error(`remote-release: invalid publication base ${artifact.base}`);
   }
   const version = artifact.base.slice(prefix.length, -1);
   if (!/^[A-Za-z0-9._-]+$/u.test(version)) {

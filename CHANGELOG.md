@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **The artifact report has a name.** `artifact.json` is what `srl build` produces beside
+  the bytes and what the release, the composition, the HTTP verifier and the benchmark all
+  read, and it was typed `Readonly<Record<string, unknown>>`: the build re-read its own
+  output through five poke-helpers, and each of the five downstream tools hand-rolled its
+  own validation over a different subset of the same document. It is now
+  `cli/delivery/artifact-report.mjs` — one `ArtifactReport` type, `writeReport` and
+  `readReport` as the only writer and reader, and a pure `parseReport` that makes the
+  contract assertable without running a bundler. A malformed report is refused before it
+  reaches disk, and a refusal names the field and the file instead of saying only that the
+  contract is unsupported
+  ([ADR-0074](docs/adr/0074-the-artifact-report-is-a-named-shape.md)).
+
 - **`srl new <name>` writes the application.** An srl application is nine interdependent
   files — the document with the library's import map pasted and the vendored script
   hashed, an entry module and a lazy chunk with their templates, the stylesheet reaching

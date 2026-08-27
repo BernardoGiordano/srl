@@ -1,9 +1,10 @@
 /** Verify bytes and headers served from one published browser artifact. */
 
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { REPORT, isRemoteReport, readReport } from './artifact-report.mjs';
 
 /**
  * @param {{ artifactRoot: string, origin: string, fetch?: typeof globalThis.fetch }} options
@@ -15,21 +16,8 @@ export async function verifyHttpArtifact(options) {
   if (!/^https?:$/u.test(origin.protocol) || origin.pathname !== '/') {
     throw new Error(`http-verify: origin must be an HTTP origin: ${options.origin}`);
   }
-  const report = JSON.parse(await readFile(join(artifactRoot, 'artifact.json'), 'utf8'));
-  if (
-    report.version !== 1 ||
-    !/^[a-z0-9][a-z0-9._-]*$/u.test(report.app ?? '') ||
-    !Array.isArray(report.files) ||
-    (report.kind !== undefined && report.kind !== 'remote') ||
-    (report.kind === 'remote' && typeof report.base !== 'string') ||
-    (report.kind !== 'remote' && typeof report.security?.csp !== 'string')
-  ) {
-    throw new Error('http-verify: unsupported artifact report.');
-  }
-  const base = report.kind === 'remote' ? report.base : '/';
-  if (!base.startsWith('/') || !base.endsWith('/') || base.startsWith('//')) {
-    throw new Error(`http-verify: invalid artifact publication base: ${String(base)}`);
-  }
+  const { report } = await readReport(artifactRoot);
+  const base = isRemoteReport(report) ? report.base : '/';
 
   let checked = 0;
   for (const file of report.files) {
@@ -54,7 +42,7 @@ export async function verifyHttpArtifact(options) {
     }
     if (
       file.path === 'public/index.html' &&
-      typeof report.security?.csp === 'string' &&
+      !isRemoteReport(report) &&
       response.headers.get('content-security-policy') !== report.security.csp
     ) {
       throw new Error('http-verify: served CSP differs from artifact security metadata.');
@@ -62,18 +50,17 @@ export async function verifyHttpArtifact(options) {
     checked += 1;
   }
 
-  const forbidden =
-    report.kind === 'remote'
-      ? ['artifact.json', 'release.json', 'THIRD_PARTY_LICENSES.md', 'assets/not-a-module.js']
-      : [
-          'artifact.json',
-          'release.json',
-          'THIRD_PARTY_LICENSES.md',
-          'assets/not-a-module.js',
-          'src/not-a-module.js',
-          'lib/not-a-module.js',
-          'components/not-a-module.js',
-        ];
+  const forbidden = isRemoteReport(report)
+    ? [REPORT, 'release.json', 'THIRD_PARTY_LICENSES.md', 'assets/not-a-module.js']
+    : [
+        REPORT,
+        'release.json',
+        'THIRD_PARTY_LICENSES.md',
+        'assets/not-a-module.js',
+        'src/not-a-module.js',
+        'lib/not-a-module.js',
+        'components/not-a-module.js',
+      ];
   for (const relativePath of forbidden) {
     const pathname = `${base}${relativePath}`;
     const response = await request(new URL(pathname, origin), { redirect: 'error' });
@@ -83,7 +70,7 @@ export async function verifyHttpArtifact(options) {
   }
   return {
     app: report.app,
-    ...(report.kind === 'remote' ? { kind: 'remote', name: report.name, base } : {}),
+    ...(isRemoteReport(report) ? { kind: 'remote', name: report.name, base } : {}),
     files: checked,
     commit: report.release.commit,
   };

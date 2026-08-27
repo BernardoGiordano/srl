@@ -15,14 +15,18 @@ import { copyFile, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/pr
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { REPORT, isRemoteReport, readReport } from './artifact-report.mjs';
 import { sha256, staticTarget } from './release-target.mjs';
+
+/** @import { ArtifactFile, ArtifactReport, ShellArtifactReport } from './artifact-report.mjs' */
 
 /**
  * @typedef {import('./release-target.mjs').ReleaseTarget} ReleaseTarget
- * @typedef {{ path: string, cache: string, bytes: number, sha256: string }} ArtifactFile
- * @typedef {{ version: number, experimental: boolean, app: string, public: string, release: { commit: string }, security: { csp: string, importMap: { sha256: string } }, files: ArtifactFile[] }} Artifact
  * @typedef {{ artifactRoot: string, outDir: string, target: ReleaseTarget, allowExperimental?: boolean }} PrepareOptions
  */
+
+/** A release names its artifact by a full commit; a build does not have to. */
+const FULL_COMMIT = /^[0-9a-f]{40}$/u;
 
 /**
  * Build a deterministic transport tree from an already-verified browser artifact.
@@ -35,9 +39,12 @@ export async function prepareRelease(options) {
   const target = options.target;
   await requireMissing(output);
 
-  const artifactPath = join(artifactRoot, 'artifact.json');
-  const artifactBytes = await readFile(artifactPath);
-  const artifact = parseArtifact(artifactBytes, artifactPath, options.allowExperimental === true);
+  const {
+    report,
+    bytes: artifactBytes,
+    path: artifactPath,
+  } = await readReport(artifactRoot);
+  const artifact = admitReleasable(report, artifactPath, options.allowExperimental === true);
   if (target.app !== undefined && artifact.app !== target.app) {
     throw new Error(
       `release:artifact: target ${target.name} accepts ${target.app}, not ${artifact.app}.`,
@@ -93,10 +100,10 @@ export async function prepareRelease(options) {
     }
   }
 
-  await copy(artifactPath, join(releaseOutput, 'artifact.json'));
+  await copy(artifactPath, join(releaseOutput, REPORT));
   files.push({
     target: 'release',
-    path: 'artifact.json',
+    path: REPORT,
     bytes: artifactBytes.byteLength,
     sha256: artifactSha256,
     kind: 'metadata',
@@ -179,61 +186,40 @@ export async function prepareRelease(options) {
   return deepFreeze(publication);
 }
 
-/** @param {Buffer} bytes @param {string} path @param {boolean} allowExperimental */
-function parseArtifact(bytes, path, allowExperimental) {
-  /** @type {Artifact} */
-  let value;
-  try {
-    value = /** @type {Artifact} */ (/** @type {unknown} */ (JSON.parse(bytes.toString('utf8'))));
-  } catch (cause) {
-    throw new Error(`release:artifact: cannot parse ${path}`, { cause });
+/**
+ * What a release requires of an artifact report beyond the report's own contract.
+ *
+ * A Remote's report carries `kind`; it is composed into a shell artifact rather
+ * than released on its own, so it is refused here rather than half-handled. See
+ * remote-release.mjs. A full commit is required because the release id is derived
+ * from it, and an experimental build ships only when a deploy says so out loud.
+ *
+ * @param {ArtifactReport} report
+ * @param {string} path
+ * @param {boolean} allowExperimental
+ * @returns {ShellArtifactReport & { release: { commit: string } }}
+ */
+function admitReleasable(report, path, allowExperimental) {
+  if (isRemoteReport(report)) {
+    throw new Error(`release:artifact: ${path} is a Remote artifact; compose it into a shell first.`);
   }
-  if (
-    value.version !== 1 ||
-    // A remote's report carries `kind`; it is composed into a shell artifact
-    // rather than released on its own. See remote-release.mjs.
-    /** @type {{ kind?: unknown }} */ (value).kind !== undefined ||
-    !/^[a-z0-9][a-z0-9._-]*$/u.test(value.app ?? '') ||
-    value.public !== 'public' ||
-    !/^[0-9a-f]{40}$/u.test(value.release?.commit ?? '') ||
-    !Array.isArray(value.files) ||
-    typeof value.security?.csp !== 'string' ||
-    typeof value.security?.importMap?.sha256 !== 'string'
-  ) {
-    throw new Error('release:artifact: artifact.json has an unsupported release contract.');
+  const commit = report.release.commit;
+  if (commit === null || !FULL_COMMIT.test(commit)) {
+    throw new Error(`release:artifact: ${path} was not built from a full commit.`);
   }
-  if (value.experimental === true && !allowExperimental) {
+  if (report.experimental === true && !allowExperimental) {
     throw new Error(
       'release:artifact: artifact remains experimental; pass --experimental only for the approved PoC deploy.',
     );
   }
-  if (
-    !/^sha256-[A-Za-z0-9+/]+={0,2}$/u.test(value.security.importMap.sha256) ||
-    /["\\\r\n]/u.test(value.security.csp) ||
-    !value.security.csp.includes(`'${value.security.importMap.sha256}'`)
-  ) {
-    throw new Error('release:artifact: CSP does not admit the reported import map.');
-  }
-  return value;
+  return { ...report, release: { ...report.release, commit } };
 }
 
-/** @param {string} artifactRoot @param {ArtifactFile[]} files */
+/** @param {string} artifactRoot @param {ReadonlyArray<ArtifactFile>} files */
 async function verifyArtifactFiles(artifactRoot, files) {
-  const expected = new Set(['artifact.json']);
+  const expected = new Set([REPORT]);
   for (const file of files) {
     validateRelative(file.path);
-    if (
-      typeof file.bytes !== 'number' ||
-      !Number.isSafeInteger(file.bytes) ||
-      file.bytes < 0 ||
-      !/^[0-9a-f]{64}$/u.test(file.sha256) ||
-      !['immutable', 'revalidate', 'metadata'].includes(file.cache)
-    ) {
-      throw new Error(`release:artifact: invalid inventory record for ${file.path}`);
-    }
-    if (expected.has(file.path)) {
-      throw new Error(`release:artifact: duplicate inventory path ${file.path}`);
-    }
     expected.add(file.path);
     const bytes = await readFile(inside(artifactRoot, file.path));
     if (bytes.byteLength !== file.bytes || sha256(bytes) !== file.sha256) {

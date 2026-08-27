@@ -120,6 +120,20 @@ import { buildArtifact } from '@srljs/cli/delivery/build.mjs';
 const report = await buildArtifact({ app: { name: 'web', dir: '/abs/path/web' } });
 ```
 
+The report is a named shape, not a bag: `ArtifactReport` in
+`@srljs/cli/delivery/artifact-report.mjs`, which is also the only module that writes or
+reads `artifact.json`. A tool of your own reads one through `readReport` and gets the
+inventory, the chunk graph, the totals and the security metadata as typed properties, and
+a malformed document is refused by field and file rather than accepted and half-used
+(ADR-0074):
+
+```js
+import { readReport, isRemoteReport } from '@srljs/cli/delivery/artifact-report.mjs';
+
+const { report } = await readReport('dist/web');
+if (!isRemoteReport(report)) console.log(report.security.csp, report.totals.brotli);
+```
+
 ## Types
 
 The library publishes the type checker's half of its interface too, and `srl new` writes a

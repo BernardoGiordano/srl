@@ -9,6 +9,9 @@ import { minifyTemplate } from '../delivery/template-html.mjs';
 import { prepareRemoteRelease } from '../delivery/remote-release.mjs';
 import { REPO, apps, walk } from '../layout.mjs';
 
+/** @import { ArtifactFile, RemoteArtifactReport } from '../delivery/artifact-report.mjs' */
+/** @import { RemoteReleaseReport } from '../delivery/remote-release.mjs' */
+
 const RELEASE = {
   commit: '0000000000000000000000000000000000000000',
   sourceDateEpoch: 0,
@@ -21,11 +24,9 @@ async function example() {
   return app;
 }
 
-/** @param {Readonly<Record<string, unknown>>} report */
+/** @param {{ files: ArtifactFile[] }} report @returns {ReadonlyArray<ArtifactFile>} */
 function filesOf(report) {
-  return /** @type {ReadonlyArray<{ path: string, cache: string, bytes: number, gzip: number, brotli: number, sha256: string }>} */ (
-    report.files
-  );
+  return report.files;
 }
 
 void test('example composes independently verified Remote artifacts', async () => {
@@ -49,12 +50,8 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.equal(billing.kind, 'remote');
     assert.equal(analytics.kind, 'remote');
     assert.notEqual(billing.root, analytics.root);
-    const billingTransport = /** @type {{ name: string, url: string, integrity: string, assets: Array<{ type: string, url: string, integrity: string }>, shared: string[], locales: string[], templates?: string }} */ (
-      billing.remote
-    );
-    const analyticsTransport = /** @type {{ name: string, url: string, assets: Array<{ type: string, url: string, integrity: string }>, shared: string[], locales: string[] }} */ (
-      analytics.remote
-    );
+    const billingTransport = billing.remote;
+    const analyticsTransport = analytics.remote;
     assert.equal(billingTransport.name, 'billing');
     assert.equal(analyticsTransport.name, 'analytics');
     assert.match(billingTransport.url, /^\/remotes\/billing\/0+\/assets\/remote-entry-[A-Za-z0-9_-]{8}\.js$/u);
@@ -91,9 +88,7 @@ void test('example composes independently verified Remote artifacts', async () =
       release: RELEASE,
       remotes: [billing, analytics],
     });
-    const composed = /** @type {Array<{ name: string, url: string, mount: string, assets: Array<{ type: string, url: string, integrity: string }> }>} */ (
-      shell.remotes
-    );
+    const composed = shell.remotes;
     assert.deepEqual(composed.map((remote) => remote.name), ['billing', 'analytics']);
     assert.equal(composed[0]?.url, billingTransport.url);
     assert.equal(composed[0]?.mount, '/billing');
@@ -125,21 +120,22 @@ void test('example composes independently verified Remote artifacts', async () =
     }
 
     /**
-     * @param {Readonly<Record<string, unknown>>} report
+     * @param {RemoteArtifactReport} report
      * @param {string} label
+     * @returns {Promise<RemoteReleaseReport & { root: string }>}
      */
     const retain = async (report, label) => {
       const prepared = join(temporary, `prepared-${label}`);
-      const publication = await prepareRemoteRelease({
-        artifactRoot: String(report.root),
+      await prepareRemoteRelease({
+        artifactRoot: report.root,
         outDir: prepared,
         allowExperimental: true,
       });
       const root = join(prepared, 'release');
-      const release = /** @type {Record<string, unknown>} */ (
+      const release = /** @type {RemoteReleaseReport} */ (
         /** @type {unknown} */ (JSON.parse(await readFile(join(root, 'release.json'), 'utf8')))
       );
-      return { ...release, root, publication };
+      return { ...release, root };
     };
     const [billingRelease, analyticsRelease] = await Promise.all([
       retain(billing, 'billing'),
@@ -159,19 +155,16 @@ void test('example composes independently verified Remote artifacts', async () =
       outDir: join(temporary, 'shell-new-billing'),
       remotes: [newerBillingRelease, analyticsRelease],
     });
-    const recomposedRemotes = /** @type {Array<{ name: string, url: string }>} */ (
-      recomposed.remotes
-    );
     assert.match(
-      recomposedRemotes.find((remote) => remote.name === 'billing')?.url ?? '',
+      recomposed.remotes.find((remote) => remote.name === 'billing')?.url ?? '',
       new RegExp(`/remotes/billing/${'1'.repeat(40)}/`, 'u'),
     );
     assert.equal(
-      recomposedRemotes.find((remote) => remote.name === 'analytics')?.url,
+      recomposed.remotes.find((remote) => remote.name === 'analytics')?.url,
       analyticsTransport.url,
     );
     const mutableCompositionPaths = new Set(['public/app.manifest.json', 'public/index.html']);
-    /** @param {Readonly<Record<string, unknown>>} report */
+    /** @param {{ files: ArtifactFile[] }} report */
     const implementationFiles = (report) =>
       filesOf(report).filter((file) => !mutableCompositionPaths.has(file.path));
     assert.deepEqual(
@@ -211,11 +204,11 @@ void test('example composes independently verified Remote artifacts', async () =
       (file) => file.target === 'release' && file.path.endsWith('.js'),
     );
     assert.ok(tamperedModule !== undefined);
-    await rm(join(String(newerBillingRelease.root), tamperedModule.path));
+    await rm(join(newerBillingRelease.root, tamperedModule.path));
     await assert.rejects(
       composeArtifact({
         app,
-        artifactRoot: String(shell.root),
+        artifactRoot: shell.root,
         outDir: join(temporary, 'shell-tampered'),
         remotes: [newerBillingRelease, analyticsRelease],
       }),

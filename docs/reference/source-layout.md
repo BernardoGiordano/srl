@@ -170,6 +170,9 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
   delivery/
     build.mjs               the production artifact: chunked, minified, hash-named, one
                             sha384 pinned per chunk, and a report describing all of it
+    artifact-report.mjs     what that report is: one typed shape, the only module that
+                            writes or reads `artifact.json`, and a pure parse the other
+                            five tools here admit one through (ADR-0074)
     production-html.mjs     an index.html's development form -> its production one
     template-html.mjs       one template minified, and proof the minified bytes parse to
                             the same tree the source did
