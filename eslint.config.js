@@ -40,6 +40,12 @@ export default tseslint.config(
       // Fixture projects for the project model's tests: deliberately unreadable
       // declarations, which is the point of them.
       'cli/test/fixtures/**',
+      // Coding-assistant scratch space, gitignored, and the place a git worktree
+      // gets checked out. A worktree is a second copy of this repository sitting
+      // inside it: `eslint .` walked one, typechecked it against the root
+      // tsconfig it does not belong to, and reported hundreds of errors about a
+      // revision nobody was editing.
+      '.claude/**',
     ],
   },
 
