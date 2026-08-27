@@ -295,6 +295,51 @@ describe('ui-table', () => {
   });
 
   /**
+   * The chooser is one of the three panels that go through `open-panel.js`, and
+   * the one that had least of this before: the trigger claimed `aria-expanded`
+   * and named nothing at all, and Escape closed the chooser from anywhere in the
+   * document whether or not it was open. ADR-0078.
+   */
+  it('announces the chooser, and closes it on a pointer outside the toolbar', async () => {
+    const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(`
+      <ui-table column-chooser>
+        <ui-table-column key="name" label="Name" hideable></ui-table-column>
+      </ui-table>
+    `));
+    table.rows = [{ id: 1, name: 'Ada' }];
+    await ready(table);
+
+    const trigger = /** @type {HTMLElement} */ (
+      present(table.querySelector('[data-ui-part="table-columns-trigger"]'))
+    );
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    assert.equal(trigger.getAttribute('aria-controls'), null);
+
+    trigger.click();
+    await ready(table);
+
+    const panel = present(table.querySelector('[data-ui-part="table-columns-panel"]'));
+    assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+    assert.equal(trigger.getAttribute('aria-controls'), panel.id, 'and it names the panel');
+
+    // The dismissal region is the toolbar strip, not the table: a pointer on a
+    // row is outside the chooser, and a table fills the screen.
+    present(table.querySelector('[data-ui-part="table-cell"]')).dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true }),
+    );
+    await ready(table);
+    assert.notOk(table.columnsOpen);
+    assert.equal(trigger.getAttribute('aria-controls'), null, 'and stops naming a panel that went');
+
+    trigger.click();
+    await ready(table);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await ready(table);
+    assert.notOk(table.columnsOpen);
+    assert.equal(document.activeElement, trigger, 'focus returns to the trigger');
+  });
+
+  /**
    * The column projection — order, visibility, and the offset every sticky column
    * sits at — is computed once per change rather than once per cell. So each thing
    * it is derived from has to be a thing the rendered cells still follow.

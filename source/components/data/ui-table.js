@@ -6,7 +6,7 @@ import {
 } from '@core/preferences/persistence.js';
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { anchorPanel } from '../internal/anchored-panel.js';
+import { panelBinding } from '../internal/open-panel.js';
 import { directionSign } from '../internal/dom.js';
 import { matchesRow, normalizeText, readPath } from './filter-descriptor.js';
 import { standardText } from '../internal/text.js';
@@ -243,11 +243,30 @@ export class UiTable extends SignalElement {
    */
   #presentationRevision = 0;
 
-  /** @type {(() => void) | undefined} */
-  #releaseColumnsPanel;
-
-  /** @type {HTMLElement | undefined} */
-  #anchoredColumnsPanel;
+  /**
+   * The column chooser floats above the page rather than inside it.
+   *
+   * A card wrapping a table almost always clips its own corners, and a table two
+   * rows tall is shorter than a list of twelve columns. Both of those cut the
+   * panel off in exactly the place a user cannot scroll to. `panelBinding` moves
+   * it to the top layer, where the card's overflow does not apply, and caps it at
+   * the room actually available so a long list scrolls instead of vanishing.
+   *
+   * `within` is the toolbar strip, not the table: a pointer on a row is outside
+   * the chooser and has to close it.
+   */
+  #columnsPanel = panelBinding({
+    host: this,
+    trigger: '[data-ui-part="table-columns-trigger"]',
+    panel: '[data-ui-part="table-columns-panel"]',
+    within: '[data-ui-part="table-columns-control"]',
+    align: 'end',
+    maxHeight: 420,
+    lifetime: () => this.lifetime,
+    onDismiss: () => {
+      this.columnsOpen = false;
+    },
+  });
 
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   #persistTimer;
@@ -256,10 +275,6 @@ export class UiTable extends SignalElement {
     this.#restoreState();
     this.addEventListener('ui-column-change', this.#onColumnChange, { signal: this.lifetime });
     super.connectedCallback();
-    document.addEventListener('pointerdown', this.#onDocumentPointerDown, {
-      signal: this.lifetime,
-    });
-    document.addEventListener('keydown', this.#onDocumentKeyDown, { signal: this.lifetime });
   }
 
   onDestroy() {
@@ -268,8 +283,6 @@ export class UiTable extends SignalElement {
     this.#intersectionObserver?.disconnect();
     this.#intersectionObserver = undefined;
     this.#observedSentinel = null;
-    this.#releaseColumnsPanel?.();
-    this.#releaseColumnsPanel = undefined;
     // A debounced write must not be lost because the user navigated away half a
     // second after dragging a column: flush it, do not cancel it.
     this.#flushPersist();
@@ -494,7 +507,7 @@ export class UiTable extends SignalElement {
       this.#dispatchQueryEvent('query-change');
     }
     this.#measureVisibleColumns();
-    this.#anchorColumnsPanel();
+    this.#columnsPanel.sync(this.columnsOpen);
     if (this.#restoredStatePending) {
       this.#restoredStatePending = false;
       this.dispatchEvent(
@@ -507,35 +520,6 @@ export class UiTable extends SignalElement {
       this.#schedulePersist();
     }
     this.#hasUpdated = true;
-  }
-
-  /**
-   * The column chooser floats above the page rather than inside it.
-   *
-   * A card wrapping a table almost always clips its own corners, and a table two
-   * rows tall is shorter than a list of twelve columns. Both of those cut the
-   * panel off in exactly the place a user cannot scroll to. `anchorPanel` moves it
-   * to the top layer, where the card's overflow does not apply, and caps it at the
-   * room actually available so a long list scrolls instead of vanishing.
-   */
-  #anchorColumnsPanel() {
-    const panel = /** @type {HTMLElement | null} */ (
-      this.querySelector('[data-ui-part="table-columns-panel"]')
-    );
-    if (!this.columnsOpen || panel === null) {
-      this.#releaseColumnsPanel?.();
-      this.#releaseColumnsPanel = undefined;
-      this.#anchoredColumnsPanel = undefined;
-      return;
-    }
-    if (panel === this.#anchoredColumnsPanel) return;
-    const trigger = /** @type {HTMLElement | null} */ (
-      this.querySelector('[data-ui-part="table-columns-trigger"]')
-    );
-    if (trigger === null) return;
-    this.#releaseColumnsPanel?.();
-    this.#releaseColumnsPanel = anchorPanel(trigger, panel, { align: 'end', maxHeight: 420 });
-    this.#anchoredColumnsPanel = panel;
   }
 
   #onColumnChange = () => {
@@ -1261,19 +1245,6 @@ export class UiTable extends SignalElement {
       this.requestUpdate();
     }
   }
-
-  /** @param {PointerEvent} event */
-  #onDocumentPointerDown = (event) => {
-    if (!this.columnsOpen) return;
-    const control = this.querySelector('[data-ui-part="table-columns-control"]');
-    if (control !== null && event.composedPath().includes(control)) return;
-    this.columnsOpen = false;
-  };
-
-  /** @param {KeyboardEvent} event */
-  #onDocumentKeyDown = (event) => {
-    if (event.key === 'Escape') this.columnsOpen = false;
-  };
 
   /** @param {unknown} row @param {number} index @param {readonly TableFilter[]} filters */
   #matchesFilters(row, index, filters) {

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **An open panel is one module, not four habits.** `internal/anchored-panel.js` owned
+  where a floating panel goes and nothing else, which is the part an open panel shares
+  least — `ui-menu` places its own with two utility classes. Everything they do share was
+  restated per element: outside-pointerdown dismissal three times, Escape three times,
+  eighteen lines of release bookkeeping twice, and the `aria-expanded`/`aria-controls` pair
+  spelled three ways. They had diverged. The table's chooser trigger claimed
+  `aria-expanded` and named nothing; the combobox pointed `aria-controls` at an id with no
+  element behind it whenever it was closed; the table answered an Escape from anywhere in
+  the document whether or not the chooser was open, and left focus where it found it. The
+  module is now `internal/open-panel.js`: `openPanel(host, trigger, panel, options)` places
+  it, announces it, dismisses it and returns the one call that undoes all of that, and
+  `panelBinding()` drives it from a component's `updated()` — with
+  `lifetime: () => this.lifetime`, `onDestroy` has nothing to write. Placement is the part
+  you can decline, with `anchor: null`. The module also has a suite for the first time,
+  which found the one real defect: `max-height` caps the content box while every other
+  number in the placement is a border-box number, so a padded panel flipped above its
+  anchor overhung it — invisible here only because Tailwind's reset was doing the job
+  ([ADR-0078](docs/adr/0078-an-open-panel-is-one-module.md)).
+
 - **A module says which of its exports are the door.** `import { … } from '@srljs/core'`
   autocompleted to 144 names in one flat namespace, several of which the source itself
   documents as internal: `compileTemplate` ("Exported for tests"), `resetInjector` ("For

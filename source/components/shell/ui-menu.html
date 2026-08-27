@@ -3,8 +3,7 @@
   data-ui-part="menu-trigger"
   class="{{ triggerClass }}"
   aria-haspopup="true"
-  [aria-expanded]="expandedAttr"
-  [aria-controls]="panelId"
+  aria-expanded="false"
   [aria-label]="labelAttr"
   (click)="toggle()"
 >
@@ -14,7 +13,6 @@
 <div
   *if="open"
   data-ui-part="menu-panel"
-  [id]="panelId"
   [role]="roleAttr"
   class="{{ panelClass }}"
 >

@@ -151,6 +151,10 @@ describe('ui-combobox', () => {
     const first = present(optionElements(combobox)[0]);
     assert.equal(input.getAttribute('aria-expanded'), 'true');
     assert.equal(input.getAttribute('aria-activedescendant'), first.id);
+    assert.equal(
+      input.getAttribute('aria-controls'),
+      present(combobox.querySelector('[data-ui-part="combobox-panel"]')).id,
+    );
 
     await press(combobox, 'ArrowDown');
     assert.equal(
@@ -161,6 +165,10 @@ describe('ui-combobox', () => {
     await press(combobox, 'Escape');
     assert.notOk(combobox.open);
     assert.equal(input.getAttribute('aria-activedescendant'), null);
+    assert.equal(input.getAttribute('aria-expanded'), 'false');
+    // The panel is gone, so the id it had is gone: a closed combobox that still
+    // controls something names an element no screen reader can reach. ADR-0078.
+    assert.equal(input.getAttribute('aria-controls'), null);
   });
 
   it('adds a tag only when the term names nothing listed', async () => {

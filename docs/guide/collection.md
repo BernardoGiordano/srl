@@ -42,7 +42,7 @@ and `avatar-fallback`; they are styling hooks, not state.
 | `ui-field` | one field: the label, the error, the three ARIA attributes that tie them together, the value wiring in both directions, and the disabled state pushed onto the control plus `data-disabled` on itself | the control element itself, its classes, and the words behind `ui.field.*` |
 | `ui-dynamic-filter` | nine rule types compiled into options, one value per ref, persistence, lazy and typeahead loading, the active-filter rail | rule declarations, group and option text, what the emitted state filters |
 | `ui-date-range` | two day fields and a confirm, plus the inclusive/exclusive conversion | the words behind `ui.dateRange.*`, and where to render it |
-| `internal/anchored-panel.js` | pins a floating panel under its anchor in the top layer, flips it when the room is above, caps it at the room there is | which element anchors what |
+| `internal/open-panel.js` | everything an open panel owes: the top layer and the placement (under the anchor, flipped when the room is above, clamped and re-measured), dismissal on an outside pointer and on Escape with focus return, `aria-expanded`/`aria-controls`, and the release | which element triggers what, and whether to decline the placement |
 | `internal/dom.js` | `optionalAttr` (an empty string removes the attribute), `isRtl`/`directionSign`, `nextElementId` | when to reach for any of them |
 | `internal/text.js` | the standard interaction text, one key per string | every word behind those keys |
 | `data/filter-descriptor.js` | what "filtered" means: `ANY_COLUMN`, the `contains`/`equals`/`range` modes, the match each rule type implies, and the row comparison | which element produces filters and which applies them |
@@ -187,11 +187,17 @@ identity. That is right for a filter change and wrong for the `filter-ready` tha
 after a slow lookup, so a consumer that pages before its rules load should ignore a ready
 event carrying no state.
 
-`ui-combobox`'s panel and `ui-table`'s column chooser are `popover` elements positioned
-by `anchored-panel.js`. The two obvious alternatives both fail: a panel in the flow pushes
-the page down when it opens, and an absolutely positioned one is clipped by the first
-ancestor with `overflow: hidden` — which is every card with rounded corners. In the top
-layer neither applies.
+`ui-combobox`'s panel, `ui-table`'s column chooser and `ui-menu`'s dropdown all go through
+`open-panel.js`, which owns what an open panel owes whichever element opened it: dismissal
+on an outside pointer and on Escape with focus back on the trigger, the
+`aria-expanded`/`aria-controls` pair, and the one call that undoes all of it.
+
+The first two are `popover` elements it also positions. The two obvious alternatives both
+fail: a panel in the flow pushes the page down when it opens, and an absolutely positioned
+one is clipped by the first ancestor with `overflow: hidden` — which is every card with
+rounded corners. In the top layer neither applies. `ui-menu` declines the placement with
+`anchor: null` and keeps the rest, because a header dropdown is already placed by the two
+utility classes the consumer wrote ([ADR-0078](../adr/0078-an-open-panel-is-one-module.md)).
 
 ## Forms
 

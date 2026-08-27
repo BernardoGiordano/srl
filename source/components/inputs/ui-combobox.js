@@ -1,7 +1,7 @@
 import { nothing } from 'lit';
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { anchorPanel } from '../internal/anchored-panel.js';
+import { panelBinding } from '../internal/open-panel.js';
 import { standardText } from '../internal/text.js';
 import { nextElementId, optionalAttr } from '../internal/dom.js';
 
@@ -198,11 +198,24 @@ export class UiCombobox extends SignalElement {
 
   #scrollActivePending = false;
 
-  /** @type {(() => void) | undefined} */
-  #release;
-
-  /** @type {HTMLElement | undefined} */
-  #anchored;
+  /**
+   * The panel obligation: position, outside pointer, Escape, the ARIA pair, and
+   * the teardown that used to be three lines in `onDestroy`. The input is the
+   * trigger because it is the `role="combobox"`; the control is the anchor
+   * because the panel is as wide as the whole box, chips included.
+   */
+  #panel = panelBinding({
+    host: this,
+    trigger: '[data-ui-part="combobox-input"]',
+    anchor: '[data-ui-part="combobox-control"]',
+    panel: '[data-ui-part="combobox-panel"]',
+    align: 'stretch',
+    maxHeight: 288,
+    lifetime: () => this.lifetime,
+    onDismiss: () => {
+      this.closePanel();
+    },
+  });
 
   #expanded = false;
 
@@ -217,13 +230,6 @@ export class UiCombobox extends SignalElement {
    *   result: readonly ComboboxOption[],
    * } | undefined} */
   #visibleCache;
-
-  connectedCallback() {
-    super.connectedCallback();
-    // pointerdown, not click, for the reason ui-menu documents: a drag that ends
-    // outside the panel must not close it mid-gesture.
-    document.addEventListener('pointerdown', this.#onDocumentPointerDown, { signal: this.lifetime });
-  }
 
   get inputId() {
     return `${this.#id}-input`;
@@ -321,10 +327,6 @@ export class UiCombobox extends SignalElement {
     if (matched.length === codes.length) this.#pendingCodes = undefined;
 
     if (!sameOptions(this.selected, matched)) this.value = matched;
-  }
-
-  get panelId() {
-    return `${this.#id}-panel`;
   }
 
   get normalizedOptions() {
@@ -446,10 +448,6 @@ export class UiCombobox extends SignalElement {
     return index === -1 ? nothing : `${this.#id}-option-${String(index)}`;
   }
 
-  get expandedAttr() {
-    return String(this.open);
-  }
-
   get labelAttr() {
     return optionalAttr(this.label);
   }
@@ -551,12 +549,6 @@ export class UiCombobox extends SignalElement {
     return remove === '' ? nothing : `${remove} ${String(option.label)}`;
   }
 
-  onDestroy() {
-    this.#release?.();
-    this.#release = undefined;
-    this.#anchored = undefined;
-  }
-
   /** @param {Map<PropertyKey, unknown>} changed */
   updated(changed) {
     super.updated(changed);
@@ -571,7 +563,7 @@ export class UiCombobox extends SignalElement {
     // The codes are kept and resolved here, whenever the options turn up.
     if (changed.has('options') && this.#pendingCodes !== undefined) this.#applyCodes();
 
-    this.#anchorPanel();
+    this.#panel.sync(this.open);
 
     if (!this.open) {
       this.#panelScrollTop = 0;
@@ -583,7 +575,7 @@ export class UiCombobox extends SignalElement {
       this.#active = undefined;
     }
 
-    const panel = this.#panel;
+    const panel = this.#panelElement;
     if (panel === null) return;
 
     if (this.#scrollActivePending) {
@@ -630,7 +622,7 @@ export class UiCombobox extends SignalElement {
     if (height === 0 || height !== this.#expandedHeight) {
       this.#expandedHeight = height;
       requestAnimationFrame(() => {
-        const current = this.#panel;
+        const current = this.#panelElement;
         if (current !== null) this.#scrollExpansionIntoView(current);
       });
       return;
@@ -649,34 +641,8 @@ export class UiCombobox extends SignalElement {
   }
 
   /** @returns {HTMLElement | null} */
-  get #panel() {
+  get #panelElement() {
     return this.querySelector('[data-ui-part="combobox-panel"]');
-  }
-
-  /**
-   * The panel is taken out of the flow and pinned under the control, because a
-   * dropdown that reflows the page is not a dropdown. `anchorPanel` also keeps it
-   * out of every ancestor's `overflow: hidden`, which is the difference between a
-   * component that works in a card and one that only works on a bare page.
-   */
-  #anchorPanel() {
-    const panel = this.#panel;
-    if (!this.open || panel === null) {
-      this.#release?.();
-      this.#release = undefined;
-      this.#anchored = undefined;
-      return;
-    }
-    // Lit reuses the panel element across renders, so this is a no-op on all but
-    // the render that opened it — and the anchor keeps following on its own.
-    if (panel === this.#anchored) return;
-    const control = /** @type {HTMLElement | null} */ (
-      this.querySelector('[data-ui-part="combobox-control"]')
-    );
-    if (control === null) return;
-    this.#release?.();
-    this.#release = anchorPanel(control, panel, { align: 'stretch', maxHeight: 288 });
-    this.#anchored = panel;
   }
 
   /** @param {HTMLElement} panel */
@@ -700,14 +666,6 @@ export class UiCombobox extends SignalElement {
     const panel = event.currentTarget;
     if (panel instanceof HTMLElement) this.#panelScrollTop = panel.scrollTop;
   }
-
-  /** @param {PointerEvent} event */
-  #onDocumentPointerDown = (event) => {
-    if (!this.open) return;
-    const target = event.target;
-    if (target instanceof Node && this.contains(target)) return;
-    this.closePanel();
-  };
 
   /**
    * Clicking the frame anywhere but on a button focuses the input and opens the
@@ -800,12 +758,6 @@ export class UiCombobox extends SignalElement {
         event.preventDefault();
         if (this.#active !== undefined) this.toggleOption(this.#active);
         else if (this.showAddTag) this.commitTag();
-        break;
-      }
-      case 'Escape': {
-        if (!this.open) return;
-        event.preventDefault();
-        this.closePanel();
         break;
       }
       case 'Backspace': {
