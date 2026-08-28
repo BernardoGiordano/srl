@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { buildArtifact, buildRemoteArtifact, composeArtifact } from '../delivery/build.mjs';
+import { entryHints } from '../delivery/entry-hints.mjs';
 import { minifyTemplate } from '../delivery/template-html.mjs';
 import { prepareRemoteRelease } from '../delivery/remote-release.mjs';
 import { REPO, apps, walk } from '../layout.mjs';
@@ -113,6 +114,23 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.ok(importMapSource !== undefined);
     const importMap = JSON.parse(importMapSource);
     assert.deepEqual(importMap.imports, shared);
+
+    // The document names the graph the report holds, and names it with the digests
+    // the map above pins, so a hint and the module request it is for are one
+    // transfer rather than two. ADR-0080.
+    const hinted = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"[^>]*>/gu)];
+    assert.deepEqual(
+      hinted.map(([, href]) => href).sort(),
+      [...new Set(entryHints(shell).flatMap((hint) => (hint.rel === 'modulepreload' ? [hint.href] : [])))].sort(),
+    );
+    for (const [tag, href] of hinted) {
+      assert.ok(
+        String(tag).includes(`integrity="${String(importMap.integrity[String(href)])}"`),
+        `${String(href)} is hinted under a digest the import map does not pin`,
+      );
+    }
+    assert.ok(!html.includes(`rel="modulepreload" href="/${String(shell.entry)}"`));
+    assert.ok(html.includes('<link rel="preload" href="/app.manifest.json" as="fetch" crossorigin="">'));
     for (const transport of [billingTransport, analyticsTransport]) {
       for (const asset of transport.assets.filter((candidate) => candidate.type === 'module')) {
         assert.equal(importMap.integrity[asset.url], asset.integrity);

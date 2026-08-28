@@ -43,6 +43,7 @@ import {
   readReport,
   writeReport,
 } from './artifact-report.mjs';
+import { withEntryHints } from './entry-hints.mjs';
 import { minifyTemplate } from './template-html.mjs';
 import { verifyPublishedRelease } from './verify-release.mjs';
 
@@ -152,6 +153,9 @@ export async function buildArtifact({
         emptyOutDir: true,
         license: { fileName: 'THIRD_PARTY_LICENSES.md' },
         minify: 'oxc',
+        // The engine's own preloading stays off: it injects hints from the document
+        // it is given, and this build hands it one that is still a source file. The
+        // hints are written afterwards, from the emitted graph. ADR-0080.
         modulePreload: false,
         outDir: publicDir,
         sourcemap: false,
@@ -173,6 +177,14 @@ export async function buildArtifact({
 
     const chunks = chunkRelationships(app, buildOutput);
     const shared = sharedOutputs(app, chunks, sharedEntries);
+    const entryModule = relative(REPO, model.entry).split(sep).join('/');
+    const entry = chunks.find(
+      (chunk) =>
+        chunk.entry && (chunk.facade === entryModule || chunk.modules.includes(entryModule)),
+    )?.path;
+    if (entry === undefined) {
+      throw artifactError(app, 'verify', 'generated output has no hash-named entry chunk.');
+    }
     await rm(css.temporary, { force: true });
     await emitLicenses(stage, publicDir);
     const templateOutput = await emitTemplateFiles(
@@ -197,16 +209,16 @@ export async function buildArtifact({
       shared,
       composition.moduleAssets,
     );
+    // The graph exists now, so the document can name it. Last write to index.html
+    // before it is inventoried, and after the import map, which a modulepreload has
+    // to be preceded by. ADR-0080.
+    const htmlPath = join(publicDir, 'index.html');
+    await writeFile(
+      htmlPath,
+      withEntryHints(await readFile(htmlPath, 'utf8'), { entry, chunks, security }),
+    );
     await verifyBrowserRoot(app, publicDir);
     const files = verifyPayload(app, await inventory(stage), templateOutput, chunks);
-    const entryModule = relative(REPO, model.entry).split(sep).join('/');
-    const entry = chunks.find(
-      (chunk) =>
-        chunk.entry && (chunk.facade === entryModule || chunk.modules.includes(entryModule)),
-    )?.path;
-    if (entry === undefined) {
-      throw artifactError(app, 'verify', 'generated output has no hash-named entry chunk.');
-    }
 
     const report = /** @type {ShellArtifactReport} */ ({
       version: 1,
@@ -416,6 +428,8 @@ export async function buildRemoteArtifact({
         emptyOutDir: true,
         license: { fileName: 'THIRD_PARTY_LICENSES.md' },
         minify: 'oxc',
+        // A Remote has no document of its own — the shell owns the one that carries
+        // the hints — so there is nothing here for the engine to inject into. ADR-0080.
         modulePreload: false,
         outDir: publicDir,
         sourcemap: false,
@@ -1243,6 +1257,10 @@ async function emitLicenses(stage, publicDir) {
  * parse5 owns HTML syntax; this code owns only which application facts survive production.
  * Shared source-delivery facts are counted exactly. Application-specific duplicated nodes
  * opt out with `data-artifact="source-only"`, so this module never learns their contents.
+ *
+ * Subtractive, and only subtractive. `order: 'pre'` runs this before a chunk has been
+ * emitted, so nothing here can name one; what the document says about the module graph
+ * is written later, from the graph itself, by `entry-hints.mjs`. ADR-0080.
  *
  * @param {BuildApplication} app
  * @returns {import('vite').Plugin}
