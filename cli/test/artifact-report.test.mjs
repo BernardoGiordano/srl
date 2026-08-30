@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   PUBLIC,
   REPORT,
+  entryChain,
   isRemoteReport,
   parseReport,
   readReport,
@@ -45,11 +46,24 @@ function shellReport() {
         entry: true,
         dynamicEntry: false,
         facade: 'example/src/main.js',
-        imports: [],
+        imports: ['assets/shared/core-abcd1234.js'],
         dynamicImports: [],
         modules: ['example/src/main.js'],
       },
+      {
+        path: 'assets/shared/core-abcd1234.js',
+        entry: false,
+        dynamicEntry: false,
+        facade: null,
+        imports: [],
+        dynamicImports: [],
+        modules: ['source/lib/core/index.js'],
+      },
     ],
+    chain: {
+      depth: 2,
+      path: ['assets/entry-abcd1234.js', 'assets/shared/core-abcd1234.js'],
+    },
     shared: { '@core/': '/assets/shared/core-abcd1234.js' },
     remotes: [],
     security: {
@@ -97,7 +111,18 @@ function remoteReport() {
     target: shell.target,
     cache: shell.cache,
     entry: 'assets/remote-entry-abcd1234.js',
-    chunks: shell.chunks,
+    chunks: [
+      {
+        path: 'assets/remote-entry-abcd1234.js',
+        entry: true,
+        dynamicEntry: false,
+        facade: 'example/remotes/billing/main.js',
+        imports: [],
+        dynamicImports: [],
+        modules: ['example/remotes/billing/main.js'],
+      },
+    ],
+    chain: { depth: 1, path: ['assets/remote-entry-abcd1234.js'] },
     remote: {
       name: 'billing',
       url,
@@ -196,6 +221,27 @@ void test('a report the module cannot name is refused, and says which field', ()
       /split template delivery names no bundle/u,
     ],
     ['kind', (report) => (report.kind = 'shell'), /unsupported report kind/u],
+    [
+      'a chain depth the chunk graph does not produce',
+      (report) => {
+        const chain = /** @type {Record<string, unknown>} */ (report.chain);
+        chain.depth = 1;
+      },
+      /chain\.depth is 1; the reported chunk graph is 2 deep/u,
+    ],
+    [
+      'a chain path that is not a path',
+      (report) => {
+        const chain = /** @type {Record<string, unknown>} */ (report.chain);
+        chain.path = ['assets/shared/core-abcd1234.js', 'assets/entry-abcd1234.js'];
+      },
+      /chain\.path is not the chain the reported chunk graph produces/u,
+    ],
+    [
+      'an entry that is not one of the chunks',
+      (report) => (report.entry = 'assets/entry-00000000.js'),
+      /is not one of the chunks the report carries/u,
+    ],
   ];
 
   for (const [label, corrupt, expected] of cases) {
@@ -292,4 +338,78 @@ void test('a report that is not there is a filesystem error, not a contract one'
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+});
+
+void test('the entry chain is how far a browser walks, not how far it could walk', () => {
+  // Two routes to `a.js`: one hop from the entry, and a longer way round through
+  // `b.js`. A browser discovers it on the first, so everything behind it is one
+  // level shallower than a longest-path walk would report.
+  /** @param {string} path @param {string[]} imports */
+  const chunk = (path, imports) => ({
+    path,
+    entry: path === 'entry.js',
+    dynamicEntry: false,
+    facade: null,
+    imports,
+    dynamicImports: [],
+    modules: [],
+  });
+  const chunks = [
+    chunk('entry.js', ['a.js', 'b.js']),
+    chunk('a.js', ['late.js']),
+    chunk('b.js', ['a.js']),
+    chunk('late.js', ['leaf.js']),
+    chunk('leaf.js', []),
+  ];
+
+  assert.deepEqual(entryChain('entry.js', chunks), {
+    depth: 4,
+    path: ['entry.js', 'a.js', 'late.js', 'leaf.js'],
+  });
+});
+
+void test('a circular chunk graph has a depth rather than an infinite loop', () => {
+  /** @param {string} path @param {string[]} imports */
+  const chunk = (path, imports) => ({
+    path,
+    entry: false,
+    dynamicEntry: false,
+    facade: null,
+    imports,
+    dynamicImports: [],
+    modules: [],
+  });
+
+  assert.deepEqual(
+    entryChain('entry.js', [
+      chunk('entry.js', ['a.js']),
+      chunk('a.js', ['b.js']),
+      chunk('b.js', ['a.js', 'entry.js']),
+    ]),
+    { depth: 3, path: ['entry.js', 'a.js', 'b.js'] },
+  );
+});
+
+void test('a route chunk is not part of the startup chain', () => {
+  /** @param {string} path @param {string[]} imports @param {string[]} dynamicImports */
+  const chunk = (path, imports, dynamicImports) => ({
+    path,
+    entry: false,
+    dynamicEntry: false,
+    facade: null,
+    imports,
+    dynamicImports,
+    modules: [],
+  });
+
+  // Which route a visitor lands on is not a build fact, so the depth of the whole
+  // application is not the depth of its start.
+  assert.deepEqual(
+    entryChain('entry.js', [
+      chunk('entry.js', [], ['route.js']),
+      chunk('route.js', ['deep.js'], []),
+      chunk('deep.js', [], []),
+    ]),
+    { depth: 1, path: ['entry.js'] },
+  );
 });

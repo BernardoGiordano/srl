@@ -23,11 +23,20 @@
  * than two loads measuring the same page: how many native module requests an entry
  * route costs, how many encoded bytes arrive, and how much of that is the
  * development Tailwind that production replaces with a compiled stylesheet.
+ *
+ * AND HOW MANY OF THEM WAITED FOR EACH OTHER
+ *
+ * `chainDepth` is the third delivery fact, and the only one of the three that moves
+ * when a transfer stops being discovered and starts being announced. The harness
+ * resolves no host, so no request pays a real round trip and neither a count nor a
+ * byte total can tell a flat graph from a serial one. `../chain.mjs` derives it from
+ * the initiator each request already carries. ADR-0082.
  */
 
 import { join } from 'node:path';
 
 import { apps, readText } from '../../../cli/layout.mjs';
+import { requestChain, until } from '../chain.mjs';
 import { artifactDeclaration } from '../declaration.mjs';
 
 /** @import { ArtifactDeclaration, BenchmarkPage, BenchmarkSample, NodeWorkloadContext, WorkloadSpec } from '../types.js' */
@@ -111,6 +120,10 @@ const READ_MARKS = `async (timeout) => {
     firstView: window.__bench?.firstView ?? null,
     load: navigation?.loadEventEnd ?? null,
     domContentLoaded: navigation?.domContentLoadedEventEnd ?? null,
+    // What puts the page's clock and the protocol's request times on one scale, so
+    // the chain can end where the first view appeared rather than where the harness
+    // stopped reading.
+    timeOrigin: performance.timeOrigin,
   };
 }`;
 
@@ -137,7 +150,7 @@ async function loadSample(context, options) {
       await page.goto('/');
     }
 
-    const marks = /** @type {{ rootDefined: number | null, firstView: number | null, load: number | null, domContentLoaded: number | null }} */ (
+    const marks = /** @type {{ rootDefined: number | null, firstView: number | null, load: number | null, domContentLoaded: number | null, timeOrigin: number }} */ (
       await page.evaluate(READ_MARKS, LOAD_TIMEOUT_MS)
     );
 
@@ -159,6 +172,10 @@ async function loadSample(context, options) {
     const templates = requests.filter(
       (request) => request.url.endsWith('.html') || request.url.includes('/assets/template'),
     );
+    // The chain ends at the first routed view. Requests a mounted view starts for its
+    // own data are a later question, and counting them would make the depth depend on
+    // how long the harness happened to keep reading.
+    const chain = requestChain(until(requests, marks.timeOrigin + marks.firstView));
     const encodedBytes = requests.reduce((total, request) => total + request.encodedBytes, 0);
     const tailwind = requests
       .filter((request) => request.url.includes('tailwind'))
@@ -169,6 +186,7 @@ async function loadSample(context, options) {
     const metrics = options.delivery === true
       ? {
           requests: requests.length,
+          chainDepth: chain.depth,
           moduleRequests: modules.length,
           templateRequests: templates.length,
           encodedBytes,
@@ -184,6 +202,7 @@ async function loadSample(context, options) {
           rootDefined: marks.rootDefined ?? marks.firstView,
           load: marks.load ?? marks.firstView,
           requests: requests.length,
+          chainDepth: chain.depth,
           fromCache: cached,
         };
 
@@ -333,11 +352,15 @@ function routeSample(page, result, expectedPath) {
   const templates = requests.filter(
     (request) => request.url.endsWith('.html') || request.url.includes('/assets/template'),
   );
+  // Every request here belongs to the navigation: the recorder was reset immediately
+  // before it, so the whole set is the chain that navigation walked.
+  const chain = requestChain(requests);
   return {
     ok: true,
     duration: result.duration,
     metrics: {
       requests: requests.length,
+      chainDepth: chain.depth,
       moduleRequests: modules.length,
       templateRequests: templates.length,
       encodedBytes: requests.reduce((total, request) => total + request.encodedBytes, 0),
@@ -513,6 +536,10 @@ function artifactSize(context) {
       ok: true,
       metrics: {
         files: report.totals.files,
+        // The build's own derivation, not a second one: `chain` is admitted by
+        // `parseReport` against `chunks[].imports` before it reaches disk, so the
+        // gate below is on a number no browser had to be started to produce.
+        chainDepth: report.chain.depth,
         rawBytes: report.totals.bytes,
         gzipBytes: report.totals.gzip,
         brotliBytes: report.totals.brotli,
@@ -530,6 +557,7 @@ function artifactSize(context) {
 const LAZY_ROUTE_UNITS = {
   duration: 'ms',
   requests: 'count',
+  chainDepth: 'depth',
   moduleRequests: 'count',
   templateRequests: 'count',
   encodedBytes: 'bytes',
@@ -561,6 +589,7 @@ export function artifactWorkloads(declaration) {
       origins,
       units: {
         files: 'count',
+        chainDepth: 'depth',
         rawBytes: 'artifact-bytes',
         gzipBytes: 'artifact-bytes',
         brotliBytes: 'artifact-bytes',
@@ -635,6 +664,7 @@ export const STARTUP_WORKLOADS = [
       rootDefined: 'ms',
       load: 'ms',
       requests: 'count',
+      chainDepth: 'depth',
       fromCache: 'count',
     },
     run: (context) => repeatLoad(context, { warm: false }),
@@ -652,6 +682,7 @@ export const STARTUP_WORKLOADS = [
       rootDefined: 'ms',
       load: 'ms',
       requests: 'count',
+      chainDepth: 'depth',
       fromCache: 'count',
     },
     run: (context) => repeatLoad(context, { warm: true }),
@@ -676,6 +707,7 @@ export const STARTUP_WORKLOADS = [
     units: {
       duration: 'ms',
       requests: 'count',
+      chainDepth: 'depth',
       moduleRequests: 'count',
       templateRequests: 'count',
       encodedBytes: 'bytes',

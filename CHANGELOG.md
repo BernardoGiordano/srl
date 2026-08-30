@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **The benchmark gates chain depth, so a serial round trip stops being free.** A gated run
+  reported cold start as a duration, a request count and a byte total, and none of the three
+  can tell twenty transfers in one round trip from twenty in sequence — which is how a
+  deployed application spent about a second discovering ten kilobytes of JavaScript one hop at
+  a time and passed. The duration cannot see it either: the harness resolves no host, so a
+  request costs well under a millisecond and depth is the only latency fact that survives the
+  measurement. `Network.requestWillBeSent` already carried the initiator that says what caused
+  a request, and `recordTraffic` was dropping it. It is kept now, with the request's wall
+  clock, and `tools/benchmark/chain.mjs` turns the two into `chainDepth`: the longest causal
+  chain to the first routed view, reported by every load and every navigation workload, in a
+  unit whose minimum delta is 1 rather than the 20 a request count needs. The same fact exists
+  statically, so `artifact.json` gains `chain` — how many round trips deep the entry's static
+  chunk graph is, breadth-first from `chunks[].imports`, admitted by `parseReport` against the
+  graph it was derived from. `budgets.json` gains its first absolute limit,
+  `delivery/artifact-size.chainDepth` at 3, which is a count of hops rather than a duration and
+  therefore needs neither the machine scaling nor the noise slack that kept `product` empty.
+  ADR-0082, and the follow-up ADR-0080 left open.
+
 - **A navigation stages its levels together, so nesting depth stops costing round trips.** `#prepare`
   looped the entering levels and awaited `#instantiate` inside the loop, so level *n+1*'s
   `import()` was not called until level *n*'s module had arrived, its templates had arrived

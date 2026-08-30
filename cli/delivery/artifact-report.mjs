@@ -60,6 +60,10 @@ const INLINE_HASH = /^sha256-[A-Za-z0-9+/]+={0,2}$/u;
  * One emitted JavaScript chunk and the graph edges that produced it.
  * @typedef {{ path: string, entry: boolean, dynamicEntry: boolean, facade: string | null, imports: string[], dynamicImports: string[], modules: string[] }} ArtifactChunk
  *
+ * How many round trips deep the entry's static module graph is, and one chain that
+ * reaches that depth. Derived from `chunks[].imports`; see `entryChain`.
+ * @typedef {{ depth: number, path: string[] }} ArtifactChain
+ *
  * What became of the application's templates. `bundle` and `url` are null under
  * `split` delivery, where each template is its own immutable file.
  * @typedef {{ delivery: TemplateDelivery, bundle: string | null, url: string | null, count: number, bytes: number, files: string[] }} ArtifactTemplates
@@ -100,6 +104,7 @@ const INLINE_HASH = /^sha256-[A-Za-z0-9+/]+={0,2}$/u;
  *   cache: ArtifactCache,
  *   entry: string,
  *   chunks: ArtifactChunk[],
+ *   chain: ArtifactChain,
  *   templates: ArtifactTemplates | null,
  *   files: ArtifactFile[],
  *   totals: ArtifactTotals,
@@ -247,6 +252,7 @@ function admitReport(value, where) {
   admitCache(report.cache, where);
   text(report.entry, where, 'entry');
   admitChunks(report.chunks, where);
+  admitChain(report.chain, String(report.entry), report.chunks, where);
   admitTemplates(report.templates, where);
   admitFiles(report.files, where);
   admitTotals(report.totals, where);
@@ -388,6 +394,91 @@ function admitChunks(value, where) {
         }
       }
     }
+  }
+}
+
+/**
+ * How deep the entry's static module graph is, in round trips.
+ *
+ * Breadth-first rather than longest-path, because the number this answers is when a
+ * browser *discovers* a chunk, and a chunk reachable in one hop is discovered in one
+ * hop however many longer routes also reach it. Breadth-first is also the only shape
+ * that terminates on a circular chunk graph, which the engine is free to emit.
+ *
+ * Static imports only. A route chunk is a dynamic import, which route a visitor
+ * lands on is not a build fact, and following those would report the depth of the
+ * whole application rather than of its startup — the same line `entryHints` draws.
+ *
+ * The entry itself is depth 1: it is a transfer, and it is the one the document
+ * names. So a graph the document flattens completely still reports the depth its
+ * modules would have cost, which is what makes the number worth gating.
+ *
+ * @param {string} entry
+ * @param {ReadonlyArray<Pick<ArtifactChunk, 'path' | 'imports'>>} chunks
+ * @returns {ArtifactChain}
+ */
+export function entryChain(entry, chunks) {
+  const byPath = new Map(chunks.map((chunk) => [chunk.path, chunk]));
+  if (!byPath.has(entry)) return { depth: 0, path: [] };
+
+  /** @type {Map<string, string | null>} The importer each chunk was first reached by. */
+  const from = new Map([[entry, null]]);
+  let frontier = [entry];
+  let deepest = entry;
+
+  while (frontier.length > 0) {
+    /** @type {string[]} */
+    const next = [];
+    for (const path of frontier) {
+      for (const imported of byPath.get(path)?.imports ?? []) {
+        if (from.has(imported) || !byPath.has(imported)) continue;
+        from.set(imported, path);
+        next.push(imported);
+      }
+    }
+    // The first chunk of the last non-empty level, so ties resolve by the sorted
+    // order the report already stores its chunks and imports in.
+    if (next.length > 0) deepest = /** @type {string} */ (next[0]);
+    frontier = next;
+  }
+
+  /** @type {string[]} */
+  const path = [];
+  for (let at = /** @type {string | null} */ (deepest); at !== null; at = from.get(at) ?? null) {
+    path.unshift(at);
+  }
+  return { depth: path.length, path };
+}
+
+/**
+ * The chain is derived, so it is admitted by re-deriving it: a report whose stated
+ * depth disagrees with its own `chunks[].imports` is describing a graph it does not
+ * carry, and every consumer of the number would inherit the disagreement.
+ *
+ * @param {unknown} value @param {string} entry @param {unknown} chunks @param {string} where
+ */
+function admitChain(value, entry, chunks, where) {
+  const chain = record(value, where, 'chain');
+  count(chain.depth, where, 'chain.depth');
+  for (const path of list(chain.path, where, 'chain.path')) {
+    if (typeof path !== 'string' || path === '') refuse(where, 'chain.path must be chunk paths.');
+  }
+  const derived = entryChain(
+    entry,
+    /** @type {ArtifactChunk[]} */ (/** @type {unknown} */ (chunks)),
+  );
+  if (derived.depth === 0) {
+    refuse(where, `entry ${entry} is not one of the chunks the report carries.`);
+  }
+  if (chain.depth !== derived.depth) {
+    refuse(
+      where,
+      `chain.depth is ${String(chain.depth)}; the reported chunk graph is ${String(derived.depth)} deep.`,
+    );
+  }
+  const stated = /** @type {string[]} */ (chain.path);
+  if (stated.length !== derived.path.length || stated.some((path, at) => path !== derived.path[at])) {
+    refuse(where, 'chain.path is not the chain the reported chunk graph produces.');
   }
 }
 

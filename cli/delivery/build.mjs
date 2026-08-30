@@ -37,6 +37,7 @@ import { projectErrors, readProject } from '../project-model/index.mjs';
 import {
   PUBLIC,
   REPORT,
+  entryChain,
   freezeReport,
   isRemoteReport,
   parseReport,
@@ -243,6 +244,7 @@ export async function buildArtifact({
       cache: CACHE,
       entry,
       chunks,
+      chain: entryChain(entry, chunks),
       shared,
       remotes: composition.remotes,
       security,
@@ -532,6 +534,7 @@ export async function buildRemoteArtifact({
       cache: CACHE,
       entry: remoteEntry,
       chunks,
+      chain: entryChain(remoteEntry, chunks),
       remote,
       templates: templateOutput,
       files,

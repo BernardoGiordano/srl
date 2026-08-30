@@ -80,6 +80,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0079](0079-one-settled-one-clock.md) | One `settled`, one clock | accepted | `source/lib/core/elements/settled.js`, `source/lib/core/foundation/clock.js`, `source/lib/test/harness.js`, `source/lib/core/navigation/router.js`, `source/components/data/ui-table.js`, `source/components/data/ui-dynamic-filter.js`, `source/components/shell/ui-sidebar.js` |
 | [ADR-0080](0080-the-entry-document-names-the-graph.md) | The entry document names the graph | accepted | `cli/delivery/entry-hints.mjs`, `cli/delivery/build.mjs`, `cli/test/entry-hints.test.mjs` |
 | [ADR-0081](0081-the-manifest-names-every-template.md) | The manifest names every template | accepted | `cli/delivery/build.mjs`, `cli/delivery/artifact-report.mjs`, `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `source/lib/core/remotes/mfe.js`, `source/lib/core/remotes/manifest-policy.js` |
+| [ADR-0082](0082-chain-depth-is-the-gated-delivery-fact.md) | Chain depth is the gated delivery fact | accepted | `tools/benchmark/chain.mjs`, `tools/benchmark/browser.mjs`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/budgets.json`, `cli/delivery/artifact-report.mjs` |
 
 <!-- /generated:adr-index -->
 

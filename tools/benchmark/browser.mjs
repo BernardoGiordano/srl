@@ -249,6 +249,14 @@ async function domCounters(session) {
  * cache off. Cache state comes back on the response event, so a warm load reports
  * the same request with `fromCache` set instead of vanishing from the count.
  *
+ * WHAT CAUSED EACH REQUEST
+ *
+ * `requestWillBeSent` carries an initiator — the parser, script or preload scanner
+ * that asked for it — and dropping it is what made a serial hop invisible: a request
+ * count and a byte total are identical whether twenty transfers happen in one round
+ * trip or in twenty. Kept here, and turned into a chain depth by `chain.mjs`, which
+ * is the fact the delivery work is about. ADR-0082.
+ *
  * @param {CDPSession} session
  * @param {string} originUrl
  * @param {boolean} cache
@@ -275,6 +283,11 @@ async function recordTraffic(session, originUrl, cache) {
       status: 0,
       encodedBytes: 0,
       fromCache: false,
+      // Wall clock rather than the protocol's monotonic timestamp, because the only
+      // thing this is ever compared with is a mark taken inside the page, and
+      // `performance.timeOrigin` puts the page's clock on this scale.
+      startedAt: event.wallTime * 1000,
+      initiator: initiatorOf(event.initiator, originUrl),
     });
   });
 
@@ -307,4 +320,37 @@ async function recordTraffic(session, originUrl, cache) {
       offOrigin.clear();
     },
   };
+}
+
+/**
+ * Which request caused this one, as a path on the measured origin.
+ *
+ * Three shapes reach here. The parser names the document or script it was reading.
+ * A script names nothing directly and carries a stack instead, whose topmost frame
+ * with a URL is the module that ran. The navigation itself names neither, and that
+ * is the root of the chain rather than a missing fact.
+ *
+ * @param {{ type?: string, url?: string, stack?: unknown } | undefined} initiator
+ * @param {string} origin
+ * @returns {{ type: string, url: string | null }}
+ */
+function initiatorOf(initiator, origin) {
+  const url = initiator?.url ?? frameUrl(initiator?.stack);
+  if (url === null || !url.startsWith(origin)) return { type: initiator?.type ?? 'other', url: null };
+  return { type: initiator?.type ?? 'other', url: url.slice(origin.length) };
+}
+
+/**
+ * @param {unknown} stack A `Runtime.StackTrace`, whose parents are the async chain.
+ * @returns {string | null}
+ */
+function frameUrl(stack) {
+  let frames = /** @type {{ callFrames?: { url?: string }[], parent?: unknown } | undefined} */ (stack);
+  while (frames !== undefined) {
+    for (const frame of frames.callFrames ?? []) {
+      if (typeof frame.url === 'string' && frame.url !== '') return frame.url;
+    }
+    frames = /** @type {typeof frames} */ (frames.parent);
+  }
+  return null;
 }

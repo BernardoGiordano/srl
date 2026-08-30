@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { launchBrowser } from '../benchmark/browser.mjs';
+import { requestChain, until } from '../benchmark/chain.mjs';
 import {
   BASELINE_VERSION,
   DURATION,
@@ -328,6 +329,67 @@ void test('calibration keeps every reading, per suite, with the spread between t
   }
 });
 
+/**
+ * @param {string} url
+ * @param {string | null} initiator
+ * @param {number} [startedAt]
+ * @returns {import('../benchmark/types.js').RequestRecord}
+ */
+function request(url, initiator, startedAt = 0) {
+  return {
+    url,
+    type: 'Script',
+    status: 200,
+    encodedBytes: 0,
+    fromCache: false,
+    startedAt,
+    initiator: { type: initiator === null ? 'other' : 'script', url: initiator },
+  };
+}
+
+void test('a serial chain and a flat one of the same size are told apart', () => {
+  // The failure this exists for: both of these are five requests and zero bytes, so
+  // the count and the byte total report them as the same load.
+  const serial = [
+    request('/', null),
+    request('/entry.js', '/'),
+    request('/root.js', '/entry.js'),
+    request('/shell.js', '/root.js'),
+    request('/page.js', '/shell.js'),
+  ];
+  const flat = [
+    request('/', null),
+    request('/entry.js', '/'),
+    request('/root.js', '/'),
+    request('/shell.js', '/'),
+    request('/page.js', '/'),
+  ];
+
+  assert.equal(serial.length, flat.length);
+  assert.deepEqual(requestChain(serial), {
+    depth: 5,
+    path: ['/', '/entry.js', '/root.js', '/shell.js', '/page.js'],
+  });
+  assert.equal(requestChain(flat).depth, 2);
+});
+
+void test('a chain stops at the first routed view, and cycles do not hang it', () => {
+  const load = [
+    request('/', null, 1000),
+    request('/entry.js', '/', 1010),
+    // A resource() from onMount: after the view, and not part of reaching it.
+    request('/api/projects', '/entry.js', 1400),
+  ];
+  assert.equal(requestChain(load).depth, 3);
+  assert.equal(requestChain(until(load, 1200)).depth, 2);
+
+  assert.equal(
+    requestChain([request('/a.js', '/b.js'), request('/b.js', '/a.js')]).depth,
+    2,
+    'a cycle is walked once, not forever',
+  );
+});
+
 void test('a new workload is reported as new rather than passed or failed', () => {
   const comparisons = compare(
     [aggregate(SPEC, [{ duration: 1, ok: true }], { warmup: 0 })],
@@ -561,6 +623,7 @@ void test('artifact size workload reports verified payload categories without re
             app: 'example',
             totals: { files: 3, bytes: 300, gzip: 150, brotli: 120 },
             chunks: [],
+            chain: { depth: 3, path: ['a.js', 'b.js', 'c.js'] },
             files,
           },
         },
@@ -573,6 +636,7 @@ void test('artifact size workload reports verified payload categories without re
       ok: true,
       metrics: {
         files: 3,
+        chainDepth: 3,
         rawBytes: 300,
         gzipBytes: 150,
         brotliBytes: 120,
@@ -594,7 +658,15 @@ void test('the ci profile is bounded and declares what it does not cover', async
   assert.ok(budgets.regressionThreshold > 0 && budgets.regressionThreshold < 1);
   assert.ok(budgets.maxRunSpread > 1, 'a run needs a limit on how far the machine may move');
   assert.ok(budgets.maxSpeedDrift > 1);
-  assert.deepEqual(budgets.product, {}, 'product budgets need user approval before they appear');
+  // Absolute limits stay scarce and stay explained. The one that exists is a count of
+  // round trips rather than a duration, which is why it needs neither the machine
+  // scaling nor the noise slack an absolute timing would. ADR-0082.
+  assert.deepEqual(
+    budgets.product,
+    { 'delivery/artifact-size': { chainDepth: 3 } },
+    'a product budget is a decision, and only the chain-depth one has been taken',
+  );
+  assert.equal(budgets.minDelta?.depth, 1, 'a single added serial hop has to be a regression');
 
   const ci = selectWorkloads('ci', {});
   assert.ok(ci.length > 0);

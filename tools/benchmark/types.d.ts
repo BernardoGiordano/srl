@@ -203,7 +203,11 @@ export interface BudgetFile {
    */
   maxRunSpread: number;
   ciMaxSeconds: number;
-  /** workload id -> metric -> absolute limit. Needs user approval to populate. */
+  /**
+   * workload id -> metric -> absolute limit. Needs user approval to populate, and
+   * carries no duration: only `chainDepth`, which is a count of round trips and
+   * therefore independent of the machine that measured it. ADR-0082.
+   */
   product: Record<string, Record<string, number>>;
 }
 
@@ -228,6 +232,8 @@ export interface NodeWorkloadContext {
         dynamicImports: string[];
         modules: string[];
       }>;
+      /** How many round trips deep the entry's static chunk graph is. ADR-0082. */
+      chain: { depth: number; path: string[] };
       files: Array<{
         path: string;
         cache: string;
@@ -257,12 +263,23 @@ export interface BenchmarkOrigin {
   close(): Promise<void>;
 }
 
+/** What the protocol says caused a request, reduced to the two facts a chain needs. */
+export interface RequestInitiator {
+  /** `parser`, `script`, `preload`, `other`: how the browser came to ask for it. */
+  type: string;
+  /** The origin-relative request that caused this one, when the protocol names one. */
+  url: string | null;
+}
+
 export interface RequestRecord {
   url: string;
   type: string;
   status: number;
   encodedBytes: number;
   fromCache: boolean;
+  /** Wall-clock ms the request was sent, on `performance.timeOrigin`'s scale. */
+  startedAt: number;
+  initiator: RequestInitiator;
 }
 
 /** The Chrome the harness drives, with the two capabilities workloads need. */

@@ -26,6 +26,7 @@ function formatValue(value, unit) {
     return `${value.toFixed(0)} B`;
   }
   if (unit === 'count') return value.toFixed(0);
+  if (unit === 'depth') return `${value.toFixed(0)} deep`;
   if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(2)} s`;
   if (Math.abs(value) >= 10) return `${value.toFixed(1)} ms`;
   return `${value.toFixed(2)} ms`;
