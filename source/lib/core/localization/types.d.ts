@@ -12,4 +12,11 @@ export interface I18nConfig {
   readonly supportedLocales: readonly string[];
   /** URL patterns containing `{locale}`. Merged in order. */
   readonly bundles: readonly string[];
+  /**
+   * The file each resolved bundle URL is served from, when a build has hash-named
+   * them so they can be immutable. Keyed by what the pattern resolves to, which is
+   * what the runtime computes and what it caches under. Absent in development,
+   * where the declared URL is the file.
+   */
+  readonly bundleFiles?: Readonly<Record<string, string>>;
 }

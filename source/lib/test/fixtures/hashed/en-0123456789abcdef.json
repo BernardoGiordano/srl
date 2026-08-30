@@ -1,0 +1,12 @@
+{
+  "$comment": [
+    "A locale bundle under the name a build gives it: the content hash in the file",
+    "name is what lets it be served immutable. Nothing resolves this URL from a",
+    "pattern, because a pattern varies only {locale} — the manifest's bundleFiles",
+    "maps the declared URL to this file, and that mapping is the only way here."
+  ],
+
+  "hashed": {
+    "only": "from the mapped file"
+  }
+}

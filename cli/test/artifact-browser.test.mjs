@@ -173,6 +173,20 @@ void test('built example mounts independent Billing and Analytics artifacts', as
         requests.every((path) => !/^\/remotes\/(?:billing|analytics)\/(?:remote-entry|.+-root)\.js$/u.test(path)),
         'built shell requested source Remote modules',
       );
+
+      // Startup step 4 fetches the file the manifest maps its bundle URL to, never
+      // the URL the pattern resolves to. That indirection is what lets a locale be
+      // hash-named and served immutable rather than revalidated on every load, and
+      // it is invisible above `load()`. ADR-0083.
+      assert.equal(
+        requests.filter((path) => path === manifest.i18n.bundleFiles['/i18n/en.json']).length,
+        1,
+        'the default locale was not fetched at the URL the manifest maps it to',
+      );
+      assert.ok(
+        requests.every((path) => !/^\/i18n\//u.test(path)),
+        'a locale was fetched at its declared URL, which the artifact does not serve',
+      );
     } finally {
       await page.close();
     }

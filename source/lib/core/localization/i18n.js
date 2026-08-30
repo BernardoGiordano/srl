@@ -377,6 +377,12 @@ function fallbackChain(tag) {
  * for which one of several bundles has no file yet is a normal state during
  * translation work, and it must not take the application down.
  *
+ * The URL the pattern resolves to is the bundle's identity — it is what the cache
+ * is keyed on and what `registerMessages` deduplicates — while `bundleFiles` says
+ * which file currently answers for it. A build hash-names its bundles so they can
+ * be served immutable, and a hash cannot live in a pattern; nothing else here
+ * changes, because the substitution is still the only thing that names a locale.
+ *
  * @param {string} pattern
  * @param {string} tag
  * @returns {Promise<MessageTable>}
@@ -389,7 +395,7 @@ async function load(pattern, tag) {
   /** @type {MessageTable} */
   let table = {};
   try {
-    const response = await fetch(url);
+    const response = await fetch(config.bundleFiles?.[url] ?? url);
     if (response.ok) {
       table = flatten(/** @type {unknown} */ (await response.json()));
     }

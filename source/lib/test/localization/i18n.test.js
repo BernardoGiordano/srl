@@ -42,6 +42,14 @@ import { assert, present } from '../harness.js';
 const FIXTURES = `${new URL('../fixtures/i18n/', import.meta.url).href}{locale}.json`;
 const LATE_BUNDLE = `${new URL('../fixtures/late/', import.meta.url).href}{locale}.json`;
 
+/**
+ * A pattern with nothing behind it, and the file a build would have emitted for it.
+ * Nothing resolves the second from the first, which is the point: only the mapping
+ * can produce the message. ADR-0083.
+ */
+const MAPPED = `${new URL('../fixtures/hashed/', import.meta.url).href}{locale}.json`;
+const EMITTED = new URL('../fixtures/hashed/en-0123456789abcdef.json', import.meta.url).href;
+
 describe('i18n', () => {
   before(async () => {
     await configureI18n({
@@ -166,6 +174,23 @@ describe('i18n', () => {
     assert.equal(t('billing.title'), 'billing.title', 'not registered yet');
     await registerMessages(LATE_BUNDLE);
     assert.equal(t('billing.title'), 'Billing');
+  });
+
+  it('fetches the file the manifest maps a bundle URL to', async () => {
+    // A content hash cannot live in a `{locale}` pattern, so a build that
+    // hash-names its locale bundles — which is what lets them be served immutable
+    // rather than revalidated on every load — maps each resolved URL to the file
+    // that answers for it. The declared URL stays the identity: it is what the
+    // pattern resolves to and what the cache is keyed on. ADR-0083.
+    assert.equal(t('hashed.only'), 'hashed.only', 'not configured yet');
+    await configureI18n({
+      defaultLocale: 'en',
+      supportedLocales: ['en', 'it', 'ar'],
+      bundles: [FIXTURES],
+      bundleFiles: { [MAPPED.replace('{locale}', 'en')]: EMITTED },
+    });
+    await registerMessages(MAPPED);
+    assert.equal(t('hashed.only'), 'from the mapped file');
   });
 
   it('formats numbers, currency and dates per locale', async () => {

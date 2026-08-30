@@ -207,14 +207,16 @@ export async function buildArtifact({
       '/',
       delivery,
     );
-    const manifest = await emitApplicationManifest(
+    const localeFiles = await emitLocaleFiles(app, publicDir, source.admitted.i18n);
+    await emitApplicationManifest(
       app,
       publicDir,
       source.raw,
       templateOutput,
       composition.remotes,
+      localeFiles,
     );
-    await emitRuntimeData(app, publicDir, normalizedRelease, manifest);
+    await emitReleaseIdentity(publicDir, normalizedRelease, app);
     const security = await emitSecurity(
       app,
       publicDir,
@@ -231,7 +233,7 @@ export async function buildArtifact({
       withEntryHints(await readFile(htmlPath, 'utf8'), { entry, chunks, security }),
     );
     await verifyBrowserRoot(app, publicDir);
-    const files = verifyPayload(app, await inventory(stage), templateOutput, chunks);
+    const files = verifyPayload(app, await inventory(stage), templateOutput, chunks, localeFiles);
 
     const report = /** @type {ShellArtifactReport} */ ({
       version: 1,
@@ -342,7 +344,7 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
     await writeFile(htmlPath, replaceImportMap(app, html, importMap));
 
     const nextManifest = { ...JSON.parse(manifestSource), remotes: composition.remotes };
-    admitManifest(nextManifest, {
+    const nextAdmitted = admitManifest(nextManifest, {
       url: `${app.name}/app.manifest.json`,
       base: 'https://artifact.invalid/',
       pins: () => integrity,
@@ -355,7 +357,13 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
       csp: cspForImportMap(inlineHash),
     };
     await verifyBrowserRoot(app, publicDir);
-    const files = verifyPayload(app, await inventory(stage), report.templates, report.chunks);
+    const files = verifyPayload(
+      app,
+      await inventory(stage),
+      report.templates,
+      report.chunks,
+      nextAdmitted.i18n.bundleFiles ?? {},
+    );
     const composed = {
       ...report,
       root: '.',
@@ -808,19 +816,28 @@ function templateAnnouncement(templates, base = '/') {
  * because the two split modes emit byte-identical artifacts and differ only here.
  * ADR-0071, ADR-0081.
  *
+ * `i18n.bundleFiles` arrives the same way and for the same reason: it names files
+ * this build emitted, so a value found in the source document describes some other
+ * artifact and is replaced rather than merged. ADR-0083.
+ *
  * @param {BuildApplication} app
  * @param {string} publicDir
  * @param {Record<string, unknown>} source
  * @param {ArtifactTemplates} templates
  * @param {AppManifest['remotes']} remotes
+ * @param {Record<string, string>} localeFiles
  */
-async function emitApplicationManifest(app, publicDir, source, templates, remotes) {
+async function emitApplicationManifest(app, publicDir, source, templates, remotes, localeFiles) {
   const { templateBundle: _configured, templateFiles: _listed, ...rest } = source;
+  const { bundleFiles: _emitted, ...i18n } = /** @type {Record<string, unknown>} */ (
+    rest.i18n ?? {}
+  );
+  const localized = { ...rest, i18n: { ...i18n, bundleFiles: localeFiles } };
   const announced = templateAnnouncement(templates);
   const manifest =
     announced.bundle === null
-      ? { ...rest, remotes, templateFiles: announced.files }
-      : { ...rest, remotes, templateBundle: announced.bundle };
+      ? { ...localized, remotes, templateFiles: announced.files }
+      : { ...localized, remotes, templateBundle: announced.bundle };
   const pins = Object.fromEntries(
     remotes.flatMap((remote) =>
       remote.assets
@@ -1443,32 +1460,67 @@ function htmlAttribute(node, name) {
 }
 
 /**
- * Copy only runtime data admitted by the rewritten manifest and emit stable release
- * identity. Locale URLs remain stable and revalidated until a runtime mapping exists.
+ * Emit every locale bundle as an immutable, hash-named file, and return the mapping
+ * from the URL the manifest declares to the file that answers for it.
+ *
+ * Locale bundles were the last payload class that could not be immutable. Everything
+ * under `assets/` is hash-named and served for a year; `/i18n/en.json` was served
+ * `private, no-cache`, so every load revalidated it — and it is startup step 4, on the
+ * critical path, before the first render. The reason was recorded here as a comment:
+ * locale URLs stay stable "until a runtime mapping exists". This is that mapping, and
+ * it goes where the runtime already reads its locales from. ADR-0083.
+ *
+ * The emitted path mirrors the declared one beneath `assets/`, so `/i18n/en.json`
+ * becomes `/assets/i18n/en-<hash>.json`. Uniqueness is inherited from a URL the
+ * manifest has already admitted rather than invented here, and the existing
+ * `immutable` rule covers the result without a per-asset exception.
+ *
+ * Every declared bundle must exist. The runtime tolerates a missing one — a locale
+ * half-translated is a normal state while translating — but an artifact that shipped
+ * without a file its own manifest names would tolerate it silently, forever.
  *
  * @param {BuildApplication} app
  * @param {string} publicDir
- * @param {{ commit: string | null, sourceDateEpoch: number | null }} release
- * @param {import('@srljs/core/lib/core/remotes/types.js').AppManifest} admitted
+ * @param {import('@srljs/core/lib/core/localization/types.js').I18nConfig} i18n
+ * @returns {Promise<Record<string, string>>} declared URL to emitted URL
  */
-async function emitRuntimeData(app, publicDir, release, admitted) {
-  const copied = new Set();
-  for (const locale of admitted.i18n.supportedLocales) {
-    for (const pattern of admitted.i18n.bundles) {
+async function emitLocaleFiles(app, publicDir, i18n) {
+  /** @type {Record<string, string>} */
+  const files = {};
+  for (const locale of i18n.supportedLocales) {
+    for (const pattern of i18n.bundles) {
       const url = pattern.replaceAll('{locale}', locale);
-      if (copied.has(url)) continue;
+      if (files[url] !== undefined) continue;
+      if (url.startsWith('/assets/')) {
+        throw artifactError(
+          app,
+          'runtime',
+          `locale bundle is declared inside /assets/, which the build owns: ${url}`,
+        );
+      }
       const source = await readFile(urlToFile(app.dir, url), 'utf8');
       JSON.parse(source);
-      const destination = join(publicDir, url);
+      const path = `assets${hashedName(url, contentHash(source))}`;
+      const destination = join(publicDir, path);
       await mkdir(dirname(destination), { recursive: true });
       await writeFile(destination, source);
-      copied.add(url);
+      files[url] = `/${path}`;
     }
   }
-  if (copied.size === 0) {
+  if (Object.keys(files).length === 0) {
     throw artifactError(app, 'runtime', 'admitted manifest names no locale data.');
   }
+  return files;
+}
 
+/**
+ * Emit the release identity every artifact carries, whatever it was built from.
+ *
+ * @param {string} publicDir
+ * @param {{ commit: string | null, sourceDateEpoch: number | null }} release
+ * @param {BuildApplication} app
+ */
+async function emitReleaseIdentity(publicDir, release, app) {
   const build = { version: 1, app: app.name, release, target: TARGET };
   await writeFile(join(publicDir, 'build.json'), `${JSON.stringify(build, null, 2)}\n`);
 }
@@ -1774,7 +1826,7 @@ async function templateAsset(app, record, base) {
       { cause },
     );
   }
-  const hash = createHash('sha256').update(source, 'utf8').digest('hex').slice(0, 16);
+  const hash = contentHash(source);
   const path = `assets/templates/${record.tag}-${hash}.html`;
   return { tag: record.tag, module: record.module, template, url: `${base}${path}`, path, source };
 }
@@ -1824,7 +1876,7 @@ async function emitTemplateFiles(app, stage, assets, base, delivery) {
   for (const asset of assets) bundle[asset.url] = asset.source;
 
   const bundleSource = `${JSON.stringify(bundle)}\n`;
-  const bundleHash = createHash('sha256').update(bundleSource, 'utf8').digest('hex').slice(0, 16);
+  const bundleHash = contentHash(bundleSource);
   const bundlePath = `assets/templates-${bundleHash}.json`;
   await writeFile(join(stage, bundlePath), bundleSource);
 
@@ -2105,7 +2157,21 @@ async function inventory(directory) {
   );
 }
 
-/** @param {string} path @returns {CacheClass | 'unknown'} */
+/**
+ * How long one emitted file may be cached, decided by where it sits and how it is
+ * named. Two rules and an allowlist: anything hash-named under `assets/` is immutable
+ * because its URL changes with its bytes, the document and the two small JSON files
+ * startup reads are revalidated because their URLs never change, and everything else
+ * is `unknown`, which `verifyPayload` refuses.
+ *
+ * The `i18n/` clause is a Remote's, not an application's: a shell emits its locale
+ * bundles hash-named under `assets/` (ADR-0083), while a Remote's are published under
+ * a base that already carries its release, so the file inside its artifact keeps the
+ * URL its descriptor declares.
+ *
+ * @param {string} path
+ * @returns {CacheClass | 'unknown'}
+ */
 function cacheClass(path) {
   if (path === 'THIRD_PARTY_LICENSES.md') return 'metadata';
   if (/^public\/assets\/(?:[^/]+\/)*[^/]+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/u.test(path)) {
@@ -2127,9 +2193,10 @@ function cacheClass(path) {
  * @param {Awaited<ReturnType<typeof inventory>>} files
  * @param {ArtifactTemplates} templates
  * @param {ArtifactChunk[]} chunks
+ * @param {Record<string, string>} localeFiles what the manifest says answers each bundle URL
  * @returns {ArtifactFile[]} the same inventory, every cache class now admitted
  */
-function verifyPayload(app, files, templates, chunks) {
+function verifyPayload(app, files, templates, chunks, localeFiles) {
   const javascript = files.filter((file) => file.path.endsWith('.js'));
   if (javascript.length < 2) {
     throw artifactError(app, 'verify', 'expected entry and lazy JavaScript chunks.');
@@ -2191,6 +2258,19 @@ function verifyPayload(app, files, templates, chunks) {
     }
     verifyHexHash(app, fileByPath, `${PUBLIC}/${template}`, /-([0-9a-f]{16})\.html$/u);
   }
+  // A mapping is a promise the runtime keeps: it fetches what this says and nothing
+  // else, so a URL here that names no file, or names one whose bytes moved out from
+  // under its hash, is a locale that silently loads empty behind a year-long cache.
+  for (const [declared, emitted] of Object.entries(localeFiles)) {
+    if (!/^\/assets\/(?:[^/]+\/)*[^/]+-[0-9a-f]{16}\.[a-z0-9]+$/u.test(emitted)) {
+      throw artifactError(app, 'verify', `locale bundle is not hash-named: ${emitted}`);
+    }
+    const path = `${PUBLIC}${emitted}`;
+    if (!fileByPath.has(path)) {
+      throw artifactError(app, 'verify', `manifest maps ${declared} to missing file ${emitted}.`);
+    }
+    verifyHexHash(app, fileByPath, path, /-([0-9a-f]{16})\.[a-z0-9]+$/u);
+  }
 
   const unknown = files.filter((file) => file.cache === 'unknown').map((file) => file.path);
   if (unknown.length > 0) {
@@ -2223,6 +2303,33 @@ function forbiddenSourceModule(app, module) {
     (directory) =>
       module === `${app.name}/${directory}` || module.startsWith(`${app.name}/${directory}/`),
   );
+}
+
+/**
+ * The digest an immutable file is named after. Sixteen hex characters of SHA-256 of
+ * the exact bytes emitted, which is what `verifyHexHash` reads back off the inventory
+ * to prove a name and its contents did not drift apart.
+ *
+ * @param {string} source
+ */
+function contentHash(source) {
+  return createHash('sha256').update(source, 'utf8').digest('hex').slice(0, 16);
+}
+
+/**
+ * The same URL with the digest in its final path segment: `/i18n/en.json` and a hash
+ * give `/i18n/en-<hash>.json`. The directory structure is kept, so a name is unique
+ * for the reason the URL it came from was.
+ *
+ * @param {string} url
+ * @param {string} hash
+ */
+function hashedName(url, hash) {
+  const slash = url.lastIndexOf('/');
+  const dot = url.lastIndexOf('.');
+  return dot > slash + 1
+    ? `${url.slice(0, dot)}-${hash}${url.slice(dot)}`
+    : `${url}-${hash}`;
 }
 
 /**

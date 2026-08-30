@@ -127,6 +127,40 @@ describe('manifest admission', () => {
       });
       assert.sameArray([...admitted.i18n.bundles], ['/i18n/{locale}.json']);
     });
+
+    it('maps a bundle URL to the file that serves it, and only a URL it resolves to', () => {
+      // A hash cannot live in a pattern, so a build that hash-names its locale
+      // bundles says per resolved URL which file answers for it. Which URLs those
+      // are is a fact about the whole block: `bundles` alone does not know the
+      // locales, and `supportedLocales` alone does not know the patterns. ADR-0083.
+      const i18n = { defaultLocale: 'en', supportedLocales: ['en', 'it'], bundles: BUNDLES };
+      assert.throws(
+        () =>
+          admit({ i18n: { ...i18n, bundleFiles: { '/i18n/de.json': '/assets/i18n/de-x.json' } } }),
+        'no bundle pattern resolves to',
+      );
+      assert.throws(
+        () =>
+          admit({
+            i18n: { ...i18n, bundleFiles: { '/i18n/en.json': 'https://cdn.invalid/en.json' } },
+          }),
+        'must be same-origin',
+      );
+
+      const admitted = admit({
+        i18n: { ...i18n, bundleFiles: { '/i18n/en.json': '/assets/x/../i18n/en-0123456789abcdef.json' } },
+      });
+      assert.equal(
+        admitted.i18n.bundleFiles?.['/i18n/en.json'],
+        '/assets/i18n/en-0123456789abcdef.json',
+      );
+    });
+
+    it('gives a document that maps nothing an empty mapping rather than nothing', () => {
+      // Development has no mapping: the declared URL is the file. The consumer is
+      // one optional read on the fetch path, and it stays one.
+      assert.equal(Object.keys(present(admit({}).i18n.bundleFiles)).length, 0);
+    });
   });
 
   describe('remote code admission', () => {

@@ -531,7 +531,61 @@ function admitI18n(value, policy) {
     defaultLocale,
     supportedLocales: Object.freeze(supportedLocales),
     bundles: patterns,
+    bundleFiles: admitBundleFiles(
+      i18n.bundleFiles,
+      `${url}: i18n.bundleFiles`,
+      patterns,
+      supportedLocales,
+      policy,
+    ),
   });
+}
+
+/**
+ * The emitted file each declared bundle URL is actually served from.
+ *
+ * A pattern cannot carry a content hash: `{locale}` is the only thing it varies, and
+ * two locales of the same bundle have different bytes. So a build that hash-names its
+ * locale bundles — the thing that lets them be served `immutable` rather than
+ * revalidated on every load — has to say, per resolved URL, which file answers for it.
+ * The runtime keeps resolving the pattern it was configured with; this is the single
+ * indirection between that URL and the one on the wire. Absent, every bundle is
+ * fetched at the URL it declares, which is what a development server serves.
+ *
+ * Keys are checked against the patterns and locales admitted above rather than taken
+ * as free strings. A mapping for a URL this manifest never resolves is a file nobody
+ * fetches, and it is locally valid in exactly the way ADR-0010 exists to catch: only
+ * the whole document knows which URLs the pair (bundles, supportedLocales) produces.
+ *
+ * @param {unknown} value
+ * @param {string} where
+ * @param {readonly string[]} patterns
+ * @param {readonly string[]} supportedLocales
+ * @param {Policy} policy
+ * @returns {Readonly<Record<string, string>>}
+ */
+function admitBundleFiles(value, where, patterns, supportedLocales, policy) {
+  if (value === undefined) return Object.freeze({});
+  const declared = asRecord(value, where);
+  const resolvable = new Set(
+    patterns.flatMap((pattern) =>
+      supportedLocales.map((locale) => pattern.split(LOCALE_PLACEHOLDER).join(locale)),
+    ),
+  );
+
+  /** @type {Record<string, string>} */
+  const files = {};
+  for (const [url, emitted] of Object.entries(declared)) {
+    const entryWhere = `${where}[${JSON.stringify(url)}]`;
+    if (!resolvable.has(url)) {
+      throw new Error(
+        `${entryWhere} maps a URL no bundle pattern resolves to for a supported locale. A ` +
+          `mapping the runtime never looks up is a file that is emitted and never fetched.`,
+      );
+    }
+    files[url] = admitPath(emitted, entryWhere, policy);
+  }
+  return Object.freeze(files);
 }
 
 /**

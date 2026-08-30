@@ -128,6 +128,31 @@ void test('example composes independently verified Remote artifacts', async () =
       [...manifest.templateFiles].sort(),
       shellTemplates.files.map((path) => `/${path}`).sort(),
     );
+    // Every locale bundle is emitted hash-named under `assets/`, so it is served
+    // immutable like everything else there, and the manifest says which file each
+    // declared URL is served from — a hash cannot live in a `{locale}` pattern, and
+    // startup step 4 is on the critical path. ADR-0083.
+    const bundleFiles = /** @type {Record<string, string>} */ (manifest.i18n.bundleFiles);
+    assert.deepEqual(
+      Object.keys(bundleFiles).sort(),
+      ['/i18n/ar.json', '/i18n/en.json', '/i18n/it.json'],
+    );
+    for (const [declared, emitted] of Object.entries(bundleFiles)) {
+      assert.match(emitted, /^\/assets\/i18n\/[a-z-]+-[0-9a-f]{16}\.json$/u);
+      const file = filesOf(shell).find((candidate) => candidate.path === `public${emitted}`);
+      assert.ok(file !== undefined, `${emitted} is not in the payload`);
+      assert.equal(file.cache, 'immutable');
+      assert.equal(
+        await readFile(join(publicRoot, emitted.slice(1)), 'utf8'),
+        await readFile(join(app.dir, declared.slice(1)), 'utf8'),
+        `${emitted} is not the bytes ${declared} declares`,
+      );
+    }
+    assert.ok(
+      filesOf(shell).every((file) => !/^public\/i18n\//u.test(file.path)),
+      'a locale bundle was also emitted at its declared URL',
+    );
+
     const html = await readFile(join(publicRoot, 'index.html'), 'utf8');
     const importMapSource = /<script type="importmap">([^<]+)<\/script>/u.exec(html)?.[1];
     assert.ok(importMapSource !== undefined);
