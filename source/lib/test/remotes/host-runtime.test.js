@@ -31,11 +31,13 @@ function manifestWith(overrides) {
         mount: '/analytics',
         requires: { session: true, permissions: ['analytics:read'] },
         grants: { api: ['/api/analytics/'], permissions: ['analytics:read'] },
+        templateFiles: [],
         ...overrides,
       },
     ],
     auth: { apiBaseUrl: '/api/' },
     i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: [] },
+    templateFiles: [],
   });
 }
 

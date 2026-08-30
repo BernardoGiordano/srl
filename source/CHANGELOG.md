@@ -2,6 +2,33 @@
 
 ## 0.5.0
 
+- **The manifest names every template, and startup starts them all — unless you ask it not to.** A component names
+  its own template, so its URL is not known until that component's module has been fetched
+  and evaluated — and `defineComponent` awaits the template before `customElements.define`,
+  deliberately, so an element already in the document is never upgraded without its markup.
+  Nine components concatenated into one chunk are therefore nine module bodies awaiting in
+  sequence: nine round trips in a row inside one 12 KB file, with the router's next level
+  waiting on all of them. Measured on a deployed artifact that is 350 ms of a 1004 ms
+  critical path, and 28 of the example application's 50 templates are under a kilobyte —
+  each paying a full round trip for less markup than the request that asks for it. The
+  build already held the list: the template transform rewrites every `defineComponent`
+  literal with the hashed URL and `templates.files` records them. Now the emitted
+  `app.manifest.json` carries `templateFiles`, a Remote's descriptor carries its own, and
+  the new `prefetchTemplates` puts them in flight at startup and beside a Remote's entry
+  module. Nothing is awaited and nothing about delivery changes: the files stay separate,
+  hash-named and immutable, every `await attachTemplate` stays exactly where it is, and the
+  nine awaits resolve from the promise cache that already existed to stop two components
+  racing one request. The trade is stated rather than implied, and it is a flag
+  rather than a decree. `--templates` takes three values: `split` names every template and
+  starts them all (the default — 50 requests and 22,858 B on the example); `split-lazy` names
+  none and is ADR-0071 unchanged (20 requests, 8,180 B, one round trip per component to
+  discover them); `bundle` ships the single JSON (1 request, 12,698 B, because fifty
+  separately compressed files share no dictionary — but any one template's change invalidates
+  the whole cache entry). `split` is the default because what it removes is latency rather
+  than bytes: measured to first paint against `split-lazy`, 59 ms slower at zero added
+  round-trip time, 207 ms faster at 40 ms, 547 ms faster at 100 ms.
+  ADR-0081, revising what ADR-0071 said its delivery cost and keeping its behaviour on a flag.
+
 - **An open panel is one module, not four habits.** `internal/anchored-panel.js` owned
   where a floating panel goes and nothing else, which is the part an open panel shares
   least — `ui-menu` places its own with two utility classes. Everything they do share was

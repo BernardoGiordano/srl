@@ -63,6 +63,7 @@ describe('remote mount lifecycle', () => {
           assets: [],
           shared: [],
           locales: [],
+          templateFiles: [],
           mount: '/lifecycle',
           requires: { session: false, permissions: [] },
           grants: { api: [], permissions: [] },
@@ -70,6 +71,7 @@ describe('remote mount lifecycle', () => {
       ],
       auth: { apiBaseUrl: '/api/' },
       i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: [] },
+      templateFiles: [],
     }));
 
     const route = present(remoteRoutes()[0]);
@@ -144,10 +146,12 @@ function manifestWithRemote(remote) {
         assets: [],
         shared: [],
         locales: [],
+        templateFiles: [],
         ...remote,
       },
     ],
     auth: { apiBaseUrl: '/api/' },
     i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: [] },
+    templateFiles: [],
   };
 }

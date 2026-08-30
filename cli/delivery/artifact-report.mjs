@@ -39,8 +39,8 @@ export const PUBLIC = 'public';
 /** How long a served file may be cached, by class. `metadata` is never served. */
 const CACHE_CLASSES = new Set(['immutable', 'revalidate', 'metadata']);
 
-/** How templates reach the browser. ADR-0071. */
-const DELIVERIES = new Set(['split', 'bundle']);
+/** How templates reach the browser. ADR-0071, ADR-0081. */
+const DELIVERIES = new Set(['split', 'split-lazy', 'bundle']);
 
 const NAME = /^[a-z0-9][a-z0-9._-]*$/u;
 const COMMIT = /^[0-9a-f]{7,64}$/u;
@@ -49,7 +49,7 @@ const INLINE_HASH = /^sha256-[A-Za-z0-9+/]+={0,2}$/u;
 
 /**
  * @typedef {'immutable' | 'revalidate' | 'metadata'} CacheClass
- * @typedef {'split' | 'bundle'} TemplateDelivery
+ * @typedef {'split' | 'split-lazy' | 'bundle'} TemplateDelivery
  *
  * One file in the artifact, hashed and measured as it was written.
  * @typedef {{ path: string, cache: CacheClass, bytes: number, gzip: number, brotli: number, sha256: string }} ArtifactFile
@@ -307,6 +307,14 @@ function admitRemote(report, where) {
     }
   }
   if (remote.templates !== undefined) text(remote.templates, where, 'remote templates');
+  // The shell turns this list into requests without reading the Remote's report a
+  // second time, so a malformed entry here becomes a failed fetch inside a mounted
+  // Remote rather than a message anyone connects to the build that produced it.
+  for (const file of list(remote.templateFiles, where, 'remote templateFiles')) {
+    if (typeof file !== 'string' || !file.startsWith(base)) {
+      refuse(where, 'remote templateFiles must be URLs below the publication base.');
+    }
+  }
 }
 
 /** @param {unknown} value @param {string} where @param {string} name */

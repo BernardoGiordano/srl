@@ -1,0 +1,16 @@
+{
+  "remotes": [],
+  "auth": {
+    "apiBaseUrl": "/api/"
+  },
+  "i18n": {
+    "defaultLocale": "en",
+    "supportedLocales": [
+      "en"
+    ],
+    "bundles": []
+  },
+  "templateFiles": [
+    "/lib/test/fixtures/route-layout.html"
+  ]
+}

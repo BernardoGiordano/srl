@@ -46,6 +46,20 @@ array plus one closure per binding. Every render after that hands lit the same a
 no re-parse, no `innerHTML`, no string diffing. The third observation is why the
 compiled result is cached per URL and never rebuilt.
 
+What is cached per URL is the *promise*, not the compiled result, so two components
+mounting at the same moment share one request instead of racing two. That is also what
+makes the request cheap to start early: by default a built artifact's `app.manifest.json`
+lists every template it holds, and startup calls `prefetchTemplates` with the list, so the
+markup is in flight while the chunks are still arriving and each `await` inside a component
+resolves from the cache. Without it a chunk holding nine components costs nine requests in a
+row, because a component's template URL is not known until that component's module has been
+fetched and evaluated ([ADR-0081](../adr/0081-the-manifest-names-every-template.md)).
+
+Nothing about that list changes how a template is delivered: the files stay separate,
+hash-named and immutable under every mode. Which of the three a deployment wants —
+announce all of them, announce none, or ship one bundle — is
+[a build flag](delivery.md#templates-in-a-built-artifact).
+
 ## Whitespace in production
 
 A built artifact serves minified markup: comments dropped, each run of whitespace collapsed

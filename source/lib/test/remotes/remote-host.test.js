@@ -42,6 +42,7 @@ function descriptor(overrides) {
     assets: [],
     shared: [],
     locales: [],
+    templateFiles: [],
     mount: '/analytics',
     requires: { session: true, permissions: ['analytics:read'] },
     grants: { api: ['/api/analytics/'], permissions: ['analytics:read', 'analytics:write'] },

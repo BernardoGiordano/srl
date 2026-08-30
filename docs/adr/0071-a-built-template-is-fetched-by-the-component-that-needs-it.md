@@ -50,6 +50,15 @@ overlaps with the chunk that triggered it. An application whose users are on hig
 links, or that wants its whole markup in one warm cache entry, asks for `--templates
 bundle` and gets exactly what it got before.
 
+**Both of the paragraphs above were revised by
+[ADR-0081](0081-the-manifest-names-every-template.md), which measured them.** They do not
+overlap: a component's template URL is not known until its own module has arrived, so nine
+components in one chunk are nine round trips in a row. The manifest now names every template
+and startup starts them all, which closes that chain — and means a visitor downloads all of
+an application's markup rather than only the routes they open. The delivery this record
+decided is unchanged; what it says the delivery costs is not. The behaviour decided here
+remains available in full, as `--templates split-lazy`.
+
 Split templates carry no subresource integrity, where the bundle recorded a `sha384` in a
 Remote's asset list. They are same-origin ([ADR-0012](0012-every-manifest-url-is-same-origin.md))
 and content-addressed by name, and `fetch` of a document cannot be pinned the way a

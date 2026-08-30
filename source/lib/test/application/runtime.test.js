@@ -19,6 +19,7 @@ const MANIFEST = new URL('../fixtures/startup-manifest.json', import.meta.url).h
 const BUNDLED = new URL('../fixtures/startup-bundled-manifest.json', import.meta.url).href;
 const MISSING_BUNDLE = new URL('../fixtures/startup-missing-bundle-manifest.json', import.meta.url)
   .href;
+const SPLIT = new URL('../fixtures/startup-split-manifest.json', import.meta.url).href;
 
 describe('application startup', () => {
   afterEach(() => {
@@ -83,6 +84,7 @@ describe('application startup', () => {
       remotes: [],
       auth: { apiBaseUrl: '/api/' },
       i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: [] },
+      templateFiles: [],
     });
 
     const started = await startApplication({ manifest: embedded });
@@ -152,5 +154,41 @@ describe('application startup', () => {
     // and the page still works. Failing startup over it would trade a slower boot
     // for no boot.
     assert.sameArray(started.steps, ['manifest', 'templates', 'locale']);
+  });
+
+  it('starts every template the manifest names without waiting for any of them', async () => {
+    const url = '/lib/test/fixtures/route-layout.html';
+    let resolveFetch = () => {};
+    const blocked = new Promise((resolve) => {
+      resolveFetch = () => {
+        resolve(undefined);
+      };
+    });
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = /** @type {typeof globalThis.fetch} */ (
+      async (/** @type {RequestInfo | URL} */ input, /** @type {RequestInit} */ init) => {
+        const href =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (href.endsWith(url)) {
+          // Held open for the whole of startup. A step that awaited the prefetch
+          // would never reach `locale`, which is the property under test: the
+          // ordering matters, the completion does not.
+          await blocked;
+        }
+        return realFetch(input, init);
+      }
+    );
+    try {
+      const started = await startApplication({ manifestUrl: SPLIT });
+      assert.sameArray(started.steps, ['manifest', 'templates', 'locale']);
+      assert.sameArray([...started.manifest.templateFiles], [url]);
+
+      resolveFetch();
+      // The request was in flight before this line, so the component that asks for
+      // it later shares that one rather than starting a second. ADR-0081.
+      assert.equal(typeof (await loadTemplate(url)), 'function');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });

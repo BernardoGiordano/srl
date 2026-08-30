@@ -58,15 +58,27 @@ const CACHE = {
 const HASHED_JAVASCRIPT = /-[A-Za-z0-9_-]{8}\.js$/u;
 
 /**
- * How a built application's templates reach the browser. `split` is the default:
- * each template is one immutable, hash-named file its own component asks for, so a
- * visitor downloads the markup of the routes they open and nothing else. `bundle`
- * additionally emits the single `templates-<hash>.json` the manifest points at, so
- * a first paint costs one request for every template in the application, which is
- * the right trade only on a link where a round trip costs more than the bytes.
- * ADR-0071.
+ * How a built application's templates reach the browser. All three emit the same
+ * thing — one immutable, hash-named file per template — and differ only in how the
+ * browser learns which URLs it needs, which is the whole cost. A component names
+ * its own template, so a URL is unknowable until that component's module has
+ * arrived; nine components in one chunk are otherwise nine requests in a row.
+ *
+ *   split       The manifest names every template and startup starts them all, so
+ *               discovery is done before the first component module evaluates. The
+ *               default: it is the wrong trade only at zero latency.
+ *   split-lazy  The manifest names none of them and each component fetches its own,
+ *               which is ADR-0071 exactly. A visitor downloads the markup of the
+ *               routes they open and nothing else, and pays a round trip per
+ *               component to find out what that is.
+ *   bundle      Additionally emits the single `templates-<hash>.json` the manifest
+ *               points at, seeded at startup. One request and the fewest bytes —
+ *               fifty separately compressed files share no dictionary — against a
+ *               cache entry that any one template's change invalidates whole.
+ *
+ * ADR-0071, ADR-0081.
  */
-const TEMPLATE_DELIVERY = new Set(['split', 'bundle']);
+const TEMPLATE_DELIVERY = new Set(['split', 'split-lazy', 'bundle']);
 
 /** @import { AppManifest } from '@srljs/core/lib/core/remotes/types.js' */
 /** @import { ArtifactChunk, ArtifactFile, ArtifactTemplates, CacheClass, RemoteArtifactReport, RemoteTransport, ShellArtifactReport } from './artifact-report.mjs' */
@@ -74,7 +86,7 @@ const TEMPLATE_DELIVERY = new Set(['split', 'bundle']);
 
 /**
  * @typedef {{ name: string, dir: string }} BuildApplication
- * @typedef {'split' | 'bundle'} TemplateDelivery
+ * @typedef {'split' | 'split-lazy' | 'bundle'} TemplateDelivery
  * @typedef {{ commit?: string | null, sourceDateEpoch?: number | null }} ReleaseInput
  *
  * One retained Remote release, as composition receives it: the report written beside
@@ -198,7 +210,7 @@ export async function buildArtifact({
       app,
       publicDir,
       source.raw,
-      templateOutput.url,
+      templateOutput,
       composition.remotes,
     );
     await emitRuntimeData(app, publicDir, normalizedRelease, manifest);
@@ -481,6 +493,7 @@ export async function buildRemoteArtifact({
       throw artifactError(app, 'remote', `${name} generated no hash-named entry chunk.`);
     }
     const assets = await remoteAssetRecords(publicDir, publicationBase, chunks, payload, templateOutput);
+    const remoteTemplates = templateAnnouncement(templateOutput, publicationBase);
     const entryAsset = assets.find(
       (asset) => asset.type === 'module' && asset.url === `${publicationBase}${remoteEntry}`,
     );
@@ -493,11 +506,15 @@ export async function buildRemoteArtifact({
       shared: [...policy.shared],
       locales,
       // Only a bundle is an asset the shell has to fetch before the remote's first
-      // component renders. Split templates are fetched by the components themselves,
-      // from this remote's own base, and need nothing in the descriptor.
-      ...(templateOutput === null || templateOutput.url === null
-        ? {}
-        : { templates: templateOutput.url }),
+      // component renders, so it is the only one that becomes a `templates` key.
+      // Split templates are fetched by the components themselves, from this remote's
+      // own base — but under `split` the descriptor names them anyway, because the
+      // URLs are the discovery a component cannot do before its own module has
+      // arrived, and the shell starts them alongside the entry module. Empty under
+      // the other two, where the markup is either already on its way or deliberately
+      // left to be discovered. ADR-0071, ADR-0081.
+      templateFiles: remoteTemplates.files,
+      ...(remoteTemplates.bundle === null ? {} : { templates: remoteTemplates.bundle }),
     };
     const files = verifyRemotePayload(app, name, payload, chunks, remoteEntry, templateOutput);
 
@@ -596,6 +613,7 @@ function composeRemotes(app, source, reports) {
       assets: transport.assets,
       shared,
       locales: transport.locales,
+      templateFiles: transport.templateFiles,
       ...(transport.templates === undefined ? {} : { templates: transport.templates }),
       mount: policy.mount,
       requires: policy.requires,
@@ -743,24 +761,63 @@ function sharedOutputs(app, chunks, entries) {
 }
 
 /**
- * The runtime manifest, with the remotes this build composed and the template
- * bundle it emitted.
+ * What a delivery announces to the runtime: a bundle to seed from, a list of files
+ * to start, or neither.
  *
- * A `null` bundle *removes* `templateBundle` rather than leaving what the source
- * manifest said: an application that once configured `/templates.json` by hand
- * would otherwise ship a manifest naming a file this artifact does not contain,
- * and a startup step that fetches it, misses, and quietly costs a round trip.
+ * One function, because the shell's manifest and a Remote's descriptor answer the
+ * same question and must not drift — a Remote whose markup the shell never starts,
+ * or starts twice, is a difference nothing else in the build would catch. They
+ * spell the answer differently (`templateBundle` against a Remote's `templates`),
+ * so the naming stays at the two call sites and only the facts are shared.
+ *
+ * The branch is on `delivery` rather than on whether a bundle URL came back,
+ * because the two split modes emit byte-identical artifacts and differ only here.
+ * ADR-0081.
+ *
+ * @param {ArtifactTemplates | null} templates
+ * @param {string} [base] Prefix for the emitted paths; a Remote's publication base.
+ * @returns {{ bundle: string | null, files: string[] }}
+ */
+function templateAnnouncement(templates, base = '/') {
+  if (templates === null || templates.delivery === 'split-lazy') return { bundle: null, files: [] };
+  if (templates.delivery === 'bundle') return { bundle: templates.url, files: [] };
+  return { bundle: null, files: templates.files.map((path) => `${base}${path}`) };
+}
+
+/**
+ * The runtime manifest, with the remotes this build composed and whichever template
+ * key the chosen delivery answers for.
+ *
+ * At most one of the two keys, and both are *replaced* rather than passed through:
+ * an application that once configured `/templates.json` by hand would otherwise
+ * ship a manifest naming a file this artifact does not contain, and a startup step
+ * that fetches it, misses, and quietly costs a round trip.
+ *
+ *   bundle      `templateBundle`, the one JSON startup seeds the whole cache from.
+ *   split       `templateFiles`, every emitted template named by the URL its
+ *               component will ask for, so startup can put them in flight together
+ *               instead of the browser learning each one from the module that just
+ *               arrived. A list of the files, not a copy of them.
+ *   split-lazy  Neither. The files are there and nothing announces them, so each is
+ *               discovered by the component that needs it — ADR-0071 unchanged.
+ *
+ * The branch is on `delivery` rather than on whether a bundle URL came back,
+ * because the two split modes emit byte-identical artifacts and differ only here.
+ * ADR-0071, ADR-0081.
  *
  * @param {BuildApplication} app
  * @param {string} publicDir
  * @param {Record<string, unknown>} source
- * @param {string | null} templateBundle
+ * @param {ArtifactTemplates} templates
  * @param {AppManifest['remotes']} remotes
  */
-async function emitApplicationManifest(app, publicDir, source, templateBundle, remotes) {
-  const { templateBundle: _configured, ...rest } = source;
+async function emitApplicationManifest(app, publicDir, source, templates, remotes) {
+  const { templateBundle: _configured, templateFiles: _listed, ...rest } = source;
+  const announced = templateAnnouncement(templates);
   const manifest =
-    templateBundle === null ? { ...rest, remotes } : { ...rest, remotes, templateBundle };
+    announced.bundle === null
+      ? { ...rest, remotes, templateFiles: announced.files }
+      : { ...rest, remotes, templateBundle: announced.bundle };
   const pins = Object.fromEntries(
     remotes.flatMap((remote) =>
       remote.assets
@@ -1725,10 +1782,10 @@ async function templateAsset(app, record, base) {
  * emitted bytes back before publication makes stale or malformed markup a build
  * failure rather than a blank route.
  *
- * The per-template files are the delivery, not a fallback: a component names its
- * own template URL and fetches it when its chunk loads, so an application ships
- * the markup of the routes a visitor opens. The bundle is the opt-in that trades
- * that for one request. ADR-0071.
+ * The per-template files are the delivery under every mode, not a fallback: a
+ * component names its own template URL and fetches it when its chunk loads. What
+ * the three modes decide is who says those URLs out loud and when, which is what
+ * `emitApplicationManifest` reads this `delivery` back out for. ADR-0071, ADR-0081.
  *
  * @param {BuildApplication} app
  * @param {string} stage
@@ -1753,7 +1810,9 @@ async function emitTemplateFiles(app, stage, assets, base, delivery) {
 
   const files = assets.map((asset) => asset.path);
   const bytes = assets.reduce((total, asset) => total + Buffer.byteLength(asset.source), 0);
-  if (delivery === 'split') {
+  // Both split modes emit exactly this and nothing more. They diverge in the
+  // manifest, not in the artifact: the same fifty files, announced or not.
+  if (delivery !== 'bundle') {
     return { delivery, bundle: null, url: null, count: assets.length, bytes, files };
   }
 
@@ -1801,7 +1860,7 @@ function validateDelivery(app, delivery) {
     throw artifactError(
       app,
       'templates',
-      `template delivery must be ${[...TEMPLATE_DELIVERY].join(' or ')}: ${delivery}`,
+      `template delivery must be one of ${[...TEMPLATE_DELIVERY].join(', ')}: ${delivery}`,
     );
   }
 }
@@ -2256,7 +2315,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     const deliveryIndex = process.argv.indexOf('--templates');
     const delivery = deliveryIndex === -1 ? undefined : process.argv[deliveryIndex + 1];
     if (deliveryIndex !== -1 && delivery === undefined) {
-      throw new Error('usage: --templates split|bundle');
+      throw new Error('usage: --templates split|split-lazy|bundle');
     }
     const baseIndex = process.argv.indexOf('--base');
     const base = baseIndex === -1 ? undefined : process.argv[baseIndex + 1];

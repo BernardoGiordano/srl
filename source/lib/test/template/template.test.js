@@ -6,7 +6,7 @@ import {
   bypassSecurityTrustStyle,
   bypassSecurityTrustUrl,
 } from '@core/template/security.js';
-import { compileTemplate } from '@core/template/template.js';
+import { compileTemplate, loadTemplate, prefetchTemplates } from '@core/template/template.js';
 import { assert, present } from '../harness.js';
 
 /**
@@ -470,5 +470,99 @@ describe('template compiler', () => {
 
   it('names the template and the expression in a syntax error', () => {
     assert.throws(() => compileTemplate('<p>{{ a + }}</p>', 'users-page.html'), 'users-page.html');
+  });
+});
+
+/**
+ * The registry in front of the compiler: which requests a set of URLs costs.
+ *
+ * `fetch` is stubbed rather than pointed at fixtures, because the assertion is a
+ * *count*. A prefetch that quietly issued a second request per template would
+ * render every page correctly and be invisible in any test that only checks the
+ * markup — which is the whole failure mode the shared-promise cache exists to
+ * prevent. ADR-0014, ADR-0081.
+ */
+describe('template prefetching', () => {
+  /** @type {typeof globalThis.fetch} */
+  let realFetch;
+  /** @type {string[]} */
+  let asked;
+  let serial = 0;
+
+  /** @param {string} name @returns {string} */
+  const url = (name) => `/lib/test/prefetch/${name}-${String(serial)}.html`;
+
+  beforeEach(() => {
+    serial += 1;
+    asked = [];
+    realFetch = globalThis.fetch;
+    globalThis.fetch = /** @type {typeof globalThis.fetch} */ (
+      (/** @type {RequestInfo | URL} */ input) => {
+        // `loadTemplate` always calls with a string href. Narrowed rather than
+        // stringified, because a `Request` has no useful `toString`.
+        const href =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        asked.push(new URL(href, document.baseURI).pathname);
+        return Promise.resolve(
+          href.includes('missing')
+            ? new Response('', { status: 404, statusText: 'Not Found' })
+            : new Response('<p>ok</p>', { status: 200 }),
+        );
+      }
+    );
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it('starts every URL at once and lets the later awaits resolve from the cache', async () => {
+    const urls = [url('one'), url('two'), url('three')];
+    prefetchTemplates(urls);
+
+    // The point of the whole record: nine components in one chunk are nine awaits
+    // in sequence, and they cost one round trip between them only if the request
+    // was already started and is shared rather than repeated.
+    const compiled = await Promise.all(urls.map((each) => loadTemplate(each)));
+    assert.equal(compiled.length, 3);
+    assert.sameArray(asked, urls);
+  });
+
+  it('does not fetch a template twice when it is prefetched and then loaded', async () => {
+    const one = url('repeat');
+    prefetchTemplates([one, one]);
+    await loadTemplate(one);
+    await loadTemplate(one);
+    assert.sameArray(asked, [one]);
+  });
+
+  it('swallows a failing prefetch and raises it at the load that needs it', async () => {
+    /** @type {unknown[]} */
+    const unhandled = [];
+    /** @param {PromiseRejectionEvent} event */
+    const record = (event) => {
+      unhandled.push(event.reason);
+      event.preventDefault();
+    };
+    addEventListener('unhandledrejection', record);
+    try {
+      const gone = url('missing');
+      prefetchTemplates([gone]);
+      // Two turns of the loop: an unhandled rejection is reported after the
+      // microtask queue drains, so asserting on the same tick would pass whatever
+      // the prefetch did with the rejection.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.sameArray(unhandled, []);
+
+      let raised = '';
+      try {
+        await loadTemplate(gone);
+      } catch (error) {
+        raised = error instanceof Error ? error.message : String(error);
+      }
+      assert.ok(raised.includes('404'), `a missing template must still throw, got ${raised}`);
+    } finally {
+      removeEventListener('unhandledrejection', record);
+    }
   });
 });

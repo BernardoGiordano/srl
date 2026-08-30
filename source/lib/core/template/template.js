@@ -14,8 +14,9 @@
  * instead of patching it. ADR-0014.
  *
  * Bindings are a restricted expression language over a component's *public*
- * members — see expression.js — and each template costs one request until
- * `seedTemplates` supplies a bundle.
+ * members — see expression.js — and each template costs one request of its own.
+ * `prefetchTemplates` starts those requests together from a list the build knows;
+ * `seedTemplates` removes them entirely, when a bundle is configured.
  */
 
 import { html, nothing } from 'lit';
@@ -95,6 +96,39 @@ export function loadTemplate(url) {
     byUrl.set(href, pending);
   }
   return pending;
+}
+
+/**
+ * Start a list of templates arriving, without waiting for any of them.
+ *
+ * The list is the one thing this cannot work out for itself. A component names its
+ * own template, so a URL is known only once that component's module has been
+ * fetched and evaluated — and nine components concatenated into one chunk means
+ * nine requests in a row inside a single file, because each `await attachTemplate`
+ * sits in a module body and module bodies run in sequence. The build holds all nine
+ * URLs before the chunk exists. Handed them, this puts them in flight at once, and
+ * every `await` that follows resolves from the cache above. ADR-0081.
+ *
+ * Idempotent and safe to call with URLs nothing will ever ask for: `loadTemplate`
+ * caches the promise, so a duplicate is not a second request, and a component that
+ * is never mounted has simply had its markup fetched early.
+ *
+ * A rejection is swallowed here on purpose. This is an optimisation, and the
+ * component that actually needs the template awaits the same promise through
+ * `attachTemplate` — which is where the failure belongs: raised once, at the point
+ * that genuinely cannot continue, rather than a second time as an unhandled
+ * rejection for a route nobody opened.
+ *
+ * @param {Iterable<string | URL>} urls
+ * @returns {void}
+ */
+export function prefetchTemplates(urls) {
+  for (const url of urls) {
+    // Attaching the handler to the cached promise rather than to a copy: this is
+    // what marks *that* promise handled, so a template that 404s stays a quiet
+    // prefetch until someone awaits it.
+    loadTemplate(url).catch(() => {});
+  }
 }
 
 /**

@@ -18,15 +18,46 @@ they open, and a template that did not change is not re-fetched after a deploy t
 another.
 
 ```bash
-npm run build -- --app example                      # one file per template (default)
-npm run build -- --app example --templates bundle   # plus templates-<hash>.json, and a
-                                                    # manifest that seeds from it at startup
+npm run build -- --app example                          # default: split
+npm run build -- --app example --templates split-lazy   # announce nothing
+npm run build -- --app example --templates bundle       # plus templates-<hash>.json
 ```
 
-`--templates bundle` is the trade the single bundle was always for: one request instead of
-one per component, on a link where a round trip costs more than the bytes — at the price of
-fetching every template in the application before the first one renders
-([ADR-0071](../adr/0071-a-built-template-is-fetched-by-the-component-that-needs-it.md)).
+All three emit exactly the same thing — one immutable, hash-named file per template — and
+differ only in what the manifest says about them, which is the whole cost. A component names
+its own template, so a URL is unknowable until that component's module has arrived and run.
+Nine components in one chunk are otherwise nine requests in a row inside one 12 KB file,
+with the router's next level waiting on all of them.
+
+| | manifest key | startup | first visit, example app |
+|---|---|---|---|
+| `split` | `templateFiles`, every URL | starts them all, waits for none | 50 requests, 22,858 B |
+| `split-lazy` | `templateFiles: []` | nothing to do | 20 requests, 8,180 B |
+| `bundle` | `templateBundle`, one URL | fetches and seeds it, **awaits it** | 1 request, 12,698 B |
+
+```json
+{ "templateFiles": ["/assets/templates/ui-card-6b1d4f0a2c8e5713.html", "…"] }
+```
+
+**`split` is the default** because the cost it removes is latency rather than bytes. Against
+`split-lazy`, measured to first paint: 59 ms slower at zero added round-trip time, 207 ms
+faster at 40 ms, 547 ms faster at 100 ms. The sign flips near zero, which is the one regime
+real users are never in — and the one `tools/benchmark` runs in, so read its byte budgets
+with that in mind.
+
+**`split-lazy` is [ADR-0071](../adr/0071-a-built-template-is-fetched-by-the-component-that-needs-it.md)
+unchanged**: a visitor downloads the markup of the routes they open and nothing else. It is
+the right mode for a metered connection, or an application whose visitors open one page.
+
+**`bundle` moves the fewest bytes**, which is not obvious: fifty separately compressed files
+are 22,858 B brotli where the same markup as one JSON is 12,698 B, because fifty brotli
+streams share no dictionary and each pays its own framing. It buys that with cache
+granularity — the filename hash covers every template, so changing one re-fetches all of
+them — and by blocking startup step 3 where the other two do not. Its individual files are
+still emitted and simply never fetched, since seeding short-circuits the network.
+
+The axis is first visit against repeat visits, and
+[ADR-0081](../adr/0081-the-manifest-names-every-template.md) has the measurements.
 
 Production markup is not the authored markup: comments and indentation are dropped, and
 every build proves the result parses to the same tree the source did before it can be
@@ -53,6 +84,72 @@ the single thing a bare file server cannot do. Every real static host can — ng
 
 npm is still how the *tooling* is installed: tsc, ESLint, the test runner, the Tailwind
 CLI. None of it is needed to serve the application.
+
+## What the entry document names
+
+A built `index.html` is not only a pruned copy of the authored one. After the module graph
+exists, the build projects it back onto the document: a `preload` for `app.manifest.json`,
+which is startup step 2, and a `modulepreload` for the entry chunk's static closure and for
+the root module the last startup step always imports.
+
+```html
+<link rel="preload" href="/app.manifest.json" as="fetch" crossorigin>
+<link rel="modulepreload" href="/assets/reactive-CDx66i8u.js" crossorigin integrity="sha384-…">
+<link rel="modulepreload" href="/assets/app-root-BetDmK3e.js" crossorigin integrity="sha384-…">
+```
+
+Without them a cold start discovers its own dependency graph one round trip at a time —
+fetch the entry, evaluate it, learn the next URL — and six to eight of the round trips
+before the first routed view exist for no other reason. Nothing about evaluation order
+changes: a hint moves the transfer, not the execution, so the seven startup steps keep
+their order and their guarantees.
+
+Each digest is the one the page's own import map already pins for that URL, so the hint and
+the module request it is for are one transfer rather than two.
+[ADR-0080](../adr/0080-the-entry-document-names-the-graph.md) has the whole decision,
+including why route chunks and locale bundles are deliberately not named.
+
+## The example's deployment
+
+[srl-example.santella.dev](https://srl-example.santella.dev) is deployed by
+`.github/workflows/deploy.yml` on every push to `main`, and the push is the repository:
+no bundler, no minifier, nothing hash-named. The browser fetches the same
+`src/pages/sales/sales-page.js` a clone serves, which is the property that makes the demo
+worth having — what is deployed is readable, and the source of a bug is one View Source
+away.
+
+It hangs off the `check` workflow with `workflow_run` rather than off the push itself, so a
+tree that fails `npm run check` is never pushed. That command is the gate, and the two
+failures it exists to catch here are the ones that arrive as a blank page rather than as a
+build error: an import map that omits a specifier, and a component template that does not
+exist.
+
+The job installs nothing. The browser's three dependencies come from `source/lib/vendor`,
+which is committed; the API is zero-dependency Node; and the mount table comes from
+`node cli/layout.mjs --deploy-pairs`, which runs before any `npm install` by design. So the
+whole deployment is a stamp, two rsyncs and a restart:
+
+```
+/home/ubuntu/www/srlexample/             <- example/, minus test/ and src/app.css
+/home/ubuntu/www/srlexample/lib/         <- source/lib/
+/home/ubuntu/www/srlexample/components/  <- source/components/
+```
+
+`example/server/` lands inside that web root because that is where supervisor's program
+line points at it: `[program:srlexample]` runs `server/server.mjs --port 8100 --api-only`,
+and `--api-only` is what keeps it from importing `cli/layout.mjs`, a development directory
+the deployed tree omits. nginx serves the static tree and proxies `/auth` and `/api` to
+8100 **on the site's own hostname**: the session cookie is `HttpOnly` and same-site, so a
+second port or a second host signs every visitor out
+([ADR-0069](../adr/0069-the-dev-server-proxies-the-backend.md)).
+
+Three repository secrets, the same three the deploy of any other static tree needs:
+`HOST`, `USERNAME` and `PRIVATE_KEY`. The remote user needs passwordless
+`sudo supervisorctl` for that one program and nothing else.
+
+`deploy*.sh` at the root is the same shape by hand, for a target that is not this one. It
+is gitignored, because what such a script holds is a host and a credential path rather
+than repository content.
 
 ## Publishing the package
 

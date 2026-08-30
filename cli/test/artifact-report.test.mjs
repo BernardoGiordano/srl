@@ -105,6 +105,7 @@ function remoteReport() {
       assets: [{ type: 'module', url, integrity: `sha384-${'A'.repeat(64)}` }],
       shared: ['@core/'],
       locales: [`${base}i18n/{locale}.json`],
+      templateFiles: [`${base}assets/templates/ui-card-abcd1234abcd1234.html`],
     },
     templates: shell.templates,
     files: shell.files,

@@ -85,6 +85,32 @@ describe('manifest admission', () => {
       );
     });
 
+    it('refuses a template list that leaves the origin, and normalizes the rest', () => {
+      // The runtime turns this list into `fetch` calls under `connect-src 'self'`,
+      // so a cross-origin entry fails as a blocked request behind an optimisation
+      // nobody is watching. One message at admission is the better failure.
+      assert.throws(
+        () => admit({ templateFiles: ['https://cdn.example/assets/templates/a.html'] }),
+        'templateFiles[0] must be same-origin',
+      );
+      assert.throws(
+        () => admit({ templateFiles: ['/assets/templates/a.html', '/assets/x/../templates/a.html'] }),
+        'names /assets/templates/a.html more than once',
+      );
+      assert.throws(() => admit({ templateFiles: '/assets/templates/a.html' }), 'must be an array');
+
+      const admitted = admit({ templateFiles: ['/assets/x/../templates/a.html'] });
+      assert.sameArray([...admitted.templateFiles], ['/assets/templates/a.html']);
+    });
+
+    it('gives a document that names no templates an empty list rather than nothing', () => {
+      // The only consumer iterates it. An optional list that is sometimes a list
+      // and sometimes undefined is a guard at every call site, for a document that
+      // simply has nothing to announce.
+      assert.sameArray([...admit({}).templateFiles], []);
+      assert.sameArray([...present(admit({ remotes: [remote({})] }).remotes[0]).templateFiles], []);
+    });
+
     it('admits a bundle pattern through every locale it will be used with', () => {
       // The pattern is not what is fetched. `/i18n/{locale}.json` is same-origin
       // for every sane tag and leaves the application for a locale that carries

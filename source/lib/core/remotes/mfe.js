@@ -29,7 +29,7 @@ import { requireElement } from '@core/elements/mount.js';
 import { readJson } from '@core/foundation/json.js';
 import { registerMessages } from '@core/localization/i18n.js';
 import { admitManifest } from '@core/remotes/manifest-policy.js';
-import { seedTemplates } from '@core/template/template.js';
+import { prefetchTemplates, seedTemplates } from '@core/template/template.js';
 
 /** @import { RouteDef } from '@core/navigation/types.js' */
 /** @import { AppManifest, RemoteDescriptor, RemoteHostProvider, RemoteModule } from '@core/remotes/types.js' */
@@ -263,10 +263,25 @@ function loadStyle(url, integrity) {
   return pending;
 }
 
-/** @param {RemoteDescriptor} remote */
+/**
+ * Put a remote's markup in flight beside its entry module.
+ *
+ * Two shapes, one job. A bundle is fetched and seeded, and is awaited because the
+ * remote's components read from the seeded cache the moment its module evaluates.
+ * Split templates are separate immutable files the components fetch for themselves,
+ * so there is nothing to await — but the URLs are known now and would otherwise not
+ * be known until each component's module had arrived, which is one round trip per
+ * component inside the remote's chunk. Starting them here costs nothing and is
+ * where the descriptor's list stops being inert. ADR-0081.
+ *
+ * @param {RemoteDescriptor} remote
+ */
 function seedRemoteTemplates(remote) {
   const url = remote.templates;
-  if (url === undefined) return Promise.resolve();
+  if (url === undefined) {
+    prefetchTemplates(remote.templateFiles);
+    return Promise.resolve();
+  }
   let pending = loadedAssets.get(url);
   if (pending !== undefined) return pending;
   const integrity = remote.assets?.find((asset) => asset.type === 'template' && asset.url === url)

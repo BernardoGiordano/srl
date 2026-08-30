@@ -107,7 +107,41 @@ export function admitManifest(value, source) {
       templateBundle === undefined
         ? undefined
         : admitPath(templateBundle, `${url}: templateBundle`, policy),
+    templateFiles: admitTemplateFiles(root.templateFiles, `${url}: templateFiles`, policy),
   });
+}
+
+/**
+ * The list of template URLs an artifact emitted, admitted one entry at a time.
+ *
+ * A frozen empty array when the key is absent rather than `undefined`, because the
+ * only consumer iterates it: an optional list that is sometimes a list and
+ * sometimes nothing is a check at every call site for a document that simply says
+ * "no templates to announce".
+ *
+ * Same-origin under the same rule as every other URL here. The runtime turns these
+ * into `fetch` calls, and the page applies `connect-src 'self'`, so a cross-origin
+ * entry would fail as a blocked request behind an optimisation nobody is watching
+ * — one message at startup is the better failure. Duplicates are refused because a
+ * list of content-addressed files that names one twice is a generator bug, and it
+ * is cheaper to say so than to let it be silently harmless.
+ *
+ * @param {unknown} value
+ * @param {string} where
+ * @param {Policy} policy
+ * @returns {readonly string[]}
+ */
+function admitTemplateFiles(value, where, policy) {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value)) throw new Error(`${where} must be an array.`);
+  const seen = new Set();
+  const files = /** @type {unknown[]} */ (value).map((entry, index) => {
+    const file = admitPath(entry, `${where}[${String(index)}]`, policy);
+    if (seen.has(file)) throw new Error(`${where} names ${file} more than once.`);
+    seen.add(file);
+    return file;
+  });
+  return Object.freeze(files);
 }
 
 /**
@@ -175,6 +209,7 @@ function admitRemote(value, index, policy, supportedLocales) {
     entry.templates === undefined
       ? undefined
       : admitPath(entry.templates, `${where} templates`, policy);
+  const templateFiles = admitTemplateFiles(entry.templateFiles, `${where} templateFiles`, policy);
   if (
     assets.length > 0 &&
     !assets.some((asset) => asset.type === 'module' && asset.url === url && asset.integrity === integrity)
@@ -198,6 +233,7 @@ function admitRemote(value, index, policy, supportedLocales) {
     shared: admitShared(entry.shared, where),
     locales: admitBundlePatterns(entry.locales, `${where} locales`, supportedLocales, policy),
     templates,
+    templateFiles,
     mount: admitMount(entry.mount, where, policy),
     requires: admitRequirements(entry.requires, where),
     grants: admitGrants(entry.grants, where),

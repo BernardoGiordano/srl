@@ -24,7 +24,7 @@ import { configureI18n } from '@core/localization/i18n.js';
 import { loadManifest, useManifest } from '@core/remotes/mfe.js';
 import { defineTag } from '@core/elements/mount.js';
 import { readJson } from '@core/foundation/json.js';
-import { seedTemplates } from '@core/template/template.js';
+import { prefetchTemplates, seedTemplates } from '@core/template/template.js';
 
 /** @import { ApplicationRoot, ApplicationSpec, StartedApplication, StartupStep } from '@core/application/types.js' */
 
@@ -59,9 +59,12 @@ export class ApplicationStartupError extends Error {
  *                    Remote locations, the API base URL and the locale
  *                    configuration all come from it, so nothing that depends on
  *                    any of them can be constructed before it lands.
- *   3. `templates`   Seed the template cache from `manifest.templateBundle`, if
- *                    one is configured. Must precede any component module,
- *                    because a component fetches its own template while loading.
+ *   3. `templates`   Warm the template cache from whichever list the manifest
+ *                    carries: seed it outright from `templateBundle`, or start
+ *                    every URL in `templateFiles` arriving. Here because a
+ *                    component fetches its own template while loading, and by the
+ *                    time it does the URL has to be known already — a chunk of
+ *                    nine components otherwise costs nine requests in a row.
  *   4. `locale`      `configureI18n`, awaited. A component that renders once
  *                    against an empty message table and again against a full one
  *                    flashes untranslated text; ordering it away costs one await.
@@ -95,8 +98,15 @@ export async function startApplication(spec) {
     return value;
   });
 
+  // Seeding wins when both are present: it puts the markup in the cache from bytes
+  // already in hand, which makes the prefetch it would otherwise start a set of
+  // requests for templates nothing will ever read from the network.
   const bundle = manifest.templateBundle;
-  if (bundle !== undefined) await step('templates', steps, () => seedTemplateBundle(bundle));
+  if (bundle !== undefined) {
+    await step('templates', steps, () => seedTemplateBundle(bundle));
+  } else if (manifest.templateFiles.length > 0) {
+    await step('templates', steps, () => prefetchTemplates(manifest.templateFiles));
+  }
 
   await step('locale', steps, () => configureI18n(manifest.i18n));
 

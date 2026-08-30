@@ -60,7 +60,14 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.ok(billingTransport.assets.some((asset) => asset.type === 'style'));
     // Split delivery is the default, so a Remote's templates are files its own
     // components fetch and there is nothing for the shell to preload. ADR-0071.
+    // The shell does start them, from the list the descriptor carries, which is a
+    // list of URLs and not an asset it has to pin. ADR-0081.
     assert.ok(!billingTransport.assets.some((asset) => asset.type === 'template'));
+    assert.ok(billingTransport.templateFiles.length > 0);
+    assert.ok(
+      billingTransport.templateFiles.every((url) => url.startsWith(String(billing.base))),
+      'a Remote named a template outside its own publication base',
+    );
     assert.ok(analyticsTransport.assets.some((asset) => asset.type === 'style'));
     assert.deepEqual(analyticsTransport.shared, []);
     assert.ok(billingTransport.shared.includes('@core/foundation/reactive.js'));
@@ -109,6 +116,18 @@ void test('example composes independently verified Remote artifacts', async () =
     const publicRoot = join(String(shell.root), 'public');
     const manifest = JSON.parse(await readFile(join(publicRoot, 'app.manifest.json'), 'utf8'));
     assert.deepEqual(manifest.remotes, composed);
+
+    // Under split delivery the manifest names every template and no bundle, which
+    // is what lets startup put them all in flight instead of the browser learning
+    // each URL from the component module that just arrived. ADR-0081.
+    const shellTemplates = /** @type {{ files: string[] }} */ (
+      /** @type {Record<string, unknown>} */ (shell).templates
+    );
+    assert.equal(manifest.templateBundle, undefined);
+    assert.deepEqual(
+      [...manifest.templateFiles].sort(),
+      shellTemplates.files.map((path) => `/${path}`).sort(),
+    );
     const html = await readFile(join(publicRoot, 'index.html'), 'utf8');
     const importMapSource = /<script type="importmap">([^<]+)<\/script>/u.exec(html)?.[1];
     assert.ok(importMapSource !== undefined);
@@ -306,16 +325,91 @@ void test('dynamic component definition fails before an incomplete template arti
   }
 });
 
+void test('the manifest announces templates the way the delivery says to', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'artifact-delivery-'));
+  try {
+    const app = await example();
+    // The Remotes are built once and composed into all three shells. A shell's
+    // delivery governs its own markup; a Remote publishes independently and carries
+    // its own answer, which is why the two flags are separate builds in the first
+    // place.
+    const remotes = await Promise.all(
+      ['billing', 'analytics'].map((name) =>
+        buildRemoteArtifact({ app, name, outDir: join(temporary, name), release: RELEASE }),
+      ),
+    );
+
+    /** @param {'split' | 'split-lazy' | 'bundle'} delivery */
+    const manifestFor = async (delivery) => {
+      const shell = await buildArtifact({
+        app,
+        outDir: join(temporary, delivery),
+        release: RELEASE,
+        remotes,
+        templates: delivery,
+      });
+      const publicDir = join(String(shell.root), String(shell.public));
+      return {
+        shell,
+        manifest: JSON.parse(await readFile(join(publicDir, 'app.manifest.json'), 'utf8')),
+      };
+    };
+
+    const eager = await manifestFor('split');
+    const lazy = await manifestFor('split-lazy');
+    const bundled = await manifestFor('bundle');
+
+    const emitted = /** @type {{ files: string[] }} */ (
+      /** @type {Record<string, unknown>} */ (eager.shell).templates
+    ).files.map((path) => `/${path}`);
+
+    // `split` names every template, so startup can put them all in flight before
+    // the first component module evaluates.
+    assert.equal(eager.manifest.templateBundle, undefined);
+    assert.deepEqual([...eager.manifest.templateFiles].sort(), [...emitted].sort());
+
+    // `split-lazy` names none of them. The key is present and empty rather than
+    // absent, so the document says "this artifact announces nothing" out loud
+    // instead of leaving it indistinguishable from a manifest built before the key
+    // existed.
+    assert.equal(lazy.manifest.templateBundle, undefined);
+    assert.deepEqual(lazy.manifest.templateFiles, []);
+
+    // `bundle` names the one JSON and no list: seeding fills the cache from bytes
+    // already in hand, so a prefetch beside it would request markup nothing reads.
+    assert.equal(lazy.manifest.templateFiles.length, 0);
+    assert.equal(bundled.manifest.templateFiles, undefined);
+    assert.match(String(bundled.manifest.templateBundle), /^\/assets\/templates-[0-9a-f]{16}\.json$/u);
+
+    // And the artifacts the two split modes emit are the same bytes. The mode is a
+    // statement about the manifest, not about what is on disk.
+    const filesOfMode = (/** @type {{ shell: unknown }} */ mode) =>
+      /** @type {{ files: string[] }} */ (
+        /** @type {Record<string, unknown>} */ (mode.shell).templates
+      ).files;
+    assert.deepEqual(filesOfMode(lazy), filesOfMode(eager));
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
 void test('a template is one immutable file, and a bundle only when asked for', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'artifact-templates-'));
   try {
     const app = await example();
-    const [split, bundled] = await Promise.all([
+    const [split, lazy, bundled] = await Promise.all([
       buildRemoteArtifact({
         app,
         name: 'billing',
         outDir: join(temporary, 'split'),
         release: RELEASE,
+      }),
+      buildRemoteArtifact({
+        app,
+        name: 'billing',
+        outDir: join(temporary, 'lazy'),
+        release: RELEASE,
+        templates: 'split-lazy',
       }),
       buildRemoteArtifact({
         app,
@@ -332,6 +426,7 @@ void test('a template is one immutable file, and a bundle only when asked for', 
         report.templates
       );
     const splitTemplates = templatesOf(split);
+    const lazyTemplates = templatesOf(lazy);
     const bundledTemplates = templatesOf(bundled);
 
     assert.equal(splitTemplates.delivery, 'split');
@@ -339,6 +434,21 @@ void test('a template is one immutable file, and a bundle only when asked for', 
     assert.equal(splitTemplates.url, null);
     assert.ok(splitTemplates.count > 0);
     assert.deepEqual(splitTemplates.files, bundledTemplates.files);
+
+    // The two split modes emit byte-identical artifacts. Everything that separates
+    // them is in what the descriptor announces, which is the assertion below —
+    // if they ever diverge here, one of them is emitting a file the other is not.
+    assert.equal(lazyTemplates.delivery, 'split-lazy');
+    assert.equal(lazyTemplates.bundle, null);
+    assert.equal(lazyTemplates.url, null);
+    assert.deepEqual(lazyTemplates.files, splitTemplates.files);
+    for (const path of lazyTemplates.files) {
+      assert.equal(
+        await readFile(join(String(lazy.root), 'public', path), 'utf8'),
+        await readFile(join(String(split.root), 'public', path), 'utf8'),
+        `${path} differs between the split modes`,
+      );
+    }
     assert.ok(
       filesOf(split).every((file) => !/templates-[0-9a-f]{16}\.json$/u.test(file.path)),
       'split delivery emitted a bundle',
@@ -351,6 +461,32 @@ void test('a template is one immutable file, and a bundle only when asked for', 
       assert.ok(file !== undefined, `${path} is not in the payload`);
       assert.equal(file.cache, 'immutable');
     }
+
+    // The descriptor names them, which is the whole difference between markup a
+    // component discovers when its own module lands and markup the shell starts
+    // beside the Remote's entry. Empty under bundle delivery, where the bytes
+    // themselves are already on their way. ADR-0081.
+    const splitRemote = /** @type {{ templateFiles: string[], templates?: string }} */ (
+      /** @type {Record<string, unknown>} */ (split).remote
+    );
+    const bundledRemote = /** @type {{ templateFiles: string[], templates?: string }} */ (
+      /** @type {Record<string, unknown>} */ (bundled).remote
+    );
+    const lazyRemote = /** @type {{ templateFiles: string[], templates?: string }} */ (
+      /** @type {Record<string, unknown>} */ (lazy).remote
+    );
+    assert.deepEqual(
+      [...splitRemote.templateFiles].sort(),
+      splitTemplates.files.map((path) => `${String(split.base)}${path}`).sort(),
+    );
+    assert.equal(splitRemote.templates, undefined);
+    // `split-lazy` announces nothing at all: no bundle to seed from and no list to
+    // start, so every template is discovered by the component that needs it, which
+    // is ADR-0071 unchanged and the reason the mode exists.
+    assert.deepEqual(lazyRemote.templateFiles, []);
+    assert.equal(lazyRemote.templates, undefined);
+    assert.deepEqual(bundledRemote.templateFiles, []);
+    assert.equal(bundledRemote.templates, bundledTemplates.url);
 
     assert.equal(bundledTemplates.delivery, 'bundle');
     assert.match(String(bundledTemplates.bundle), /^assets\/templates-[0-9a-f]{16}\.json$/u);
