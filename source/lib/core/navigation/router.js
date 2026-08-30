@@ -752,6 +752,14 @@ class AppRouter {
    * for the same reason — `@core/elements/mount.js` creates elements, it does not
    * connect them.
    *
+   * Which is why the levels are staged together rather than one at a time: a
+   * child's lazy `import()` no longer waits for its parent's module, its
+   * templates and its element, so a URL's nesting depth costs one round trip
+   * instead of one per level. Ordering is `#place`'s, at the commit, where
+   * ADR-0002 puts it. `#authorize` stays a sequence for the opposite reason — a
+   * parent's verdict decides whether a child is fetched at all — and it has
+   * already run by the time a level reaches here.
+   *
    * Returns null when the navigation was superseded while a module was loading,
    * having released whatever it had already built: an element that never reaches
    * the DOM still has to be paired with its `release`, which is what
@@ -762,27 +770,44 @@ class AppRouter {
    * @returns {Promise<EnteringLevel[] | null>}
    */
   async #prepare(entering, attempt) {
+    const staging = entering.map(async (route, index) => {
+      const request = requestFor(route);
+      const element = await this.#instantiate(route, request, index === entering.length - 1);
+      return /** @type {EnteringLevel} */ ({ route, request, element });
+    });
+
+    // `allSettled`, not `all`: a level that rejects while a sibling is still
+    // loading must not leave that sibling's element unbuilt-and-unreleased, and
+    // a rejection nobody awaits is an unhandled one.
+    const settled = await Promise.allSettled(staging);
+
     /** @type {EnteringLevel[]} */
     const prepared = [];
+    /** @type {{ cause: unknown } | null} */
+    let failure = null;
 
-    for (const [index, route] of entering.entries()) {
-      const request = requestFor(route);
-
-      try {
-        const element = await this.#instantiate(route, request, index === entering.length - 1);
-        prepared.push({ route, request, element });
-      } catch (cause) {
-        // The levels above this one are built and will never be placed, so they
-        // are released here rather than left to a garbage collector that cannot
-        // run a route's `unmount`.
-        await releaseAll(prepared);
-        throw cause;
+    for (const result of settled) {
+      if (result.status === 'fulfilled') {
+        prepared.push(result.value);
+        continue;
       }
+      // The shallowest failure is the one reported, which is the one a sequential
+      // walk would have reached first: a broken parent explains a broken child
+      // better than the other way round.
+      failure ??= { cause: result.reason };
+    }
 
-      if (!attempt.live) {
-        await releaseAll(prepared);
-        return null;
-      }
+    if (failure !== null) {
+      // The levels that did build will never be placed, so they are released here
+      // rather than left to a garbage collector that cannot run a route's
+      // `unmount`.
+      await releaseAll(prepared);
+      throw failure.cause;
+    }
+
+    if (!attempt.live) {
+      await releaseAll(prepared);
+      return null;
     }
 
     return prepared;

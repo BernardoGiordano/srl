@@ -709,6 +709,48 @@ describe('router attachment', () => {
       assert.equal(currentPath.value, '/');
     });
 
+    it('releases a level still being built when a sibling level fails', async () => {
+      const parent = deferred();
+      let released = 0;
+      const outlet = await startAt(
+        [
+          { path: '/', component: 'test-home-view' },
+          {
+            path: '/managed',
+            mount: async () => {
+              await parent.promise;
+              return document.createElement('test-mounted-view');
+            },
+            unmount: () => {
+              released += 1;
+            },
+            children: [
+              {
+                path: 'inner',
+                component: 'test-late-inner-view',
+                load: () => Promise.reject(new Error('inner is gone')),
+              },
+            ],
+          },
+        ],
+        '/',
+      );
+
+      // The levels are staged together, so the child's rejection lands while the
+      // parent is still being built. What must not happen is the failure being
+      // published before the parent finishes: an element built after nobody is
+      // waiting for it is an element nothing releases.
+      const navigation = navigate('/managed/inner');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      parent.release();
+      await navigation;
+
+      assert.includes(present(navigationError.value).message, 'inner is gone');
+      assert.equal(released, 1, 'the level that finished last is still paired with its unmount');
+      assert.equal(outlet.firstElementChild?.localName, 'test-home-view');
+      assert.equal(currentPath.value, '/');
+    });
+
     it('leaves no history entry for a URL that never arrived', async () => {
       const outlet = await startAt(
         [
@@ -1397,6 +1439,63 @@ describe('router attachment', () => {
       assert.equal(outlet.querySelector('.view')?.textContent, 'login');
       assert.equal(loads, 0, 'a denied section must not fetch what is inside it');
       assert.equal(built.shell, 0, 'nor mount its layout');
+    });
+
+    it('stages every entering level at once, rather than one per round trip', async () => {
+      const layout = deferred();
+      let childLoadStarted = false;
+
+      const attachment = startAt(
+        [
+          {
+            path: '/staged',
+            component: 'test-staged-layout',
+            load: async () => {
+              await layout.promise;
+              customElements.define(
+                'test-staged-layout',
+                class extends SignalElement {
+                  render() {
+                    return html`<x-route-outlet></x-route-outlet>`;
+                  }
+                },
+              );
+            },
+            children: [
+              {
+                path: 'inner',
+                component: 'test-staged-child-view',
+                load: () => {
+                  childLoadStarted = true;
+                  customElements.define(
+                    'test-staged-child-view',
+                    class extends SignalElement {
+                      render() {
+                        return html`<span class="view">staged</span>`;
+                      }
+                    },
+                  );
+                  return Promise.resolve();
+                },
+              },
+            ],
+          },
+        ],
+        '/staged/inner',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(
+        childLoadStarted,
+        true,
+        'a child does not wait for its parent module to arrive before fetching its own',
+      );
+
+      layout.release();
+      const outlet = await attachment;
+      await settled(present(outlet.firstElementChild));
+
+      assert.equal(outlet.querySelector('.view')?.textContent, 'staged');
     });
 
     it('treats a parent with no component as a prefix and a guard only', async () => {

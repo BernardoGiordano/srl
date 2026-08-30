@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **A navigation stages its levels together, so nesting depth stops costing round trips.** `#prepare`
+  looped the entering levels and awaited `#instantiate` inside the loop, so level *n+1*'s
+  `import()` was not called until level *n*'s module had arrived, its templates had arrived
+  and its element had been created. A URL's nesting depth was paid in latency: on a deployed
+  artifact the shell layout landed at 503 ms and the page below it only started then, arriving
+  at 853 ms. The independence was already recorded in `#prepare`'s own comment — loading a
+  module, instantiating an element and assigning its properties are all things a level can do
+  while its predecessor is still mounted — so the levels are now staged as a set and awaited
+  once. `#place` is untouched and still commits them in order, which is where ADR-0002 puts the
+  ordering, and `#authorize` stays serial on purpose: a parent's verdict decides whether a
+  child's module is fetched at all. Failure keeps its pairing. The staging settles as a whole
+  before anything is published, so a level that finishes after a sibling has already rejected is
+  still released rather than orphaned, and the shallowest failure is the one reported — the same
+  one a sequential walk would have reached first. No interface changed and no caller or test was
+  rewritten. A four-level URL loses three round trips, not one.
+
 - **The manifest names every template, and startup starts them all — unless you ask it not to.** A component names
   its own template, so its URL is not known until that component's module has been fetched
   and evaluated — and `defineComponent` awaits the template before `customElements.define`,
