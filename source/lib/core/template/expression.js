@@ -86,8 +86,8 @@ function compile(node, where, unwrap) {
     }
 
     case 'name': {
-      const { name } = node;
-      return (scope) => read(resolve(name, scope, where));
+      const lookup = compileNameRead(node.name, where);
+      return (scope) => read(lookup(scope));
     }
 
     case 'member': {
@@ -99,7 +99,9 @@ function compile(node, where, unwrap) {
           if (optional) return undefined;
           throw evaluationError(where, `Cannot read "${name}" of ${String(target)}`);
         }
-        return read(member(target, name));
+        // No member check: `name` is a literal the parser already refused if it
+        // were reserved. Only the computed key below can still be one.
+        return read(/** @type {Record<string, unknown>} */ (target)[name]);
       };
     }
 
@@ -109,7 +111,9 @@ function compile(node, where, unwrap) {
       return (scope) => {
         const target = object(scope);
         if (target === null || target === undefined) return undefined;
-        return read(member(target, String(index(scope))));
+        const key = String(index(scope));
+        refuseForbiddenMember(key);
+        return read(/** @type {Record<string, unknown>} */ (target)[key]);
       };
     }
 
@@ -189,14 +193,19 @@ function compileCall(node, where, read) {
             if (receiver === null || receiver === undefined) {
               throw evaluationError(where, `Cannot call "${name}" of ${String(receiver)}`);
             }
-            return { fn: member(receiver, name), receiver, label: name };
+            return {
+              fn: /** @type {Record<string, unknown>} */ (receiver)[name],
+              receiver,
+              label: name,
+            };
           };
         })()
       : callee.kind === 'name'
         ? (() => {
             const { name } = callee;
+            const lookup = compileNameResolution(name, where);
             return (scope) => {
-              const found = resolveWithReceiver(name, scope, where);
+              const found = lookup(scope);
               return { fn: found.value, receiver: found.receiver, label: name };
             };
           })()
@@ -278,9 +287,10 @@ function compileAssignment(node, where) {
 
   if (target.kind === 'name') {
     const { name } = target;
+    const lookup = compileNameResolution(name, where);
     return (scope) => {
       const next = value(scope);
-      const current = resolveWithReceiver(name, scope, where);
+      const current = lookup(scope);
       // Assigning to a signal sets it rather than replacing it. Without this,
       // `(input)="query = $event.target.value"` would overwrite the signal
       // object on the component and silently detach every subscriber.
@@ -333,27 +343,19 @@ function compileAssignment(node, where) {
  * class before the page ever runs — a renamed property is a build failure there
  * rather than a blank spot on the page.
  *
+ * Everything the *name alone* decides is decided here, once, while the
+ * expression compiles: `$host` is not a lookup at all, and a denied name is not
+ * a lookup either but an error, now raised while the template compiles rather
+ * than on the render that first reaches it. What is left in the returned
+ * closure is the three-step walk, and nothing else.
+ *
  * @param {string} name
- * @param {Scope} scope
  * @param {string} where
- * @returns {unknown}
+ * @returns {(scope: Scope) => unknown}
  */
-function resolve(name, scope, where) {
-  return resolveWithReceiver(name, scope, where).value;
-}
-
-/**
- * @param {string} name
- * @param {Scope} scope
- * @param {string} where
- * @returns {{ value: unknown, receiver: unknown }}
- */
-function resolveWithReceiver(name, scope, where) {
-  if (name === '$host') return { value: scope.host, receiver: undefined };
-
-  if (UNRESOLVABLE_NAMES.has(name)) {
-    throw new Error(`Templates may not reference "${name}" in ${where}.`);
-  }
+function compileNameRead(name, where) {
+  if (name === '$host') return (scope) => scope.host;
+  refuseUnresolvableName(name, where);
 
   // `in` rather than `hasOwn`, because row locals are prototype-chained: a
   // nested `*for` sees the outer loop's variables through the chain instead of
@@ -362,32 +364,48 @@ function resolveWithReceiver(name, scope, where) {
   // and `{{ toString }}` still resolves to nothing. `undefined` and `null` in
   // locals still shadow a component member of the same name, which a truthiness
   // check would not.
-  if (name in scope.locals) {
-    return { value: scope.locals[name], receiver: scope.locals };
-  }
-  // `in` for the host, because a component's members are mostly getters and
-  // methods on its prototype chain. The denylist above is what keeps that from
+  //
+  // `in` for the host too, because a component's members are mostly getters and
+  // methods on its prototype chain. The refusal above is what keeps that from
   // also exposing `Object.prototype`.
-  if (name in scope.host) return { value: scope.host[name], receiver: scope.host };
-  if (globalsByName.has(name)) return { value: globalsByName.get(name), receiver: undefined };
-
-  // A name the component does not have resolves to nothing. The template checker
-  // is what refuses it, statically, against the component's own types.
-  return { value: undefined, receiver: undefined };
+  return (scope) => {
+    if (name in scope.locals) return scope.locals[name];
+    if (name in scope.host) return scope.host[name];
+    // A name the component does not have resolves to nothing. The template
+    // checker is what refuses it, statically, against the component's own types.
+    return globalsByName.get(name);
+  };
 }
 
 /**
- * Property access that refuses to walk into the prototype chain of plain
- * objects it did not create. The list itself is dialect.js's, so the checker
- * refuses the same names.
+ * The same resolution, keeping the receiver a call needs for its `this` and an
+ * assignment needs to write through. Separate from `compileNameRead` so that
+ * reading an identifier — by far the most common thing a template does — does
+ * not allocate a record it would immediately discard.
  *
- * @param {object} target
  * @param {string} name
- * @returns {unknown}
+ * @param {string} where
+ * @returns {(scope: Scope) => { value: unknown, receiver: unknown }}
  */
-function member(target, name) {
-  refuseForbiddenMember(name);
-  return /** @type {Record<string, unknown>} */ (target)[name];
+function compileNameResolution(name, where) {
+  if (name === '$host') return (scope) => ({ value: scope.host, receiver: undefined });
+  refuseUnresolvableName(name, where);
+
+  return (scope) => {
+    if (name in scope.locals) return { value: scope.locals[name], receiver: scope.locals };
+    if (name in scope.host) return { value: scope.host[name], receiver: scope.host };
+    return { value: globalsByName.get(name), receiver: undefined };
+  };
+}
+
+/**
+ * @param {string} name
+ * @param {string} where
+ */
+function refuseUnresolvableName(name, where) {
+  if (UNRESOLVABLE_NAMES.has(name)) {
+    throw new Error(`Templates may not reference "${name}" in ${where}.`);
+  }
 }
 
 /**
@@ -396,7 +414,8 @@ function member(target, name) {
  * A name written in the source is refused while parsing, so by the time an
  * expression is compiled the only unchecked key left is a computed one, whose
  * value is not known until the event fires. `row[column] = value` with a
- * `column` of `__proto__` is the case this exists for.
+ * `column` of `__proto__` is the case this exists for — and the reason the
+ * static member and call paths do not call this at all.
  *
  * @param {string} name
  */

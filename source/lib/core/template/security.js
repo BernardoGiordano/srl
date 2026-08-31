@@ -2,8 +2,14 @@
  * Security contexts for values that cross from a template expression into DOM.
  *
  * Escaping text is sufficient only in a text node. URL, executable-resource,
- * HTML and style sinks each have different rules, so the template compiler asks
- * this module to sanitize a value immediately before Lit writes it.
+ * HTML and style sinks each have different rules, so a value bound into one is
+ * sanitized immediately before Lit writes it.
+ *
+ * *Which* sink a binding writes into is settled once, while the template is
+ * compiled: the element and the attribute name are both fixed by then, and
+ * `attributeSinkFor`/`propertySinkFor` hand the compiler the single sanitizer
+ * that binding will ever need — or `null`, when the binding is in no security
+ * context and needs none.
  *
  * The four `bypassSecurityTrust*` functions are the public escape hatch. Their
  * deliberately noisy names are part of the API: every use should stand out in a
@@ -26,17 +32,7 @@ const TRUSTED_VALUE = Symbol('ui-test trusted value');
 const HTML = 'HTML';
 const STYLE = 'Style';
 const URL_CONTEXT = 'URL';
-const URL_SET = 'URL set';
 const RESOURCE_URL = 'Resource URL';
-
-/** @type {Readonly<Record<SecurityContext, string>>} */
-const LABELS = {
-  html: HTML,
-  style: STYLE,
-  url: URL_CONTEXT,
-  urlSet: URL_SET,
-  resourceUrl: RESOURCE_URL,
-};
 
 /**
  * The browser's Trusted Types interfaces are not in TypeScript's DOM library.
@@ -154,33 +150,40 @@ function setTemplateSource(template, source) {
 }
 
 /**
- * Sanitize an attribute binding according to its element/name pair.
- * `null` means the attribute must be removed.
+ * Resolve the sink an attribute binding writes into.
+ *
+ * Every input to this decision is fixed when the binding is compiled — the
+ * element, the attribute name — so the compiler asks once and keeps the answer
+ * instead of re-deriving it per evaluation. `null` means the attribute lands in
+ * no security context and the value needs no sanitizer at all.
  *
  * @param {string} tag
  * @param {string} name
- * @param {unknown} value
  * @param {string} where
- * @returns {unknown | null}
+ * @returns {Sanitizer | null}
  */
-export function sanitizeAttribute(tag, name, value, where) {
+export function attributeSinkFor(tag, name, where) {
   if (name.toLowerCase().startsWith('on')) {
     throw new Error(`${where} targets an inline event attribute. Use an (event) binding.`);
   }
-  return sanitize(labelFor(tag, name), value, where);
+  return sinkFor(tag, name, where);
 }
 
 /**
- * Sanitize a property binding and refuse DOM assignments whose lifecycle or
- * code-execution semantics cannot be made safe.
+ * Resolve the sink a property binding writes into, and refuse outright the DOM
+ * assignments whose lifecycle or code-execution semantics cannot be made safe.
+ *
+ * Those refusals used to be raised on every evaluation, and a compile-time call
+ * with a `null` value existed alongside them so that a dangerous target failed
+ * even when the binding never rendered. Resolving the sink at compile time is
+ * that call, so the pair collapses into one.
  *
  * @param {string} tag
- * @param {string} name
- * @param {unknown} value
+ * @param {string} name camelCased property name.
  * @param {string} where
- * @returns {unknown | null}
+ * @returns {Sanitizer | null}
  */
-export function sanitizeProperty(tag, name, value, where) {
+export function propertySinkFor(tag, name, where) {
   switch (refusedProperty(name)) {
     case 'event-property':
       throw new Error(
@@ -195,50 +198,84 @@ export function sanitizeProperty(tag, name, value, where) {
     default:
       break;
   }
-  return sanitize(labelFor(tag, name.toLowerCase()), value, where);
+  return sinkFor(tag, name, where);
 }
 
 /**
- * The dialect decides which sink a name is; this turns that into the label the
- * sanitizer and its error messages use.
+ * The dialect decides which sink a name is; this binds that answer to the one
+ * sanitizer it selects, together with the `where` its errors quote.
  *
  * @param {string} tag
  * @param {string} name
- * @returns {string | undefined}
+ * @param {string} where
+ * @returns {Sanitizer | null}
  */
-function labelFor(tag, name) {
+function sinkFor(tag, name, where) {
   const context = securityContextFor(tag, name);
-  return context === undefined ? undefined : LABELS[context];
+  if (context === undefined) return null;
+  const sanitize = SANITIZERS[context];
+  return (value) => sanitize(value, where);
 }
 
 /**
- * @param {string | undefined} context
+ * One sanitizer per context, selected by name rather than by a chain of
+ * comparisons the evaluator would walk again on every render.
+ *
+ * @typedef {(value: unknown) => unknown | null} Sanitizer
+ * @typedef {(value: unknown, where: string) => unknown | null} ContextSanitizer
+ */
+
+/** @type {Readonly<Record<SecurityContext, ContextSanitizer>>} */
+const SANITIZERS = {
+  html: sanitizeForHtml,
+  style: sanitizeForStyle,
+  url: sanitizeForUrl,
+  urlSet: sanitizeForUrlSet,
+  resourceUrl: sanitizeForResourceUrl,
+};
+
+/**
+ * A nullish value means "remove this attribute" in every context, which is why
+ * each sanitizer answers `null` before looking at anything else.
+ *
  * @param {unknown} value
  * @param {string} where
  * @returns {unknown | null}
  */
-function sanitize(context, value, where) {
+function sanitizeForHtml(value, where) {
   if (value === null || value === undefined) return null;
-  if (context === undefined) return value;
-
   const trusted = asTrustedValue(value);
-  if (context === HTML) {
-    const source = trusted === null ? stringValue(value, where) : trusted.unwrap(HTML);
-    return nativeHtml(trusted === null ? sanitizeHtml(source) : source);
-  }
-  if (context === STYLE) {
-    const source = trusted === null ? sanitizeStyle(stringValue(value, where)) : trusted.unwrap(STYLE);
-    return source;
-  }
-  if (context === URL_CONTEXT) {
-    if (trusted !== null) return trusted.unwrap(URL_CONTEXT);
-    return sanitizeUrl(stringValue(value, where));
-  }
-  if (context === URL_SET) {
-    if (trusted !== null) return trusted.unwrap(URL_CONTEXT);
-    return sanitizeUrlSet(stringValue(value, where));
-  }
+  if (trusted === null) return nativeHtml(sanitizeHtml(stringValue(value, where)));
+  return nativeHtml(trusted.unwrap(HTML));
+}
 
+/** @param {unknown} value @param {string} where @returns {unknown | null} */
+function sanitizeForStyle(value, where) {
+  if (value === null || value === undefined) return null;
+  const trusted = asTrustedValue(value);
+  return trusted === null ? sanitizeStyle(stringValue(value, where)) : trusted.unwrap(STYLE);
+}
+
+/** @param {unknown} value @param {string} where @returns {unknown | null} */
+function sanitizeForUrl(value, where) {
+  if (value === null || value === undefined) return null;
+  const trusted = asTrustedValue(value);
+  return trusted === null ? sanitizeUrl(stringValue(value, where)) : trusted.unwrap(URL_CONTEXT);
+}
+
+/** @param {unknown} value @param {string} where @returns {unknown | null} */
+function sanitizeForUrlSet(value, where) {
+  if (value === null || value === undefined) return null;
+  const trusted = asTrustedValue(value);
+  // A URL set is stamped with the ordinary URL trust: `srcset` carries the same
+  // values `src` does, so a separate stamp would be a distinction without one.
+  return trusted === null ? sanitizeUrlSet(stringValue(value, where)) : trusted.unwrap(URL_CONTEXT);
+}
+
+/** @param {unknown} value @param {string} where @returns {unknown | null} */
+function sanitizeForResourceUrl(value, where) {
+  if (value === null || value === undefined) return null;
+  const trusted = asTrustedValue(value);
   if (trusted === null) {
     throw new Error(
       `${where} is an executable resource URL and requires ` +

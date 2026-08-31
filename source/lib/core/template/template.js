@@ -35,8 +35,8 @@ import {
 } from '@core/template/dialect.js';
 import { effect } from '@core/foundation/reactive.js';
 import {
-  sanitizeAttribute,
-  sanitizeProperty,
+  attributeSinkFor,
+  propertySinkFor,
 } from '@core/template/security.js';
 
 // Side effect only: i18n registers `t`, `num`, `dt` and friends as template
@@ -686,9 +686,7 @@ function compileAttributes(element, context, chunks) {
     const evaluate = compileInterpolatedAttribute(pieces, context);
     const where = `${context.where} ${name} interpolation`;
     chunks.text(` ${name}="`);
-    chunks.hole((scope) =>
-      sanitizeOrNothing(sanitizeAttribute(element.localName, name, evaluate(scope), where)),
-    );
+    chunks.hole(throughSink(evaluate, attributeSinkFor(element.localName, name, where)));
     chunks.text('"');
   }
 }
@@ -722,13 +720,10 @@ function compileBinding(element, target, source, context, chunks) {
   const evaluate = compileExpression(source, where);
 
   if (classified.kind === 'property') {
-    // Reject dangerous property targets while compiling, even if this render
-    // never happens. Other contexts sanitize on every evaluation below.
-    sanitizeProperty(element.localName, name, null, where);
+    // Resolving the sink is also what rejects a dangerous property target, and
+    // it happens here, while compiling, even if this binding never renders.
     chunks.text(` .${name}=`);
-    chunks.hole((scope) =>
-      sanitizeOrNothing(sanitizeProperty(element.localName, name, evaluate(scope), where)),
-    );
+    chunks.hole(throughSink(evaluate, propertySinkFor(element.localName, name, where)));
     return;
   }
 
@@ -739,9 +734,7 @@ function compileBinding(element, target, source, context, chunks) {
   }
 
   chunks.text(` ${name}="`);
-  chunks.hole((scope) =>
-    sanitizeOrNothing(sanitizeAttribute(element.localName, name, evaluate(scope), where)),
-  );
+  chunks.hole(throughSink(evaluate, attributeSinkFor(element.localName, name, where)));
   chunks.text('"');
 }
 
@@ -969,9 +962,21 @@ function compileInterpolatedAttribute(pieces, context) {
       .join('');
 }
 
-/** @param {unknown | null} value @returns {unknown} */
-function sanitizeOrNothing(value) {
-  return value === null ? nothing : value;
+/**
+ * Wrap a binding's evaluator in the sink resolved for it while compiling.
+ *
+ * A binding in no security context gets no sanitizer call at all — the common
+ * case, since `class`, `id` and every `aria-` attribute land there. `nothing`
+ * removes the attribute, which is what a nullish value has always meant here
+ * and what a sanitizer says when it refuses one.
+ *
+ * @param {Evaluator} evaluate
+ * @param {((value: unknown) => unknown | null) | null} sink
+ * @returns {Evaluator}
+ */
+function throughSink(evaluate, sink) {
+  if (sink === null) return (scope) => evaluate(scope) ?? nothing;
+  return (scope) => sink(evaluate(scope)) ?? nothing;
 }
 
 /**
