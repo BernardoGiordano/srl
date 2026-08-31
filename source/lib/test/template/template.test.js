@@ -376,6 +376,41 @@ describe('template compiler', () => {
     assert.equal(present(host.querySelector('p')).textContent, 'Grace');
   });
 
+  it('re-records what the new branch reads when a host render flips it', async () => {
+    // The reason a host render must reach the binding at all: a ternary on an
+    // ordinary Lit property reads a different signal on each side, and a
+    // dependency set captured once would keep tracking the abandoned one. The
+    // render bumps `scope.version`, the binding evaluates again inside a fresh
+    // effect, and that is what re-records. ADR-0018.
+    const left = signal('left');
+    const right = signal('right');
+    const model = { pick: true, left, right };
+    const compiled = compileTemplate('<p>{{ pick ? left : right }}</p>', 'test');
+
+    render(compiled(model), host);
+    assert.equal(present(host.querySelector('p')).textContent, 'left');
+
+    model.pick = false;
+    render(compiled(model), host);
+    assert.equal(present(host.querySelector('p')).textContent, 'right');
+
+    right.value = 'changed';
+    await Promise.resolve();
+    assert.equal(
+      present(host.querySelector('p')).textContent,
+      'changed',
+      'the binding recorded the signal the new branch reads',
+    );
+
+    left.value = 'abandoned';
+    await Promise.resolve();
+    assert.equal(
+      present(host.querySelector('p')).textContent,
+      'changed',
+      'and stopped tracking the one the old branch read',
+    );
+  });
+
   it('does no work for a *for row nothing changed about', () => {
     let evaluations = 0;
     const items = signal([{ id: '1' }, { id: '2' }]);
