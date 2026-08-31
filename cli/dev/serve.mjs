@@ -4,7 +4,10 @@
  *
  * Zero dependencies so that `npm start` works on a fresh clone, and not a
  * dependency of the application: any static server that can mount two directories
- * on one origin serves the same folders with no Node at all.
+ * on one origin serves the same folders with no Node at all. The template
+ * announcement below is the one thing that wants a parsed project, and it imports
+ * the model lazily and declines rather than failing when it cannot: a clone with
+ * no `node_modules` still gets a server, one round trip per template slower.
  *
  *   node cli/dev/serve.mjs [--app <name>] [--port 8000] [--no-watch] [--open]
  *                          [--proxy <prefix>=<origin>]...
@@ -28,6 +31,17 @@
  *                 disk, which is what lets an application with an API develop on
  *                 one origin — the arrangement it is deployed into — rather than
  *                 on two. ADR-0069.
+ *   templates     `app.manifest.json` is announced with `templateFiles`, computed
+ *                 from `cli/project-model/` the way the build computes it from
+ *                 what it emitted. Same manifest key, same runtime step, same
+ *                 `prefetchTemplates`; the only difference between development and
+ *                 production is which module wrote the list.
+ *                 `cli/delivery/source-manifest.mjs`.
+ *   revalidation  `no-cache` rather than the origin's `no-store` default, which
+ *                 turns a reload's forty module bodies and fifty templates from
+ *                 whole bodies into 304s. `cli/origin/` sends the `ETag` and
+ *                 answers the `If-None-Match`; what is stated here is only that
+ *                 the browser is allowed to ask. ADR-0085.
  *
  * `serveApplication` is the seam: it takes an application and its proxies and
  * returns a bound origin, so the behaviour below is assertable in-process rather
@@ -40,6 +54,7 @@ import { request as httpsRequest } from 'node:https';
 import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { templateAnnouncer } from '../delivery/source-manifest.mjs';
 import { REPO, selectedApp } from '../layout.mjs';
 import { serveOrigin } from '../origin/index.mjs';
 import { MOUNTS as PACKAGE_MOUNTS } from '../package/interface.mjs';
@@ -170,6 +185,7 @@ export async function serveApplication(options) {
    */
   const mounts = [...PACKAGE_MOUNTS, ['/', app.dir]];
   const entryDocument = join(app.dir, 'index.html');
+  const manifest = templateAnnouncer(app, log);
 
   /** Open EventSource connections, one per browser tab. */
   /** @type {Set<ServerResponse>} */
@@ -180,9 +196,31 @@ export async function serveApplication(options) {
       mounts,
       fallback: entryDocument,
 
-      // Only the entry document, and only while watching: every other byte is the
-      // file on disk, streamed.
+      /**
+       * Revalidation rather than the origin's `no-store`.
+       *
+       * `no-store` is the safe default for an origin that knows nothing about its
+       * caller, and it is the wrong one here: it deletes the browser cache, so the
+       * second reload costs exactly what the first did — every module and every
+       * template as a whole body. `no-cache` keeps the entry and requires the
+       * browser to revalidate it before use, which is a 304 for everything the
+       * developer did not touch and a 200 for the file they did.
+       *
+       * The stale-module failure `no-store` was guarding against needs the
+       * validator to lie, and it is built from size and mtime: an edit changes at
+       * least one of them. A checkout that restores an old mtime at an identical
+       * size is the residue, and it is a `touch` away — which is a trade worth
+       * making for the two thirds of a reload this returns.
+       */
+      headers: () => ({ 'Cache-Control': 'no-cache' }),
+
+      /**
+       * Two documents are not the file on disk: the entry, which carries the
+       * reload client while watching, and the manifest, which carries the template
+       * list the build would have written. Every other byte is streamed.
+       */
       transform: async (file) => {
+        if (file === manifest.file) return manifest.representation();
         if (!watching || file !== entryDocument) return null;
         const html = await readFile(file, 'utf8');
         const injected = html.includes('</body>')
@@ -223,7 +261,14 @@ export async function serveApplication(options) {
     },
   );
 
-  if (watching) await startWatching(mounts, log, clients);
+  if (watching) {
+    await startWatching(mounts, log, clients);
+    // On the same signal as the watcher, and for the same reason: watching means a
+    // human is about to load this page, and the model's first build is ~200 ms of
+    // importing a compiler. A suite that asks for a server without one is asking
+    // for a server, not for a warm cache.
+    manifest.warm();
+  }
 
   return { url: running.url, port: running.port, mounts, close: running.close };
 }

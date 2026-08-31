@@ -83,6 +83,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0082](0082-chain-depth-is-the-gated-delivery-fact.md) | Chain depth is the gated delivery fact | accepted | `tools/benchmark/chain.mjs`, `tools/benchmark/browser.mjs`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/budgets.json`, `cli/delivery/artifact-report.mjs` |
 | [ADR-0083](0083-a-locale-bundle-is-hash-named-and-immutable.md) | A locale bundle is hash-named and immutable | accepted | `cli/delivery/build.mjs`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/localization/i18n.js` |
 | [ADR-0084](0084-a-startup-step-publishes-its-own-duration.md) | A startup step publishes its own duration | accepted | `source/lib/core/application/runtime.js`, `source/lib/core/application/types.d.ts`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/origin.mjs`, `example/benchmark.json` |
+| [ADR-0085](0085-source-delivery-announces-its-templates.md) | Source delivery announces its templates, and a reload revalidates | accepted | `cli/delivery/source-manifest.mjs`, `cli/origin/index.mjs`, `cli/origin/types.d.ts`, `cli/dev/serve.mjs`, `example/server/static.mjs`, `example/server/server.mjs`, `cli/test/origin.test.mjs`, `cli/test/serve-templates.test.mjs` |
 
 <!-- /generated:adr-index -->
 

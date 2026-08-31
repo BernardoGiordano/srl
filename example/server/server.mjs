@@ -9,10 +9,10 @@
  *
  * `--api-only` drops the static half, for the deployment where nginx already
  * serves the files and this process sits behind it on /auth and /api. It is not
- * only an optimisation: static.mjs reads the mount table from cli/layout.mjs,
- * and cli/ is a development directory the released tree deliberately omits,
- * so importing it on the server is a startup crash. Hence the dynamic import
- * below rather than a flag checked inside serveStatic.
+ * only an optimisation: static.mjs is an adapter over cli/origin/, and cli/ is a
+ * development directory the released tree deliberately omits, so importing it on
+ * the server is a startup crash. Hence the dynamic import below rather than a flag
+ * checked inside the handler.
  *
  * Same-origin is still a requirement, not a preference — see the note in
  * static.mjs. Behind nginx it is the reverse proxy that provides it, so /auth and
@@ -54,8 +54,10 @@ const API_ONLY = process.argv.includes('--api-only');
 
 // Imported here rather than at the top so that --api-only never resolves the
 // module: the point of the flag is a deployment where cli/layout.mjs does not
-// exist. Top-level await, so the server is not listening before it is decided.
-const serveStatic = API_ONLY ? null : (await import('./static.mjs')).serveStatic;
+// exist. Top-level await, so the server is not listening before it is decided —
+// and so the static half's first project-model build starts before the first
+// request rather than inside it.
+const serveStatic = API_ONLY ? null : (await import('./static.mjs')).staticOrigin(APP_DIR);
 
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
@@ -72,7 +74,7 @@ const server = createServer((request, response) => {
         response.end(JSON.stringify({ error: 'not_found', path: url.pathname }));
         return;
       }
-      await serveStatic(APP_DIR, request, response, url);
+      await serveStatic(request, response);
     } catch (cause) {
       // One place that turns a thrown handler into a response. Without it a bad
       // request body hangs the socket and the browser reports a network error

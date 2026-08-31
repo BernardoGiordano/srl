@@ -93,8 +93,10 @@ changed another.
 entry through `admitPath` and refuses duplicates. The runtime turns this list into `fetch`
 calls under the page's own `connect-src 'self'`, so a cross-origin entry would fail as a
 blocked request behind an optimisation nobody is watching; one message at startup is the
-better failure. The key is absent in development and under bundle delivery, and admission
-returns a frozen empty array either way, so the consumer iterates without a guard.
+better failure. The key is absent under bundle delivery, and admission returns a frozen
+empty array, so the consumer iterates without a guard. (It was absent in development too
+when this was written. [ADR-0085](0085-source-delivery-announces-its-templates.md) gives
+source delivery the same key from `cli/project-model/`.)
 
 **Seeding wins when both keys are present.** A bundle puts markup in the cache from bytes
 already in hand, which makes a prefetch beside it a set of requests for templates nothing

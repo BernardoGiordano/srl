@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -245,6 +245,110 @@ void test('HEAD carries the length and no body, transformed or streamed', async 
         const transformed = await fetch(`${url}/`, { method: 'HEAD' });
         assert.equal(transformed.headers.get('content-length'), String(injected.byteLength));
         assert.equal(await transformed.text(), '');
+      },
+    );
+  });
+});
+
+void test('a streamed file carries a validator, and a conditional request is a 304', async () => {
+  await withFixture(async ({ mounts }) => {
+    await withOrigin({ mounts, headers: () => ({ 'Cache-Control': 'no-cache' }) }, async (url) => {
+      const first = await fetch(`${url}/lib/core/reactive.js`);
+      const etag = first.headers.get('etag') ?? '';
+      assert.match(etag, /^W\/".+"$/u);
+      assert.equal(await first.text(), 'export const reactive = 1;\n');
+
+      const again = await fetch(`${url}/lib/core/reactive.js`, {
+        headers: { 'If-None-Match': etag },
+      });
+      assert.equal(again.status, 304);
+      assert.equal(await again.text(), '');
+      // What the 200 said about caching this URL is repeated; the type of a
+      // representation that is not being sent is not.
+      assert.equal(again.headers.get('etag'), etag);
+      assert.equal(again.headers.get('cache-control'), 'no-cache');
+      assert.equal(again.headers.get('content-type'), null);
+      assert.equal(again.headers.get('content-length'), null);
+
+      // The comparison is the weak one this header requires, and the list form and
+      // `*` are both what a browser can legitimately send.
+      const forms = [etag.replace('W/', ''), `"other", ${etag}`, '*'];
+      for (const header of forms) {
+        const conditional = await fetch(`${url}/lib/core/reactive.js`, {
+          headers: { 'If-None-Match': header },
+        });
+        assert.equal(conditional.status, 304, header);
+      }
+
+      // A tag that is not ours is a whole body, which is the case an edit produces.
+      const stale = await fetch(`${url}/lib/core/reactive.js`, {
+        headers: { 'If-None-Match': '"stale"' },
+      });
+      assert.equal(stale.status, 200);
+      assert.equal(await stale.text(), 'export const reactive = 1;\n');
+
+      // HEAD revalidates the same way.
+      const head = await fetch(`${url}/lib/core/reactive.js`, {
+        method: 'HEAD',
+        headers: { 'If-None-Match': etag },
+      });
+      assert.equal(head.status, 304);
+    });
+  });
+});
+
+void test('the validator changes with the file, so an edit is a whole body again', async () => {
+  await withFixture(async ({ root, mounts }) => {
+    const file = join(root, 'lib', 'core', 'reactive.js');
+    await withOrigin({ mounts }, async (url) => {
+      const etag = (await fetch(`${url}/lib/core/reactive.js`)).headers.get('etag') ?? '';
+
+      await writeFile(file, 'export const reactive = 2;\n');
+      // Size is unchanged here, so this is the mtime half of the validator doing the
+      // work — and a filesystem with one-second timestamps needs to see a new second.
+      await utimes(file, new Date(), new Date(Date.now() + 2000));
+
+      const edited = await fetch(`${url}/lib/core/reactive.js`, {
+        headers: { 'If-None-Match': etag },
+      });
+      assert.equal(edited.status, 200);
+      assert.equal(await edited.text(), 'export const reactive = 2;\n');
+      assert.notEqual(edited.headers.get('etag'), etag);
+    });
+  });
+});
+
+void test('a transform is not validated by the file, unless it says it is', async () => {
+  await withFixture(async ({ mounts, appDir }) => {
+    const entry = join(appDir, 'index.html');
+    const generated = Buffer.from('<!doctype html><body>generated</body>\n');
+
+    // No ETag of its own: stat describes the file, and a body built from more than
+    // the file would be revalidated against something that does not change with it.
+    await withOrigin({ mounts, transform: (file) => (file === entry ? { body: generated } : null) },
+      async (url) => {
+        const response = await fetch(`${url}/index.html`);
+        assert.equal(response.headers.get('etag'), null);
+        const conditional = await fetch(`${url}/index.html`, { headers: { 'If-None-Match': '*' } });
+        assert.equal(conditional.status, 200);
+      },
+    );
+
+    // And one that knows its own bytes says so, and gets the 304.
+    await withOrigin(
+      {
+        mounts,
+        transform: (file) =>
+          file === entry ? { body: generated, headers: { ETag: '"generated-1"' } } : null,
+      },
+      async (url) => {
+        const response = await fetch(`${url}/index.html`);
+        assert.equal(response.headers.get('etag'), '"generated-1"');
+        const conditional = await fetch(`${url}/index.html`, {
+          headers: { 'If-None-Match': '"generated-1"' },
+        });
+        assert.equal(conditional.status, 304);
+        assert.equal(await conditional.text(), '');
       },
     );
   });

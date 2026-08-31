@@ -94,6 +94,12 @@ spawning; the seventh asserts an exit code and still has to.
 the segment boundary, the fallback, the method refusal, `HEAD`, and that a transform's
 length is the transformed body's. No browser, no build, no application.
 
-The published surface grew by one directory. `srl test` is the fifth adapter and is not
+The published surface grew by one directory. `srl test` is another adapter and is not
 here: choosing a browser test runner for an adopter is its own decision, and until it is
 made an adopter builds its own origin over this module in four lines.
+
+`example/server/static.mjs` was a fifth hand-written copy of these rules and was missed —
+it is the server `npm run example:serve` starts, so it is the one a developer of the
+example application actually looks at.
+[ADR-0085](0085-source-delivery-announces-its-templates.md) folds it in, and adds
+conditional requests to the rules this module owns.

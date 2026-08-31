@@ -47,6 +47,13 @@ export interface TransformContext {
  * A body to send instead of the file on disk, plus whatever headers describe it
  * being different — `Content-Encoding: gzip` for the benchmark, nothing at all
  * for an injected script tag. `Content-Length` is the origin's to set.
+ *
+ * A transformed body carries no `ETag` unless one is stated here. The origin's own
+ * validator is built from the file's size and mtime, and those describe the file
+ * rather than what a transform made of it: a body that also depends on the
+ * adapter's configuration would be revalidated against something that
+ * configuration does not change. A transform that knows its bytes are a pure
+ * function of the file it was handed may say so by setting `ETag` itself.
  */
 export interface Representation {
   body: Buffer;
@@ -66,6 +73,10 @@ export interface OriginOptions {
    * Extra response headers for a static hit — a cache policy, a
    * Content-Security-Policy on the entry document. `Cache-Control: no-store` and
    * the file's own `Content-Type` are the defaults this replaces.
+   *
+   * This is where a 304 is bought. The origin already sends an `ETag` for a
+   * streamed file and already answers `If-None-Match`; a policy of `no-store`
+   * means no browser ever sends one, and `no-cache` means every reload does.
    */
   headers?: (pathname: string, file: string) => Record<string, string>;
   /**

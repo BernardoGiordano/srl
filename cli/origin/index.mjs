@@ -18,6 +18,12 @@
  *   headers     extra response headers for a static hit
  *   fallback    the document a navigation with no file gets
  *
+ * Conditional requests are this module's rather than an option, because they are
+ * a rule about files and not a policy: a file streamed from disk is sent with an
+ * `ETag`, and an `If-None-Match` naming it is answered 304. Whether a browser ever
+ * asks is the adapter's `headers` — `no-store` means it never will, `no-cache`
+ * means it will on every reload. ADR-0085.
+ *
  * THERE IS NO PROXY OPTION, and there must not be one. The development server's
  * `--proxy` is load-bearing (ADR-0069) and it is one adapter's concern: it lives
  * in that adapter's `route`, which is consulted before the method check and before
@@ -47,6 +53,48 @@ import { contentType } from '../package/interface.mjs';
  * so the default is the safe one and a production cache policy is stated.
  */
 const NO_STORE = { 'Cache-Control': 'no-store' };
+
+/**
+ * A validator for the bytes of one file on disk, so a caller that states a
+ * revalidating cache policy gets 304s instead of whole bodies.
+ *
+ * Derived from size and mtime rather than from a hash, which is what nginx does
+ * and for the same reason: answering a conditional request must not cost reading
+ * the file the answer says not to send. Weak, because that is what a validator
+ * built from metadata honestly is — and `If-None-Match` is compared weakly in any
+ * case, so nothing is lost by saying so.
+ *
+ * Only the streamed path gets one. A `transform` returns bytes this module did
+ * not read, and stat cannot speak for them: a body that also depends on the
+ * adapter's configuration would be revalidated against a file whose mtime that
+ * configuration does not change. A transform that wants revalidation states its
+ * own `ETag` in `Representation.headers`, where it knows what it built.
+ *
+ * @param {import('node:fs').Stats} stats
+ * @returns {string}
+ */
+function entityTag(stats) {
+  return `W/"${stats.size.toString(16)}-${Math.trunc(stats.mtimeMs).toString(16)}"`;
+}
+
+/**
+ * Whether an `If-None-Match` header names the tag we would send.
+ *
+ * The list form and `*` are both what a browser can legitimately send, and the
+ * comparison is the weak one RFC 9110 requires for this header: `W/"x"` and `"x"`
+ * are the same entity for the purpose of deciding not to send it again.
+ *
+ * @param {string | undefined} header
+ * @param {string} etag
+ * @returns {boolean}
+ */
+function noneMatch(header, etag) {
+  if (header === undefined) return false;
+  if (header.trim() === '*') return true;
+  /** @param {string} tag */
+  const weak = (tag) => tag.trim().replace(/^W\//u, '');
+  return header.split(',').some((candidate) => weak(candidate) === weak(etag));
+}
 
 /**
  * Which mount claims a path, and what is left of the path after the prefix.
@@ -225,9 +273,24 @@ export function createOrigin(options) {
     const headers = {
       'Content-Type': contentType(file),
       ...NO_STORE,
+      // Before the adapter's, so an adapter that wants a validator of its own —
+      // for a body it built — states one and wins.
+      ...(representation === null ? { ETag: entityTag(stats) } : {}),
       ...headersFor(url.pathname, file),
       ...representation?.headers,
     };
+
+    // The whole point of sending a validator, and it is checked for whichever
+    // validator is in play — the file's, or one a transform stated for the bytes it
+    // built. Content-Type is dropped because a 304 carries no representation to
+    // type; everything else the 200 would have said about caching this URL still
+    // holds and is repeated, which is what RFC 9110 asks for.
+    const { ETag: etag } = headers;
+    if (etag !== undefined && noneMatch(request.headers['if-none-match'], etag)) {
+      const { 'Content-Type': _typed, ...validating } = headers;
+      response.writeHead(304, validating).end();
+      return;
+    }
 
     if (representation !== null) {
       const { body } = representation;

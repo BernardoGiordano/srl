@@ -70,12 +70,52 @@ touch, and how to tell it that whitespace matters, is in
 with no build step at all. It writes authored bytes, minifies nothing, and
 [ADR-0042](../adr/0042-the-template-bundle-is-per-application.md) is why.
 
+## Templates in development
+
+The same manifest key, from a different producer. `templateFiles` is what makes startup
+step 3 run at all, and a source tree has no bundler to write it — so the development
+servers compute it from `cli/project-model/`, the same list `npm run templates` bundles
+and `npm run verify` checks against. `cli/delivery/source-manifest.mjs` is the second
+producer; the runtime path is the one above, unchanged, and the browser cannot tell which
+module wrote the manifest it fetched.
+
+```json
+{ "templateFiles": ["/src/app-root.html", "/components/data/ui-table.html", "…"] }
+```
+
+Without it the templates step is skipped and every template is discovered the slow way: a
+chunk's module body runs, learns its own template URL, awaits it, and only then does the
+next module body run. Nine components in a chunk is nine round trips in a row, on every
+reload — the exact chain `split` closed for production, left open where the editing
+happens.
+
+A Remote's markup is announced on that Remote's entry and never on the shell, the way the
+build announces it. The router runs a Remote's guard before `prepareRemote`, and markup
+the shell had already fetched is the request that guard exists to refuse.
+
+An application that set `templateBundle` by hand keeps it: the runtime prefers seeding
+over a list, so a list beside a bundle is requests nothing reads. And a project the model
+cannot parse — a half-typed module, a clone with no `node_modules` — costs the
+announcement and never the server: the manifest on disk is served unchanged, one round
+trip per template slower.
+
+**Reloads revalidate.** Both servers state `Cache-Control: no-cache` and `cli/origin/`
+sends an `ETag` built from each file's size and mtime, so a reload is a 304 for every file
+the developer did not touch and a whole body for the one they did. Measured on the example
+application: **776,793 B over 54 requests, every reload** under the old `no-store` — which
+deleted the browser cache and made the second reload cost exactly what the first did —
+against **30,300 B over 101 requests** now. More requests, because the 50 templates are
+now started up front; a fiftieth of the bytes, because all of them revalidate.
+
 `cli/dev/serve.mjs` exists because requiring `npm install` before the app could be
 *run* would make the project look like it has a toolchain it does not have. What a server
 has to provide is correct MIME types, a history fallback so a reload on `/users/3` returns
 `index.html`, two directories mounted on one origin, and watch-and-reload. Only the last
 two are more than a file handler, and the nginx equivalent is two `alias` blocks and a
-`try_files`.
+`try_files`. It is an adapter over `cli/origin/`, and so is `example/server/static.mjs`,
+which is the one `npm run example:serve` starts: an application with a backend needs its
+API same-origin with the page, so it serves its own files rather than being proxied to
+([ADR-0075](../adr/0075-one-application-origin-not-four-servers.md)).
 
 `python3 -m http.server` does not serve this repository: an application directory and the
 library have to appear at `/` and `/lib/` on one origin, and mounting two directories is
@@ -137,8 +177,8 @@ whole deployment is a stamp, two rsyncs and a restart:
 
 `example/server/` lands inside that web root because that is where supervisor's program
 line points at it: `[program:srlexample]` runs `server/server.mjs --port 8100 --api-only`,
-and `--api-only` is what keeps it from importing `cli/layout.mjs`, a development directory
-the deployed tree omits. nginx serves the static tree and proxies `/auth` and `/api` to
+and `--api-only` is what keeps it from importing `cli/origin/` and the mount table behind
+it, a development directory the deployed tree omits. nginx serves the static tree and proxies `/auth` and `/api` to
 8100 **on the site's own hostname**: the session cookie is `HttpOnly` and same-site, so a
 second port or a second host signs every visitor out
 ([ADR-0069](../adr/0069-the-dev-server-proxies-the-backend.md)).
