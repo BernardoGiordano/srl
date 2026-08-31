@@ -10,7 +10,8 @@
  * or counts, so nothing has to parse "1.2 MB" back into a number to compare it.
  */
 
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 /** @import { BaselineFile, CalibrationRecord, Comparison, Environment, Mode, WorkloadRecord } from './types.js' */
 
@@ -110,10 +111,11 @@ export function renderReport(run) {
       .map(([name, version]) => `${name}@${version}`)
       .join('  ')}`,
   );
-  if (run.baseline === null) {
-    lines.push('  no baseline to compare against: this run is the first one.');
-  } else if (run.reason !== null) {
-    lines.push(`  not gated: ${run.reason}`);
+  // A missing baseline reads as "not gated" like every other reason a run does not
+  // gate, rather than as a milder sentence of its own: an origin that has never had a
+  // baseline file is the most ungated a run can be, and it used to say the least.
+  if (run.baseline === null || run.reason !== null) {
+    lines.push(`  not gated: ${run.reason ?? 'there is no baseline to compare against.'}`);
   }
   lines.push('');
 
@@ -187,10 +189,17 @@ export function renderReport(run) {
 /**
  * The run, as the file the next one compares against.
  *
+ * The directory is created rather than required: an application-owned baseline lives
+ * beside the application repository's own `benchmark/`, and the first run that records
+ * one is by definition the run where that directory does not exist yet. It used to end
+ * in an ENOENT stack trace, which reads as a broken harness rather than as the one step
+ * that opens a gate.
+ *
  * @param {string} path
  * @param {BaselineFile} file
  * @returns {Promise<void>}
  */
 export async function writeResults(path, file) {
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(file, null, 2)}\n`, 'utf8');
 }

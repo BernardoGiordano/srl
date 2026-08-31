@@ -21,7 +21,7 @@ import {
   unstableReference,
 } from '../benchmark/measure.mjs';
 import { MEMORY_WORKLOADS } from '../benchmark/node/lifecycle.mjs';
-import { artifactWorkloads } from '../benchmark/node/startup.mjs';
+import { STARTUP_STEPS, artifactWorkloads } from '../benchmark/node/startup.mjs';
 import { HARNESS_PATH, startOrigin } from '../benchmark/origin.mjs';
 import { PENDING, WORKLOADS, selectWorkloads } from '../benchmark/workloads.mjs';
 import { REPO, readText } from '../../cli/layout.mjs';
@@ -579,10 +579,10 @@ void test('the artifact origin serves production headers, compression, fallback 
 });
 
 void test('artifact size workload reports verified payload categories without rebuilding', async () => {
-  // Built from a fixture declaration rather than found in the static list: no
-  // application in this repository declares artifact benchmarks, and the workload's
-  // job — read a verified report, report its payload categories — does not depend on
-  // which application declared it.
+  // Built from a fixture declaration rather than from the example's: the workload's job
+  // — read a verified report, report its payload categories — does not depend on which
+  // application declared it, and a fixture keeps this case from moving when the
+  // example's own declaration does.
   const workload = artifactWorkloads({
     app: 'fixture',
     lazyRoutes: [],
@@ -651,6 +651,22 @@ void test('artifact size workload reports verified payload categories without re
   ]);
 });
 
+void test('every startup step the runtime publishes is a declared metric', async () => {
+  // The harness reads the page's performance timeline, so it cannot discover a step the
+  // runtime added: an unlisted step is measured by the browser, reported by nobody and
+  // gated by nothing. This is the only place the two lists meet. ADR-0084.
+  const types = await readFile(`${REPO}/source/lib/core/application/types.d.ts`, 'utf8');
+  const union = /export type StartupStep =([^;]+);/u.exec(types)?.[1];
+  assert.ok(union !== undefined, 'the runtime must still declare its steps as a union');
+  const declared = [...union.matchAll(/'([a-z]+)'/gu)].map((match) => match[1]);
+  assert.ok(declared.length > 0);
+  assert.deepEqual(
+    [...STARTUP_STEPS].sort(),
+    [...declared].sort(),
+    'the benchmark step list and the runtime step union must name the same steps',
+  );
+});
+
 void test('the ci profile is bounded and declares what it does not cover', async () => {
   /** @type {import('../benchmark/types.js').BudgetFile} */
   const budgets = JSON.parse(await readFile(`${REPO}/tools/benchmark/budgets.json`, 'utf8'));
@@ -672,17 +688,33 @@ void test('the ci profile is bounded and declares what it does not cover', async
   assert.ok(ci.length > 0);
   assert.ok(ci.every((workload) => workload.localOnly !== true));
 
-  // No application in this repository ships a benchmark.json, so no artifact workload
-  // is declared and none selects. An application's route names reach its own numbers
-  // and nothing else, which is the property the declaration seam exists to hold.
+  // The example ships a benchmark.json, so the artifact workloads its declaration names
+  // are selected — which is what makes the chain-depth product budget above reachable at
+  // all. An application's route names reach its own numbers and nothing else, which is
+  // the property the declaration seam exists to hold.
   const distExample = selectWorkloads('ci', { app: 'example', origin: 'dist' });
   assert.ok(
-    distExample.every((workload) => !workload.id.startsWith('delivery/lazy-')),
-    'an application that declares no artifact routes contributes no artifact workloads',
+    distExample.some((workload) => workload.id === 'delivery/artifact-size'),
+    'the application that declares an artifact must produce the size workload',
   );
   assert.ok(
-    distExample.every((workload) => workload.id !== 'delivery/artifact-size'),
-    'the artifact size workload is declared by an application, not by the harness',
+    distExample.some((workload) => workload.id.startsWith('delivery/lazy-')),
+    'the declared lazy routes must each produce a workload',
+  );
+  assert.ok(
+    selectWorkloads('ci', { app: 'example', origin: 'source' }).every(
+      (workload) =>
+        workload.id !== 'delivery/artifact-size' && !workload.id.startsWith('delivery/lazy-'),
+    ),
+    'artifact workloads need the dist origin and must not select on the source one',
+  );
+  // And an application that declares nothing still contributes nothing: the seam is the
+  // declaration, not the presence of an application directory.
+  assert.deepEqual(
+    selectWorkloads('ci', { app: 'no-such-application', origin: 'dist' }).filter(
+      (workload) => workload.suite === 'delivery' && workload.id !== 'delivery/entry-route',
+    ),
+    [],
   );
 
   const ids = new Set(WORKLOADS.map((workload) => workload.id));

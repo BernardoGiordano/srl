@@ -56,7 +56,10 @@ describe('hosted application startup', () => {
 
     // The step ran even though the application supplied no hook: mounting remotes
     // is a provider installation, and this is the application saying it does.
-    assert.sameArray(started.steps, ['manifest', 'locale', 'providers']);
+    assert.sameArray(
+      started.steps.map((run) => run.name),
+      ['manifest', 'locale', 'providers'],
+    );
 
     // Through the interface `@core/remotes/mfe.js` uses, which is the only caller that
     // matters: a route per remote, with the manifest's `requires` block turned

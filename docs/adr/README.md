@@ -82,6 +82,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0081](0081-the-manifest-names-every-template.md) | The manifest names every template | accepted | `cli/delivery/build.mjs`, `cli/delivery/artifact-report.mjs`, `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `source/lib/core/remotes/mfe.js`, `source/lib/core/remotes/manifest-policy.js` |
 | [ADR-0082](0082-chain-depth-is-the-gated-delivery-fact.md) | Chain depth is the gated delivery fact | accepted | `tools/benchmark/chain.mjs`, `tools/benchmark/browser.mjs`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/budgets.json`, `cli/delivery/artifact-report.mjs` |
 | [ADR-0083](0083-a-locale-bundle-is-hash-named-and-immutable.md) | A locale bundle is hash-named and immutable | accepted | `cli/delivery/build.mjs`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/localization/i18n.js` |
+| [ADR-0084](0084-a-startup-step-publishes-its-own-duration.md) | A startup step publishes its own duration | accepted | `source/lib/core/application/runtime.js`, `source/lib/core/application/types.d.ts`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/origin.mjs`, `example/benchmark.json` |
 
 <!-- /generated:adr-index -->
 

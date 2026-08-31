@@ -163,11 +163,17 @@ export async function startOrigin(app, options = {}) {
           return true;
         }
 
-        // A static artifact origin still needs the browser-facing half of the
-        // application's backend seam. Signed out is the deterministic startup state:
-        // the real endpoint 401s, which the BFF store admits as an ordinary visitor
-        // rather than a startup failure.
-        if (artifact !== undefined && url.pathname === '/auth/session' && request.method === 'GET') {
+        // A static origin still needs the browser-facing half of the application's
+        // backend seam, and neither adapter runs the application's server. Signed out
+        // is the deterministic startup state: the real endpoint 401s, which the BFF
+        // store admits as an ordinary visitor rather than a startup failure.
+        //
+        // Both adapters, because the alternative is not "an unauthenticated page" but
+        // no page at all: the session restore is a startup step, a 404 is not a
+        // refusal any store may interpret, and `startApplication` correctly turns it
+        // into an ApplicationStartupError. The source origin therefore failed every
+        // startup and delivery sample it took rather than measuring a slower boot.
+        if (url.pathname === '/auth/session' && request.method === 'GET') {
           send(response, {
             status: 401,
             type: 'application/json; charset=utf-8',

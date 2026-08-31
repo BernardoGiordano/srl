@@ -45,6 +45,66 @@ import { artifactDeclaration } from '../declaration.mjs';
 const LOAD_TIMEOUT_MS = 30_000;
 
 /**
+ * The startup steps the runtime publishes, in the order it runs them.
+ *
+ * `source/lib/core/application/runtime.js` owns both the order and the
+ * `srl:startup:` measure prefix; this list is what turns those measures into
+ * declared metrics with a unit, and a step the runtime adds without a line here is
+ * simply not gated. Repeated rather than imported because the harness reads the
+ * page's performance timeline, not the library's module graph. ADR-0084.
+ *
+ * Exported so a test can hold it against the runtime's own `StartupStep` union: a step
+ * added there and not here reports in the browser's timeline and gates nothing, which is
+ * the exact shape of silence this list exists to end.
+ *
+ * @type {readonly string[]}
+ */
+export const STARTUP_STEPS = [
+  'configure',
+  'manifest',
+  'templates',
+  'locale',
+  'providers',
+  'ready',
+  'root',
+];
+
+/** The measure prefix the runtime emits its step durations under. */
+const STEP_MEASURE = 'srl:startup:';
+
+/**
+ * `templates` becomes `stepTemplates`: one metric per step, so a regression inside
+ * one step is a named number rather than 30 ms hidden in an 88 ms total.
+ *
+ * @param {string} step
+ * @returns {string}
+ */
+function stepMetric(step) {
+  return `step${step[0]?.toUpperCase() ?? ''}${step.slice(1)}`;
+}
+
+/** Every step metric, declared in milliseconds. A skipped step reports nothing. */
+const STEP_UNITS = Object.fromEntries(STARTUP_STEPS.map((step) => [stepMetric(step), 'ms']));
+
+/**
+ * The steps this load ran, as metrics. A step the application does not use is
+ * absent rather than zero: a zero would average into the median as a real
+ * measurement of work that never happened.
+ *
+ * @param {Record<string, number> | undefined} steps
+ * @returns {Record<string, number>}
+ */
+function stepMetrics(steps) {
+  /** @type {Record<string, number>} */
+  const metrics = {};
+  for (const step of STARTUP_STEPS) {
+    const duration = steps?.[step];
+    if (duration !== undefined) metrics[stepMetric(step)] = duration;
+  }
+  return metrics;
+}
+
+/**
  * Every application's artifact declaration, read once because the workload list is a
  * static export. An application that ships no benchmark.json contributes nothing here.
  *
@@ -115,7 +175,18 @@ const READ_MARKS = `async (timeout) => {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   const navigation = performance.getEntriesByType('navigation')[0];
+  // The startup steps, read off the page's own performance timeline. The runtime
+  // publishes them there precisely because nothing outside the application's main.js
+  // holds the value startApplication() returned. Last write wins, so a page that
+  // started twice reports the boot the user is looking at.
+  const steps = {};
+  for (const entry of performance.getEntriesByType('measure')) {
+    if (entry.name.startsWith(${JSON.stringify(STEP_MEASURE)})) {
+      steps[entry.name.slice(${String(STEP_MEASURE.length)})] = entry.duration;
+    }
+  }
   return {
+    steps,
     rootDefined: window.__bench?.rootDefined ?? null,
     firstView: window.__bench?.firstView ?? null,
     load: navigation?.loadEventEnd ?? null,
@@ -150,7 +221,7 @@ async function loadSample(context, options) {
       await page.goto('/');
     }
 
-    const marks = /** @type {{ rootDefined: number | null, firstView: number | null, load: number | null, domContentLoaded: number | null, timeOrigin: number }} */ (
+    const marks = /** @type {{ steps: Record<string, number>, rootDefined: number | null, firstView: number | null, load: number | null, domContentLoaded: number | null, timeOrigin: number }} */ (
       await page.evaluate(READ_MARKS, LOAD_TIMEOUT_MS)
     );
 
@@ -204,6 +275,7 @@ async function loadSample(context, options) {
           requests: requests.length,
           chainDepth: chain.depth,
           fromCache: cached,
+          ...stepMetrics(marks.steps),
         };
 
     return { ok: true, duration: marks.firstView, metrics };
@@ -666,6 +738,7 @@ export const STARTUP_WORKLOADS = [
       requests: 'count',
       chainDepth: 'depth',
       fromCache: 'count',
+      ...STEP_UNITS,
     },
     run: (context) => repeatLoad(context, { warm: false }),
   },
@@ -684,6 +757,7 @@ export const STARTUP_WORKLOADS = [
       requests: 'count',
       chainDepth: 'depth',
       fromCache: 'count',
+      ...STEP_UNITS,
     },
     run: (context) => repeatLoad(context, { warm: true }),
   },

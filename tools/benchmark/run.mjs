@@ -261,7 +261,7 @@ async function main() {
           : PENDING,
       baseline,
       comparable,
-      reason,
+      reason: gateReason(baseline, baselinePath, originAdapter, reason),
       calibration,
       speedBySuite,
     }),
@@ -461,16 +461,60 @@ async function referenceMedian(page, exportName) {
 }
 
 /**
+ * Read the baseline every comparison is made against, or nothing when there is none.
+ *
+ * Absent is a legitimate state — the first run of a new baseline file has to produce one
+ * — and it is reported as such by `gateReason` rather than passed over. Present and
+ * unreadable is not: a corrupt or half-written baseline that read as `null` would make a
+ * run silently gate on nothing, which is the failure mode this whole harness exists to
+ * avoid. So only ENOENT becomes null and everything else is thrown, naming the file.
+ *
  * @param {string} path
  * @returns {Promise<BaselineFile | null>}
  */
 async function readBaseline(path) {
+  /** @type {string} */
+  let text;
   try {
-    const parsed = /** @type {unknown} */ (JSON.parse(await readFile(path, 'utf8')));
-    return /** @type {BaselineFile} */ (parsed);
-  } catch {
-    return null;
+    text = await readFile(path, 'utf8');
+  } catch (cause) {
+    if (cause instanceof Error && /** @type {{ code?: unknown }} */ (cause).code === 'ENOENT') {
+      return null;
+    }
+    throw cause;
   }
+  try {
+    const parsed = /** @type {unknown} */ (JSON.parse(text));
+    return /** @type {BaselineFile} */ (parsed);
+  } catch (cause) {
+    throw new Error(`${path.slice(REPO.length + 1)} is not readable JSON, so nothing can be gated on it.`, {
+      cause,
+    });
+  }
+}
+
+/**
+ * Why this run gates nothing, when it does not.
+ *
+ * `comparability` answers this for a baseline that exists and does not match. It cannot
+ * answer it for a baseline that is not there, because it is not told which file was
+ * looked for — and that case was the quietest of the lot: `--origin dist` has never had
+ * an artifact baseline in this repository, so it ran fully ungated and said nothing at
+ * all. A run that gates nothing has to say so.
+ *
+ * @param {BaselineFile | null} baseline
+ * @param {string} path
+ * @param {'source' | 'dist'} originAdapter
+ * @param {string | null} reason
+ * @returns {string | null}
+ */
+function gateReason(baseline, path, originAdapter, reason) {
+  if (baseline !== null) return reason;
+  return (
+    `there is no baseline at ${path.slice(REPO.length + 1)}: every metric reports as new and ` +
+    'nothing is gated. Record one on a quiet machine with `node tools/benchmark/run.mjs' +
+    `${originAdapter === 'dist' ? ' --origin dist' : ''} --update-baseline\`.`
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 import { manifest, useManifest } from '@core/remotes/mfe.js';
 import { ApplicationStartupError, startApplication } from '@core/application/runtime.js';
 import { loadTemplate } from '@core/template/template.js';
-import { assert } from '../harness.js';
+import { assert, present } from '../harness.js';
 
 /** @import { AppManifest } from '@core/remotes/types.js' */
 
@@ -21,6 +21,16 @@ const MISSING_BUNDLE = new URL('../fixtures/startup-missing-bundle-manifest.json
   .href;
 const SPLIT = new URL('../fixtures/startup-split-manifest.json', import.meta.url).href;
 
+/**
+ * The names of the steps that ran. Each entry carries its duration too, so the
+ * order — which is what most of these cases are about — reads through here rather
+ * than through an assertion on objects whose timings are never the same twice.
+ *
+ * @param {import('@core/application/types.js').StartedApplication} started
+ * @returns {string[]}
+ */
+const names = (started) => started.steps.map((run) => run.name);
+
 describe('application startup', () => {
   afterEach(() => {
     useManifest(undefined);
@@ -31,7 +41,7 @@ describe('application startup', () => {
 
     // No theme, no providers, no session: a minimal application's shape. The skipped steps are absent rather than run with a default, which
     // is what keeps an optional feature optional.
-    assert.sameArray(started.steps, ['manifest', 'locale']);
+    assert.sameArray(names(started), ['manifest', 'locale']);
     assert.equal(started.manifest.auth.apiBaseUrl, '/api/');
     assert.equal(manifest(), started.manifest, 'startup must install what it validated');
   });
@@ -68,7 +78,7 @@ describe('application startup', () => {
     });
 
     assert.sameArray(order, ['configure', 'providers:/api/', 'ready', 'root']);
-    assert.sameArray(started.steps, [
+    assert.sameArray(names(started), [
       'configure',
       'manifest',
       'locale',
@@ -77,6 +87,64 @@ describe('application startup', () => {
       'root',
     ]);
     assert.ok(customElements.get('startup-fixture-root'), 'the root element must be defined');
+  });
+
+  it('reports what each step cost, on the result and as a User Timing measure', async () => {
+    const started = await startApplication({
+      manifestUrl: MANIFEST,
+      // Deliberately slow, and the only slow step: a per-step duration that came from
+      // a shared stopwatch would spread this wait across the steps around it.
+      providers: () => new Promise((resolve) => setTimeout(resolve, 20)),
+    });
+
+    const providers = present(
+      started.steps.find((run) => run.name === 'providers'),
+      'the providers step must be reported',
+    );
+    assert.ok(
+      providers.duration >= 15,
+      `the slow step must carry its own duration, got ${String(providers.duration)} ms`,
+    );
+
+    const locale = present(started.steps.find((run) => run.name === 'locale'));
+    assert.ok(locale.duration < providers.duration, 'each step is timed on its own');
+
+    // The measure is what a profiler and the benchmark harness read: neither of them
+    // holds this return value, and the harness only looks at the page long after
+    // startup resolved.
+    const measure = present(
+      performance.getEntriesByName('srl:startup:providers', 'measure').at(-1),
+      'the step must emit a srl:startup: measure',
+    );
+    assert.ok(
+      Math.abs(measure.duration - providers.duration) < 1,
+      'the measure and the reported duration must be the same fact',
+    );
+  });
+
+  it('measures a step that failed, up to the point it failed', async () => {
+    await assert.rejects(
+      () =>
+        startApplication({
+          manifestUrl: MANIFEST,
+          ready: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            throw new Error('session endpoint unreachable');
+          },
+        }),
+      'Application startup failed at step "ready"',
+    );
+
+    // A boot that fails slowly is the case where the timing matters most, and it is
+    // the one a stopwatch stopped after the body would lose.
+    const measure = present(
+      performance.getEntriesByName('srl:startup:ready', 'measure').at(-1),
+      'a failed step must still be measured',
+    );
+    assert.ok(
+      measure.duration >= 15,
+      `expected the failure to carry its wait, got ${String(measure.duration)} ms`,
+    );
   });
 
   it('accepts an already-validated manifest instead of fetching one', async () => {
@@ -139,7 +207,7 @@ describe('application startup', () => {
 
   it('seeds the template cache from the manifest bundle', async () => {
     const started = await startApplication({ manifestUrl: BUNDLED });
-    assert.sameArray(started.steps, ['manifest', 'templates', 'locale']);
+    assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
 
     // No such file exists. Resolving it proves the source came from the bundle,
     // and that the seed happened before anything could ask for a template.
@@ -153,7 +221,7 @@ describe('application startup', () => {
     // A bundle is an optimisation: absent, every template costs its own request
     // and the page still works. Failing startup over it would trade a slower boot
     // for no boot.
-    assert.sameArray(started.steps, ['manifest', 'templates', 'locale']);
+    assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
   });
 
   it('starts every template the manifest names without waiting for any of them', async () => {
@@ -180,7 +248,7 @@ describe('application startup', () => {
     );
     try {
       const started = await startApplication({ manifestUrl: SPLIT });
-      assert.sameArray(started.steps, ['manifest', 'templates', 'locale']);
+      assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
       assert.sameArray([...started.manifest.templateFiles], [url]);
 
       resolveFetch();

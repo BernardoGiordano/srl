@@ -36,8 +36,23 @@ Every hook is optional and each is awaited before the next runs. The steps, in o
 | `ready` | Anything that must settle before the root mounts, such as `AuthSession.init()` |
 | `root` | Mount the root element, verifying that the module actually defined it |
 
-The return value lists the hooks that ran. Any failure is rethrown as
+The return value lists the steps that ran, each with the milliseconds it took:
+
+```js
+const started = await startHostedApplication({ /* … */ });
+started.steps; // [{ name: 'configure', duration: 0.6 }, { name: 'manifest', duration: 3.4 }, …]
+```
+
+Every step also emits a `srl:startup:<step>` [User Timing][user-timing] measure, which
+is how a profiler, a field beacon and the benchmark harness read the same durations
+without holding this return value. A boot is seven steps deep, and until each published
+its own number a regression inside one of them was invisible in the total
+([ADR-0084](../adr/0084-a-startup-step-publishes-its-own-duration.md)).
+
+Any failure is rethrown as
 `ApplicationStartupError`, naming the step and keeping the original error as `cause`.
 The root check goes through the same `@core/elements/mount.js` path an outlet target,
 a route level and a remote root use, and takes its tag from the class `load` resolved
 — so the page's root element and the startup spec cannot name two different things.
+
+[user-timing]: https://developer.mozilla.org/en-US/docs/Web/API/Performance_API/User_timing

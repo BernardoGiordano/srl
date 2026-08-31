@@ -26,7 +26,20 @@ import { defineTag } from '@core/elements/mount.js';
 import { readJson } from '@core/foundation/json.js';
 import { prefetchTemplates, seedTemplates } from '@core/template/template.js';
 
-/** @import { ApplicationRoot, ApplicationSpec, StartedApplication, StartupStep } from '@core/application/types.js' */
+/** @import { ApplicationRoot, ApplicationSpec, StartedApplication, StartupStep, StartupStepRun } from '@core/application/types.js' */
+
+/**
+ * Prefix of the User Timing measure each step emits.
+ *
+ * A startup step is the unit a startup regression happens in, and the total hides
+ * it: 30 ms more in `templates` is 2% of one boot and invisible in every number
+ * anybody records. So each step publishes its duration twice, on purpose — on the
+ * returned `steps`, for an application that wants to report its own boot, and as a
+ * measure, for everything that cannot hold that value: the browser's performance
+ * panel, a field beacon, and the benchmark harness, which reads the page's own
+ * clock at a moment long after `startApplication` resolved.
+ */
+export const STARTUP_MEASURE = 'srl:startup:';
 
 /**
  * A step of startup failed. `step` names which one, `cause` is what went wrong.
@@ -81,11 +94,16 @@ export class ApplicationStartupError extends Error {
  * The root module is imported dynamically rather than named in a static import,
  * because a static import is evaluated before any of the above runs.
  *
+ * Every step that runs reports its duration, on the returned `steps` and as a
+ * `srl:startup:<step>` User Timing measure. A boot is seven steps deep and the
+ * total is the only number anything downstream used to be able to see, which made
+ * "startup got 30 ms slower" a fact with no owner. ADR-0084.
+ *
  * @param {ApplicationSpec} spec
  * @returns {Promise<StartedApplication>}
  */
 export async function startApplication(spec) {
-  /** @type {StartupStep[]} */
+  /** @type {StartupStepRun[]} */
   const steps = [];
 
   const { configure, providers, ready, root } = spec;
@@ -118,20 +136,30 @@ export async function startApplication(spec) {
 }
 
 /**
- * Run one step, recording that it ran and attaching its name to any failure.
+ * Run one step, recording what it cost and attaching its name to any failure.
+ *
+ * The duration is recorded in a `finally`, so a step that threw still reports how
+ * long it took before it did — which is the number wanted when a boot fails on a
+ * timeout rather than on a rejection.
  *
  * @template T
  * @param {StartupStep} name
- * @param {StartupStep[]} steps
+ * @param {StartupStepRun[]} steps
  * @param {() => T | Promise<T>} body
  * @returns {Promise<T>}
  */
 async function step(name, steps, body) {
-  steps.push(name);
+  const run = { name, duration: 0 };
+  steps.push(run);
+  const started = performance.now();
   try {
     return await body();
   } catch (cause) {
     throw new ApplicationStartupError(name, cause);
+  } finally {
+    const ended = performance.now();
+    run.duration = ended - started;
+    performance.measure(`${STARTUP_MEASURE}${name}`, { start: started, end: ended });
   }
 }
 

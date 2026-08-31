@@ -115,8 +115,19 @@ export const requested = [];
 /** @type {typeof fetch | undefined} */
 let realFetch;
 
-/** Install the stub. Returns the function that removes it again. */
-export function installFakeServer() {
+/**
+ * Install the stub. Returns the function that removes it again.
+ *
+ * `origin` is for the caller that has no `location`: the benchmark harness imports this
+ * module into Node and drives it from `tools/benchmark/origin.mjs`, so that the artifact
+ * workloads walk this application's real routes against the same backend its browser
+ * suite asserts on. Omitted in the browser, where the page's own origin is the answer.
+ *
+ * @param {{ origin?: string }} [options]
+ * @returns {() => void}
+ */
+export function installFakeServer(options = {}) {
+  const base = options.origin ?? globalThis.location?.origin;
   realFetch ??= globalThis.fetch;
   session = null;
   expireOnce = false;
@@ -129,7 +140,7 @@ export function installFakeServer() {
       // header, and a Request is the only thing that carries one. `String(request)` is
       // "[object Request]", which is how a stub ends up faking an endpoint nobody called.
       const target = input instanceof Request ? input.url : String(input);
-      const url = new URL(target, location.origin);
+      const url = new URL(target, base);
       const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
       requested.push(`${method} ${url.pathname}`);
 
@@ -156,6 +167,30 @@ export function installFakeServer() {
     if (realFetch !== undefined) globalThis.fetch = realFetch;
     session = null;
   };
+}
+
+/**
+ * Sign the stub in, for a benchmark that measures an authenticated route.
+ *
+ * Separate from `installFakeServer` because a credential is the one thing the harness
+ * must not guess: it knows how to ask for an authenticated origin, and this module is
+ * the only place that knows what this application's sign-in looks like. `admin` is the
+ * password `/auth/login` above turns into the administrator scope set, so a route guard
+ * on a leaf is satisfied by a real session rather than by a bypass.
+ *
+ * @param {typeof globalThis.fetch} fetch The stub's fetch, captured while it was installed.
+ * @param {string} origin
+ * @returns {Promise<void>}
+ */
+export async function benchmarkSignIn(fetch, origin) {
+  const response = await fetch(`${origin}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'ada.rossi', password: 'admin' }),
+  });
+  if (!response.ok) {
+    throw new Error(`the fake server refused the benchmark sign-in with ${String(response.status)}.`);
+  }
 }
 
 /** Make the next `/api` request answer 401, once. */

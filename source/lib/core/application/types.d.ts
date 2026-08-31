@@ -59,6 +59,21 @@ export type StartupStep =
   | 'ready'
   | 'root';
 
+/**
+ * One step that ran, and what it cost.
+ *
+ * The duration is here rather than in a second list because the name alone is not
+ * enough to act on: a startup total is the sum of seven steps, and a regression
+ * inside one of them is invisible in the total. Also emitted as a
+ * `srl:startup:<name>` User Timing measure, which is what lets a profiler and a
+ * benchmark harness read the same fact without holding the return value.
+ */
+export interface StartupStepRun {
+  readonly name: StartupStep;
+  /** Milliseconds, from the step starting to its hook settling. */
+  readonly duration: number;
+}
+
 export interface StartedApplication {
   readonly manifest: AppManifest;
   /**
@@ -66,5 +81,5 @@ export interface StartedApplication {
    * what makes "this application uses no session" an assertion rather than a
    * comment.
    */
-  readonly steps: readonly StartupStep[];
+  readonly steps: readonly StartupStepRun[];
 }
