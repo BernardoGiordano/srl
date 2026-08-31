@@ -47,11 +47,14 @@ no re-parse, no `innerHTML`, no string diffing. The third observation is why the
 compiled result is cached per URL and never rebuilt.
 
 What is cached per URL is the *promise*, not the compiled result, so two components
-mounting at the same moment share one request instead of racing two. That is also what
-makes the request cheap to start early: by default a built artifact's `app.manifest.json`
-lists every template it holds, and startup calls `prefetchTemplates` with the list, so the
-markup is in flight while the chunks are still arriving and each `await` inside a component
-resolves from the cache. Without it a chunk holding nine components costs nine requests in a
+mounting at the same moment share one compile instead of racing two. The bytes are cached
+separately from the compile, which is what makes the request cheap to start early: by
+default a built artifact's `app.manifest.json` lists every template it holds, and startup
+calls `prefetchTemplates` with the list, so the markup is in flight while the chunks are
+still arriving and each `await` inside a component resolves from the cache. The prefetch
+takes the transfer only — a walk of every template in the application ahead of the first
+paint would cost more main thread than the round trips it saves — so a template is compiled
+when the component that names it is defined, and never before. Without it a chunk holding nine components costs nine requests in a
 row, because a component's template URL is not known until that component's module has been
 fetched and evaluated ([ADR-0081](../adr/0081-the-manifest-names-every-template.md)).
 

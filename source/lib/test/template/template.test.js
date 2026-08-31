@@ -503,10 +503,14 @@ describe('template prefetching', () => {
         const href =
           typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         asked.push(new URL(href, document.baseURI).pathname);
+        // `uncompilable` is markup the fetch is happy to hand over and the
+        // compiler refuses: an empty `[]` binding. It is what separates "the
+        // bytes arrived" from "the template was compiled".
+        const body = href.includes('uncompilable') ? '<p []="">no</p>' : '<p>ok</p>';
         return Promise.resolve(
           href.includes('missing')
             ? new Response('', { status: 404, statusText: 'Not Found' })
-            : new Response('<p>ok</p>', { status: 200 }),
+            : new Response(body, { status: 200 }),
         );
       }
     );
@@ -534,6 +538,42 @@ describe('template prefetching', () => {
     await loadTemplate(one);
     await loadTemplate(one);
     assert.sameArray(asked, [one]);
+  });
+
+  it('fetches the source without compiling it, and compiles at the load', async () => {
+    /** @type {unknown[]} */
+    const unhandled = [];
+    /** @param {PromiseRejectionEvent} event */
+    const record = (event) => {
+      unhandled.push(event.reason);
+      event.preventDefault();
+    };
+    addEventListener('unhandledrejection', record);
+    try {
+      const bad = url('uncompilable');
+      prefetchTemplates([bad]);
+      // The bytes are what the prefetch buys. Compiling them here would raise the
+      // template's own error at startup, for a component nobody has mounted — and
+      // would spend the compiler on every other template in the list besides.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.sameArray(asked, [bad]);
+      assert.sameArray(unhandled, []);
+
+      let raised = '';
+      try {
+        await loadTemplate(bad);
+      } catch (error) {
+        raised = error instanceof Error ? error.message : String(error);
+      }
+      assert.ok(
+        raised.includes('empty [] binding'),
+        `the compile must happen at the load that needs it, got ${raised}`,
+      );
+      // Still one request: the compile read the source the prefetch cached.
+      assert.sameArray(asked, [bad]);
+    } finally {
+      removeEventListener('unhandledrejection', record);
+    }
   });
 
   it('swallows a failing prefetch and raises it at the load that needs it', async () => {

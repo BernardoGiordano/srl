@@ -61,13 +61,24 @@ calls `prefetchTemplates` with it. A Remote's descriptor carries the same list f
 templates, and the shell starts them in `prepareRemote`, beside the Remote's entry module
 and its stylesheets.
 
-`prefetchTemplates` is `loadTemplate` per URL with the result discarded. That is sound
-because [ADR-0014](0014-compiled-templates-are-cached-per-url.md) caches the *promise*
-rather than the compiled result, "so two components mounting at the same moment share one
-request instead of racing two": the nine existing awaits resolve from the cache, each
-`await attachTemplate` stays exactly where it is, and the compile path is untouched. A
+**`prefetchTemplates` starts the transfer and nothing else.** It resolves each URL against
+a *source* cache, separate from the compiled cache
+[ADR-0014](0014-compiled-templates-are-cached-per-url.md) governs, and hands back the bytes.
+The nine existing awaits resolve from that cache, each `await attachTemplate` stays exactly
+where it is, and the compile happens there — once per component that actually mounts. A
 rejection is swallowed at the prefetch and surfaces at the `attachTemplate` that genuinely
 needs it, so a template nobody mounts cannot fail a page.
+
+The split is the point, and this record originally missed it: `prefetchTemplates` was
+`loadTemplate` per URL with the result discarded, which put a compile on the startup main
+thread for every template in the artifact. A template costs two separable things — bytes
+off the network and a walk of the HTML on the main thread — and only the first is a round
+trip worth closing early. On the example application that was **33 ms of blocked main
+thread before the first paint** to compile fifty templates, when the entry route paints
+seven; a mid-range Android runs 3–5× slower, so 100–170 ms. The two caches are what let the
+transfer be eager and the compile follow need. ADR-0014's per-URL identity rule is
+untouched: a compiled template is still built once, still cached under its URL, and its
+strings array is still never rebuilt.
 
 **Startup does not wait.** `prefetchTemplates` returns synchronously, having started the
 transfers. Step 3 is a step because it is ordered — the URLs have to be in flight before the

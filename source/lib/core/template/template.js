@@ -15,8 +15,9 @@
  *
  * Bindings are a restricted expression language over a component's *public*
  * members — see expression.js — and each template costs one request of its own.
- * `prefetchTemplates` starts those requests together from a list the build knows;
- * `seedTemplates` removes them entirely, when a bundle is configured.
+ * `prefetchTemplates` starts those requests together from a list the build knows —
+ * the bytes only, so the compile still follows the mount rather than preceding it;
+ * `seedTemplates` removes the requests entirely, when a bundle is configured.
  */
 
 import { html, nothing } from 'lit';
@@ -69,10 +70,24 @@ function setTemplateSource(template, source) {
 
 /* ── Registry ──────────────────────────────────────────────────────────── */
 
-/** @type {Map<string, Promise<CompiledTemplate>>} */
+/**
+ * Two caches, because a template costs two separable things: bytes off the
+ * network, and a compile on the main thread. `sourceByUrl` holds the first,
+ * `byUrl` the second, and nothing may collapse them back into one — a prefetch
+ * that compiles pays the whole application's compiler in front of the first
+ * paint, for markup nobody has opened. ADR-0081 buys the round trip; the compile
+ * belongs to `attachTemplate`, which runs once per component that actually
+ * mounts.
+ *
+ * A source entry is a string when it was seeded from a bundle and a promise when
+ * it is in flight or has been fetched. Both are cached under the URL, so a
+ * prefetch and the `attachTemplate` that follows it share one request.
+ *
+ * @type {Map<string, Promise<CompiledTemplate>>}
+ */
 const byUrl = new Map();
 
-/** @type {Map<string, string>} */
+/** @type {Map<string, string | Promise<string>>} */
 const sourceByUrl = new Map();
 
 /** @type {WeakMap<object, CompiledTemplate>} */
@@ -82,7 +97,7 @@ const byClass = new WeakMap();
  * Load and compile a template, once per URL.
  *
  * The promise is cached rather than the result, so two components mounting at the
- * same moment share one request instead of racing two.
+ * same moment share one compile instead of racing two.
  *
  * @param {string | URL} url
  * @returns {Promise<CompiledTemplate>}
@@ -99,6 +114,43 @@ export function loadTemplate(url) {
 }
 
 /**
+ * The source of a template, once per URL, without compiling it.
+ *
+ * Returns the seeded string synchronously when a bundle put one there, so the
+ * bundle path costs no extra turn of the microtask queue, and otherwise the
+ * cached fetch — shared by the prefetch that started it and by every
+ * `loadTemplate` that follows.
+ *
+ * A rejection stays in the cache on purpose: the request failed for this URL, and
+ * repeating it once per mounting component would turn one 404 into many.
+ *
+ * @param {string} href Already resolved against `document.baseURI`.
+ * @returns {string | Promise<string>}
+ */
+function sourceOf(href) {
+  let source = sourceByUrl.get(href);
+  if (source === undefined) {
+    source = fetchSource(href);
+    sourceByUrl.set(href, source);
+  }
+  return source;
+}
+
+/**
+ * @param {string} href
+ * @returns {Promise<string>}
+ */
+async function fetchSource(href) {
+  const response = await fetch(href);
+  if (!response.ok) {
+    throw new Error(
+      `Cannot load template ${href}: ${String(response.status)} ${response.statusText}`,
+    );
+  }
+  return response.text();
+}
+
+/**
  * Start a list of templates arriving, without waiting for any of them.
  *
  * The list is the one thing this cannot work out for itself. A component names its
@@ -109,12 +161,18 @@ export function loadTemplate(url) {
  * URLs before the chunk exists. Handed them, this puts them in flight at once, and
  * every `await` that follows resolves from the cache above. ADR-0081.
  *
- * Idempotent and safe to call with URLs nothing will ever ask for: `loadTemplate`
- * caches the promise, so a duplicate is not a second request, and a component that
+ * Bytes only, and that is the whole point of the split. Compiling here would walk
+ * the HTML and parse every expression of every template in the application before
+ * the first paint, when a route mounts a handful of them — the requests are what
+ * cost a round trip, and they are the only part worth starting early. The compile
+ * stays in `attachTemplate`, per component, over the source this warmed.
+ *
+ * Idempotent and safe to call with URLs nothing will ever ask for: `sourceOf`
+ * caches the request, so a duplicate is not a second request, and a component that
  * is never mounted has simply had its markup fetched early.
  *
  * A rejection is swallowed here on purpose. This is an optimisation, and the
- * component that actually needs the template awaits the same promise through
+ * component that actually needs the template awaits the same request through
  * `attachTemplate` — which is where the failure belongs: raised once, at the point
  * that genuinely cannot continue, rather than a second time as an unhandled
  * rejection for a route nobody opened.
@@ -127,7 +185,8 @@ export function prefetchTemplates(urls) {
     // Attaching the handler to the cached promise rather than to a copy: this is
     // what marks *that* promise handled, so a template that 404s stays a quiet
     // prefetch until someone awaits it.
-    loadTemplate(url).catch(() => {});
+    const source = sourceOf(new URL(url, document.baseURI).href);
+    if (typeof source !== 'string') source.catch(() => {});
   }
 }
 
@@ -136,16 +195,7 @@ export function prefetchTemplates(urls) {
  * @returns {Promise<CompiledTemplate>}
  */
 async function fetchAndCompile(href) {
-  const seeded = sourceByUrl.get(href);
-  if (seeded !== undefined) return compileTemplate(seeded, href);
-
-  const response = await fetch(href);
-  if (!response.ok) {
-    throw new Error(
-      `Cannot load template ${href}: ${String(response.status)} ${response.statusText}`,
-    );
-  }
-  return compileTemplate(await response.text(), href);
+  return compileTemplate(await sourceOf(href), href);
 }
 
 /**
@@ -154,7 +204,9 @@ async function fetchAndCompile(href) {
  *
  * Deliberately a seed rather than a replacement: the compile path is identical
  * either way, which means development and production run the same compiler over
- * the same bytes and a bundling bug cannot change rendering behaviour.
+ * the same bytes and a bundling bug cannot change rendering behaviour. It fills
+ * the same source cache `prefetchTemplates` warms, which is why a bundle simply
+ * makes the prefetch find everything already there.
  *
  * @param {Readonly<Record<string, string>>} sources Keys are URLs, absolute or
  *   root-relative.

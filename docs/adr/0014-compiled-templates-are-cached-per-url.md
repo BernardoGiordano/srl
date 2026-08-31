@@ -30,6 +30,13 @@ Runtime compilation costs one request and one walk per template for the life of 
 and nothing per render — which is what makes the buildless position defensible rather
 than merely stated. `seedTemplates` removes the request too, when a bundle is configured.
 
+The request and the walk are cached separately, and deliberately: the source cache holds
+bytes and is warmed eagerly by `prefetchTemplates`, the compiled cache holds the strings
+array this record is about and is filled by `attachTemplate`. "Once per URL" applies to
+both. Collapsing them into one cache is what
+[ADR-0081](0081-the-manifest-names-every-template.md) originally did, and it moved every
+template's walk onto the startup main thread.
+
 The invariant is fragile in one specific way: any future change that recreates the strings
 array — a cache keyed by something other than the URL, a copy made for immutability, a
 per-instance compile — silently converts every render into a rebuild, with no error and no
