@@ -1,7 +1,6 @@
-import { configureClock, createManualClock } from '@core/foundation/clock.js';
 import { manifest, useManifest } from '@core/remotes/mfe.js';
 import { ApplicationStartupError, startApplication } from '@core/application/runtime.js';
-import { loadTemplate } from '@core/template/template.js';
+import { attachTemplate, loadTemplate } from '@core/template/template.js';
 import { assert, present } from '../harness.js';
 
 /** @import { AppManifest } from '@core/remotes/types.js' */
@@ -263,9 +262,10 @@ describe('application startup', () => {
     }
   });
 
-  it('starts the entry group at step 3 and the rest after startup', async () => {
+  it('starts the entry group at step 3 and a chunk group when its chunk asks', async () => {
     const entry = '/lib/test/fixtures/grouped-entry.html';
     const deferred = '/lib/test/fixtures/grouped-deferred.html';
+    const sibling = '/lib/test/fixtures/grouped-deferred-sibling.html';
 
     /** @type {string[]} */
     const requested = [];
@@ -278,8 +278,6 @@ describe('application startup', () => {
         return realFetch(input, init);
       }
     );
-    const clock = createManualClock();
-    configureClock({ clock });
     try {
       const started = await startApplication({ manifestUrl: GROUPED });
       assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
@@ -288,20 +286,26 @@ describe('application startup', () => {
       // closure needs and nothing else: a flat list could only have started both.
       // ADR-0086.
       assert.sameArray(requested, [entry]);
-      assert.equal(clock.pending, 1, 'the remaining groups were not scheduled');
 
-      // And nothing was dropped. The deferred group is a later transfer, not an
-      // absent one — a component in that chunk still finds its markup already in
-      // flight rather than paying ADR-0071's round trip for it.
-      clock.flush();
-      assert.sameArray(requested, [entry, deferred]);
+      // And it stays nothing else. A group that startup did not start is not a
+      // group startup deferred — nothing in the deferred chunk has been asked for,
+      // so a visitor a guard would have turned away has fetched none of it.
+      // ADR-0087.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.sameArray(requested, [entry]);
+
+      // The chunk arrives and its first component is defined, which is where
+      // `defineComponent` calls `attachTemplate`. Both of the chunk's templates
+      // start there, so the second component does not pay ADR-0071's round trip
+      // when the module body reaches it.
+      await attachTemplate(class DeferredComponent {}, deferred);
+      assert.sameArray(requested, [entry, deferred, sibling]);
 
       // Derived, entry first: a caller that wants every template this artifact
       // holds does not have to know how the document was partitioned.
-      assert.sameArray([...started.manifest.templateFiles], [entry, deferred]);
+      assert.sameArray([...started.manifest.templateFiles], [entry, deferred, sibling]);
       assert.sameArray([...(started.manifest.templateGroups.entry ?? [])], [entry]);
     } finally {
-      configureClock();
       globalThis.fetch = realFetch;
     }
   });

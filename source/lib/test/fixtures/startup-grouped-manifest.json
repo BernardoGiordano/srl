@@ -15,7 +15,8 @@
       "/lib/test/fixtures/grouped-entry.html"
     ],
     "chunk:assets/deferred-Ab12Cd34.js": [
-      "/lib/test/fixtures/grouped-deferred.html"
+      "/lib/test/fixtures/grouped-deferred.html",
+      "/lib/test/fixtures/grouped-deferred-sibling.html"
     ]
   }
 }

@@ -18,6 +18,12 @@
  * `prefetchTemplates` starts those requests together from a list the build knows —
  * the bytes only, so the compile still follows the mount rather than preceding it;
  * `seedTemplates` removes the requests entirely, when a bundle is configured.
+ *
+ * `registerTemplateGroups` is what decides *when* a list is started: the manifest
+ * groups the artifact's markup by chunk, startup starts the entry group, and every
+ * other group starts on the first `attachTemplate` out of its chunk. Markup follows
+ * its code, so it is fetched only by a visitor who was allowed to load that code.
+ * ADR-0087.
  */
 
 import { html, nothing } from 'lit';
@@ -92,6 +98,27 @@ const sourceByUrl = new Map();
 
 /** @type {WeakMap<object, CompiledTemplate>} */
 const byClass = new WeakMap();
+
+/**
+ * Which group a template belongs to, for the groups that have not started yet.
+ *
+ * The manifest partitions an artifact's markup by the chunk whose modules name it
+ * (ADR-0086), and the entry group aside, the moment to start a group is the moment
+ * its chunk turns out to be needed. That moment is observable here and nowhere else:
+ * `attachTemplate` is called by `defineComponent` while the chunk's own module body
+ * is running, which is after whatever imported that chunk was allowed to. So a group
+ * starts because a level asked for it rather than because startup finished, and it
+ * inherits every guard that stood between the visitor and that chunk without
+ * restating one of them. ADR-0087.
+ *
+ * An entry is removed once its group has been started, so this map is also the set
+ * of groups still to start and the second component out of the same chunk finds
+ * nothing left to do. `prefetchTemplates` is what removes them, which makes any
+ * deliberate start count as the group's start — startup's entry group included.
+ *
+ * @type {Map<string, readonly string[]>}
+ */
+const groupByTemplate = new Map();
 
 /**
  * Load and compile a template, once per URL.
@@ -182,12 +209,56 @@ async function fetchSource(href) {
  */
 export function prefetchTemplates(urls) {
   for (const url of urls) {
+    const href = new URL(url, document.baseURI).href;
+    // Started deliberately, so whichever group it belongs to has now started. Doing
+    // this here rather than at the one call site that starts a group is what keeps
+    // startup's entry group from being started a second time by the first component
+    // that attaches out of it.
+    groupByTemplate.delete(href);
     // Attaching the handler to the cached promise rather than to a copy: this is
     // what marks *that* promise handled, so a template that 404s stays a quiet
     // prefetch until someone awaits it.
-    const source = sourceOf(new URL(url, document.baseURI).href);
+    const source = sourceOf(href);
     if (typeof source !== 'string') source.catch(() => {});
   }
+}
+
+/**
+ * Tell this module how the artifact's templates are partitioned.
+ *
+ * Called once, by startup, with `AppManifest.templateGroups`. The keys are the
+ * build's names for its own chunks and are not read: what matters is which URLs
+ * travel together, not what the group they travel in is called. A document with no
+ * groups — source delivery, which has no chunks to group by, and `split-lazy`, which
+ * announces nothing — registers nothing, and every template is started by whoever
+ * asks for it exactly as before. ADR-0087.
+ *
+ * @param {Readonly<Record<string, readonly string[]>>} groups
+ * @returns {void}
+ */
+export function registerTemplateGroups(groups) {
+  for (const urls of Object.values(groups)) {
+    const group = urls.map((url) => new URL(url, document.baseURI).href);
+    for (const href of group) groupByTemplate.set(href, group);
+  }
+}
+
+/**
+ * Start the group this template belongs to, unless it has already started.
+ *
+ * The template itself is in the group, deliberately: the caller is about to await it
+ * and `sourceOf` caches per URL, so the request started here is the one that await
+ * resolves from. What the group adds is the rest of the chunk whose module body is
+ * running at this instant — nine components in one file are nine requests in a row
+ * when each waits for its own `attachTemplate` to be reached, and one batch when the
+ * first of them starts all nine. ADR-0071's round trip, closed per chunk at the point
+ * the chunk is known to be wanted.
+ *
+ * @param {string} href Already resolved against `document.baseURI`.
+ */
+function startTemplateGroup(href) {
+  const group = groupByTemplate.get(href);
+  if (group !== undefined) prefetchTemplates(group);
 }
 
 /**
@@ -220,6 +291,12 @@ export function seedTemplates(sources) {
 /**
  * Compile a template and make it the one a class renders.
  *
+ * Also the point at which this component's chunk turns out to be needed, so the rest
+ * of that chunk's markup is started here before this template is awaited. See
+ * `startTemplateGroup`: the call is the whole of the router's leg of template
+ * delivery, and it is here rather than in the router because this is the only place
+ * that knows which chunk is running. ADR-0087.
+ *
  * Called only by `defineComponent` in `@core/elements/component.js`, which owns the order:
  * a template is attached before `customElements.define`, because defining first
  * would upgrade elements already in the document and Lit renders on connection,
@@ -231,7 +308,9 @@ export function seedTemplates(sources) {
  * @returns {Promise<void>}
  */
 export async function attachTemplate(ctor, url) {
-  byClass.set(ctor, await loadTemplate(url));
+  const href = new URL(url, document.baseURI).href;
+  startTemplateGroup(href);
+  byClass.set(ctor, await loadTemplate(href));
 }
 
 /**

@@ -141,7 +141,7 @@ void test('built example mounts independent Billing and Analytics artifacts', as
 
       // Split delivery, from the browser's side: every template arrives as its own
       // immutable file and no bundle is fetched (ADR-0071), and the manifest named
-      // all of them so startup could start them together rather than the browser
+      // all of them so a chunk's markup starts as one batch rather than the browser
       // learning each URL from the component module that just arrived (ADR-0081).
       const shellTemplates = /** @type {{ count: number, files: string[] }} */ (shell.templates);
       const fetched = requests.filter((path) => path.startsWith('/assets/templates/'));
@@ -153,27 +153,31 @@ void test('built example mounts independent Billing and Analytics artifacts', as
         fetched.every((path) => shellTemplates.files.includes(path.slice(1))),
         'a fetched template is not in the artifact report',
       );
-      // The whole list, not a prefix of it. A prefetch that quietly covered the
-      // shell and left the route chunks to discover their own markup would pass
-      // every other assertion here and leave the serial chain exactly where it was.
-      //
-      // Which is also what makes this the assertion that guards ADR-0086: the
-      // groups reorder the transfers and startup defers all but `entry` to a
-      // yielded macrotask, so a deferral that dropped a group instead of delaying
-      // it shows up here as a fetched set smaller than the announced one.
+      // Which templates the browser fetched is decided by which chunks it loaded,
+      // and that is the whole of ADR-0087: startup starts the `entry` group, and
+      // every other group starts on the first `attachTemplate` out of its own
+      // chunk. So the set to expect is the entry group plus the group of every
+      // chunk this session actually requested — a template outside it is one the
+      // visitor paid for without ever loading the code that renders it, and a
+      // template missing from it is a group that was dropped rather than deferred.
       const manifest = JSON.parse(
         await readFile(join(String(shell.root), String(shell.public), 'app.manifest.json'), 'utf8'),
       );
-      const announced = Object.values(
-        /** @type {Record<string, string[]>} */ (manifest.templateGroups),
-      ).flat();
-      // The non-entry groups start on a macrotask after startup rather than inside
-      // step 3, so "has every announced template been requested" is a question with
-      // a settling time. Polling it is the honest way to ask; the navigations above
-      // have already given it far longer than it needs. ADR-0086.
+      const groups = /** @type {Record<string, string[]>} */ (manifest.templateGroups);
+      const announced = Object.values(groups).flat();
+      const loadedChunks = new Set(requests);
+      const expected = new Set(groups.entry ?? []);
+      for (const [name, urls] of Object.entries(groups)) {
+        if (name === 'entry') continue;
+        if (!loadedChunks.has(`/${name.slice('chunk:'.length)}`)) continue;
+        for (const url of urls) expected.add(url);
+      }
+      // A group starts inside the module body that defines its first component, so
+      // by the time the element it defines is on screen the requests are out. The
+      // poll is for the request events, not for the decision. ADR-0087.
       const templatesRequested = () =>
         new Set(requests.filter((path) => path.startsWith('/assets/templates/')));
-      for (let attempt = 0; attempt < 100 && templatesRequested().size < announced.length; attempt += 1) {
+      for (let attempt = 0; attempt < 100 && templatesRequested().size < expected.size; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
       assert.deepEqual(
@@ -183,8 +187,14 @@ void test('built example mounts independent Billing and Analytics artifacts', as
       );
       assert.deepEqual(
         [...templatesRequested()].sort(),
-        [...announced].sort(),
-        'the browser did not fetch exactly the templates the manifest named',
+        [...expected].sort(),
+        'the browser did not fetch exactly the templates of the chunks it loaded',
+      );
+      // And the narrowing is real rather than a tautology: this session opened the
+      // shell and two Remotes, and the screens it never opened cost it nothing.
+      assert.ok(
+        expected.size < announced.length,
+        `every announced template belonged to a loaded chunk (${String(announced.length)})`,
       );
       assert.ok(
         requests.every((path) => !/^\/remotes\/(?:billing|analytics)\/(?:remote-entry|.+-root)\.js$/u.test(path)),

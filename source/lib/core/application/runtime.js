@@ -21,11 +21,14 @@
  */
 
 import { configureI18n } from '@core/localization/i18n.js';
-import { schedule } from '@core/foundation/clock.js';
 import { loadManifest, useManifest } from '@core/remotes/mfe.js';
 import { defineTag } from '@core/elements/mount.js';
 import { readJson } from '@core/foundation/json.js';
-import { prefetchTemplates, seedTemplates } from '@core/template/template.js';
+import {
+  prefetchTemplates,
+  registerTemplateGroups,
+  seedTemplates,
+} from '@core/template/template.js';
 
 /** @import { ApplicationRoot, ApplicationSpec, StartedApplication, StartupStep, StartupStepRun } from '@core/application/types.js' */
 /** @import { AppManifest } from '@core/remotes/types.js' */
@@ -78,6 +81,9 @@ export class ApplicationStartupError extends Error {
  *                    carries: seed it outright from `templateBundle`, or start
  *                    the entry group of `templateGroups` arriving — every URL in
  *                    `templateFiles` when the document is flat and has no groups.
+ *                    The other groups are registered rather than started; each
+ *                    starts on the first `attachTemplate` out of its own chunk,
+ *                    so markup a guard refused is markup nobody fetched.
  *                    Here because a component fetches its own template while
  *                    loading, and by the time it does the URL has to be known
  *                    already — a chunk of nine components otherwise costs nine
@@ -127,7 +133,13 @@ export async function startApplication(spec) {
   if (bundle !== undefined) {
     await step('templates', steps, () => seedTemplateBundle(bundle));
   } else if (manifest.templateFiles.length > 0) {
-    await step('templates', steps, () => prefetchTemplates(entryTemplates(manifest)));
+    await step('templates', steps, () => {
+      // Registered before the entry group is started, so starting it is also what
+      // marks it started and the first component out of the entry closure does not
+      // start it a second time.
+      registerTemplateGroups(manifest.templateGroups);
+      prefetchTemplates(entryTemplates(manifest));
+    });
   }
 
   await step('locale', steps, () => configureI18n(manifest.i18n));
@@ -136,7 +148,6 @@ export async function startApplication(spec) {
   if (ready !== undefined) await step('ready', steps, () => ready(manifest));
   if (root !== undefined) await step('root', steps, () => defineRoot(root));
 
-  startRemainingTemplates(manifest);
   return { manifest, steps };
 }
 
@@ -154,38 +165,6 @@ export async function startApplication(spec) {
  */
 function entryTemplates(manifest) {
   return manifest.templateGroups.entry ?? manifest.templateFiles;
-}
-
-/**
- * Start the groups a first paint does not need, once startup is out of the way.
- *
- * ADR-0081 put every template in flight at step 3 and closed a serial chain worth
- * 350 ms doing it. What it could not do is order them: fifty requests left together,
- * at equal priority, and on HTTP/1.1 the six that matter queued behind forty-four
- * that did not. Grouping is what lets the six go first; this is what keeps the other
- * forty-four from being lost — they are still started eagerly, still before any of
- * them is asked for, just not against the entry's own transfers.
- *
- * Through `schedule` at zero delay rather than inline, and the delay is not the
- * point: a macrotask is. `startApplication` resolves into the root element
- * connecting and the router resolving its first URL, and those are the requests that
- * should reach the network first. Yielding once puts this behind them without
- * naming a duration nobody could defend.
- *
- * Nothing to do under bundle delivery — the cache is already seeded — or for a flat
- * document, whose whole list step 3 already started. ADR-0086.
- *
- * @param {AppManifest} manifest
- */
-function startRemainingTemplates(manifest) {
-  if (manifest.templateBundle !== undefined) return;
-  const rest = Object.entries(manifest.templateGroups)
-    .filter(([name]) => name !== 'entry')
-    .flatMap(([, urls]) => urls);
-  if (rest.length === 0) return;
-  schedule(() => {
-    prefetchTemplates(rest);
-  }, 0);
 }
 
 /**

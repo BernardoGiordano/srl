@@ -49,14 +49,20 @@ compiled result is cached per URL and never rebuilt.
 What is cached per URL is the *promise*, not the compiled result, so two components
 mounting at the same moment share one compile instead of racing two. The bytes are cached
 separately from the compile, which is what makes the request cheap to start early: by
-default a built artifact's `app.manifest.json` lists every template it holds, and startup
-calls `prefetchTemplates` with the list, so the markup is in flight while the chunks are
-still arriving and each `await` inside a component resolves from the cache. The prefetch
-takes the transfer only — a walk of every template in the application ahead of the first
-paint would cost more main thread than the round trips it saves — so a template is compiled
-when the component that names it is defined, and never before. Without it a chunk holding nine components costs nine requests in a
+default a built artifact's `app.manifest.json` lists every template it holds, grouped by the
+chunk whose modules name it, and `prefetchTemplates` is called with a whole group at a time —
+so the markup is in flight while the chunks are still arriving and each `await` inside a
+component resolves from the cache. The prefetch takes the transfer only — a walk of every
+template in the application ahead of the first paint would cost more main thread than the
+round trips it saves — so a template is compiled when the component that names it is defined,
+and never before. Without it a chunk holding nine components costs nine requests in a
 row, because a component's template URL is not known until that component's module has been
 fetched and evaluated ([ADR-0081](../adr/0081-the-manifest-names-every-template.md)).
+
+Startup starts the `entry` group; every other group starts on the first `attachTemplate` out
+of its own chunk, which is the module body that just arrived. Markup follows its code, so a
+visitor fetches the markup of the screens they were allowed to load and none of the rest
+([ADR-0087](../adr/0087-a-template-group-starts-with-the-chunk-that-names-it.md)).
 
 Nothing about that list changes how a template is delivered: the files stay separate,
 hash-named and immutable under every mode. Which of the three a deployment wants —

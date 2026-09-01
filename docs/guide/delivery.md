@@ -31,7 +31,7 @@ with the router's next level waiting on all of them.
 
 | | manifest key | startup | first visit, example app |
 |---|---|---|---|
-| `split` | `templateGroups`, every URL, grouped by chunk | starts the `entry` group, waits for none; the rest follow on the next macrotask | 50 requests, 22,858 B |
+| `split` | `templateGroups`, every URL, grouped by chunk | starts the `entry` group, waits for none; every other group starts when its chunk does | 3 requests, 5.5 KB signed out; 24 requests signed in |
 | `split-lazy` | `templateFiles: []` | nothing to do | 20 requests, 8,180 B |
 | `bundle` | `templateBundle`, one URL | fetches and seeds it, **awaits it** | 1 request, 12,698 B |
 
@@ -48,11 +48,22 @@ with the router's next level waiting on all of them.
 before any route is known: on the example application that is 50 requests at step 3 when
 the first paint reaches three of them. Grouped by the chunk whose modules name each
 template, startup starts the `entry` group — the closure the entry document already
-preloads — and the other 35 groups start on a yielded macrotask, after the root element
-and the router's first URL have had the network to themselves. Nothing is dropped; the
-transfers are ordered ([ADR-0086](../adr/0086-the-manifest-groups-templates-by-chunk.md)).
+preloads — and leaves the other 35 registered
+([ADR-0086](../adr/0086-the-manifest-groups-templates-by-chunk.md)).
 `admitManifest` still derives the flat `templateFiles` union from the groups, so code that
 wants every template this artifact holds reads one property as before.
+
+**A group starts when its chunk does.** `defineComponent` calls `attachTemplate` from the
+module body, which is the one place that knows which chunk is running, and that call starts
+the whole group before it awaits its own template: nine components in one chunk cost one
+batch of nine requests rather than nine in a row. The entitlement follows for free — a chunk
+evaluates only because something imported it, and a route chunk is imported downstream of the
+`canActivate` that gates its route, so markup a guard refused is markup nobody fetched. On the
+example application a visitor at the login form fetches 3 templates instead of 50, and a
+signed-in session that opens the dashboard and the orders list fetches 24. The cost is one
+round trip on the first navigation into a chunk, because its markup now leaves after the code
+rather than before it
+([ADR-0087](../adr/0087-a-template-group-starts-with-the-chunk-that-names-it.md)).
 
 **`split` is the default** because the cost it removes is latency rather than bytes. Against
 `split-lazy`, measured to first paint: 59 ms slower at zero added round-trip time, 207 ms
