@@ -1,0 +1,36 @@
+{
+  "$comment": [
+    "What this application declares about its own artifact benchmarks, read by",
+    "tools/benchmark/declaration.mjs. Opt-in: before this file existed the harness built",
+    "no artifact workloads at all, so `delivery/artifact-size` had no producer and the one",
+    "absolute limit in budgets.json - chainDepth 3 - was unreachable. ADR-0082.",
+    "",
+    "backend points at the module the browser suite installs, not a second stub. The",
+    "harness imports it into Node and answers /auth and /api behind the static origin with",
+    "it, so a delivery number cannot drift from what the suite asserts, and it needs no",
+    "database to be up.",
+    "",
+    "lazyRoutes are routes reached through a literal dynamic import, one workload each:",
+    "each sample opens the application signed in on /login - where every application chunk",
+    "is still cold - and navigates once. Four rather than all twenty: the question is how",
+    "many round trips a first navigation costs, and these four are the shapes that differ.",
+    "A leaf list, a leaf with a parent layout and a URL parameter, a form-heavy screen, and",
+    "a screen behind a scope guard.",
+    "",
+    "staleReleaseRoute is deliberately none of them. It must still be uncached after the",
+    "release switch the workload simulates, which is only true of a route no other workload",
+    "has opened."
+  ],
+  "backend": "test/fake-server.js",
+  "lazyRoutes": [
+    { "id": "dashboard", "path": "/", "tag": "dashboard-page" },
+    { "id": "orders", "path": "/sales/orders", "tag": "orders-page" },
+    { "id": "customer-detail", "path": "/sales/customers/CU-0001", "tag": "customer-detail-page" },
+    { "id": "settings-users", "path": "/settings/users", "tag": "settings-users" }
+  ],
+  "staleReleaseRoute": {
+    "path": "/settings/audit",
+    "tag": "settings-audit",
+    "module": "example/src/pages/settings/settings-audit.js"
+  }
+}
