@@ -98,6 +98,15 @@ export function admitManifest(value, source) {
   assertDistinct(admitted, policy);
 
   const templateBundle = root.templateBundle;
+  const templateGroups = admitTemplateGroups(root.templateGroups, `${url}: templateGroups`, policy);
+  const grouped = Object.values(templateGroups).flat();
+  const listed = admitTemplateFiles(root.templateFiles, `${url}: templateFiles`, policy);
+  if (grouped.length > 0 && listed.length > 0) {
+    throw new Error(
+      `${url} names its templates twice, as \`templateGroups\` and as \`templateFiles\`. One ` +
+        `document cannot say both which chunk needs what and that everything is needed at once.`,
+    );
+  }
 
   return Object.freeze({
     remotes: Object.freeze(admitted),
@@ -107,8 +116,53 @@ export function admitManifest(value, source) {
       templateBundle === undefined
         ? undefined
         : admitPath(templateBundle, `${url}: templateBundle`, policy),
-    templateFiles: admitTemplateFiles(root.templateFiles, `${url}: templateFiles`, policy),
+    templateGroups,
+    // The flat union stays available and stays derived. A caller that wants "every
+    // template this artifact holds" should not have to know how the document was
+    // partitioned, and a second copy in the document is the thing this replaced.
+    templateFiles: grouped.length > 0 ? Object.freeze(grouped) : listed,
   });
+}
+
+/**
+ * The chunk-to-template join, admitted one entry at a time.
+ *
+ * Keys are opaque here on purpose: `entry` and `chunk:<path>` are the build's names
+ * for its own output, and a policy that validated their spelling would be a second
+ * place the two have to agree. What this does check is every value, because every
+ * value becomes a `fetch` — same-origin under the same rule as every other URL in the
+ * document, for the same reason `admitTemplateFiles` gives.
+ *
+ * Duplicates are refused across the whole record rather than within a group. A
+ * template is named by exactly one module, which lives in exactly one chunk, so the
+ * same URL in two groups is a join that went wrong — and it would be paid twice, once
+ * per group that starts. A frozen empty record when the key is absent, so the consumer
+ * reads it without a guard. ADR-0086.
+ *
+ * @param {unknown} value
+ * @param {string} where
+ * @param {Policy} policy
+ * @returns {Readonly<Record<string, readonly string[]>>}
+ */
+function admitTemplateGroups(value, where, policy) {
+  if (value === undefined) return Object.freeze({});
+  const record = asRecord(value, where);
+  const seen = new Set();
+
+  /** @type {Record<string, readonly string[]>} */
+  const groups = {};
+  for (const [name, entries] of Object.entries(record)) {
+    if (!Array.isArray(entries)) throw new Error(`${where}.${name} must be an array.`);
+    groups[name] = Object.freeze(
+      /** @type {unknown[]} */ (entries).map((entry, index) => {
+        const file = admitPath(entry, `${where}.${name}[${String(index)}]`, policy);
+        if (seen.has(file)) throw new Error(`${where} names ${file} more than once.`);
+        seen.add(file);
+        return file;
+      }),
+    );
+  }
+  return Object.freeze(groups);
 }
 
 /**

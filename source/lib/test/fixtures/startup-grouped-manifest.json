@@ -1,0 +1,21 @@
+{
+  "remotes": [],
+  "auth": {
+    "apiBaseUrl": "/api/"
+  },
+  "i18n": {
+    "defaultLocale": "en",
+    "supportedLocales": [
+      "en"
+    ],
+    "bundles": []
+  },
+  "templateGroups": {
+    "entry": [
+      "/lib/test/fixtures/grouped-entry.html"
+    ],
+    "chunk:assets/deferred-Ab12Cd34.js": [
+      "/lib/test/fixtures/grouped-deferred.html"
+    ]
+  }
+}

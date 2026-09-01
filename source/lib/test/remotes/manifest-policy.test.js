@@ -108,7 +108,63 @@ describe('manifest admission', () => {
       // and sometimes undefined is a guard at every call site, for a document that
       // simply has nothing to announce.
       assert.sameArray([...admit({}).templateFiles], []);
+      assert.sameArray(Object.keys(admit({}).templateGroups), []);
       assert.sameArray([...present(admit({ remotes: [remote({})] }).remotes[0]).templateFiles], []);
+    });
+
+    it('admits grouped templates under the rules the flat list has, and derives the union', () => {
+      // Every value becomes a `fetch` under the page's own `connect-src 'self'`,
+      // so the group's entries are admitted exactly as the flat list's are.
+      assert.throws(
+        () => admit({ templateGroups: { entry: ['https://cdn.example/a.html'] } }),
+        'templateGroups.entry[0] must be same-origin',
+      );
+      assert.throws(
+        () => admit({ templateGroups: { entry: '/assets/templates/a.html' } }),
+        'templateGroups.entry must be an array',
+      );
+
+      // Across the record, not within a group. A template is named by one module,
+      // which lives in one chunk, so the same URL in two groups is a join that went
+      // wrong — and it would be paid twice, once per group that starts.
+      assert.throws(
+        () =>
+          admit({
+            templateGroups: {
+              entry: ['/assets/templates/a.html'],
+              'chunk:assets/x.js': ['/assets/x/../templates/a.html'],
+            },
+          }),
+        'names /assets/templates/a.html more than once',
+      );
+
+      const admitted = admit({
+        templateGroups: {
+          entry: ['/assets/x/../templates/a.html'],
+          'chunk:assets/x.js': ['/assets/templates/b.html'],
+        },
+      });
+      assert.sameArray([...(admitted.templateGroups.entry ?? [])], ['/assets/templates/a.html']);
+      // The union is derived, entry first, so a caller that wants every template
+      // this artifact holds reads one property and not a partition. ADR-0086.
+      assert.sameArray(
+        [...admitted.templateFiles],
+        ['/assets/templates/a.html', '/assets/templates/b.html'],
+      );
+    });
+
+    it('refuses a document that names its templates both ways', () => {
+      // A generator that could not decide. One document cannot say both which chunk
+      // needs what and that everything is needed at once, and the runtime would have
+      // to pick — quietly, and differently from the next reader. ADR-0086.
+      assert.throws(
+        () =>
+          admit({
+            templateGroups: { entry: ['/assets/templates/a.html'] },
+            templateFiles: ['/assets/templates/b.html'],
+          }),
+        'names its templates twice',
+      );
     });
 
     it('admits a bundle pattern through every locale it will be used with', () => {

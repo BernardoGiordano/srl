@@ -62,7 +62,11 @@ const MANIFEST = '/app.manifest.json';
  * Route chunks are not here. Which route a visitor lands on is not a build fact, and
  * a document that preloaded all of them would trade a round trip for the whole
  * application's bytes. That chain is shortened where it is actually known — in the
- * router, which knows the levels a URL enters.
+ * router, which knows the levels a URL enters. Nothing there calls this yet: a
+ * `RouteDef` carries an opaque `load` closure and neither side has a fact that maps a
+ * route to the chunk that import resolves to. What does exist is the other half —
+ * `app.manifest.json` groups its templates by chunk under the same closure rule this
+ * uses, so a router that gained such a fact would have a list to start. ADR-0086.
  *
  * @param {HintFacts} facts
  * @returns {EntryHint[]}

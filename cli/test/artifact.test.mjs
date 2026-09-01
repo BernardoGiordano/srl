@@ -102,7 +102,7 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.equal(composed[0]?.mount, '/billing');
     assert.equal(composed[1]?.url, analyticsTransport.url);
 
-    const shellChunks = /** @type {Array<{ modules: string[] }>} */ (shell.chunks);
+    const shellChunks = /** @type {Array<{ path: string, modules: string[] }>} */ (shell.chunks);
     assert.ok(
       shellChunks
         .flatMap((chunk) => chunk.modules)
@@ -118,15 +118,37 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.deepEqual(manifest.remotes, composed);
 
     // Under split delivery the manifest names every template and no bundle, which
-    // is what lets startup put them all in flight instead of the browser learning
-    // each URL from the component module that just arrived. ADR-0081.
+    // is what lets startup put them in flight instead of the browser learning each
+    // URL from the component module that just arrived — and it names them grouped by
+    // the chunk that holds each naming module, so the entry closure can go first.
+    // ADR-0081, ADR-0086.
     const shellTemplates = /** @type {{ files: string[] }} */ (
       /** @type {Record<string, unknown>} */ (shell).templates
     );
     assert.equal(manifest.templateBundle, undefined);
+    assert.equal(manifest.templateFiles, undefined, 'split emitted the flat list as well');
+    const groups = /** @type {Record<string, string[]>} */ (manifest.templateGroups);
     assert.deepEqual(
-      [...manifest.templateFiles].sort(),
+      Object.values(groups).flat().sort(),
       shellTemplates.files.map((path) => `/${path}`).sort(),
+    );
+    // `entry` first, and a real group rather than an empty ceremonial one: startup
+    // step 3 starts exactly this, so a build that grouped everything under a route
+    // chunk would leave the first paint discovering its own markup.
+    assert.equal(Object.keys(groups)[0], 'entry');
+    assert.ok((groups.entry ?? []).length > 0, 'the entry group is empty');
+    assert.ok(
+      Object.keys(groups).every((name) => name === 'entry' || name.startsWith('chunk:')),
+      'a template group is named neither `entry` nor `chunk:<path>`',
+    );
+    // Every `chunk:` key names a chunk the artifact actually emitted. A key that
+    // named nothing would be a group no consumer could ever ask for.
+    const emittedChunks = new Set(shellChunks.map((chunk) => chunk.path));
+    assert.ok(
+      Object.keys(groups)
+        .filter((name) => name !== 'entry')
+        .every((name) => emittedChunks.has(name.slice('chunk:'.length))),
+      'a template group names a chunk the artifact does not emit',
     );
     // Every locale bundle is emitted hash-named under `assets/`, so it is served
     // immutable like everything else there, and the manifest says which file each
@@ -388,10 +410,17 @@ void test('the manifest announces templates the way the delivery says to', async
       /** @type {Record<string, unknown>} */ (eager.shell).templates
     ).files.map((path) => `/${path}`);
 
-    // `split` names every template, so startup can put them all in flight before
-    // the first component module evaluates.
+    // `split` names every template, grouped by the chunk that holds each naming
+    // module, so startup can put the entry closure's in flight before the first
+    // component module evaluates and leave the rest to follow. ADR-0086.
     assert.equal(eager.manifest.templateBundle, undefined);
-    assert.deepEqual([...eager.manifest.templateFiles].sort(), [...emitted].sort());
+    assert.equal(eager.manifest.templateFiles, undefined);
+    assert.deepEqual(
+      Object.values(/** @type {Record<string, string[]>} */ (eager.manifest.templateGroups))
+        .flat()
+        .sort(),
+      [...emitted].sort(),
+    );
 
     // `split-lazy` names none of them. The key is present and empty rather than
     // absent, so the document says "this artifact announces nothing" out loud
@@ -399,11 +428,13 @@ void test('the manifest announces templates the way the delivery says to', async
     // existed.
     assert.equal(lazy.manifest.templateBundle, undefined);
     assert.deepEqual(lazy.manifest.templateFiles, []);
+    assert.equal(lazy.manifest.templateGroups, undefined);
 
     // `bundle` names the one JSON and no list: seeding fills the cache from bytes
     // already in hand, so a prefetch beside it would request markup nothing reads.
     assert.equal(lazy.manifest.templateFiles.length, 0);
     assert.equal(bundled.manifest.templateFiles, undefined);
+    assert.equal(bundled.manifest.templateGroups, undefined);
     assert.match(String(bundled.manifest.templateBundle), /^\/assets\/templates-[0-9a-f]{16}\.json$/u);
 
     // And the artifacts the two split modes emit are the same bytes. The mode is a

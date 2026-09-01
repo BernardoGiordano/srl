@@ -1,3 +1,4 @@
+import { configureClock, createManualClock } from '@core/foundation/clock.js';
 import { manifest, useManifest } from '@core/remotes/mfe.js';
 import { ApplicationStartupError, startApplication } from '@core/application/runtime.js';
 import { loadTemplate } from '@core/template/template.js';
@@ -20,6 +21,7 @@ const BUNDLED = new URL('../fixtures/startup-bundled-manifest.json', import.meta
 const MISSING_BUNDLE = new URL('../fixtures/startup-missing-bundle-manifest.json', import.meta.url)
   .href;
 const SPLIT = new URL('../fixtures/startup-split-manifest.json', import.meta.url).href;
+const GROUPED = new URL('../fixtures/startup-grouped-manifest.json', import.meta.url).href;
 
 /**
  * The names of the steps that ran. Each entry carries its duration too, so the
@@ -152,6 +154,7 @@ describe('application startup', () => {
       remotes: [],
       auth: { apiBaseUrl: '/api/' },
       i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: [] },
+      templateGroups: {},
       templateFiles: [],
     });
 
@@ -256,6 +259,49 @@ describe('application startup', () => {
       // it later shares that one rather than starting a second. ADR-0081.
       assert.equal(typeof (await loadTemplate(url)), 'function');
     } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it('starts the entry group at step 3 and the rest after startup', async () => {
+    const entry = '/lib/test/fixtures/grouped-entry.html';
+    const deferred = '/lib/test/fixtures/grouped-deferred.html';
+
+    /** @type {string[]} */
+    const requested = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = /** @type {typeof globalThis.fetch} */ (
+      async (/** @type {RequestInfo | URL} */ input, /** @type {RequestInit} */ init) => {
+        const href =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (href.endsWith('.html')) requested.push(new URL(href).pathname);
+        return realFetch(input, init);
+      }
+    );
+    const clock = createManualClock();
+    configureClock({ clock });
+    try {
+      const started = await startApplication({ manifestUrl: GROUPED });
+      assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
+
+      // The whole point of the grouping. Startup started the markup the entry
+      // closure needs and nothing else: a flat list could only have started both.
+      // ADR-0086.
+      assert.sameArray(requested, [entry]);
+      assert.equal(clock.pending, 1, 'the remaining groups were not scheduled');
+
+      // And nothing was dropped. The deferred group is a later transfer, not an
+      // absent one — a component in that chunk still finds its markup already in
+      // flight rather than paying ADR-0071's round trip for it.
+      clock.flush();
+      assert.sameArray(requested, [entry, deferred]);
+
+      // Derived, entry first: a caller that wants every template this artifact
+      // holds does not have to know how the document was partitioned.
+      assert.sameArray([...started.manifest.templateFiles], [entry, deferred]);
+      assert.sameArray([...(started.manifest.templateGroups.entry ?? [])], [entry]);
+    } finally {
+      configureClock();
       globalThis.fetch = realFetch;
     }
   });

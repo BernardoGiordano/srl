@@ -71,6 +71,7 @@ describe('remote mount lifecycle', () => {
       ],
       auth: { apiBaseUrl: '/api/' },
       i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: [] },
+      templateGroups: {},
       templateFiles: [],
     }));
 
@@ -152,6 +153,7 @@ function manifestWithRemote(remote) {
     ],
     auth: { apiBaseUrl: '/api/' },
     i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: [] },
+    templateGroups: {},
     templateFiles: [],
   };
 }

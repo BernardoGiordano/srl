@@ -37,6 +37,7 @@ function manifestWith(overrides) {
     ],
     auth: { apiBaseUrl: '/api/' },
     i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: [] },
+    templateGroups: {},
     templateFiles: [],
   });
 }

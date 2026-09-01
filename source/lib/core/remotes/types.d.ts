@@ -220,13 +220,29 @@ export interface AppManifest {
    */
   readonly templateBundle?: string;
   /**
+   * The templates this artifact emitted, grouped by the chunk whose modules name
+   * them: `entry` for the closure the document already preloads, and
+   * `chunk:<emitted path>` for every other chunk.
+   *
+   * The group is what makes the list actionable. A flat list can only be started at
+   * once, before a route is known; grouped, startup starts the entry group and the
+   * rest follow the code that needs them
+   * ([ADR-0086](../../../../docs/adr/0086-the-manifest-groups-templates-by-chunk.md)).
+   * Emitted only under `--templates split`; an empty record everywhere else.
+   */
+  readonly templateGroups: Readonly<Record<string, readonly string[]>>;
+  /**
    * Every template this artifact emitted, as the URLs its components will ask for.
    *
    * Not a bundle and not a substitute for one: the files stay separate and
    * immutable, and this is only the discovery a component cannot do for itself, so
-   * startup can put them all in flight instead of paying one round trip per
-   * component once its chunk arrives ([ADR-0081](../../../../docs/adr/0081-the-manifest-names-every-template.md)).
-   * Empty in development and under bundle delivery.
+   * a caller can put them in flight instead of paying one round trip per component
+   * once its chunk arrives ([ADR-0081](../../../../docs/adr/0081-the-manifest-names-every-template.md)).
+   *
+   * Derived from `templateGroups` when the document carries one, entry group first,
+   * so "everything this artifact holds" stays one property rather than a partition
+   * the caller has to know about. Read from the document under source delivery,
+   * which has no chunks to group by. Empty under bundle delivery.
    */
   readonly templateFiles: readonly string[];
 }

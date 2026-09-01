@@ -156,17 +156,34 @@ void test('built example mounts independent Billing and Analytics artifacts', as
       // The whole list, not a prefix of it. A prefetch that quietly covered the
       // shell and left the route chunks to discover their own markup would pass
       // every other assertion here and leave the serial chain exactly where it was.
+      //
+      // Which is also what makes this the assertion that guards ADR-0086: the
+      // groups reorder the transfers and startup defers all but `entry` to a
+      // yielded macrotask, so a deferral that dropped a group instead of delaying
+      // it shows up here as a fetched set smaller than the announced one.
       const manifest = JSON.parse(
         await readFile(join(String(shell.root), String(shell.public), 'app.manifest.json'), 'utf8'),
       );
+      const announced = Object.values(
+        /** @type {Record<string, string[]>} */ (manifest.templateGroups),
+      ).flat();
+      // The non-entry groups start on a macrotask after startup rather than inside
+      // step 3, so "has every announced template been requested" is a question with
+      // a settling time. Polling it is the honest way to ask; the navigations above
+      // have already given it far longer than it needs. ADR-0086.
+      const templatesRequested = () =>
+        new Set(requests.filter((path) => path.startsWith('/assets/templates/')));
+      for (let attempt = 0; attempt < 100 && templatesRequested().size < announced.length; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
       assert.deepEqual(
-        [...manifest.templateFiles].sort(),
+        [...announced].sort(),
         shellTemplates.files.map((path) => `/${path}`).sort(),
         'the manifest does not name every emitted template',
       );
       assert.deepEqual(
-        [...new Set(fetched)].sort(),
-        [...manifest.templateFiles].sort(),
+        [...templatesRequested()].sort(),
+        [...announced].sort(),
         'the browser did not fetch exactly the templates the manifest named',
       );
       assert.ok(

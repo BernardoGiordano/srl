@@ -84,6 +84,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0083](0083-a-locale-bundle-is-hash-named-and-immutable.md) | A locale bundle is hash-named and immutable | accepted | `cli/delivery/build.mjs`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/localization/i18n.js` |
 | [ADR-0084](0084-a-startup-step-publishes-its-own-duration.md) | A startup step publishes its own duration | accepted | `source/lib/core/application/runtime.js`, `source/lib/core/application/types.d.ts`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/origin.mjs`, `example/benchmark.json` |
 | [ADR-0085](0085-source-delivery-announces-its-templates.md) | Source delivery announces its templates, and a reload revalidates | accepted | `cli/delivery/source-manifest.mjs`, `cli/origin/index.mjs`, `cli/origin/types.d.ts`, `cli/dev/serve.mjs`, `example/server/static.mjs`, `example/server/server.mjs`, `cli/test/origin.test.mjs`, `cli/test/serve-templates.test.mjs` |
+| [ADR-0086](0086-the-manifest-groups-templates-by-chunk.md) | The manifest groups templates by chunk | accepted | `cli/delivery/build.mjs`, `cli/delivery/entry-hints.mjs`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/remotes/types.d.ts`, `source/lib/core/application/runtime.js`, `cli/test/artifact.test.mjs`, `cli/test/artifact-browser.test.mjs`, `source/lib/test/application/runtime.test.js`, `source/lib/test/remotes/manifest-policy.test.js`, `tools/benchmark/baseline.json` |
 
 <!-- /generated:adr-index -->
 

@@ -208,11 +208,18 @@ export async function buildArtifact({
       delivery,
     );
     const localeFiles = await emitLocaleFiles(app, publicDir, source.admitted.i18n);
+    // The join the manifest used to throw away: which chunk names each template.
+    // Both halves have been in scope since `chunkRelationships` ran. ADR-0086.
+    const templateGroups =
+      templateOutput.delivery === 'split'
+        ? groupTemplates(app, templates.assets(), chunks, entry)
+        : null;
     await emitApplicationManifest(
       app,
       publicDir,
       source.raw,
       templateOutput,
+      templateGroups,
       composition.remotes,
       localeFiles,
     );
@@ -796,6 +803,92 @@ function templateAnnouncement(templates, base = '/') {
 }
 
 /**
+ * Group the emitted templates by the chunk whose modules name them.
+ *
+ * The join was already in the process and thrown away. `TemplateAsset.module` is the
+ * absolute path of the module that called `defineComponent`, `chunkRelationships` has
+ * already reduced every module of every chunk to the same repository-relative name,
+ * and nothing had ever put the two beside each other. So the manifest flattened fifty
+ * URLs into one list sorted by tag, and a list with no shape leaves the runtime one
+ * move: start all of it, at equal priority, before any route is known.
+ *
+ * Two kinds of group, and the split is the point. `entry` is every template named by
+ * a module the entry document already preloads — the entry chunk, its static closure,
+ * and the chunks it imports dynamically together with theirs. That is exactly the set
+ * `entryHints` names, deliberately: the templates a first paint needs are the ones
+ * whose code the document was already fetching. Everything else is one group per
+ * chunk, keyed `chunk:<emitted path>`, so a consumer that knows which chunk it is
+ * about to fetch can start that chunk's markup beside it rather than an application's
+ * worth of markup at boot.
+ *
+ * `entry` sorts first so the flattened list a consumer derives from these groups still
+ * begins with the templates that matter soonest.
+ *
+ * A naming module no chunk claims is a build failure. The alternative is a template
+ * that belongs to no group and is therefore announced nowhere, which is ADR-0071's
+ * serial chain back again on one component and invisible from outside. ADR-0086.
+ *
+ * @param {BuildApplication} app
+ * @param {TemplateAsset[]} assets
+ * @param {ArtifactChunk[]} chunks
+ * @param {string} entry The emitted path of the entry chunk.
+ * @returns {Record<string, string[]>}
+ */
+function groupTemplates(app, assets, chunks, entry) {
+  const byPath = new Map(chunks.map((chunk) => [chunk.path, chunk]));
+  const root = byPath.get(entry);
+  if (root === undefined) {
+    throw artifactError(app, 'templates', `entry chunk ${entry} is not one of the emitted chunks.`);
+  }
+
+  // The entry closure, by the rule `entryHints` uses: static imports transitively,
+  // plus the dynamic imports the entry chunk itself makes — the root module, which
+  // `startApplication` always reaches — and their static closures. Route chunks are
+  // dynamic imports of the root, not of the entry, so they stay out of it.
+  const preloaded = new Set([entry]);
+  const queue = [...root.imports, ...root.dynamicImports];
+  while (queue.length > 0) {
+    const path = /** @type {string} */ (queue.shift());
+    if (preloaded.has(path)) continue;
+    preloaded.add(path);
+    queue.push(...(byPath.get(path)?.imports ?? []));
+  }
+
+  /** @type {Map<string, string>} Repository-relative module to the chunk that holds it. */
+  const owner = new Map();
+  for (const chunk of chunks) {
+    for (const module of chunk.modules) {
+      // A module the engine duplicated into more than one chunk is claimed by the
+      // first, and `chunks` is sorted by path, so which one that is does not move
+      // between builds of the same source.
+      if (!owner.has(module)) owner.set(module, chunk.path);
+    }
+  }
+
+  /** @type {Record<string, string[]>} */
+  const groups = {};
+  for (const asset of assets) {
+    const module = portableModule(app, asset.module);
+    const chunk = owner.get(module);
+    if (chunk === undefined) {
+      throw artifactError(
+        app,
+        'templates',
+        `<${asset.tag}> is defined in ${module}, which no emitted chunk contains.`,
+      );
+    }
+    const name = preloaded.has(chunk) ? 'entry' : `chunk:${chunk}`;
+    (groups[name] ??= []).push(`/${asset.path}`);
+  }
+
+  return Object.fromEntries(
+    Object.entries(groups).sort(([left], [right]) =>
+      left === 'entry' ? -1 : right === 'entry' ? 1 : left.localeCompare(right),
+    ),
+  );
+}
+
+/**
  * The runtime manifest, with the remotes this build composed and whichever template
  * key the chosen delivery answers for.
  *
@@ -824,20 +917,33 @@ function templateAnnouncement(templates, base = '/') {
  * @param {string} publicDir
  * @param {Record<string, unknown>} source
  * @param {ArtifactTemplates} templates
+ * @param {Record<string, string[]> | null} groups The chunk-to-template join under
+ *   `split` delivery, and null under every other mode.
  * @param {AppManifest['remotes']} remotes
  * @param {Record<string, string>} localeFiles
  */
-async function emitApplicationManifest(app, publicDir, source, templates, remotes, localeFiles) {
-  const { templateBundle: _configured, templateFiles: _listed, ...rest } = source;
+async function emitApplicationManifest(app, publicDir, source, templates, groups, remotes, localeFiles) {
+  const {
+    templateBundle: _configured,
+    templateFiles: _listed,
+    templateGroups: _grouped,
+    ...rest
+  } = source;
   const { bundleFiles: _emitted, ...i18n } = /** @type {Record<string, unknown>} */ (
     rest.i18n ?? {}
   );
   const localized = { ...rest, i18n: { ...i18n, bundleFiles: localeFiles } };
   const announced = templateAnnouncement(templates);
+  // Three shapes, one per delivery mode, and the artifact says which by which key it
+  // carries. `split` says `templateGroups` and nothing else: the flat list was the
+  // same URLs with the shape removed, so emitting both would be one copy of the truth
+  // and one copy of what the runtime is meant to stop doing with it. ADR-0086.
   const manifest =
-    announced.bundle === null
-      ? { ...localized, remotes, templateFiles: announced.files }
-      : { ...localized, remotes, templateBundle: announced.bundle };
+    announced.bundle !== null
+      ? { ...localized, remotes, templateBundle: announced.bundle }
+      : groups === null
+        ? { ...localized, remotes, templateFiles: announced.files }
+        : { ...localized, remotes, templateGroups: groups };
   const pins = Object.fromEntries(
     remotes.flatMap((remote) =>
       remote.assets

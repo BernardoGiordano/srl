@@ -31,13 +31,28 @@ with the router's next level waiting on all of them.
 
 | | manifest key | startup | first visit, example app |
 |---|---|---|---|
-| `split` | `templateFiles`, every URL | starts them all, waits for none | 50 requests, 22,858 B |
+| `split` | `templateGroups`, every URL, grouped by chunk | starts the `entry` group, waits for none; the rest follow on the next macrotask | 50 requests, 22,858 B |
 | `split-lazy` | `templateFiles: []` | nothing to do | 20 requests, 8,180 B |
 | `bundle` | `templateBundle`, one URL | fetches and seeds it, **awaits it** | 1 request, 12,698 B |
 
 ```json
-{ "templateFiles": ["/assets/templates/ui-card-6b1d4f0a2c8e5713.html", "…"] }
+{
+  "templateGroups": {
+    "entry": ["/assets/templates/app-root-ae669edf0e5aa032.html", "…"],
+    "chunk:assets/shell-layout-BCQ4fpba.js": ["/assets/templates/ui-card-6b1d4f0a2c8e5713.html", "…"]
+  }
+}
 ```
+
+**The group is what makes the list actionable.** A flat list can only be started at once,
+before any route is known: on the example application that is 50 requests at step 3 when
+the first paint reaches three of them. Grouped by the chunk whose modules name each
+template, startup starts the `entry` group — the closure the entry document already
+preloads — and the other 35 groups start on a yielded macrotask, after the root element
+and the router's first URL have had the network to themselves. Nothing is dropped; the
+transfers are ordered ([ADR-0086](../adr/0086-the-manifest-groups-templates-by-chunk.md)).
+`admitManifest` still derives the flat `templateFiles` union from the groups, so code that
+wants every template this artifact holds reads one property as before.
 
 **`split` is the default** because the cost it removes is latency rather than bytes. Against
 `split-lazy`, measured to first paint: 59 ms slower at zero added round-trip time, 207 ms
@@ -72,8 +87,9 @@ with no build step at all. It writes authored bytes, minifies nothing, and
 
 ## Templates in development
 
-The same manifest key, from a different producer. `templateFiles` is what makes startup
-step 3 run at all, and a source tree has no bundler to write it — so the development
+A flat list, from a different producer. `templateFiles` is what makes startup step 3 run
+at all, and a source tree has no bundler to write it — nor any chunks to group it by, so
+development announces the whole list and startup starts the whole list — so the development
 servers compute it from `cli/project-model/`, the same list `npm run templates` bundles
 and `npm run verify` checks against. `cli/delivery/source-manifest.mjs` is the second
 producer; the runtime path is the one above, unchanged, and the browser cannot tell which

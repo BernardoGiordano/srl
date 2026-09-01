@@ -21,12 +21,14 @@
  */
 
 import { configureI18n } from '@core/localization/i18n.js';
+import { schedule } from '@core/foundation/clock.js';
 import { loadManifest, useManifest } from '@core/remotes/mfe.js';
 import { defineTag } from '@core/elements/mount.js';
 import { readJson } from '@core/foundation/json.js';
 import { prefetchTemplates, seedTemplates } from '@core/template/template.js';
 
 /** @import { ApplicationRoot, ApplicationSpec, StartedApplication, StartupStep, StartupStepRun } from '@core/application/types.js' */
+/** @import { AppManifest } from '@core/remotes/types.js' */
 
 /**
  * Prefix of the User Timing measure each step emits.
@@ -74,10 +76,12 @@ export class ApplicationStartupError extends Error {
  *                    any of them can be constructed before it lands.
  *   3. `templates`   Warm the template cache from whichever list the manifest
  *                    carries: seed it outright from `templateBundle`, or start
- *                    every URL in `templateFiles` arriving. Here because a
- *                    component fetches its own template while loading, and by the
- *                    time it does the URL has to be known already — a chunk of
- *                    nine components otherwise costs nine requests in a row.
+ *                    the entry group of `templateGroups` arriving — every URL in
+ *                    `templateFiles` when the document is flat and has no groups.
+ *                    Here because a component fetches its own template while
+ *                    loading, and by the time it does the URL has to be known
+ *                    already — a chunk of nine components otherwise costs nine
+ *                    requests in a row.
  *   4. `locale`      `configureI18n`, awaited. A component that renders once
  *                    against an empty message table and again against a full one
  *                    flashes untranslated text; ordering it away costs one await.
@@ -123,7 +127,7 @@ export async function startApplication(spec) {
   if (bundle !== undefined) {
     await step('templates', steps, () => seedTemplateBundle(bundle));
   } else if (manifest.templateFiles.length > 0) {
-    await step('templates', steps, () => prefetchTemplates(manifest.templateFiles));
+    await step('templates', steps, () => prefetchTemplates(entryTemplates(manifest)));
   }
 
   await step('locale', steps, () => configureI18n(manifest.i18n));
@@ -132,7 +136,56 @@ export async function startApplication(spec) {
   if (ready !== undefined) await step('ready', steps, () => ready(manifest));
   if (root !== undefined) await step('root', steps, () => defineRoot(root));
 
+  startRemainingTemplates(manifest);
   return { manifest, steps };
+}
+
+/**
+ * The templates a first paint needs, which is a smaller set than "all of them".
+ *
+ * `templateGroups.entry` is the markup named by modules the entry document already
+ * preloads, so it is the group whose code is arriving anyway. A document with no
+ * groups — source delivery, which has no chunks to group by — has only the flat list
+ * to give, and giving all of it is what this used to do for every document.
+ * ADR-0086, ADR-0085.
+ *
+ * @param {AppManifest} manifest
+ * @returns {readonly string[]}
+ */
+function entryTemplates(manifest) {
+  return manifest.templateGroups.entry ?? manifest.templateFiles;
+}
+
+/**
+ * Start the groups a first paint does not need, once startup is out of the way.
+ *
+ * ADR-0081 put every template in flight at step 3 and closed a serial chain worth
+ * 350 ms doing it. What it could not do is order them: fifty requests left together,
+ * at equal priority, and on HTTP/1.1 the six that matter queued behind forty-four
+ * that did not. Grouping is what lets the six go first; this is what keeps the other
+ * forty-four from being lost — they are still started eagerly, still before any of
+ * them is asked for, just not against the entry's own transfers.
+ *
+ * Through `schedule` at zero delay rather than inline, and the delay is not the
+ * point: a macrotask is. `startApplication` resolves into the root element
+ * connecting and the router resolving its first URL, and those are the requests that
+ * should reach the network first. Yielding once puts this behind them without
+ * naming a duration nobody could defend.
+ *
+ * Nothing to do under bundle delivery — the cache is already seeded — or for a flat
+ * document, whose whole list step 3 already started. ADR-0086.
+ *
+ * @param {AppManifest} manifest
+ */
+function startRemainingTemplates(manifest) {
+  if (manifest.templateBundle !== undefined) return;
+  const rest = Object.entries(manifest.templateGroups)
+    .filter(([name]) => name !== 'entry')
+    .flatMap(([, urls]) => urls);
+  if (rest.length === 0) return;
+  schedule(() => {
+    prefetchTemplates(rest);
+  }, 0);
 }
 
 /**
