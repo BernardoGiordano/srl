@@ -74,6 +74,33 @@ export interface StartupStepRun {
   readonly duration: number;
 }
 
+/**
+ * What one artifact's `build.json` says it was built from, once it has been proved
+ * to say anything. Both halves of the identity are nullable because the build emits
+ * them that way: an artifact of an uncommitted tree is legitimate, and it is the
+ * release that refuses to ship one rather than the build that refuses to make it.
+ * A document where both are null carries no identity and never reaches this type.
+ */
+export interface ReleaseIdentity {
+  /** The application the origin is serving. A different name is a different deployment, not a new release of this one. */
+  readonly app: string;
+  readonly commit: string | null;
+  readonly sourceDateEpoch: number | null;
+}
+
+export interface ReleaseWatchOptions {
+  /** Defaults to `/build.json`, which is where every artifact this toolchain builds emits it. */
+  readonly url?: string;
+  /**
+   * The shortest gap between two reads, in milliseconds. Commit boundaries are as
+   * frequent as the user's clicks; this is what keeps a busy minute to one request.
+   * Measured on the library's clock, so a suite drives it rather than sleeping.
+   */
+  readonly minIntervalMs?: number;
+  /** The fetch a read goes out on. The seam a suite replaces; defaults to the browser's. */
+  readonly fetch?: (url: string, init?: RequestInit) => Promise<Response>;
+}
+
 export interface StartedApplication {
   readonly manifest: AppManifest;
   /**

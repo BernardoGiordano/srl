@@ -451,6 +451,41 @@ export function entryChain(entry, chunks) {
 }
 
 /**
+ * Every chunk the entry document has already started transferring by the time the
+ * application's first module runs.
+ *
+ * The entry itself, its static closure, the dynamic imports the entry chunk makes —
+ * the root module, which `startApplication`'s last step always reaches — and their
+ * static closures. Route chunks are dynamic imports of the *root*, not of the entry,
+ * so they stay outside it: which route a visitor lands on is not a build fact.
+ *
+ * This is the rule three consumers state the same way, which is why it is here and
+ * not in any one of them. `entryHints` names these chunks in the document,
+ * `groupTemplates` calls the templates they define the `entry` group, and the
+ * generated service worker precaches them. A fourth definition of "what the first
+ * paint costs" is a fourth chance for the three to disagree about it.
+ *
+ * @param {string} entry
+ * @param {ReadonlyArray<Pick<ArtifactChunk, 'path' | 'imports' | 'dynamicImports'>>} chunks
+ * @returns {string[]} sorted, and including `entry` itself when the graph names it
+ */
+export function entryClosure(entry, chunks) {
+  const byPath = new Map(chunks.map((chunk) => [chunk.path, chunk]));
+  const root = byPath.get(entry);
+  if (root === undefined) return [];
+
+  const reached = new Set([entry]);
+  const queue = [...root.imports, ...root.dynamicImports];
+  while (queue.length > 0) {
+    const path = /** @type {string} */ (queue.shift());
+    if (reached.has(path)) continue;
+    reached.add(path);
+    queue.push(...(byPath.get(path)?.imports ?? []));
+  }
+  return [...reached].sort((left, right) => left.localeCompare(right));
+}
+
+/**
  * The chain is derived, so it is admitted by re-deriving it: a report whose stated
  * depth disagrees with its own `chunks[].imports` is describing a graph it does not
  * carry, and every consumer of the number would inherit the disagreement.

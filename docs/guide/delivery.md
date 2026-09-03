@@ -176,6 +176,63 @@ the module request it is for are one transfer rather than two.
 [ADR-0080](../adr/0080-the-entry-document-names-the-graph.md) has the whole decision,
 including why route chunks and locale bundles are deliberately not named.
 
+## The worker the build generates, and the release a tab is running
+
+Every build emits `public/sw.js` beside the bytes it describes. It is generated from the
+artifact's own facts rather than by walking the output directory: the precache list is the
+document, its stylesheet, the entry chunk's static closure and the root module it always
+imports, and the markup those modules define — the same closure the `modulepreload` hints
+above are derived from, computed once in `entryClosure` and read by all three consumers.
+
+```js
+const PRECACHE = [
+  "/index.html",
+  "/assets/index-Igztw2eg.css",
+  "/assets/app-root-BmsFBqLr.js",
+  "/assets/entry-C71ACrhs.js",
+  ...
+  "/assets/templates/login-page-32bc7914e98576f1.html"
+];
+```
+
+The fetch handler restates the cache classes `cacheClass()` already assigned: hash-named
+`/assets/` is cache-first, the fixed URLs — the document, `app.manifest.json`, `build.json`,
+`i18n/*.json` — are network-first with the cache as the offline fallback, and a navigation
+is answered by the shell whatever path it names. Everything else is left on the network
+untouched, which is how a Remote's bytes stay its deployer's: a Remote publishes under
+`/remotes/<name>/<version>/`, and the immutable rule is anchored at `/assets/` so it cannot
+match one.
+
+Nothing registers it for you. `registerServiceWorker()` from `@core/application/worker.js`
+is one call an application makes after startup, because a development origin has no `/sw.js`
+and a library that registered one anyway would be caching a dev server's bytes.
+
+```js
+import { registerServiceWorker } from '@core/application/worker.js';
+
+await startApplication({ /* … */ });
+await registerServiceWorker();
+```
+
+The worker deliberately does not `skipWaiting`: a tab running last week's modules must not
+have this week's worker answering its requests. So the other half of a deploy is knowing one
+happened, which is what `build.json` is for and what `@core/application/release.js` reads.
+
+```js
+import { releaseChanged, watchRelease } from '@core/application/release.js';
+
+watchRelease();     // reads /build.json at commit boundaries, throttled
+// releaseChanged.value becomes true, once, when the origin serves a different release
+```
+
+The read happens when a navigation commits — the one instant the tab could act on the
+answer — and at most once a minute. The library decides when the fact is true; what a banner
+says, and whether it offers a reload or takes one at an idle moment, is the application's.
+[ADR-0088](../adr/0088-the-service-worker-is-generated-from-the-artifact-report.md) and
+[ADR-0089](../adr/0089-a-tab-learns-its-release-changed-at-a-commit-boundary.md) have both
+decisions, including why the example application calls neither: a registration and a
+per-navigation read both move request counts three committed benchmark workloads gate on.
+
 ## The example's deployment
 
 [srl-example.santella.dev](https://srl-example.santella.dev) is deployed by

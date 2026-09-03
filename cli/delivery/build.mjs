@@ -38,6 +38,7 @@ import {
   PUBLIC,
   REPORT,
   entryChain,
+  entryClosure,
   freezeReport,
   isRemoteReport,
   parseReport,
@@ -45,6 +46,7 @@ import {
   writeReport,
 } from './artifact-report.mjs';
 import { withEntryHints } from './entry-hints.mjs';
+import { WORKER, serviceWorkerSource } from './service-worker.mjs';
 import { minifyTemplate } from './template-html.mjs';
 import { verifyPublishedRelease } from './verify-release.mjs';
 
@@ -239,7 +241,16 @@ export async function buildArtifact({
       htmlPath,
       withEntryHints(await readFile(htmlPath, 'utf8'), { entry, chunks, security }),
     );
-    await verifyBrowserRoot(app, publicDir);
+    const stylesheet = await verifyBrowserRoot(app, publicDir);
+    // Last write into the artifact, and before the inventory: the worker names the
+    // document's stylesheet, which the check above is what proves the document
+    // loads, and it is itself one more file the build then hashes, cache-classes and
+    // verifies. A generated file that skipped that would be the one byte in the
+    // artifact nothing proved. ADR-0088.
+    await writeFile(
+      join(publicDir, WORKER),
+      serviceWorkerSource({ app: app.name, entry, chunks, templateGroups, stylesheet }),
+    );
     const files = verifyPayload(app, await inventory(stage), templateOutput, chunks, localeFiles);
 
     const report = /** @type {ShellArtifactReport} */ ({
@@ -835,23 +846,14 @@ function templateAnnouncement(templates, base = '/') {
  * @returns {Record<string, string[]>}
  */
 function groupTemplates(app, assets, chunks, entry) {
-  const byPath = new Map(chunks.map((chunk) => [chunk.path, chunk]));
-  const root = byPath.get(entry);
-  if (root === undefined) {
+  // The entry closure, by the rule `entryHints` names in the document and the
+  // generated worker precaches: static imports transitively, plus the dynamic imports
+  // the entry chunk itself makes — the root module, which `startApplication` always
+  // reaches — and their static closures. Route chunks are dynamic imports of the
+  // root, not of the entry, so they stay out of it.
+  const preloaded = new Set(entryClosure(entry, chunks));
+  if (preloaded.size === 0) {
     throw artifactError(app, 'templates', `entry chunk ${entry} is not one of the emitted chunks.`);
-  }
-
-  // The entry closure, by the rule `entryHints` uses: static imports transitively,
-  // plus the dynamic imports the entry chunk itself makes — the root module, which
-  // `startApplication` always reaches — and their static closures. Route chunks are
-  // dynamic imports of the root, not of the entry, so they stay out of it.
-  const preloaded = new Set([entry]);
-  const queue = [...root.imports, ...root.dynamicImports];
-  while (queue.length > 0) {
-    const path = /** @type {string} */ (queue.shift());
-    if (preloaded.has(path)) continue;
-    preloaded.add(path);
-    queue.push(...(byPath.get(path)?.imports ?? []));
   }
 
   /** @type {Map<string, string>} Repository-relative module to the chunk that holds it. */
@@ -1741,8 +1743,17 @@ function replaceImportMap(app, source, importMap) {
 }
 
 /**
+ * Prove the emitted document is the production one, and name the stylesheet it
+ * loads.
+ *
+ * The name is returned rather than merely asserted because it has a second reader:
+ * the generated service worker precaches it. The rules below already establish that
+ * there is exactly one, that it is hash-named and that the document loads it, which
+ * is everything a precache entry needs to be true. ADR-0088.
+ *
  * @param {BuildApplication} app
  * @param {string} publicDir
+ * @returns {Promise<string | null>} the stylesheet's URL, or null for a document with none
  */
 async function verifyBrowserRoot(app, publicDir) {
   const html = await readFile(join(publicDir, 'index.html'), 'utf8');
@@ -1770,7 +1781,7 @@ async function verifyBrowserRoot(app, publicDir) {
     throw artifactError(app, 'verify', `expected one production stylesheet; saw ${String(cssPaths.length)}.`);
   }
   const cssPath = cssPaths[0];
-  if (cssPath === undefined) return;
+  if (cssPath === undefined) return null;
   const relativeCss = relative(publicDir, cssPath).split(sep).join('/');
   if (!/^assets\/[a-z0-9_-]+-[A-Za-z0-9_-]{8}\.css$/u.test(relativeCss)) {
     throw artifactError(app, 'verify', `production stylesheet is not hash-named: ${relativeCss}`);
@@ -1782,6 +1793,7 @@ async function verifyBrowserRoot(app, publicDir) {
   if (!css.includes('--ui-color-canvas') || css.includes('@source') || css.includes('@import')) {
     throw artifactError(app, 'verify', 'production stylesheet lost tokens or retains build directives.');
   }
+  return `/${relativeCss}`;
 }
 
 /**
@@ -2266,9 +2278,13 @@ async function inventory(directory) {
 /**
  * How long one emitted file may be cached, decided by where it sits and how it is
  * named. Two rules and an allowlist: anything hash-named under `assets/` is immutable
- * because its URL changes with its bytes, the document and the two small JSON files
- * startup reads are revalidated because their URLs never change, and everything else
- * is `unknown`, which `verifyPayload` refuses.
+ * because its URL changes with its bytes, the document, the two small JSON files
+ * startup reads and the service worker are revalidated because their URLs never
+ * change, and everything else is `unknown`, which `verifyPayload` refuses.
+ *
+ * `sw.js` is in the second group for the reason it cannot be in the first: a
+ * registration names one URL for the lifetime of an origin, so the worker is the one
+ * script here whose name may not move with its bytes. ADR-0088.
  *
  * The `i18n/` clause is a Remote's, not an application's: a shell emits its locale
  * bundles hash-named under `assets/` (ADR-0083), while a Remote's are published under
@@ -2287,6 +2303,7 @@ function cacheClass(path) {
     path === 'public/index.html' ||
     path === 'public/app.manifest.json' ||
     path === 'public/build.json' ||
+    path === `public/${WORKER}` ||
     /^public\/i18n\/[a-z0-9-]+\.json$/u.test(path)
   ) {
     return 'revalidate';
@@ -2303,7 +2320,14 @@ function cacheClass(path) {
  * @returns {ArtifactFile[]} the same inventory, every cache class now admitted
  */
 function verifyPayload(app, files, templates, chunks, localeFiles) {
-  const javascript = files.filter((file) => file.path.endsWith('.js'));
+  // Every `.js` in the artifact is a chunk the engine emitted and the report
+  // describes, with one exception this build writes itself: the service worker is a
+  // classic script at a fixed URL, in no import map and in no module graph, so the
+  // hash-naming and one-file-per-chunk rules below are not true of it and must not be
+  // asked of it. It is checked instead by being required output. ADR-0088.
+  const javascript = files.filter(
+    (file) => file.path.endsWith('.js') && file.path !== `${PUBLIC}/${WORKER}`,
+  );
   if (javascript.length < 2) {
     throw artifactError(app, 'verify', 'expected entry and lazy JavaScript chunks.');
   }
@@ -2395,6 +2419,7 @@ function verifyPayload(app, files, templates, chunks, localeFiles) {
     `${PUBLIC}/index.html`,
     `${PUBLIC}/app.manifest.json`,
     `${PUBLIC}/build.json`,
+    `${PUBLIC}/${WORKER}`,
   ];
   for (const path of required) {
     if (!fileByPath.has(path)) throw artifactError(app, 'verify', `required output is missing: ${path}`);
