@@ -76,6 +76,7 @@ the reason is recorded in the module that owns it.
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
 | What a correct srl application is made of | `cli/scaffold/application.mjs` — the nine files `srl new` writes, and the fixture the packaged-install probe drives |
 | What static discovery knows about the project | `cli/project-model/` |
+| How an editor consumes the project model and template checker | `cli/language-server/`; editor launchers live under `editors/` |
 | A dependency or layering rule | `tools/checks/verify-deps.mjs` |
 | Whether an application's import map still matches the library it installed | `cli/checks/importmap-check.mjs` — the one check a consumer runs, because the failures are blank pages |
 | What tsc has to know to resolve `@core/` | `source/tsconfig.base.json` — published, extended rather than copied |

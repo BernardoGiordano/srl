@@ -1,0 +1,20 @@
+{
+  "srl component": {
+    "prefix": "srl-component",
+    "body": [
+      "import { defineComponent } from '@core/elements/component.js';",
+      "import { SignalElement } from '@core/elements/signal-element.js';",
+      "",
+      "export class ${1:ExampleElement} extends SignalElement {",
+      "  ${2}",
+      "}",
+      "",
+      "await defineComponent({",
+      "  tag: '${3:example-element}',",
+      "  element: ${1:ExampleElement},",
+      "  uses: [${4}],",
+      "});"
+    ],
+    "description": "Define an srl component with a sibling HTML template"
+  }
+}

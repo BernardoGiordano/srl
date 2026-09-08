@@ -11,6 +11,7 @@ enforced; the enforcement is named.
 | No runtime dependency is fetched from npm or a CDN | `npm run verify` fails on an undeclared bare specifier or a cross-origin entry |
 | Template expressions avoid `eval` and `unsafe-eval` | `core/template/expression.js` is a parser; the shipped CSP has no `unsafe-eval` |
 | The runtime compiler and the static checker share one grammar | Both import `core/template/dialect.js` |
+| Editors do not carry a second template grammar or component model | `cli/language-server/` adapts the checker and project model; ADR-0090 |
 | Trusted Types and context-sensitive sanitisation stay enforced | `core/template/security.js`, the sink tests, `require-trusted-types-for 'script'` in the deployment's CSP |
 | Locale switching is reactive and reload-free | `t()` reads a signal; asserted across two independently-owned components |
 | The remote host interface never exposes a credential | No method returns a token; `host.auth.fetch` is the only way out |

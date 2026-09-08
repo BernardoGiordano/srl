@@ -96,7 +96,15 @@ function deployPairs() {
  * Root directories that are never an application, so `apps()` skips them and
  * `srl new` refuses to write into one.
  */
-export const NOT_APPS = new Set(['source', 'cli', 'tools', 'node_modules', 'dist', 'coverage']);
+export const NOT_APPS = new Set([
+  'source',
+  'cli',
+  'tools',
+  'editors',
+  'node_modules',
+  'dist',
+  'coverage',
+]);
 
 /**
  * @param {string} path

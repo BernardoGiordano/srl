@@ -103,7 +103,14 @@ srl build --app web
 
 # Every element, global and template the project model can see.
 srl model --app web --json
+
+# The same model and template checker as an LSP server over stdio. Normally
+# started by the VS Code or WebStorm plugin rather than by hand.
+srl language-server
 ```
+
+Editor installation and the complete feature list are in the repository's
+[editor support guide](https://github.com/BernardoGiordano/srl/blob/main/docs/guide/editor-support.md).
 
 `srl --help` lists the rest: the release pipeline, the template bundle, the import-map
 fragment, the mount table.

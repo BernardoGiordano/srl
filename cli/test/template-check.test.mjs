@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { checkTemplateSource, parseTemplate } from '../checks/template-check.mjs';
@@ -227,4 +228,19 @@ void test('a dialect refusal is a finding of its own kind', () => {
   assert.equal(found?.code, 'templates/dialect');
   assert.equal(found?.line, 1);
   assert.match(String(found?.message), /forbidden/u);
+});
+
+void test('an unsaved JavaScript buffer overrides the file on disk', async () => {
+  const source = await readFile(module, 'utf8');
+  const changed = source.replace("  label = '';", "  renamed = '';");
+  const diagnostics = checkTemplateSource({
+    module,
+    className: 'TemplateCheckHost',
+    template: 'fixture.html',
+    source: '<p>{{ label }}</p>',
+    elements: child,
+    files: new Map([[module, changed]]),
+  });
+
+  assert.match(diagnostics.map((diagnostic) => diagnostic.message).join('\n'), /label/u);
 });

@@ -30,6 +30,7 @@ Everything `check` runs, individually:
 | `npm run templates:check` | A binding that does not typecheck against its component class |
 | `npm run lint` | Type-aware ESLint |
 | `npm run test:tools` | The Node-side suites: project model, checkers, benchmark integrity, frozen interfaces, docs |
+| `npm run test:editors` | Editor launcher path resolution |
 | `npm run vendor` | A vendored byte that does not match its recorded hash |
 | `npm run package` | A published bundle that will not build, or still names a specifier only an import map resolves |
 | `npm run verify` | Layering, dependencies, import maps, template ownership, translations, storage access |
@@ -49,3 +50,4 @@ Everything `check` runs, individually:
 | Anything in the render, router, table or startup path | `npm run benchmark:ci` |
 | Tailwind input or a component's example classes | `npm run css`, then re-read the delivery numbers in [the performance envelope](guide/performance.md) |
 | Documentation prose | nothing; generated tables: `npm run docs:write` |
+| `cli/language-server/` or `editors/` | `npm run test:tools && npm run test:editors`; package each editor before release |

@@ -3,7 +3,7 @@
   "version": "0.7.0",
   "type": "module",
   "license": "MIT",
-  "description": "The srl toolchain: application scaffold, dev server, project model, template checker, and the production artifact build and release pipeline",
+  "description": "The srl toolchain: application scaffold, dev server, project model, template checker, language server, and production delivery",
   "keywords": [
     "srl",
     "buildless",
@@ -11,7 +11,8 @@
     "build",
     "static-site",
     "web-components",
-    "toolchain"
+    "toolchain",
+    "language-server"
   ],
   "author": "Bernardo Giordano",
   "homepage": "https://github.com/BernardoGiordano/srl#readme",
@@ -79,6 +80,7 @@
     "package",
     "scaffold",
     "project-model",
+    "language-server",
     "delivery",
     "checks",
     "dev"

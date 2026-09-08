@@ -47,6 +47,7 @@ const COMMANDS = {
   retention: '../delivery/retention.mjs',
   'check templates': '../checks/template-check.mjs',
   'check importmap': '../checks/importmap-check.mjs',
+  'language-server': '../language-server/server.mjs',
 };
 
 const USAGE = `usage: srl <command> [options]
@@ -108,6 +109,8 @@ Release
   retention <release-root> [--apply]
 
 Other
+  language-server             LSP server over stdio, used by VS Code, WebStorm and
+                              any editor with a generic LSP client
   layout [--deploy-pairs | --apps]
                             the mount table and the application list, for a
                             consumer that cannot import

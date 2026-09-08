@@ -20,6 +20,7 @@ owns all of it.
 | [Application startup](guide/startup.md) | `startApplication`, `startHostedApplication`, the hook order |
 | [Defining a component](guide/components.md) | `defineComponent`, `uses`, the rules that are easy to trip over |
 | [The template language](guide/templates.md) | Bindings, directives, DOM security contexts, static checking |
+| [Editor support](guide/editor-support.md) | VS Code, WebStorm, generic LSP clients and every language feature |
 | [Routing](guide/routing.md) | Route configuration, guards, child layouts, dynamic mounting |
 | [Internationalisation](guide/i18n.md) | Locales, plurals, RTL, the collection's own text |
 | [Preferences](guide/preferences.md) | The persistence boundary, storage adapters, themes |

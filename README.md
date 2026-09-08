@@ -29,6 +29,7 @@ example/            the example application: four sections, auth over a real bac
 cli/                the published toolchain, @srljs/cli: the application scaffold, dev
                     server, project model, template checker, artifact build and release.
                     Its own package.json, the same way source/ has one
+editors/            thin VS Code and WebStorm clients over the toolchain's language server
 tools/              this repository's own tools, published nowhere: the vendor refresh,
                     the bundle build, the interface and docs checks, the benchmarks
 ```
@@ -152,6 +153,7 @@ The README is the interface. The manual is `docs/`, and the reasoning is `docs/a
 | [Architecture map](docs/architecture.md) | Glossary, the dependency rule, the seams and what proves each |
 | [Invariants](docs/invariants.md) | What a change may not break, and the check that enforces it |
 | [Guide](docs/guide/) | Startup, components, templates, routing, i18n, preferences, auth, the collection, performance, delivery, testing |
+| [Editor support](docs/guide/editor-support.md) | VS Code, WebStorm and generic LSP setup; diagnostics, completion, navigation and refactoring |
 | [Reference](docs/reference/) | The generated project index, the source layout, the Angular map |
 | [Decision records](docs/adr/) | One decision per file, cited from source by number |
 | [Changelog](CHANGELOG.md) | What changed in the published interface, and what a bump means |

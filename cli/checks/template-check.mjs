@@ -830,6 +830,7 @@ function lineAndColumn(source, at) {
  *   host: ts.CompilerHost,
  *   files: Map<string, { mtime: number, file: ts.SourceFile }>,
  *   generated: Map<string, GeneratedFile>,
+ *   overrides: ReadonlyMap<string, string>,
  *   program: ts.Program | undefined,
  *   error: ts.Diagnostic | undefined,
  * }} CompilerState
@@ -886,20 +887,32 @@ function compilerState() {
     host: ts.createCompilerHost(options),
     files: new Map(),
     generated: new Map(),
+    overrides: new Map(),
     program: undefined,
     error: config.error,
   };
 
   const originalGetSourceFile = state.host.getSourceFile.bind(state.host);
   state.host.fileExists = (file) =>
-    state.generated.has(resolve(file)) || ts.sys.fileExists(file);
-  state.host.readFile = (file) => state.generated.get(resolve(file))?.text ?? ts.sys.readFile(file);
+    state.generated.has(resolve(file)) || state.overrides.has(resolve(file)) || ts.sys.fileExists(file);
+  state.host.readFile = (file) =>
+    state.generated.get(resolve(file))?.text ?? state.overrides.get(resolve(file)) ?? ts.sys.readFile(file);
   state.host.getSourceFile = (file, languageVersion, onError, shouldCreateNewSourceFile) => {
     const path = resolve(file);
     const virtual = state.generated.get(path);
     if (virtual !== undefined) {
       // A shim is different text every call, so it is never cached.
       return ts.createSourceFile(file, virtual.text, languageVersion, true, ts.ScriptKind.TS);
+    }
+
+    const override = state.overrides.get(path);
+    if (override !== undefined) {
+      const kind = path.endsWith('.mjs') || path.endsWith('.js')
+        ? ts.ScriptKind.JS
+        : path.endsWith('.json')
+          ? ts.ScriptKind.JSON
+          : ts.ScriptKind.Unknown;
+      return ts.createSourceFile(file, override, languageVersion, true, kind);
     }
 
     const mtime = ts.sys.getModifiedTime?.(path)?.getTime() ?? 0;
@@ -916,17 +929,26 @@ function compilerState() {
   return state;
 }
 
-/** @param {string[]} shimPaths @param {Map<string, GeneratedFile>} generated */
-function typecheck(shimPaths, generated) {
+/**
+ * @param {string[]} shimPaths
+ * @param {Map<string, GeneratedFile>} generated
+ * @param {ReadonlyMap<string, string>} [overrides]
+ */
+function typecheck(shimPaths, generated, overrides = new Map()) {
   const state = compilerState();
   if (state.error !== undefined) return [state.error];
 
   state.generated = generated;
+  state.overrides = new Map(
+    [...overrides].map(([path, source]) => [resolve(path), source]),
+  );
   const program = ts.createProgram({
     rootNames: [...state.fileNames, ...shimPaths],
     options: state.options,
     host: state.host,
-    oldProgram: state.program,
+    // TypeScript may reuse an old source file without asking the host for it. An open
+    // editor buffer must win over that program even before it reaches disk.
+    oldProgram: state.overrides.size === 0 ? state.program : undefined,
   });
   state.program = program;
 
@@ -990,6 +1012,7 @@ function fromCompiler(diagnostic, at) {
  *   elements?: Map<string, ElementType>,
  *   globals?: Map<string, TemplateGlobal>,
  *   available?: Set<string>,
+ *   files?: ReadonlyMap<string, string>,
  * }} input
  * @returns {Diagnostic[]}
  */
@@ -1009,7 +1032,7 @@ export function checkTemplateSource(input) {
   );
   const generatedFile = builder.build();
   const shim = resolve(dirname(component.module), `.${component.className}.template-check.ts`);
-  const diagnostics = typecheck([shim], new Map([[shim, generatedFile]]));
+  const diagnostics = typecheck([shim], new Map([[shim, generatedFile]]), input.files);
 
   /** @param {number} offset @returns {Where} */
   const at = (offset) => ({

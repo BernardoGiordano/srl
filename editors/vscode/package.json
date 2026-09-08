@@ -1,0 +1,103 @@
+{
+  "name": "srl",
+  "displayName": "srl",
+  "description": "Complete srl template support powered by the project toolchain",
+  "version": "0.7.0",
+  "publisher": "bernardogiordano",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BernardoGiordano/srl.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "keywords": [
+    "srl",
+    "html",
+    "templates",
+    "web components",
+    "language server"
+  ],
+  "main": "./dist/extension.cjs",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onLanguage:html",
+    "workspaceContains:**/node_modules/@srljs/cli/package.json",
+    "workspaceContains:cli/language-server/server.mjs"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "srl.restartLanguageServer",
+        "title": "srl: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "srl",
+      "properties": {
+        "srl.nodePath": {
+          "type": "string",
+          "default": "node",
+          "scope": "machine-overridable",
+          "description": "Node.js 22 or newer executable used to run the project-local srl language server."
+        },
+        "srl.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "scope": "window",
+          "description": "Trace communication with the srl language server."
+        }
+      }
+    },
+    "grammars": [
+      {
+        "scopeName": "source.srl.embedded.html",
+        "path": "./syntaxes/srl-html.tmLanguage.json",
+        "injectTo": [
+          "text.html.basic"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.expression.srl": "javascript"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "html",
+        "path": "./snippets/html.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/javascript.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild extension.cjs --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.cjs",
+    "test": "node --test test/*.test.cjs",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "vscode-languageclient": "10.1.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.2"
+  }
+}

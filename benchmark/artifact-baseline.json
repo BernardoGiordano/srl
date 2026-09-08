@@ -1,0 +1,163 @@
+{
+  "version": 2,
+  "recorded": "2026-08-31T09:28:51.523Z",
+  "mode": "ci",
+  "app": "example:dist",
+  "environment": {
+    "profile": "0219cbfa4fa0fe40",
+    "platform": "Darwin",
+    "release": "25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M3",
+    "cores": 8,
+    "memoryGiB": 16,
+    "node": "v22.14.0",
+    "chrome": "Chrome/151.0.7922.175",
+    "dependencies": {
+      "lit": "3.3.3",
+      "@preact/signals-core": "1.14.4"
+    }
+  },
+  "calibration": {
+    "readings": 8,
+    "overall": {
+      "arithmetic": 23.699999999254942,
+      "layout": 20.700000001117587
+    },
+    "bySuite": {
+      "startup": {
+        "arithmetic": 23.699999999254942,
+        "layout": 20.700000001117587
+      },
+      "delivery": {
+        "arithmetic": 23.699999999254942,
+        "layout": 20.699999999254942
+      },
+      "template": {
+        "arithmetic": 23.700000001117587,
+        "layout": 20.59999999962747
+      },
+      "router": {
+        "arithmetic": 23.699999999254942,
+        "layout": 20.700000001117587
+      },
+      "collection": {
+        "arithmetic": 23.699999999254942,
+        "layout": 21
+      },
+      "memory": {
+        "arithmetic": 23.700000001117587,
+        "layout": 20.800000000745058
+      },
+      "tooling": {
+        "arithmetic": 23.700000001117587,
+        "layout": 20.90000000037253
+      }
+    },
+    "spread": {
+      "arithmetic": 1.0000000000785927,
+      "layout": 1.0194174757465904
+    }
+  },
+  "results": [
+    {
+      "id": "delivery/artifact-size",
+      "suite": "delivery",
+      "title": "Verified production artifact size",
+      "units": {
+        "files": "count",
+        "chainDepth": "depth",
+        "rawBytes": "artifact-bytes",
+        "gzipBytes": "artifact-bytes",
+        "brotliBytes": "artifact-bytes",
+        "javascriptRawBytes": "artifact-bytes",
+        "javascriptGzipBytes": "artifact-bytes",
+        "cssRawBytes": "artifact-bytes",
+        "cssGzipBytes": "artifact-bytes",
+        "templateRawBytes": "artifact-bytes",
+        "templateGzipBytes": "artifact-bytes"
+      },
+      "samples": 1,
+      "warmup": 0,
+      "metrics": {
+        "files": {
+          "median": 129,
+          "p95": 129,
+          "mean": 129,
+          "min": 129,
+          "max": 129
+        },
+        "chainDepth": {
+          "median": 3,
+          "p95": 3,
+          "mean": 3,
+          "min": 3,
+          "max": 3
+        },
+        "rawBytes": {
+          "median": 426916,
+          "p95": 426916,
+          "mean": 426916,
+          "min": 426916,
+          "max": 426916
+        },
+        "gzipBytes": {
+          "median": 154273,
+          "p95": 154273,
+          "mean": 154273,
+          "min": 154273,
+          "max": 154273
+        },
+        "brotliBytes": {
+          "median": 134386,
+          "p95": 134386,
+          "mean": 134386,
+          "min": 134386,
+          "max": 134386
+        },
+        "javascriptRawBytes": {
+          "median": 230338,
+          "p95": 230338,
+          "mean": 230338,
+          "min": 230338,
+          "max": 230338
+        },
+        "javascriptGzipBytes": {
+          "median": 92654,
+          "p95": 92654,
+          "mean": 92654,
+          "min": 92654,
+          "max": 92654
+        },
+        "cssRawBytes": {
+          "median": 47821,
+          "p95": 47821,
+          "mean": 47821,
+          "min": 47821,
+          "max": 47821
+        },
+        "cssGzipBytes": {
+          "median": 9441,
+          "p95": 9441,
+          "mean": 9441,
+          "min": 9441,
+          "max": 9441
+        },
+        "templateRawBytes": {
+          "median": 76586,
+          "p95": 76586,
+          "mean": 76586,
+          "min": 76586,
+          "max": 76586
+        },
+        "templateGzipBytes": {
+          "median": 27323,
+          "p95": 27323,
+          "mean": 27323,
+          "min": 27323,
+          "max": 27323
+        }
+      }
+    }
+  ]
+}

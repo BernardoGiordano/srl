@@ -160,6 +160,8 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
                             mounts, specifier prefixes, and the generated import-map
                             fragment applications paste (`npm run importmap`)
   project-model/            one AST pass over an application, shared by every tool
+  language-server/          LSP over the project model and in-memory template checker;
+                            VS Code and WebStorm are thin launchers for this one process
   diagnostics/              what a check found, as values: one Diagnostic type and the
                             only two things that print one, a terminal report and a
                             JSON document
@@ -218,6 +220,10 @@ tools/                      THIS REPOSITORY'S OWN TOOLS, published nowhere: the 
                             against (ADR-0066)
   benchmark/                the performance gate: workloads, baseline, budgets
   test/                     the Node-side suites for everything above
+
+editors/                    editor clients, published independently from the two npm packages
+  vscode/                   VS Code LSP client, TextMate injection grammar and snippets
+  webstorm/                 WebStorm 2026.1+ adapter over the platform's native LSP client
 
 ```
 

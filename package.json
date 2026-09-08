@@ -39,6 +39,7 @@
     "lint": "eslint .",
     "test": "web-test-runner",
     "test:tools": "node --test tools/test/*.test.mjs cli/test/*.test.mjs",
+    "test:editors": "node --test editors/vscode/test/*.test.cjs",
     "test:artifact": "node --test cli/test/artifact*.test.mjs",
     "test:watch": "web-test-runner --watch",
     "css": "npm run css:example",
@@ -52,7 +53,7 @@
     "docs:adr:write": "node tools/checks/adr-check.mjs --write",
     "benchmark": "node tools/benchmark/run.mjs",
     "benchmark:ci": "node tools/benchmark/run.mjs --ci",
-    "check": "npm run typecheck && npm run templates:check && npm run lint && npm run test:tools && npm run vendor && npm run package && npm run verify && npm run pack:check && npm run docs:check && npm run docs:adr && npm run test"
+    "check": "npm run typecheck && npm run templates:check && npm run lint && npm run test:tools && npm run test:editors && npm run vendor && npm run package && npm run verify && npm run pack:check && npm run docs:check && npm run docs:adr && npm run test"
   },
   "//layout": [
     "  source/             the library, and a package of its own: source/package.json",
@@ -63,7 +64,8 @@
     "                      dependencies and its own tests. Depends on nothing here.",
     "  source/components/  reusable prebundled components built on source/lib.",
     "  cli/                the toolchain, and the second package: dev server, project",
-    "                      model, template checker, artifact build and release. Every",
+    "                      model, template checker, language server, artifact build and",
+    "                      release. Every",
     "                      tool a repository built on srl needs, and nothing that only",
     "                      makes sense inside this one.",
     "  tools/              the tools that only make sense inside this one: the vendor",
@@ -71,6 +73,7 @@
     "                      the benchmark harness. Published nowhere.",
     "  example/            an application. Any root directory with an index.html is",
     "                      one; the tools discover them rather than being told.",
+    "  editors/            thin VS Code and WebStorm clients over cli/language-server.",
     "",
     "A browser sees three mounts on one origin: / for the application, /lib/ for",
     "source/lib, /components/ for source/components. The library declares the two",

@@ -1,0 +1,46 @@
+{
+  "scopeName": "source.srl.embedded.html",
+  "injectionSelector": "L:text.html.basic",
+  "patterns": [
+    {
+      "name": "meta.embedded.expression.srl",
+      "begin": "\\{\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.begin.srl"
+        }
+      },
+      "end": "\\}\\}",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.srl"
+        }
+      },
+      "patterns": [
+        {
+          "include": "source.js"
+        }
+      ]
+    },
+    {
+      "name": "keyword.control.directive.srl",
+      "match": "\\*(?:if|else|for)\\b"
+    },
+    {
+      "captures": {
+        "1": {
+          "name": "entity.other.attribute-name.event.srl"
+        }
+      },
+      "match": "\\(([A-Za-z][\\w:-]*)\\)(?=\\s*=)"
+    },
+    {
+      "captures": {
+        "1": {
+          "name": "variable.other.property.srl"
+        }
+      },
+      "match": "\\[([.?]?[A-Za-z][\\w:-]*)\\](?=\\s*=)"
+    }
+  ]
+}

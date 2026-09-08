@@ -1,0 +1,35 @@
+{
+  "srl interpolation": {
+    "prefix": "srl-interpolation",
+    "body": "{{ ${1:value} }}",
+    "description": "Interpolate a typed srl template expression"
+  },
+  "srl conditional": {
+    "prefix": "srl-if",
+    "body": [
+      "<${1:div} *if=\"${2:condition}\">",
+      "  $0",
+      "</${1:div}>"
+    ],
+    "description": "srl conditional element"
+  },
+  "srl loop": {
+    "prefix": "srl-for",
+    "body": [
+      "<${1:div} *for=\"${2:item} of ${3:items}; key: ${2:item}.${4:id}\">",
+      "  {{ ${2:item}.${5:name} }}",
+      "</${1:div}>"
+    ],
+    "description": "srl keyed loop"
+  },
+  "srl event binding": {
+    "prefix": "srl-event",
+    "body": "(${1:click})=\"${2:handler}($event)\"",
+    "description": "srl typed DOM event binding"
+  },
+  "srl property binding": {
+    "prefix": "srl-property",
+    "body": "[.${1:property}]=\"${2:value}\"",
+    "description": "srl custom-element property binding"
+  }
+}

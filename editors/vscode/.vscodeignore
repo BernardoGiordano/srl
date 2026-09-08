@@ -1,0 +1,7 @@
+.vscode/**
+test/**
+*.vsix
+package-lock.json
+extension.cjs
+server-path.cjs
+node_modules/**
