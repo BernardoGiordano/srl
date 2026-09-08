@@ -76,6 +76,7 @@ the reason is recorded in the module that owns it.
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
 | What a correct srl application is made of | `cli/scaffold/application.mjs` — the nine files `srl new` writes, and the fixture the packaged-install probe drives |
 | What static discovery knows about the project | `cli/project-model/` |
+| How public inputs, internal state, inherited declarations, events and projection names become one Element | `cli/project-model/parse.mjs`, resolved by `cli/project-model/index.mjs` |
 | How an editor consumes the project model and template checker | `cli/language-server/`; editor launchers live under `editors/` |
 | How an incomplete editor template becomes context, scope, typed members and edit ranges | `cli/language-server/semantics.mjs` |
 | A dependency or layering rule | `tools/checks/verify-deps.mjs` |

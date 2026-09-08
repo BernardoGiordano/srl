@@ -9,26 +9,26 @@ Everything the library and the shared collection define:
 
 <!-- generated:elements -->
 
-| Tag | Class | Module | Template | Uses | Reactive properties | Observed attributes |
-|---|---|---|---|---|---|---|
-| `ui-app-shell` | `UiAppShell` | `source/components/shell/ui-app-shell.js` | `source/components/shell/ui-app-shell.html` | — | 2 | 2 |
-| `ui-avatar` | `UiAvatar` | `source/components/shell/ui-avatar.js` | `source/components/shell/ui-avatar.html` | — | 6 | 5 |
-| `ui-breadcrumb` | `UiBreadcrumb` | `source/components/shell/ui-breadcrumb.js` | `source/components/shell/ui-breadcrumb.html` | — | 8 | 7 |
-| `ui-combobox` | `UiCombobox` | `source/components/inputs/ui-combobox.js` | `source/components/inputs/ui-combobox.html` | — | 32 | 17 |
-| `ui-date-range` | `UiDateRange` | `source/components/inputs/ui-date-range.js` | `source/components/inputs/ui-date-range.html` | — | 8 | 5 |
-| `ui-dialog` | `UiDialog` | `source/components/overlays/ui-dialog.js` | `source/components/overlays/ui-dialog.html` | — | 5 | 5 |
-| `ui-dynamic-filter` | `UiDynamicFilter` | `source/components/data/ui-dynamic-filter.js` | `source/components/data/ui-dynamic-filter.html` | `ui-combobox`, `ui-date-range` | 12 | 8 |
-| `ui-field` | `UiField` | `source/components/inputs/ui-field.js` | `source/components/inputs/ui-field.html` | — | 10 | 8 |
-| `ui-menu` | `UiMenu` | `source/components/shell/ui-menu.js` | `source/components/shell/ui-menu.html` | — | 5 | 5 |
-| `ui-sidebar` | `UiSidebar` | `source/components/shell/ui-sidebar.js` | `source/components/shell/ui-sidebar.html` | — | 2 | 2 |
-| `ui-sidebar-group` | `UiSidebarGroup` | `source/components/shell/ui-sidebar-group.js` | `source/components/shell/ui-sidebar-group.html` | — | 5 | 5 |
-| `ui-sidebar-item` | `UiSidebarItem` | `source/components/shell/ui-sidebar-item.js` | `source/components/shell/ui-sidebar-item.html` | — | 4 | 4 |
-| `ui-sidebar-toggle` | `UiSidebarToggle` | `source/components/shell/ui-sidebar-toggle.js` | `source/components/shell/ui-sidebar-toggle.html` | — | 3 | 3 |
-| `ui-table` | `UiTable` | `source/components/data/ui-table.js` | `source/components/data/ui-table.html` | `ui-table-column` | 23 | 19 |
-| `ui-table-column` | `UiTableColumn` | `source/components/data/ui-table-column.js` | — | — | 0 | 15 |
-| `ui-topbar` | `UiTopbar` | `source/components/shell/ui-topbar.js` | `source/components/shell/ui-topbar.html` | — | 1 | 1 |
-| `x-outlet` | `ComponentOutlet` | `source/lib/core/elements/outlet.js` | — | — | 0 | 0 |
-| `x-route-outlet` | `RouteOutlet` | `source/lib/core/navigation/router.js` | — | — | 0 | 0 |
+| Tag | Class | Module | Template | Uses | Public inputs | Internal state | Observed attributes | Events | Projection |
+|---|---|---|---|---|---|---|---|---|---|
+| `ui-app-shell` | `UiAppShell` | `source/components/shell/ui-app-shell.js` | `source/components/shell/ui-app-shell.html` | — | 2 | 0 | 2 | 0 | 2 |
+| `ui-avatar` | `UiAvatar` | `source/components/shell/ui-avatar.js` | `source/components/shell/ui-avatar.html` | — | 5 | 1 | 5 | 0 | 0 |
+| `ui-breadcrumb` | `UiBreadcrumb` | `source/components/shell/ui-breadcrumb.js` | `source/components/shell/ui-breadcrumb.html` | — | 8 | 0 | 7 | 0 | 0 |
+| `ui-combobox` | `UiCombobox` | `source/components/inputs/ui-combobox.js` | `source/components/inputs/ui-combobox.html` | — | 28 | 4 | 17 | 7 | 0 |
+| `ui-date-range` | `UiDateRange` | `source/components/inputs/ui-date-range.js` | `source/components/inputs/ui-date-range.html` | — | 5 | 3 | 5 | 2 | 0 |
+| `ui-dialog` | `UiDialog` | `source/components/overlays/ui-dialog.js` | `source/components/overlays/ui-dialog.html` | — | 5 | 0 | 5 | 1 | 1 |
+| `ui-dynamic-filter` | `UiDynamicFilter` | `source/components/data/ui-dynamic-filter.js` | `source/components/data/ui-dynamic-filter.html` | `ui-combobox`, `ui-date-range` | 9 | 3 | 8 | 2 | 0 |
+| `ui-field` | `UiField` | `source/components/inputs/ui-field.js` | `source/components/inputs/ui-field.html` | — | 10 | 0 | 8 | 0 | 1 |
+| `ui-menu` | `UiMenu` | `source/components/shell/ui-menu.js` | `source/components/shell/ui-menu.html` | — | 5 | 0 | 5 | 0 | 2 |
+| `ui-sidebar` | `UiSidebar` | `source/components/shell/ui-sidebar.js` | `source/components/shell/ui-sidebar.html` | — | 2 | 0 | 2 | 0 | 1 |
+| `ui-sidebar-group` | `UiSidebarGroup` | `source/components/shell/ui-sidebar-group.js` | `source/components/shell/ui-sidebar-group.html` | — | 5 | 0 | 5 | 0 | 2 |
+| `ui-sidebar-item` | `UiSidebarItem` | `source/components/shell/ui-sidebar-item.js` | `source/components/shell/ui-sidebar-item.html` | — | 4 | 0 | 4 | 0 | 1 |
+| `ui-sidebar-toggle` | `UiSidebarToggle` | `source/components/shell/ui-sidebar-toggle.js` | `source/components/shell/ui-sidebar-toggle.html` | — | 3 | 0 | 3 | 0 | 1 |
+| `ui-table` | `UiTable` | `source/components/data/ui-table.js` | `source/components/data/ui-table.html` | `ui-table-column` | 23 | 0 | 19 | 9 | 1 |
+| `ui-table-column` | `UiTableColumn` | `source/components/data/ui-table-column.js` | — | — | 0 | 0 | 15 | 1 | 0 |
+| `ui-topbar` | `UiTopbar` | `source/components/shell/ui-topbar.js` | `source/components/shell/ui-topbar.html` | — | 1 | 0 | 1 | 0 | 1 |
+| `x-outlet` | `ComponentOutlet` | `source/lib/core/elements/outlet.js` | — | — | 0 | 0 | 0 | 1 | 0 |
+| `x-route-outlet` | `RouteOutlet` | `source/lib/core/navigation/router.js` | — | — | 0 | 0 | 0 | 0 | 0 |
 
 <!-- /generated:elements -->
 

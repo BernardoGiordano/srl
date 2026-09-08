@@ -123,6 +123,33 @@ export class TemplateSemantics {
     const partial = this.#partialTagAt(offset);
     if (partial !== undefined) return { kind: /** @type {const} */ ('tag'), ...partial };
 
+    for (const element of this.#elements) {
+      const valued = element.attributes.find(
+        (attribute) =>
+          attribute.valueStart <= offset &&
+          offset <= attribute.valueEnd &&
+          attribute.valueStart !== attribute.nameEnd,
+      );
+      if (valued === undefined) continue;
+      const parent = innermost(
+        this.#elements.filter(
+          (candidate) =>
+            candidate !== element &&
+            candidate.at < element.at &&
+            element.end <= candidate.end,
+        ),
+      );
+      return {
+        kind: /** @type {const} */ ('attribute-value'),
+        tag: element.tag,
+        name: valued.name,
+        value: valued.value,
+        start: valued.valueStart,
+        end: valued.valueEnd,
+        parentTag: parent?.tag,
+      };
+    }
+
     const element = innermost(
       this.#elements.filter(
         (candidate) => candidate.at <= offset && offset <= candidate.openEnd,
@@ -642,7 +669,9 @@ function checkerElements(model) {
         className: record.className,
         exported: record.exported,
         properties: record.properties,
+        state: record.state,
         observedAttributes: record.observedAttributes,
+        events: record.events,
       },
     ]),
   );

@@ -200,7 +200,9 @@ reaches the DOM whatever the element does with it, and an element that observes 
 that name renders nothing and says nothing. So the checker asks the project model what
 each custom element observes — `static properties` mapped through Lit's rule, or
 `static observedAttributes` for an element that is configuration rather than a component —
-and reports an attribute nothing reacts to:
+and reports an attribute nothing reacts to. The same model resolves inherited static
+fields and getters, keeps `state: true` private to the owning element, and supplies custom
+event detail and `<x-content>` projection names to editor assistance:
 
 ```text
 employees-page.html:22:7 - error: <ui-table> does not observe the attribute pagesize.
@@ -212,8 +214,9 @@ employees-page.html:24:7 - error: <ui-table> declares rows as a property with no
 Three deliberate limits. Native elements are unchecked, because nothing here holds
 `<input>`'s attribute set. Global, `aria-*` and `data-*` attributes belong to every
 element. And an element whose surface no static tool can read — a class built inside a
-function, handed to `defineComponent` by a loader — is skipped rather than guessed at:
-the model reports that surface as unknown, and unknown is not empty.
+function, handed to `defineComponent` by a loader, or property options assembled at run
+time — is skipped rather than guessed at. The model retains declarations it did read,
+marks the surface incomplete, and never treats unknown as empty.
 
 Two frictions of JSDoc-based typing worth knowing: a JSDoc cast satisfies tsc but not
 typescript-eslint, because it leaves no assertion node in the ESLint AST — `Response

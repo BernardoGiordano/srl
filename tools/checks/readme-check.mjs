@@ -99,17 +99,20 @@ async function sections() {
   if (reference === undefined) throw new Error('No application found to read.');
 
   const elements = table(
-    ['Tag', 'Class', 'Module', 'Template', 'Uses', 'Reactive properties', 'Observed attributes'],
+    ['Tag', 'Class', 'Module', 'Template', 'Uses', 'Public inputs', 'Internal state', 'Observed attributes', 'Events', 'Projection'],
     publishedElements(reference).map((record) => [
       `\`${record.tag}\``,
       `\`${record.className}\``,
       code(repoPath(record.module)),
       code(record.template === null ? null : repoPath(record.template)),
       record.uses.length === 0 ? '—' : record.uses.map((use) => `\`${use.tag ?? use.className}\``).join(', '),
-      String(record.properties.length),
+      record.surfaceKnown ? String(record.properties.length) : `${String(record.properties.length)}+`,
+      record.surfaceKnown ? String(record.state.length) : `${String(record.state.length)}+`,
       // Not the same count: a property may declare `attribute: false`, and an element that
       // is configuration rather than a component declares attributes and no properties.
       record.observedAttributes === null ? '?' : String(record.observedAttributes.length),
+      record.eventsKnown ? String(record.events.length) : `${String(record.events.length)}+`,
+      record.slots === null ? '?' : String(record.slots.length),
     ]),
   );
 

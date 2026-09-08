@@ -35,4 +35,7 @@ export class TemplateCheckHost extends HTMLElement {
 export class TemplateCheckChild extends HTMLElement {
   /** @type {Array<{ id: number, name: string }>} */
   items = [];
+
+  /** Internal implementation state, never caller input. */
+  internal = [];
 }

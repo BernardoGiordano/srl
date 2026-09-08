@@ -1,14 +1,26 @@
 // Every way an element declares what markup may write on it, stated once.
 
+import { SurfaceBase } from './surface-base.mjs';
+
 // Lit's way: properties, each mapping to an attribute by its own rule.
-export class Surface extends HTMLElement {
-  static properties = {
-    label: { type: String },
-    emptyLabel: { type: String, attribute: 'empty-label' },
-    collapsed: { type: Boolean, reflect: true, attribute: 'data-collapsed' },
-    rows: { attribute: false },
-    internal: { state: true },
-  };
+export class Surface extends SurfaceBase {
+  static get properties() {
+    return {
+      ...super.properties,
+      label: { type: String },
+      emptyLabel: { type: String, attribute: 'empty-label' },
+      collapsed: { type: Boolean, reflect: true, attribute: 'data-collapsed' },
+      rows: { attribute: false },
+      internal: { state: true },
+    };
+  }
+
+  /** @type {{ code: string, label: string }} */
+  result = { code: '', label: '' };
+
+  announce() {
+    this.dispatchEvent(new CustomEvent('surface-change', { detail: this.result }));
+  }
 }
 
 await defineComponent({

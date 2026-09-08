@@ -159,11 +159,20 @@ void test('two applications get two models, from their own import maps', async (
   assert.ok(!b.elements.has('fx-host'), "app-b does not contain app-a's elements");
 });
 
-void test('public reactive properties and template globals come from the declarations', async () => {
+void test('public inputs, internal state and template globals come from declarations', async () => {
   const model = await fixtureProject(APP_A);
 
   assert.deepEqual(model.elements.get('fx-child')?.properties, ['label', 'rows']);
   assert.deepEqual(model.elements.get('fx-host')?.properties, []);
+  assert.deepEqual(model.elements.get('fx-surface')?.properties, [
+    'collapsed',
+    'emptyLabel',
+    'inheritedLabel',
+    'label',
+    'rows',
+  ]);
+  assert.deepEqual(model.elements.get('fx-surface')?.state, ['inheritedState', 'internal']);
+  assert.ok(!model.elements.get('fx-surface')?.properties.includes('internal'));
 
   assert.deepEqual(
     [...model.globals.entries()].map(([name, global]) => [name, global.exportName]),
@@ -183,6 +192,7 @@ void test('what an element observes is read from either declaration, or reported
   assert.deepEqual(model.elements.get('fx-surface')?.observedAttributes, [
     'data-collapsed',
     'empty-label',
+    'inherited-label',
     'label',
   ]);
   assert.deepEqual(model.elements.get('fx-child')?.observedAttributes, ['label']);
@@ -195,9 +205,34 @@ void test('what an element observes is read from either declaration, or reported
   // difference decides whether a tool may call an attribute in markup dead.
   assert.deepEqual(model.elements.get('fx-headless')?.observedAttributes, []);
   assert.equal(model.elements.get('fx-opaque')?.observedAttributes, null);
+  assert.equal(model.elements.get('fx-opaque')?.surfaceKnown, false);
+  assert.deepEqual(model.elements.get('fx-opaque')?.properties, []);
 
-  assert.match(describeElement(model, 'fx-surface'), /attributes data-collapsed, empty-label, label/u);
+  assert.match(
+    describeElement(model, 'fx-surface'),
+    /attributes data-collapsed, empty-label, inherited-label, label/u,
+  );
   assert.match(describeElement(model, 'fx-opaque'), /attributes unknown/u);
+});
+
+void test('inheritance retains declarations, events, projection names and mjs elements', async () => {
+  const model = await fixtureProject(APP_A);
+  const surface = model.elements.get('fx-surface');
+  const inherited = surface?.propertyDeclarations.find(
+    (property) => property.name === 'inheritedLabel',
+  );
+
+  assert.equal(inherited?.declaration.className, 'SurfaceBase');
+  assert.match(inherited?.declaration.module ?? '', /surface-base\.mjs$/u);
+  assert.equal(surface?.surfaceKnown, true);
+  assert.deepEqual(surface?.events.map((event) => event.name), ['base-change', 'surface-change']);
+  assert.deepEqual(surface?.events.find((event) => event.name === 'base-change')?.detail, {
+    kind: 'property',
+    name: 'selection',
+  });
+  assert.equal(surface?.eventsKnown, true);
+  assert.deepEqual(model.elements.get('fx-child')?.slots, ['', 'header']);
+  assert.match(model.elements.get('fx-module')?.module ?? '', /module-element\.mjs$/u);
 });
 
 void test('the JSON projection is stable, relative and free of absolute paths', async () => {
@@ -226,7 +261,7 @@ void test('describing one element answers what a caller has to know', async () =
   assert.match(description, /<fx-child>\s+Child/u);
   assert.match(description, /src\/child\.js/u);
   assert.match(description, /src\/child\.html/u);
-  assert.match(description, /properties label, rows/u);
+  assert.match(description, /inputs\s+label, rows/u);
   assert.match(description, /used by\s+<fx-host> <fx-spelled>/u);
   assert.match(describeElement(model, 'fx-gone'), /MISSING/u);
   assert.match(describeElement(model, 'no-such-element'), /No element <no-such-element>/u);

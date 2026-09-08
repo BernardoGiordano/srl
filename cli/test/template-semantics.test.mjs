@@ -48,6 +48,27 @@ void test('one template semantic snapshot drives completion context', async (con
     assert.ok(!event.some((item) => item.label === 'rows'));
   });
 
+  await context.test('offers public inputs and typed custom events from Element metadata', async () => {
+    const avatar = await complete('<ui-avatar ');
+    const avatarLabels = new Set(avatar.map((item) => item.label));
+    assert.ok(avatarLabels.has('[.src]'));
+    assert.ok(!avatarLabels.has('[.broken]'), 'internal state leaked as caller input');
+
+    const combobox = await complete('<ui-combobox ');
+    assert.ok(combobox.some((item) => item.label === '(selection-change)'));
+
+    const detail = await complete('<ui-combobox (selection-change)="$event.detail.');
+    assert.ok(detail.some((item) => item.label === 'length'));
+    assert.ok(detail.some((item) => item.label === 'map'));
+  });
+
+  await context.test('completes projection names declared by the parent template', async () => {
+    const source = '<app-card><span slot=""></span></app-card>';
+    const at = source.indexOf('slot="') + 'slot="'.length;
+    const slots = await complete(source, at);
+    assert.deepEqual(slots.map((item) => item.label), ['actions', 'toolbar']);
+  });
+
   await context.test('invalidates typed members when an open host changes', async () => {
     const original = await readFile(host, 'utf8');
     const changed = original.replace('rows = this.#employees.value;', 'rows = 1;');

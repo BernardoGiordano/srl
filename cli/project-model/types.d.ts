@@ -33,6 +33,42 @@ export interface UsesEntry {
   tag: string | null;
 }
 
+/** One source declaration retained after Element semantics are resolved. */
+export interface ElementDeclaration {
+  /** Absolute path of the module containing the declaration. */
+  module: string;
+  className: string;
+  /** 1-based source position of the declared name. */
+  line: number;
+  column: number;
+}
+
+/** One Lit reactive declaration, including meaning inherited by an element. */
+export interface ElementProperty {
+  name: string;
+  /** Input is caller-authored; state belongs only to the declaring element. */
+  kind: 'input' | 'state' | 'unknown';
+  /** Observed attribute name, false when disabled, null when statically unknown. */
+  attribute: string | false | null;
+  declaration: ElementDeclaration;
+}
+
+/** Detail shape recoverable without inventing a second JavaScript type system. */
+export type ElementEventDetail =
+  | { kind: 'none' }
+  | { kind: 'property'; name: string }
+  | { kind: 'object'; properties: string[] }
+  | { kind: 'type'; text: string }
+  | { kind: 'unknown' };
+
+/** One event an element dispatches itself. Native DOM events remain platform facts. */
+export interface ElementEvent {
+  name: string;
+  event: 'Event' | 'CustomEvent';
+  detail: ElementEventDetail;
+  declaration: ElementDeclaration;
+}
+
 /** One custom element, as the project statically declares it. */
 export interface ElementRecord {
   tag: string;
@@ -54,8 +90,14 @@ export interface ElementRecord {
   uses: UsesEntry[];
   /** Tags this element's markup may name, from `uses` and its own tag. Sorted. */
   usesTags: string[];
-  /** Public reactive property names from `static properties`. Sorted. */
+  /** Known public input names from resolved `static properties`. Sorted. */
   properties: string[];
+  /** Known internal reactive state names. Sorted. */
+  state: string[];
+  /** Resolved declarations, inherited ones included and subclass overrides applied. */
+  propertyDeclarations: ElementProperty[];
+  /** False when inheritance or a declaration contains meaning static analysis cannot read. */
+  surfaceKnown: boolean;
   /**
    * Attribute names an instance reacts to, from `static properties` and
    * `static observedAttributes`. Sorted.
@@ -65,6 +107,12 @@ export interface ElementRecord {
    * attribute written in markup dead.
    */
   observedAttributes: string[] | null;
+  /** Known dispatched events, inherited ones included. */
+  events: ElementEvent[];
+  /** False when at least one dispatched event name is computed. */
+  eventsKnown: boolean;
+  /** Projection buckets from `<x-content>`. Empty string is default; null means dynamic. */
+  slots: string[] | null;
 }
 
 /** A template file on disk and who claims it. */
@@ -174,7 +222,29 @@ export interface ProjectIndex {
     template: string | null;
     uses: string[];
     properties: string[];
+    state: string[];
+    surfaceKnown: boolean;
+    propertyDeclarations: Array<{
+      name: string;
+      kind: 'input' | 'state' | 'unknown';
+      attribute: string | false | null;
+      module: string;
+      className: string;
+      line: number;
+      column: number;
+    }>;
     observedAttributes: string[] | null;
+    events: Array<{
+      name: string;
+      event: 'Event' | 'CustomEvent';
+      detail: ElementEventDetail;
+      module: string;
+      className: string;
+      line: number;
+      column: number;
+    }>;
+    eventsKnown: boolean;
+    slots: string[] | null;
   }>;
   globals: Array<{ name: string; module: string; exportName: string }>;
   templates: Array<{ path: string; url: string | null; claimedBy: string | null }>;

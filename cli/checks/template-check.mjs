@@ -96,7 +96,13 @@ const GLOBAL_ATTRIBUTES = new Set(
  *   className: string,
  *   exported: boolean,
  *   properties?: readonly string[],
+ *   state?: readonly string[],
  *   observedAttributes?: readonly string[] | null,
+ *   events?: ReadonlyArray<{
+ *     name: string,
+ *     event: 'Event' | 'CustomEvent',
+ *     detail: import('../project-model/types.js').ElementEventDetail,
+ *   }>,
  * }} ElementType */
 /** @typedef {{ module: string, className: string, template: string, available: Set<string> }} Component */
 /** @typedef {{ name: string, dir: string }} Application */
@@ -307,7 +313,9 @@ async function discover(app) {
       className: record.className,
       exported: record.exported,
       properties: record.properties,
+      state: record.state,
       observedAttributes: record.observedAttributes,
+      events: record.events,
     });
   }
 
@@ -367,7 +375,7 @@ class ShimBuilder {
     output.write('declare function __urlSetSink(value: string | import("@core/template/types.js").TrustedUrl | null | undefined): void;\n');
     output.write('declare function __resourceUrlSink(value: import("@core/template/types.js").TrustedResourceUrl | null | undefined): void;\n');
     output.write('type __Event<N extends string> = N extends keyof HTMLElementEventMap ? HTMLElementEventMap[N] : Event;\n');
-    output.write('type __TemplateEvent<E extends EventTarget, N extends string> = __Event<N> & { readonly target: E; readonly currentTarget: E };\n');
+    output.write('type __TemplateEvent<E extends EventTarget, T extends Event> = T & { readonly target: E; readonly currentTarget: E };\n');
     output.write('export {};\n');
 
     for (const [name, global] of this.globals) {
@@ -527,7 +535,7 @@ class ShimBuilder {
         const elementType = this.elementType(node.tag);
         this.line(
           indent,
-          `const ${eventId} = null as unknown as __TemplateEvent<${elementType}, ${JSON.stringify(event)}>;\n`,
+          `const ${eventId} = null as unknown as __TemplateEvent<${elementType}, ${this.eventType(node.tag, event)}>;\n`,
         );
         const child = new Map(scope);
         child.set('$event', eventId);
@@ -554,6 +562,14 @@ class ShimBuilder {
         } else if (classified.kind === 'property') {
           if (refusedProperty(name) !== undefined) {
             this.problem(attr.at, `${this.component.template}: property ${name} is forbidden`);
+            continue;
+          }
+          if (this.elements.get(node.tag)?.state?.includes(name) === true) {
+            this.problem(
+              attr.at,
+              `${this.component.template}: <${node.tag}> declares ${name} as internal reactive ` +
+                'state, not a public input.',
+            );
             continue;
           }
           const context = securityContextFor(node.tag, name);
@@ -769,6 +785,26 @@ class ShimBuilder {
     if (SVG_ELEMENTS.has(tag)) return `SVGElementTagNameMap[${JSON.stringify(tag)}]`;
     if (MATHML_ELEMENTS.has(tag)) return 'MathMLElement';
     return 'HTMLElement';
+  }
+
+  /** Custom event detail comes from the same resolved Element model as completion. */
+  eventType(/** @type {string} */ tag, /** @type {string} */ name) {
+    const element = this.elements.get(tag);
+    const event = element?.events?.find((candidate) => candidate.name === name);
+    if (event === undefined) return `__Event<${JSON.stringify(name)}>`;
+    if (event.event === 'Event') return 'Event';
+
+    let detail = 'unknown';
+    if (event.detail.kind === 'none') detail = 'null';
+    else if (event.detail.kind === 'type') detail = event.detail.text;
+    else if (event.detail.kind === 'object') {
+      detail = `{ ${event.detail.properties.map((property) => `readonly ${JSON.stringify(property)}: unknown`).join('; ')} }`;
+    } else if (event.detail.kind === 'property' && element?.exported === true) {
+      detail =
+        `InstanceType<typeof import(${JSON.stringify(moduleSpecifier(this.component.module, element.module))})` +
+        `[${JSON.stringify(element.className)}]>[${JSON.stringify(event.detail.name)}]`;
+    }
+    return `CustomEvent<${detail}>`;
   }
 
   /** @param {number} at @param {string} message */
@@ -1098,7 +1134,7 @@ export function templateExpressionMembers(input) {
   if (input.event !== undefined) {
     const eventId = builder.id('completion_event');
     body.push(
-      `  const ${eventId} = null as unknown as __TemplateEvent<${builder.elementType(input.event.tag)}, ${JSON.stringify(input.event.name)}>;\n`,
+      `  const ${eventId} = null as unknown as __TemplateEvent<${builder.elementType(input.event.tag)}, ${builder.eventType(input.event.tag, input.event.name)}>;\n`,
     );
     scope.set('$event', eventId);
   }
@@ -1118,7 +1154,7 @@ export function templateExpressionMembers(input) {
   output.write('type __Item<T> = __Unwrap<T> extends Iterable<infer I> ? I : never;\n');
   output.write('declare function __unwrap<T>(value: T): __Unwrap<T>;\n');
   output.write('type __Event<N extends string> = N extends keyof HTMLElementEventMap ? HTMLElementEventMap[N] : Event;\n');
-  output.write('type __TemplateEvent<E extends EventTarget, N extends string> = __Event<N> & { readonly target: E; readonly currentTarget: E };\n');
+  output.write('type __TemplateEvent<E extends EventTarget, T extends Event> = T & { readonly target: E; readonly currentTarget: E };\n');
   output.write('export {};\n');
   for (const [name, global] of builder.globals) {
     output.write(

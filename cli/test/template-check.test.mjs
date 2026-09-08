@@ -13,7 +13,15 @@ const child = new Map([
       className: 'TemplateCheckChild',
       exported: true,
       properties: ['items'],
+      state: ['internal'],
       observedAttributes: ['empty-label', 'label'],
+      events: [
+        {
+          name: 'items-change',
+          event: /** @type {const} */ ('CustomEvent'),
+          detail: { kind: /** @type {const} */ ('property'), name: 'items' },
+        },
+      ],
     },
   ],
 ]);
@@ -70,6 +78,10 @@ void test('checks boolean and custom-element property assignments', () => {
   assert.match(check('<button [?disabled]="label"></button>').join('\n'), /boolean/u);
   assert.match(check('<test-child [.items]="label"></test-child>').join('\n'), /not assignable/u);
   assert.match(check('<test-child [.missing]="rows"></test-child>').join('\n'), /missing/u);
+  assert.match(
+    check('<test-child [.internal]="rows"></test-child>').join('\n'),
+    /internal reactive state, not a public input/u,
+  );
 });
 
 void test('checks security-sensitive property contexts and forbidden sinks', () => {
@@ -88,6 +100,17 @@ void test('checks security-sensitive property contexts and forbidden sinks', () 
 
 void test('types native event targets', () => {
   assert.match(check('<input (change)="choose($event.target.value)">').join('\n'), /string/u);
+});
+
+void test('types custom event detail from Element metadata', () => {
+  assert.deepEqual(
+    check('<test-child (items-change)="choose($event.detail.length)"></test-child>'),
+    [],
+  );
+  assert.match(
+    check('<test-child (items-change)="choose($event.detail.missing)"></test-child>').join('\n'),
+    /missing/u,
+  );
 });
 
 void test('refuses what the runtime refuses, from the shared dialect', () => {

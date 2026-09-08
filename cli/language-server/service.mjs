@@ -322,6 +322,9 @@ export class SrlLanguageService {
           : await classSymbols(component.module, component.className, this.documents);
       return expressionCompletions(symbols, model, context.locals);
     }
+    if (context.kind === 'attribute-value' && context.name === 'slot') {
+      return projectionCompletions(model.elements.get(context.parentTag ?? ''));
+    }
     if (context.kind === 'opening-tag' || context.kind === 'attribute') {
       return attributeCompletions(context.tag, model.elements.get(context.tag));
     }
@@ -345,6 +348,15 @@ export class SrlLanguageService {
       const record = model.elements.get(context.tag);
       const hover = attributeHover(context.name, record);
       if (hover !== null) return { contents: { kind: 'markdown', value: hover } };
+    }
+
+    if (context.kind === 'attribute-value' && context.name === 'slot') {
+      const parent = model.elements.get(context.parentTag ?? '');
+      if (parent?.slots !== undefined && parent.slots !== null) {
+        const names = parent.slots.filter((name) => name !== '');
+        const text = names.length === 0 ? 'default projection' : `projection: ${names.join(', ')}`;
+        return { contents: { kind: 'markdown', value: `**\`slot\`** — ${text} of \`<${parent.tag}>\`.` } };
+      }
     }
 
     if (context.kind !== 'expression' || component === undefined) return null;
@@ -378,9 +390,8 @@ export class SrlLanguageService {
       const record = model.elements.get(context.tag);
       const name = bindingName(context.name);
       if (record !== undefined && name !== null && record.properties.includes(name)) {
-        const symbols = await classSymbols(record.module, record.className, this.documents);
-        const symbol = symbols.find((candidate) => candidate.name === name);
-        if (symbol !== undefined) return [symbol.location];
+        const property = record.propertyDeclarations.find((candidate) => candidate.name === name);
+        if (property !== undefined) return [declarationLocation(property.declaration, name)];
       }
     }
 
@@ -594,7 +605,9 @@ function checkerElements(model) {
         className: record.className,
         exported: record.exported,
         properties: record.properties,
+        state: record.state,
         observedAttributes: record.observedAttributes,
+        events: record.events,
       },
     ]),
   );
@@ -627,11 +640,13 @@ function attributeCompletions(tag, record) {
     kind: 14,
     insertTextFormat: 2,
   }));
-  for (const event of COMMON_EVENTS) {
+  const customEvents = new Map(record?.events.map((event) => [event.name, event]) ?? []);
+  for (const event of new Set([...COMMON_EVENTS, ...customEvents.keys()])) {
+    const custom = customEvents.get(event);
     found.push({
       label: `(${event})`,
       kind: 23,
-      detail: 'srl event binding',
+      detail: custom === undefined ? 'srl event binding' : `${record?.className ?? tag} event`,
       insertText: `(${event})="$1"`,
       insertTextFormat: 2,
     });
@@ -680,6 +695,21 @@ function attributeCompletions(tag, record) {
   return found;
 }
 
+/** Named projection buckets accepted by the parent element.
+ * @param {ElementRecord | undefined} record @returns {Array<Record<string, unknown>>}
+ */
+function projectionCompletions(record) {
+  if (record?.slots === undefined || record.slots === null) return [];
+  return record.slots
+    .filter((name) => name !== '')
+    .map((name) => ({
+      label: name,
+      kind: 12,
+      detail: `${record.className} projection`,
+      insertText: name,
+    }));
+}
+
 /** @param {Awaited<ReturnType<typeof classSymbols>>} symbols @param {ProjectModel} model @param {string[]} locals */
 function expressionCompletions(symbols, model, locals) {
   /** @type {Array<Record<string, unknown>>} */
@@ -717,6 +747,15 @@ function elementMarkdown(record) {
   if (record.properties.length > 0) lines.push('', `Properties: ${record.properties.map((name) => `\`${name}\``).join(', ')}`);
   if (record.observedAttributes !== null && record.observedAttributes.length > 0) {
     lines.push('', `Attributes: ${record.observedAttributes.map((name) => `\`${name}\``).join(', ')}`);
+  }
+  if (record.events.length > 0) {
+    lines.push('', `Events: ${record.events.map((event) => `\`${event.name}\``).join(', ')}`);
+  }
+  if (record.slots !== null && record.slots.length > 0) {
+    lines.push(
+      '',
+      `Projection: ${record.slots.map((name) => name === '' ? '`default`' : `\`${name}\``).join(', ')}`,
+    );
   }
   return lines.join('\n');
 }
@@ -840,6 +879,18 @@ async function moduleLocation(module, name, documents) {
   if (own !== undefined) return own.location;
   const uri = toUri(module);
   return { uri, range: rangeAt(documents.get(uri)?.text ?? '', 0, 0) };
+}
+
+/** @param {import('../project-model/types.js').ElementDeclaration} declaration @param {string} name */
+function declarationLocation(declaration, name) {
+  const start = { line: declaration.line - 1, character: declaration.column - 1 };
+  return {
+    uri: toUri(declaration.module),
+    range: {
+      start,
+      end: { line: start.line, character: start.character + name.length },
+    },
+  };
 }
 
 /**

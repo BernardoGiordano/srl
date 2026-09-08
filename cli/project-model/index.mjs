@@ -5,16 +5,17 @@
  *
  * WHAT IT OWNS
  *
- * Which custom elements exist, the class and module that declare each one, the markup
- * each renders, which tags each may name, which templates exist and which definition
+ * Which custom elements exist, the class and module that declare each one, public inputs
+ * and internal state across inheritance, events they dispatch, projection buckets their
+ * markup renders, which tags each may name, which templates exist and which definition
  * claims them, which names templates may use without an import, and every declaration
- * static analysis cannot read. Applications and their mounts come from cli/layout.mjs,
- * which stays the owner of physical layout; this module consumes it rather than
- * re-deriving it.
+ * static analysis cannot read. Applications and their mounts come from cli/layout.mjs;
+ * this module consumes them rather than re-deriving physical layout.
  *
  * WHY IT EXISTS
  *
- * Three tools answered these questions separately and agreed only by luck. ADR-0038.
+ * Three tools answered these questions separately and agreed only by luck. ADR-0038,
+ * ADR-0093.
  * One model also gives an AI agent or an editor the same answer the build uses:
  * `--json` is the whole index, `--element` is one element and its dependencies.
  *
@@ -25,9 +26,11 @@
  * consumer, which is a data structure looking for a reason.
  */
 
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseFragment } from 'parse5';
 
+import { INTERPOLATION } from '@srljs/core/lib/core/template/dialect.js';
 import { REPO, apps, exists, readText, repoPath, selectedApp, walk } from '../layout.mjs';
 import {
   COMPONENTS,
@@ -42,6 +45,21 @@ import { parseModule } from './parse.mjs';
  * @import { Application, ElementRecord, ModuleRecord, ProjectDiagnostic, ProjectIndex,
  *   ProjectModel, TemplateRecord, UsesEntry } from './types.js'
  */
+
+/** @typedef {{
+ *   properties: Map<string, import('./types.js').ElementProperty>,
+ *   surfaceKnown: boolean,
+ *   explicitAttributes: Set<string>,
+ *   attributesKnown: boolean,
+ *   events: Map<string, import('./types.js').ElementEvent>,
+ *   eventsKnown: boolean,
+ * }} ResolvedSurface */
+/** @typedef {{
+ *   tagName?: string,
+ *   attrs?: Array<{ name: string, value: string }>,
+ *   childNodes?: ProjectionNode[],
+ *   content?: ProjectionNode,
+ * }} ProjectionNode */
 
 /**
  * Everything one application's source declares.
@@ -73,6 +91,8 @@ export async function readProject(app, options = {}) {
 
   /** @type {Map<string, ModuleRecord>} */
   const modules = new Map();
+  /** @type {Map<string, Awaited<ReturnType<typeof parseModule>>>} */
+  const parsedModules = new Map();
   /** @type {Map<string, ElementRecord>} */
   const elements = new Map();
   /** @type {Map<string, import('./types.js').TemplateGlobal>} */
@@ -84,6 +104,7 @@ export async function readProject(app, options = {}) {
 
   for (const file of [...new Set(files)].sort()) {
     const parsed = await parseModule(file, prefixes);
+    parsedModules.set(parsed.path, parsed);
     modules.set(parsed.path, {
       path: parsed.path,
       imports: parsed.imports,
@@ -113,7 +134,7 @@ export async function readProject(app, options = {}) {
           ? null
           : resolve(
               dirname(parsed.path),
-              definition.template ?? `${basename(parsed.path, '.js')}.html`,
+              definition.template ?? `${basename(parsed.path, extname(parsed.path))}.html`,
             );
 
       /** @type {ElementRecord} */
@@ -128,12 +149,14 @@ export async function readProject(app, options = {}) {
         templateExists: template === null ? null : await exists(template),
         uses: [],
         usesTags: [],
-        properties: parsed.properties.get(definition.className) ?? [],
-        // `?? null` and not `?? []`: a class this module did not declare at top level —
-        // one built by a factory, or handed to `customElements.define` from elsewhere —
-        // has a surface nothing here read, and "unread" must not read as "observes
-        // nothing".
-        observedAttributes: parsed.attributes.get(definition.className) ?? null,
+        properties: [],
+        state: [],
+        propertyDeclarations: [],
+        surfaceKnown: false,
+        observedAttributes: null,
+        events: [],
+        eventsKnown: false,
+        slots: null,
       };
 
       const existing = elements.get(definition.tag);
@@ -157,6 +180,8 @@ export async function readProject(app, options = {}) {
       if (definition.uses.length > 0) pending.push({ record, uses: definition.uses });
     }
   }
+
+  resolveElementSurfaces(elements, parsedModules);
 
   // `uses` resolves the way the browser resolves it: through the import that brought the
   // class in, or the declaring module for a local class. Second pass, because an entry
@@ -215,8 +240,208 @@ export async function readProject(app, options = {}) {
   }
 
   const templates = await readTemplates(app, elements, roots);
+  await readProjectionSlots(elements);
 
   return { app, prefixes, entry, modules, elements, globals, templates, diagnostics };
+}
+
+/** Platform/framework roots add no application-declared reactive inputs of their own. */
+const ELEMENT_ROOTS = new Set([
+  'Element',
+  'EventTarget',
+  'HTMLElement',
+  'LitElement',
+  'ReactiveElement',
+  'SVGElement',
+]);
+
+/**
+ * Resolve authored class facts into each registered Element. Lit inherits reactive
+ * declarations even when a subclass supplies its own `properties`, and subclass entries
+ * replace same-named parent entries. Callers receive that answer, not syntax fragments
+ * they have to merge again.
+ *
+ * @param {Map<string, ElementRecord>} elements
+ * @param {Map<string, Awaited<ReturnType<typeof parseModule>>>} parsedModules
+ */
+function resolveElementSurfaces(elements, parsedModules) {
+  /** @type {Map<string, ResolvedSurface>} */
+  const cache = new Map();
+
+  /** @param {string} module @param {string} className @param {Set<string>} [stack] @returns {ResolvedSurface} */
+  const resolveClass = (module, className, stack = new Set()) => {
+    const key = `${module}\0${className}`;
+    const cached = cache.get(key);
+    if (cached !== undefined) return cached;
+    if (stack.has(key)) return unknownSurface();
+
+    const parsed = parsedModules.get(module);
+    const authored = parsed?.surfaces.get(className);
+    if (parsed === undefined || authored === undefined) return unknownSurface();
+
+    const branch = new Set(stack).add(key);
+    let parent = emptySurface();
+    if (!authored.inheritanceKnown) parent = unknownSurface();
+    else if (authored.superclass !== null && !ELEMENT_ROOTS.has(authored.superclass)) {
+      const imported = parsed.imports.get(authored.superclass);
+      const parentModule = imported ?? module;
+      const parentName = parsed.importNames.get(authored.superclass) ?? authored.superclass;
+      parent = resolveClass(parentModule, parentName, branch);
+    }
+
+    const properties = new Map(parent.properties);
+    for (const property of authored.properties) {
+      properties.set(property.name, {
+        name: property.name,
+        kind: property.kind,
+        attribute: property.attribute,
+        declaration: {
+          module,
+          className,
+          line: property.line,
+          column: property.column,
+        },
+      });
+    }
+
+    const events = new Map(parent.events);
+    for (const event of authored.events) {
+      /** @type {import('./types.js').ElementEvent} */
+      const next = {
+        name: event.name,
+        event: event.event,
+        detail: event.detail,
+        declaration: {
+          module,
+          className,
+          line: event.line,
+          column: event.column,
+        },
+      };
+      const existing = events.get(event.name);
+      events.set(event.name, existing === undefined ? next : mergeEvent(existing, next));
+    }
+
+    const resolved = {
+      properties,
+      surfaceKnown: parent.surfaceKnown && authored.propertiesKnown,
+      explicitAttributes: authored.attributesDeclared
+        ? new Set([
+            ...(authored.attributesIncludeSuper ? parent.explicitAttributes : []),
+            ...authored.observedAttributes,
+          ])
+        : new Set(parent.explicitAttributes),
+      attributesKnown: authored.attributesDeclared
+        ? authored.attributesKnown &&
+          (!authored.attributesIncludeSuper || parent.attributesKnown)
+        : parent.attributesKnown,
+      events,
+      eventsKnown: parent.eventsKnown && authored.eventsKnown,
+    };
+    cache.set(key, resolved);
+    return resolved;
+  };
+
+  for (const record of elements.values()) {
+    const surface = resolveClass(record.module, record.className);
+    record.propertyDeclarations = [...surface.properties.values()].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    record.properties = record.propertyDeclarations
+      .filter((property) => property.kind === 'input')
+      .map((property) => property.name);
+    record.state = record.propertyDeclarations
+      .filter((property) => property.kind === 'state')
+      .map((property) => property.name);
+    record.surfaceKnown = surface.surfaceKnown;
+
+    const attributes = new Set(surface.explicitAttributes);
+    let attributesKnown = surface.attributesKnown;
+    for (const property of record.propertyDeclarations) {
+      if (typeof property.attribute === 'string') attributes.add(property.attribute);
+      else if (property.attribute === null) attributesKnown = false;
+    }
+    record.observedAttributes = attributesKnown
+      ? [...attributes].sort((left, right) => left.localeCompare(right))
+      : null;
+    record.events = [...surface.events.values()].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    record.eventsKnown = surface.eventsKnown;
+  }
+}
+
+/** @returns {ResolvedSurface} */
+function emptySurface() {
+  return {
+    properties: new Map(),
+    surfaceKnown: true,
+    explicitAttributes: new Set(),
+    attributesKnown: true,
+    events: new Map(),
+    eventsKnown: true,
+  };
+}
+
+/** @returns {ResolvedSurface} */
+function unknownSurface() {
+  return { ...emptySurface(), surfaceKnown: false, attributesKnown: false, eventsKnown: false };
+}
+
+/** Two branches dispatching one name with different shapes remain known by name only. @returns {import('./types.js').ElementEvent} */
+function mergeEvent(
+  /** @type {import('./types.js').ElementEvent} */ left,
+  /** @type {import('./types.js').ElementEvent} */ right,
+) {
+  if (left.event === right.event && JSON.stringify(left.detail) === JSON.stringify(right.detail)) {
+    return left;
+  }
+  return {
+    ...left,
+    event: left.event === 'CustomEvent' || right.event === 'CustomEvent' ? 'CustomEvent' : 'Event',
+    detail: { kind: /** @type {const} */ ('unknown') },
+  };
+}
+
+/**
+ * Projection buckets are authored by the rendered template, not reconstructed from
+ * caller markup. Parse each claimed template once and keep default projection as `''`.
+ *
+ * @param {Map<string, ElementRecord>} elements
+ */
+async function readProjectionSlots(elements) {
+  for (const record of elements.values()) {
+    if (record.template === null) {
+      record.slots = [];
+      continue;
+    }
+    if (record.templateExists !== true) {
+      record.slots = null;
+      continue;
+    }
+    try {
+      const source = await readText(record.template);
+      const prepared = source.replace(INTERPOLATION, (expression) => ' '.repeat(expression.length));
+      const fragment = /** @type {ProjectionNode} */ (parseFragment(prepared));
+      /** @type {Set<string>} */
+      const slots = new Set();
+      let known = true;
+      /** @param {ProjectionNode} node */
+      const visit = (node) => {
+        if (node.tagName === 'x-content') {
+          const name = node.attrs?.find((attribute) => attribute.name === 'name')?.value ?? '';
+          if (name.includes('{{')) known = false;
+          else slots.add(name);
+        }
+        for (const child of node.childNodes ?? []) visit(child);
+        if (node.content !== undefined) visit(node.content);
+      };
+      visit(fragment);
+      record.slots = known ? [...slots].sort((left, right) => left.localeCompare(right)) : null;
+    } catch {
+      record.slots = null;
+    }
+  }
 }
 
 /**
@@ -334,7 +559,7 @@ export function orphanTemplates(model) {
   /** @type {Set<string>} */
   const siblings = new Set();
   for (const path of model.modules.keys()) {
-    siblings.add(join(dirname(path), `${basename(path, '.js')}.html`));
+    siblings.add(join(dirname(path), `${basename(path, extname(path))}.html`));
   }
   return [...model.templates.values()].filter(
     (template) => template.claimedBy === null && siblings.has(template.path),
@@ -387,7 +612,29 @@ export function projectIndex(model) {
         template: rel(record.template),
         uses: record.uses.map((use) => use.tag ?? `${use.className} (unresolved)`).sort(),
         properties: record.properties,
+        state: record.state,
+        surfaceKnown: record.surfaceKnown,
+        propertyDeclarations: record.propertyDeclarations.map((property) => ({
+          name: property.name,
+          kind: property.kind,
+          attribute: property.attribute,
+          module: repoPath(property.declaration.module),
+          className: property.declaration.className,
+          line: property.declaration.line,
+          column: property.declaration.column,
+        })),
         observedAttributes: record.observedAttributes,
+        events: record.events.map((event) => ({
+          name: event.name,
+          event: event.event,
+          detail: event.detail,
+          module: repoPath(event.declaration.module),
+          className: event.declaration.className,
+          line: event.declaration.line,
+          column: event.declaration.column,
+        })),
+        eventsKnown: record.eventsKnown,
+        slots: record.slots,
       })),
     globals: [...model.globals.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
@@ -446,12 +693,22 @@ export function describeElement(model, tag) {
   ];
 
   if (record.properties.length > 0) {
-    lines.push(`  properties ${record.properties.join(', ')}`);
+    lines.push(`  inputs     ${record.properties.join(', ')}`);
   }
+  if (record.state.length > 0) {
+    lines.push(`  state      ${record.state.join(', ')}`);
+  }
+  if (!record.surfaceKnown) lines.push('  surface    incomplete (dynamic or unresolved declaration)');
   if (record.observedAttributes === null) {
     lines.push('  attributes unknown (the declaration is not statically readable)');
   } else if (record.observedAttributes.length > 0) {
     lines.push(`  attributes ${record.observedAttributes.join(', ')}`);
+  }
+  if (record.events.length > 0) lines.push(`  events     ${record.events.map((event) => event.name).join(', ')}`);
+  if (!record.eventsKnown) lines.push('  events     incomplete (a dispatched name is computed)');
+  if (record.slots === null) lines.push('  projection unknown');
+  else if (record.slots.length > 0) {
+    lines.push(`  projection ${record.slots.map((name) => name === '' ? '(default)' : name).join(', ')}`);
   }
   if (record.uses.length > 0) {
     lines.push('  uses');
