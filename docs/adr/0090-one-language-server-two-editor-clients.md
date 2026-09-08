@@ -53,3 +53,7 @@ may retain a source file without asking the host for it. Those checks rebuild th
 saved-file and template-only checks retain the cached path from ADR-0039. Reopen this
 decision if TypeScript exposes a versioned host interface that permits both correctness
 and structural reuse for overlays.
+
+ADR-0091 narrows that rule without waiting for such an interface: a program built while a
+buffer differed from disk is reused for exactly that buffer text, since every file it may
+have retained is then still the text the next check is about.

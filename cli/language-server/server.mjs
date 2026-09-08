@@ -7,18 +7,28 @@
  * language feature lives in `service.mjs`. Both VS Code and WebStorm start this file
  * from the project's own `@srljs/cli`, so editor semantics match installed srl semantics.
  * ADR-0090.
+ *
+ * Dispatch answers messages; it does not decide when analysis runs. Document lifetime,
+ * staleness and scheduling belong to `analysis.mjs`, so a message handler is a single
+ * call with no ordering knowledge in it. ADR-0091.
  */
 
+import { LiveAnalysis } from './analysis.mjs';
 import { SrlLanguageService } from './service.mjs';
 
 const service = new SrlLanguageService();
+const analysis = new LiveAnalysis({
+  service,
+  publish: (uri, diagnostics) => notify('textDocument/publishDiagnostics', { uri, diagnostics }),
+  report: (text) => notify('window/showMessage', { type: 1, message: text }),
+});
 let buffer = Buffer.alloc(0);
 let shutdown = false;
 let nextRequest = 1;
-/** @type {NodeJS.Timeout | undefined} */
-let validationTimer;
-/** @type {NodeJS.Timeout | undefined} */
-let reloadTimer;
+/** Requests being answered. @type {Set<string | number>} */
+const pending = new Set();
+/** Requests the client withdrew before an answer was written. @type {Set<string | number>} */
+const cancelled = new Set();
 
 process.stdin.on('data', (chunk) => {
   buffer = Buffer.concat([buffer, Buffer.from(chunk)]);
@@ -59,13 +69,25 @@ function readMessages() {
 /** @param {{ id?: string | number | null, method?: string, params?: any }} message */
 async function receive(message) {
   if (message.method === undefined) return;
+  const id = message.id;
+  const answerable = id !== undefined && id !== null;
+  if (answerable) pending.add(id);
   try {
     const result = await dispatch(message.method, message.params ?? {});
-    if (message.id !== undefined && message.id !== null) respond(message.id, result);
+    if (!answerable) return;
+    // A withdrawn request gets the answer the protocol reserves for one. A client that
+    // asked to forget a request should not have to work out which reply to ignore.
+    if (cancelled.has(id)) respondError(id, -32800, 'Request cancelled');
+    else respond(id, result);
   } catch (cause) {
     const error = cause instanceof Error ? cause.message : String(cause);
-    if (message.id !== undefined && message.id !== null) respondError(message.id, -32603, error);
+    if (answerable) respondError(id, cancelled.has(id) ? -32800 : -32603, error);
     else process.stderr.write(`srl language server: ${message.method}: ${error}\n`);
+  } finally {
+    if (answerable) {
+      pending.delete(id);
+      cancelled.delete(id);
+    }
   }
 }
 
@@ -73,14 +95,7 @@ async function receive(message) {
 async function dispatch(method, params) {
   switch (method) {
     case 'initialize': {
-      try {
-        await service.reload();
-      } catch (cause) {
-        notify('window/showMessage', {
-          type: 1,
-          message: `srl language server could not read this project: ${cause instanceof Error ? cause.message : String(cause)}`,
-        });
-      }
+      await analysis.start();
       return {
         capabilities: {
           positionEncoding: 'utf-16',
@@ -127,48 +142,37 @@ async function dispatch(method, params) {
           },
         ],
       });
-      scheduleValidation();
       return null;
     case 'shutdown':
       shutdown = true;
+      analysis.dispose();
       return null;
     case 'exit':
       process.exit(shutdown ? 0 : 1);
       return null;
     case 'textDocument/didOpen':
-      service.open(
+      analysis.open(
         params.textDocument.uri,
         params.textDocument.languageId,
         params.textDocument.version,
         params.textDocument.text,
       );
-      scheduleValidation(params.textDocument.uri);
       return null;
     case 'textDocument/didChange': {
       const change = params.contentChanges.at(-1);
       if (change !== undefined) {
-        service.change(params.textDocument.uri, params.textDocument.version, change.text);
-        scheduleValidation(params.textDocument.uri);
+        analysis.change(params.textDocument.uri, params.textDocument.version, change.text);
       }
       return null;
     }
     case 'textDocument/didSave':
-      if (params.text !== undefined) {
-        const current = service.documents.get(params.textDocument.uri);
-        service.change(params.textDocument.uri, current?.version ?? 0, params.text);
-      }
-      if (/\.(?:m?js|json|html)$/u.test(params.textDocument.uri)) scheduleReload();
-      else scheduleValidation(params.textDocument.uri);
+      analysis.save(params.textDocument.uri, params.text);
       return null;
     case 'textDocument/didClose':
-      service.close(params.textDocument.uri);
-      notify('textDocument/publishDiagnostics', {
-        uri: params.textDocument.uri,
-        diagnostics: [],
-      });
+      analysis.close(params.textDocument.uri);
       return null;
     case 'workspace/didChangeWatchedFiles':
-      scheduleReload();
+      analysis.watched(params.changes ?? []);
       return null;
     case 'textDocument/completion':
       return service.completion(params.textDocument.uri, params.position);
@@ -200,43 +204,15 @@ async function dispatch(method, params) {
         params.range,
         params.context?.diagnostics ?? [],
       );
-    case '$/setTrace':
     case '$/cancelRequest':
+      if (pending.has(params.id)) cancelled.add(params.id);
+      return null;
+    case '$/setTrace':
     case 'workspace/didChangeConfiguration':
       return null;
     default:
       if (params.id !== undefined) throw new Error(`Method not found: ${method}`);
       return null;
-  }
-}
-
-/** @param {string} [only] */
-function scheduleValidation(only) {
-  if (validationTimer !== undefined) clearTimeout(validationTimer);
-  validationTimer = setTimeout(() => void validateOpen(only), 120);
-}
-
-function scheduleReload() {
-  if (reloadTimer !== undefined) clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => {
-    void service
-      .reload()
-      .then(() => validateOpen())
-      .catch((cause) =>
-        notify('window/showMessage', {
-          type: 1,
-          message: `srl project refresh failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-        }),
-      );
-  }, 120);
-}
-
-/** @param {string} [only] */
-async function validateOpen(only) {
-  const uris = only === undefined ? [...service.documents.keys()] : [only];
-  for (const uri of uris) {
-    const diagnostics = await service.diagnostics(uri);
-    notify('textDocument/publishDiagnostics', { uri, diagnostics });
   }
 }
 

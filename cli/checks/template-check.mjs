@@ -832,6 +832,7 @@ function lineAndColumn(source, at) {
  *   generated: Map<string, GeneratedFile>,
  *   overrides: ReadonlyMap<string, string>,
  *   program: ts.Program | undefined,
+ *   overlay: ReadonlyMap<string, string>,
  *   error: ts.Diagnostic | undefined,
  * }} CompilerState
  */
@@ -889,6 +890,7 @@ function compilerState() {
     generated: new Map(),
     overrides: new Map(),
     program: undefined,
+    overlay: new Map(),
     error: config.error,
   };
 
@@ -933,8 +935,9 @@ function compilerState() {
  * @param {string[]} shimPaths
  * @param {Map<string, GeneratedFile>} generated
  * @param {ReadonlyMap<string, string>} [overrides]
+ * @param {ts.CancellationToken} [cancellation]
  */
-function typecheck(shimPaths, generated, overrides = new Map()) {
+function typecheck(shimPaths, generated, overrides = new Map(), cancellation = undefined) {
   const state = compilerState();
   if (state.error !== undefined) return [state.error];
 
@@ -942,20 +945,71 @@ function typecheck(shimPaths, generated, overrides = new Map()) {
   state.overrides = new Map(
     [...overrides].map(([path, source]) => [resolve(path), source]),
   );
+  // TypeScript may reuse an old source file without asking the host for it, so a program
+  // built while a buffer differed from disk is only reusable for that same buffer text.
+  // The condition is the overlay itself rather than its absence: identical text means
+  // every file the old program retained is still the text this check is about, and an
+  // empty overlay after a non-empty one is a change like any other. ADR-0091.
   const program = ts.createProgram({
     rootNames: [...state.fileNames, ...shimPaths],
     options: state.options,
     host: state.host,
-    // TypeScript may reuse an old source file without asking the host for it. An open
-    // editor buffer must win over that program even before it reaches disk.
-    oldProgram: state.overrides.size === 0 ? state.program : undefined,
+    oldProgram: sameOverlay(state.overlay, state.overrides) ? state.program : undefined,
   });
   state.program = program;
+  state.overlay = state.overrides;
 
+  // Asked per shim, not per program. `getPreEmitDiagnostics()` with no file typechecks
+  // every file in the repository so that all but one file's findings can be discarded,
+  // which was most of the cost of an interactive check.
+  /** @type {ts.Diagnostic[]} */
+  const found = [
+    ...program.getConfigFileParsingDiagnostics(),
+    ...program.getOptionsDiagnostics(cancellation),
+    ...program.getGlobalDiagnostics(cancellation),
+  ];
   const wanted = new Set(shimPaths.map((path) => resolve(path)));
-  return ts.getPreEmitDiagnostics(program).filter((diagnostic) =>
+  for (const path of wanted) {
+    const file = program.getSourceFile(path);
+    if (file === undefined) continue;
+    found.push(
+      ...program.getSyntacticDiagnostics(file, cancellation),
+      ...program.getSemanticDiagnostics(file, cancellation),
+    );
+  }
+
+  return ts.sortAndDeduplicateDiagnostics(found).filter((diagnostic) =>
     diagnostic.file === undefined ? true : wanted.has(resolve(diagnostic.file.fileName)),
   );
+}
+
+/**
+ * Whether two overlays are the same text for the same files.
+ *
+ * @param {ReadonlyMap<string, string>} left
+ * @param {ReadonlyMap<string, string>} right
+ * @returns {boolean}
+ */
+function sameOverlay(left, right) {
+  if (left.size !== right.size) return false;
+  for (const [path, source] of left) {
+    if (right.get(path) !== source) return false;
+  }
+  return true;
+}
+
+/**
+ * Discard the cached compiler.
+ *
+ * The parsed `tsconfig.json` is part of what ADR-0039 caches: the options, the path
+ * mappings and the root file names are read once per process. A CLI run ends before
+ * that can go stale, but the language server outlives the configuration it parsed, so
+ * the editor seam needs a way to say that the file it came from changed. Callers that
+ * only changed source should not use this: it also discards the parsed source files and
+ * the previous program, which is the cold rebuild ADR-0039 exists to avoid.
+ */
+export function invalidateCompiler() {
+  compiler = undefined;
 }
 
 /**
@@ -1004,6 +1058,11 @@ function fromCompiler(diagnostic, at) {
  * defaults to every element in `elements`, which is what an editor checking
  * unsaved markup wants: the file being edited may not declare its dependency yet.
  *
+ * `cancellation` lets a caller abandon a check whose answer no longer matters. The
+ * typecheck is one synchronous call, so an interactive caller that cannot wait for it
+ * has no other way to get the thread back; the token throws out of the compiler, and
+ * this function throws `ts.OperationCanceledException` on to its caller.
+ *
  * @param {{
  *   module: string,
  *   className: string,
@@ -1013,6 +1072,7 @@ function fromCompiler(diagnostic, at) {
  *   globals?: Map<string, TemplateGlobal>,
  *   available?: Set<string>,
  *   files?: ReadonlyMap<string, string>,
+ *   cancellation?: ts.CancellationToken,
  * }} input
  * @returns {Diagnostic[]}
  */
@@ -1032,7 +1092,12 @@ export function checkTemplateSource(input) {
   );
   const generatedFile = builder.build();
   const shim = resolve(dirname(component.module), `.${component.className}.template-check.ts`);
-  const diagnostics = typecheck([shim], new Map([[shim, generatedFile]]), input.files);
+  const diagnostics = typecheck(
+    [shim],
+    new Map([[shim, generatedFile]]),
+    input.files,
+    input.cancellation,
+  );
 
   /** @param {number} offset @returns {Where} */
   const at = (offset) => ({

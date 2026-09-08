@@ -65,9 +65,11 @@ export async function readProject(app, options = {}) {
 
   // Tests included: a fixture that registers an element is part of what the page defines,
   // and a checker that cannot see it reports the fixture's own markup as unknown elements.
+  // `.mjs` included: the editor clients open it and the template checker reads it, so a
+  // module this walk skips is a module whose elements do not exist to any consumer.
   /** @type {string[]} */
   const files = [];
-  for (const root of roots) files.push(...(await walk(root, /\.js$/u)));
+  for (const root of roots) files.push(...(await walk(root, /\.m?js$/u)));
 
   /** @type {Map<string, ModuleRecord>} */
   const modules = new Map();

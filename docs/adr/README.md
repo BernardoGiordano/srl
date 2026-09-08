@@ -89,6 +89,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0088](0088-the-service-worker-is-generated-from-the-artifact-report.md) | The service worker is generated from the artifact report | accepted | `cli/delivery/service-worker.mjs`, `cli/delivery/build.mjs`, `cli/delivery/artifact-report.mjs`, `source/lib/core/application/worker.js`, `cli/test/service-worker.test.mjs` |
 | [ADR-0089](0089-a-tab-learns-its-release-changed-at-a-commit-boundary.md) | A tab learns its release changed at a commit boundary | accepted | `source/lib/core/application/release.js`, `source/lib/core/application/types.d.ts`, `source/lib/test/application/release.test.js` |
 | [ADR-0090](0090-one-language-server-two-editor-clients.md) | One language server, with thin editor clients | accepted | `cli/language-server/`, `editors/vscode/`, `editors/webstorm/`, `cli/checks/template-check.mjs` |
+| [ADR-0091](0091-one-module-decides-what-the-editor-sees-next.md) | One module decides what the editor sees next | accepted | `cli/language-server/analysis.mjs`, `cli/language-server/server.mjs`, `cli/language-server/service.mjs`, `cli/checks/template-check.mjs` |
 
 <!-- /generated:adr-index -->
 

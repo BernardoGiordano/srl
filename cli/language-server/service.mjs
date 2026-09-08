@@ -111,6 +111,73 @@ export class SrlLanguageService {
     this.documents.delete(uri);
   }
 
+  /** @param {string} uri @returns {number | undefined} The version of an open document. */
+  version(uri) {
+    return this.documents.get(uri)?.version;
+  }
+
+  /**
+   * Which open documents a change to `path` can change the answer for.
+   *
+   * A template is checked through a shim that imports the component's own module, the
+   * module of every custom element the template names, and the module of every global it
+   * may use. An unsaved edit to any of those changes that template's diagnostics while
+   * the template's own text stands still, so the dependency is the shim's import list
+   * rather than the file the editor happened to change.
+   *
+   * Only open documents are answered. A closed file's diagnostics are not on screen, and
+   * revalidating every template in the repository on each keystroke is the cost this
+   * question exists to avoid.
+   *
+   * The shim's own imports are followed, not theirs. An unsaved edit to a module that
+   * only an element's module imports is seen on save, when the model reloads and every
+   * open document is stale again; following it live would mean an import graph whose
+   * only consumer is a keystroke.
+   *
+   * @param {string} path
+   * @returns {string[]} document URIs to revalidate
+   */
+  dependents(path) {
+    /** @type {Set<string>} */
+    const affected = new Set();
+    const own = toUri(path);
+    if (this.documents.has(own)) affected.add(own);
+    if (!/\.m?js$/u.test(path)) return [...affected];
+
+    for (const [uri, document] of this.documents) {
+      const template = fromUri(uri);
+      if (!template.endsWith('.html')) continue;
+      const model = this.model(uri);
+      if (model === undefined) continue;
+      const component = this.component(model, template);
+      if (component === undefined) continue;
+      if (component.module === path) {
+        affected.add(uri);
+        continue;
+      }
+      if ([...model.globals.values()].some((global) => global.module === path)) {
+        affected.add(uri);
+        continue;
+      }
+      // Unparseable markup is exactly when the tag list is unknown, so it is assumed to
+      // depend on the change rather than assumed not to.
+      let tags;
+      try {
+        tags = templateTags(parseTemplate(document.text, template));
+      } catch {
+        affected.add(uri);
+        continue;
+      }
+      for (const tag of tags) {
+        if (model.elements.get(tag)?.module === path) {
+          affected.add(uri);
+          break;
+        }
+      }
+    }
+    return [...affected];
+  }
+
   /** @param {string} uri @returns {Promise<string>} */
   async source(uri) {
     return this.documents.get(uri)?.text ?? readFile(fromUri(uri), 'utf8');
@@ -138,8 +205,16 @@ export class SrlLanguageService {
     return [...model.elements.values()].find((element) => element.template === path);
   }
 
-  /** @param {string} uri Inline template and project-model diagnostics for one editor document. */
-  async diagnostics(uri) {
+  /**
+   * Inline template and project-model diagnostics for one editor document.
+   *
+   * @param {string} uri
+   * @param {{ cancellation?: import('typescript').CancellationToken }} [options]
+   *   `cancellation` abandons the typecheck when its answer stops being worth the thread.
+   *   It throws `ts.OperationCanceledException` out of this call rather than returning a
+   *   partial answer, because a short diagnostic list reads as "no errors here".
+   */
+  async diagnostics(uri, options = {}) {
     const path = fromUri(uri);
     const model = this.model(uri);
     if (model === undefined) return [];
@@ -165,9 +240,13 @@ export class SrlLanguageService {
               globals: model.globals,
               available: new Set(component.usesTags),
               files: this.openJavaScript(),
+              cancellation: options.cancellation,
             }),
           );
         } catch (cause) {
+          // A cancelled check has no findings, not zero findings. It is the caller's to
+          // retry, so it travels rather than being reported as a template error.
+          if (cause instanceof ts.OperationCanceledException) throw cause;
           found.push({
             severity: 'error',
             code: 'templates/syntax',
@@ -1120,6 +1199,22 @@ function calledName(expression) {
     return left === undefined ? expression.name.text : `${left}.${expression.name.text}`;
   }
   return undefined;
+}
+
+/** @param {TemplateNode[]} nodes @returns {Set<string>} Every tag the markup names. */
+function templateTags(nodes) {
+  /** @type {Set<string>} */
+  const tags = new Set();
+  /** @param {TemplateNode[]} level */
+  const walk = (level) => {
+    for (const node of level) {
+      if (node.kind !== 'element') continue;
+      tags.add(node.tag);
+      walk(node.children);
+    }
+  };
+  walk(nodes);
+  return tags;
 }
 
 /** @param {string} parent @param {string} directory */
