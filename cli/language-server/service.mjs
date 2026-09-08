@@ -9,13 +9,14 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 import { checkTemplateSource, parseTemplate } from '../checks/template-check.mjs';
 import { apps } from '../layout.mjs';
 import { readProject } from '../project-model/index.mjs';
+import { TemplateSemantics } from './semantics.mjs';
 
 /** @import { Diagnostic } from '../diagnostics/types.js' */
 /** @import { ElementRecord, ProjectModel } from '../project-model/types.js' */
@@ -50,6 +51,35 @@ const COMMON_EVENTS = [
   'pointerup',
   'submit',
 ];
+
+const NATIVE_ELEMENT_SURFACES = new Map([
+  [
+    'input',
+    {
+      attributes: [
+        'accept',
+        'autocomplete',
+        'checked',
+        'disabled',
+        'max',
+        'maxlength',
+        'min',
+        'minlength',
+        'multiple',
+        'name',
+        'pattern',
+        'placeholder',
+        'readonly',
+        'required',
+        'step',
+        'type',
+        'value',
+      ],
+      boolean: ['checked', 'disabled', 'multiple', 'readonly', 'required'],
+      properties: ['checked', 'disabled', 'files', 'value', 'valueAsDate', 'valueAsNumber'],
+    },
+  ],
+]);
 
 const DIRECTIVES = [
   {
@@ -279,19 +309,22 @@ export class SrlLanguageService {
     const model = this.model(uri);
     if (model === undefined) return [];
     const component = this.component(model, fromUri(uri));
-    const tag = tagAt(source, offset);
-    const opening = openingTagAt(source, offset);
-    const expression = expressionAt(source, offset);
+    const semantics = this.#semantics(uri, source, model, component);
+    const context = semantics.at(offset);
 
-    if (tag !== undefined && tag.typed) return tagCompletions(model, component);
-    if (expression !== undefined) {
+    if (context.kind === 'tag' && context.typed) return tagCompletions(model, component);
+    if (context.kind === 'expression') {
+      const members = semantics.membersAt(offset);
+      if (members !== undefined) return members;
       const symbols =
         component === undefined
           ? []
           : await classSymbols(component.module, component.className, this.documents);
-      return expressionCompletions(symbols, model, source, offset, expression.attribute);
+      return expressionCompletions(symbols, model, context.locals);
     }
-    if (opening !== undefined) return attributeCompletions(model.elements.get(opening.tag));
+    if (context.kind === 'opening-tag' || context.kind === 'attribute') {
+      return attributeCompletions(context.tag, model.elements.get(context.tag));
+    }
     return [];
   }
 
@@ -301,22 +334,20 @@ export class SrlLanguageService {
     const offset = offsetAt(source, position);
     const model = this.model(uri);
     if (model === undefined) return null;
-    const tag = tagAt(source, offset);
-    if (tag !== undefined) {
-      const record = model.elements.get(tag.name);
+    const component = this.component(model, fromUri(uri));
+    const context = this.#semantics(uri, source, model, component).at(offset);
+    if (context.kind === 'tag') {
+      const record = model.elements.get(context.name);
       if (record !== undefined) return elementHover(record);
     }
 
-    const attribute = attributeAt(source, offset);
-    if (attribute !== undefined) {
-      const record = model.elements.get(attribute.tag);
-      const hover = attributeHover(attribute.name, record);
+    if (context.kind === 'attribute') {
+      const record = model.elements.get(context.tag);
+      const hover = attributeHover(context.name, record);
       if (hover !== null) return { contents: { kind: 'markdown', value: hover } };
     }
 
-    const expression = expressionAt(source, offset);
-    const component = this.component(model, fromUri(uri));
-    if (expression === undefined || component === undefined) return null;
+    if (context.kind !== 'expression' || component === undefined) return null;
     const word = wordAt(source, offset);
     if (word === undefined) return null;
     const symbols = await classSymbols(component.module, component.className, this.documents);
@@ -336,16 +367,16 @@ export class SrlLanguageService {
     const offset = offsetAt(source, position);
     const model = this.model(uri);
     if (model === undefined) return [];
-    const tag = tagAt(source, offset);
-    if (tag !== undefined) {
-      const record = model.elements.get(tag.name);
+    const component = this.component(model, fromUri(uri));
+    const context = this.#semantics(uri, source, model, component).at(offset);
+    if (context.kind === 'tag') {
+      const record = model.elements.get(context.name);
       if (record !== undefined) return [await elementLocation(record, this.documents)];
     }
 
-    const attribute = attributeAt(source, offset);
-    if (attribute !== undefined) {
-      const record = model.elements.get(attribute.tag);
-      const name = bindingName(attribute.name);
+    if (context.kind === 'attribute') {
+      const record = model.elements.get(context.tag);
+      const name = bindingName(context.name);
       if (record !== undefined && name !== null && record.properties.includes(name)) {
         const symbols = await classSymbols(record.module, record.className, this.documents);
         const symbol = symbols.find((candidate) => candidate.name === name);
@@ -353,10 +384,8 @@ export class SrlLanguageService {
       }
     }
 
-    const expression = expressionAt(source, offset);
-    const component = this.component(model, fromUri(uri));
     const word = wordAt(source, offset);
-    if (expression === undefined || component === undefined || word === undefined) return [];
+    if (context.kind !== 'expression' || component === undefined || word === undefined) return [];
     const symbols = await classSymbols(component.module, component.className, this.documents);
     const symbol = symbols.find((candidate) => candidate.name === word.text);
     if (symbol !== undefined) return [symbol.location];
@@ -368,8 +397,9 @@ export class SrlLanguageService {
   async references(uri, position, includeDeclaration) {
     const source = await this.source(uri);
     const model = this.model(uri);
-    const tag = tagAt(source, offsetAt(source, position));
-    if (model === undefined || tag === undefined || !model.elements.has(tag.name)) return [];
+    if (model === undefined) return [];
+    const tag = await tagIdentityAt(uri, source, position, model, this.documents);
+    if (tag === undefined || !model.elements.has(tag.name)) return [];
     const locations = [];
     const seen = new Set();
     for (const project of this.models) {
@@ -378,7 +408,9 @@ export class SrlLanguageService {
         seen.add(template.path);
         const templateUri = toUri(template.path);
         const text = await this.source(templateUri);
-        for (const span of tagSpans(text, tag.name)) {
+        const owner = this.component(project, template.path);
+        const semantics = this.#semantics(templateUri, text, project, owner);
+        for (const span of semantics.tags(tag.name)) {
           locations.push({ uri: templateUri, range: rangeAt(text, span.start, span.end) });
         }
       }
@@ -393,9 +425,10 @@ export class SrlLanguageService {
   /** @param {string} uri @param {Position} position Only tag identity is safely renameable across JavaScript and markup. */
   async prepareRename(uri, position) {
     const source = await this.source(uri);
-    const tag = tagAt(source, offsetAt(source, position));
     const model = this.model(uri);
-    if (tag === undefined || model?.elements.has(tag.name) !== true) return null;
+    if (model === undefined) return null;
+    const tag = await tagIdentityAt(uri, source, position, model, this.documents);
+    if (tag === undefined || model.elements.has(tag.name) !== true) return null;
     return { range: rangeAt(source, tag.start, tag.end), placeholder: tag.name };
   }
 
@@ -406,12 +439,17 @@ export class SrlLanguageService {
     }
     const source = await this.source(uri);
     const model = this.model(uri);
-    const tag = tagAt(source, offsetAt(source, position));
-    if (model === undefined || tag === undefined) return null;
+    if (model === undefined) return null;
+    const tag = await tagIdentityAt(uri, source, position, model, this.documents);
+    if (tag === undefined) return null;
     const record = model.elements.get(tag.name);
     if (record === undefined) return null;
+    const existing = model.elements.get(newName);
+    if (existing !== undefined && existing.tag !== record.tag) {
+      throw new Error(`<${newName}> is already registered by ${existing.className}.`);
+    }
 
-    /** @type {Record<string, Array<{ range: object, newText: string }>>} */
+    /** @type {Record<string, Array<{ range: Range, newText: string }>>} */
     const changes = {};
     const seen = new Set();
     for (const project of this.models) {
@@ -420,7 +458,9 @@ export class SrlLanguageService {
         seen.add(template.path);
         const templateUri = toUri(template.path);
         const text = await this.source(templateUri);
-        const edits = tagSpans(text, tag.name).map((span) => ({
+        const owner = this.component(project, template.path);
+        const semantics = this.#semantics(templateUri, text, project, owner);
+        const edits = semantics.tags(tag.name).map((span) => ({
           range: rangeAt(text, span.start, span.end),
           newText: newName,
         }));
@@ -439,7 +479,11 @@ export class SrlLanguageService {
   /** @param {string} uri Semantic tokens supplement native HTML highlighting with srl grammar. */
   async semanticTokens(uri) {
     const source = await this.source(uri);
-    return { data: encodeSemanticTokens(source, semanticSpans(source)) };
+    const model = this.model(uri);
+    if (model === undefined) return { data: [] };
+    const component = this.component(model, fromUri(uri));
+    const semantics = this.#semantics(uri, source, model, component);
+    return { data: encodeSemanticTokens(source, semanticSpans(source, semantics)) };
   }
 
   /** @param {string} uri Custom tag names link to their declaring JavaScript modules. */
@@ -447,9 +491,11 @@ export class SrlLanguageService {
     const source = await this.source(uri);
     const model = this.model(uri);
     if (model === undefined || !fromUri(uri).endsWith('.html')) return [];
+    const component = this.component(model, fromUri(uri));
+    const semantics = this.#semantics(uri, source, model, component);
     const links = [];
     for (const [tag, record] of model.elements) {
-      for (const span of tagSpans(source, tag)) {
+      for (const span of semantics.tags(tag)) {
         links.push({
           range: rangeAt(source, span.start, span.end),
           target: toUri(record.module),
@@ -464,12 +510,10 @@ export class SrlLanguageService {
   async documentSymbols(uri) {
     const source = await this.source(uri);
     if (!fromUri(uri).endsWith('.html')) return [];
-    let roots;
-    try {
-      roots = parseTemplate(source, fromUri(uri));
-    } catch {
-      return [];
-    }
+    const model = this.model(uri);
+    if (model === undefined) return [];
+    const component = this.component(model, fromUri(uri));
+    const roots = this.#semantics(uri, source, model, component).roots;
     const symbols = [];
     for (const node of roots) {
       if (node.kind === 'element') symbols.push(elementSymbol(source, node));
@@ -509,10 +553,13 @@ export class SrlLanguageService {
         continue;
       }
       const start = offsetAt(source, range.start);
-      const tag = tagAt(source, start) ?? tagAt(source, Math.min(source.length, start + 1));
+      const semantics = this.#semantics(uri, source, model, owner);
+      const first = semantics.at(start);
+      const second = semantics.at(Math.min(source.length, start + 1));
+      const tag = first.kind === 'tag' ? first : second.kind === 'tag' ? second : undefined;
       const target = tag === undefined ? undefined : model.elements.get(tag.name);
       if (target === undefined || !target.exported) continue;
-      const edit = await addUseEdit(model, owner, target, this.documents);
+      const edit = await semantics.addUse(target);
       if (edit === null) continue;
       actions.push({
         title: `Add ${target.className} to ${owner.className}.uses`,
@@ -523,6 +570,17 @@ export class SrlLanguageService {
       });
     }
     return actions;
+  }
+
+  /** @param {string} uri @param {string} source @param {ProjectModel} model @param {ElementRecord | undefined} component */
+  #semantics(uri, source, model, component) {
+    return new TemplateSemantics({
+      source,
+      where: fromUri(uri),
+      model,
+      component,
+      documents: this.documents,
+    });
   }
 }
 
@@ -560,8 +618,9 @@ function tagCompletions(model, component) {
     }));
 }
 
-/** @param {ElementRecord | undefined} record */
-function attributeCompletions(record) {
+/** @param {string} tag @param {ElementRecord | undefined} record */
+function attributeCompletions(tag, record) {
+  const native = NATIVE_ELEMENT_SURFACES.get(tag);
   /** @type {Array<Record<string, unknown>>} */
   const found = DIRECTIVES.map((directive) => ({
     ...directive,
@@ -577,7 +636,13 @@ function attributeCompletions(record) {
       insertTextFormat: 2,
     });
   }
-  for (const name of [...new Set([...COMMON_ATTRIBUTES, ...(record?.observedAttributes ?? [])])]) {
+  for (const name of [
+    ...new Set([
+      ...COMMON_ATTRIBUTES,
+      ...(native?.attributes ?? []),
+      ...(record?.observedAttributes ?? []),
+    ]),
+  ]) {
     found.push({
       label: name,
       kind: 10,
@@ -592,8 +657,17 @@ function attributeCompletions(record) {
       insertText: `[${name}]="$1"`,
       insertTextFormat: 2,
     });
+    if (native?.boolean.includes(name) === true) {
+      found.push({
+        label: `[?${name}]`,
+        kind: 10,
+        detail: 'srl boolean attribute binding',
+        insertText: `[?${name}]="$1"`,
+        insertTextFormat: 2,
+      });
+    }
   }
-  for (const property of record?.properties ?? []) {
+  for (const property of [...new Set([...(native?.properties ?? []), ...(record?.properties ?? [])])]) {
     const kebab = kebabCase(property);
     found.push({
       label: `[.${kebab}]`,
@@ -606,8 +680,8 @@ function attributeCompletions(record) {
   return found;
 }
 
-/** @param {Awaited<ReturnType<typeof classSymbols>>} symbols @param {ProjectModel} model @param {string} source @param {number} offset @param {string | undefined} attribute */
-function expressionCompletions(symbols, model, source, offset, attribute) {
+/** @param {Awaited<ReturnType<typeof classSymbols>>} symbols @param {ProjectModel} model @param {string[]} locals */
+function expressionCompletions(symbols, model, locals) {
   /** @type {Array<Record<string, unknown>>} */
   const found = symbols.map((symbol) => ({
     label: symbol.name,
@@ -622,11 +696,8 @@ function expressionCompletions(symbols, model, source, offset, attribute) {
       detail: `template global from ${relativePath(global.module)}`,
     });
   }
-  for (const local of loopLocals(source, offset)) {
+  for (const local of locals) {
     found.push({ label: local, kind: 6, detail: 'template loop local' });
-  }
-  if (attribute?.startsWith('(') === true) {
-    found.push({ label: '$event', kind: 6, detail: 'typed DOM event' });
   }
   return uniqueBy(found, (item) => String(item.label));
 }
@@ -670,6 +741,45 @@ function attributeHover(name, record) {
 function bindingName(name) {
   if (!name.startsWith('[.') || !name.endsWith(']')) return null;
   return camelCase(name.slice(2, -1));
+}
+
+/**
+ * Resolve custom-element identity from either an actual template tag or its JavaScript
+ * registration literal. The latter lets rename start at the declaration while retaining
+ * one project-wide tag operation. ADR-0090, ADR-0092.
+ *
+ * @param {string} uri
+ * @param {string} source
+ * @param {Position} position
+ * @param {ProjectModel} model
+ * @param {Map<string, { text: string }>} documents
+ */
+async function tagIdentityAt(uri, source, position, model, documents) {
+  const offset = offsetAt(source, position);
+  if (fromUri(uri).endsWith('.html')) {
+    const semantics = new TemplateSemantics({
+      source,
+      where: fromUri(uri),
+      model,
+      documents,
+    });
+    const context = semantics.at(offset);
+    if (context.kind === 'tag') {
+      return { name: context.name, start: context.start, end: context.end };
+    }
+    return undefined;
+  }
+
+  const path = fromUri(uri);
+  for (const record of model.elements.values()) {
+    if (record.module !== path) continue;
+    const declaration = await tagDeclaration(record, documents);
+    if (declaration === null) continue;
+    const start = offsetAt(source, declaration.range.start);
+    const end = offsetAt(source, declaration.range.end);
+    if (start <= offset && offset <= end) return { name: record.tag, start, end };
+  }
+  return undefined;
 }
 
 /** @param {ElementRecord} record @param {Map<string, { text: string }>} documents @returns {Promise<{ uri: string, range: Range }>} */
@@ -793,80 +903,6 @@ function documentationFor(source, node) {
 }
 
 /** @param {string} source @param {number} offset */
-function tagAt(source, offset) {
-  const start = source.lastIndexOf('<', offset);
-  if (start === -1 || source.lastIndexOf('>', offset) > start) return undefined;
-  const match = /^<\/?([A-Za-z][\w:-]*)/u.exec(source.slice(start));
-  if (match === null || match[1] === undefined) return undefined;
-  const nameStart = start + match[0].indexOf(match[1]);
-  const end = nameStart + match[1].length;
-  if (offset < nameStart || offset > end) return undefined;
-  return {
-    name: match[1].toLowerCase(),
-    start: nameStart,
-    end,
-    typed: !source.startsWith('</', start),
-  };
-}
-
-/** @param {string} source @param {number} offset */
-function openingTagAt(source, offset) {
-  const start = source.lastIndexOf('<', offset);
-  if (start === -1 || source.lastIndexOf('>', offset) > start || source.startsWith('</', start)) return undefined;
-  const match = /^<([A-Za-z][\w:-]*)/u.exec(source.slice(start));
-  if (match?.[1] === undefined) return undefined;
-  return { tag: match[1].toLowerCase(), start };
-}
-
-/** @param {string} source @param {number} offset */
-function attributeAt(source, offset) {
-  const opening = openingTagAt(source, offset);
-  if (opening === undefined) return undefined;
-  const text = source.slice(opening.start, offset + 1);
-  const attributesStart = text.indexOf(' ');
-  if (attributesStart === -1) return undefined;
-  const pattern = /[^\s=/>]+/gu;
-  pattern.lastIndex = attributesStart;
-  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
-    const name = match[0];
-    const start = opening.start + match.index;
-    const end = start + name.length;
-    if (start <= offset && offset <= end) return { tag: opening.tag, name, start, end };
-    const next = text.slice(pattern.lastIndex).match(/^\s*=/u);
-    if (next !== null) {
-      const equals = pattern.lastIndex + next[0].length;
-      const quote = text[equals];
-      if (quote === '"' || quote === "'") {
-        const close = text.indexOf(quote, equals + 1);
-        pattern.lastIndex = close === -1 ? text.length : close + 1;
-      }
-    }
-  }
-  return undefined;
-}
-
-/** @param {string} source @param {number} offset */
-function expressionAt(source, offset) {
-  const interpolation = source.lastIndexOf('{{', offset);
-  if (interpolation !== -1 && source.lastIndexOf('}}', offset) < interpolation) {
-    return { start: interpolation + 2, attribute: undefined };
-  }
-  const opening = openingTagAt(source, offset);
-  if (opening === undefined) return undefined;
-  const before = source.slice(opening.start, offset + 1);
-  const match = /([^\s=/>]+)\s*=\s*(["'])([^"']*)$/u.exec(before);
-  if (match?.[1] === undefined) return undefined;
-  const name = match[1].toLowerCase();
-  if (
-    !(name.startsWith('[') && name.endsWith(']')) &&
-    !(name.startsWith('(') && name.endsWith(')')) &&
-    name !== '*if' &&
-    name !== '*for'
-  ) return undefined;
-  return { start: offset - (match[3]?.length ?? 0), attribute: name };
-}
-
-/** @param {string} source @param {number} offset */
 function wordAt(source, offset) {
   let start = offset;
   let end = offset;
@@ -875,26 +911,15 @@ function wordAt(source, offset) {
   return start === end ? undefined : { text: source.slice(start, end), start, end };
 }
 
-/** @param {string} source @param {number} offset */
-function loopLocals(source, offset) {
-  const locals = new Set(['$index', '$first', '$last', '$count']);
-  const pattern = /\*for\s*=\s*["']\s*([A-Za-z_$][\w$]*)\s+of\b(?:[^"']*?\bindex\s+as\s+([A-Za-z_$][\w$]*))?/gu;
-  for (const match of source.slice(0, offset).matchAll(pattern)) {
-    if (match[1] !== undefined) locals.add(match[1]);
-    if (match[2] !== undefined) locals.add(match[2]);
-  }
-  return [...locals];
-}
-
-/** @param {string} source */
-function semanticSpans(source) {
+/** @param {string} source @param {TemplateSemantics} semantics */
+function semanticSpans(source, semantics) {
   /** @type {Array<{ start: number, length: number, type: number }>} */
   const spans = [];
   addPattern(/\{\{|\}\}/gu, TOKEN_TYPES.operator);
   addPattern(/\*(?:if|else|for)\b/gu, TOKEN_TYPES.keyword);
   addCaptured(/\(([A-Za-z][\w:-]*)\)/gu, 1, TOKEN_TYPES.event);
   addCaptured(/\[([.?]?[A-Za-z][\w:-]*)\]/gu, 1, TOKEN_TYPES.property);
-  for (const expression of expressionSpans(source)) {
+  for (const expression of semantics.expressionSpans()) {
     const text = source.slice(expression.start, expression.end);
     for (const match of text.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/gu)) {
       const start = expression.start + (match.index ?? 0);
@@ -927,24 +952,6 @@ function semanticSpans(source) {
   }
 }
 
-/** @param {string} source */
-function expressionSpans(source) {
-  const spans = [];
-  for (const match of source.matchAll(/\{\{([\s\S]*?)\}\}/gu)) {
-    const value = match[1] ?? '';
-    const start = (match.index ?? 0) + match[0].indexOf(value);
-    spans.push({ start, end: start + value.length });
-  }
-  for (const match of source.matchAll(/([^\s=/>]+)\s*=\s*(["'])([\s\S]*?)\2/gu)) {
-    const name = (match[1] ?? '').toLowerCase();
-    if (!name.startsWith('[') && !name.startsWith('(') && name !== '*if' && name !== '*for') continue;
-    const value = match[3] ?? '';
-    const start = (match.index ?? 0) + match[0].lastIndexOf(value);
-    spans.push({ start, end: start + value.length });
-  }
-  return spans;
-}
-
 /** @param {string} source @param {Array<{ start: number, length: number, type: number }>} spans */
 function encodeSemanticTokens(source, spans) {
   const data = [];
@@ -959,18 +966,6 @@ function encodeSemanticTokens(source, spans) {
     previousCharacter = position.character;
   }
   return data;
-}
-
-/** @param {string} source @param {string} tag */
-function tagSpans(source, tag) {
-  const spans = [];
-  const pattern = new RegExp(`<\\/?(${escapeRegExp(tag)})(?=[\\s>/])`, 'giu');
-  for (const match of source.matchAll(pattern)) {
-    const value = match[1] ?? '';
-    const start = (match.index ?? 0) + match[0].indexOf(value);
-    spans.push({ start, end: start + value.length });
-  }
-  return spans;
 }
 
 /** @param {string} source @param {Extract<TemplateNode, { kind: 'element' }>} node @returns {LspDocumentSymbol} */
@@ -988,82 +983,6 @@ function elementSymbol(source, node) {
       .filter((child) => child.kind === 'element')
       .map((child) => elementSymbol(source, child)),
   };
-}
-
-/** @param {ProjectModel} model @param {ElementRecord} owner @param {ElementRecord} target @param {Map<string, { text: string }>} documents */
-async function addUseEdit(model, owner, target, documents) {
-  const uri = toUri(owner.module);
-  const source = documents.get(uri)?.text ?? (await readFile(owner.module, 'utf8'));
-  const tree = ts.createSourceFile(owner.module, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
-  const object = definitionObject(tree, owner.className);
-  if (object === undefined) return null;
-  let localName = target.className;
-  /** @type {Array<{ range: object, newText: string }>} */
-  const edits = [];
-  /** @type {ts.NamedImports | undefined} */
-  let targetImport;
-  /** @type {ts.ImportDeclaration | undefined} */
-  let lastImport;
-  /** @type {Map<string, ts.Expression>} */
-  const imported = new Map();
-  for (const statement of tree.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    lastImport = statement;
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
-    for (const element of bindings.elements) {
-      imported.set(element.name.text, statement.moduleSpecifier);
-      if (
-        ts.isStringLiteralLike(statement.moduleSpecifier) &&
-        resolveImport(model, owner.module, statement.moduleSpecifier.text) === target.module &&
-        (element.propertyName?.text ?? element.name.text) === target.className
-      ) {
-        localName = element.name.text;
-        targetImport = bindings;
-      }
-    }
-  }
-  const conflict = imported.get(localName);
-  if (
-    conflict !== undefined &&
-    ts.isStringLiteralLike(conflict) &&
-    resolveImport(model, owner.module, conflict.text) !== target.module
-  ) return null;
-
-  if (targetImport === undefined && conflict === undefined) {
-    const specifier = importSpecifier(model, owner.module, target.module);
-    const text = `import { ${target.className} } from ${JSON.stringify(specifier)};\n`;
-    const at = lastImport?.end ?? 0;
-    edits.push({
-      range: rangeAt(source, at, at),
-      newText: `${at === 0 ? '' : '\n'}${text}`,
-    });
-  }
-
-  const uses = object.properties.find(
-    (property) => ts.isPropertyAssignment(property) && nodeName(property.name) === 'uses',
-  );
-  if (uses !== undefined && ts.isPropertyAssignment(uses)) {
-    if (!ts.isArrayLiteralExpression(uses.initializer)) return null;
-    if (uses.initializer.elements.some((element) => ts.isIdentifier(element) && element.text === localName)) return null;
-    const at = uses.initializer.end - 1;
-    edits.push({
-      range: rangeAt(source, at, at),
-      newText: `${uses.initializer.elements.length === 0 ? '' : ', '}${localName}`,
-    });
-  } else {
-    const last = object.properties.at(-1);
-    if (last === undefined) return null;
-    const tail = source.slice(last.end, object.end - 1);
-    const comma = tail.indexOf(',');
-    const multiline = source.slice(object.pos, object.end).includes('\n');
-    const at = comma === -1 ? last.end : last.end + comma + 1;
-    edits.push({
-      range: rangeAt(source, at, at),
-      newText: `${comma === -1 ? ',' : ''}${multiline ? `\n  uses: [${localName}],` : ` uses: [${localName}],`}`,
-    });
-  }
-  return { changes: { [uri]: edits } };
 }
 
 /** @param {ts.SourceFile} tree @param {string} className */
@@ -1091,27 +1010,6 @@ function definitionObject(tree, className) {
   };
   visit(tree);
   return found;
-}
-
-/** @param {ProjectModel} model @param {string} from @param {string} specifier */
-function resolveImport(model, from, specifier) {
-  if (specifier.startsWith('.')) return resolve(dirname(from), specifier);
-  for (const [prefix, directory] of Object.entries(model.prefixes)) {
-    if (specifier.startsWith(prefix)) return resolve(directory, specifier.slice(prefix.length));
-  }
-  return undefined;
-}
-
-/** @param {ProjectModel} model @param {string} from @param {string} target */
-function importSpecifier(model, from, target) {
-  const prefixes = Object.entries(model.prefixes)
-    .filter(([, directory]) => inside(target, directory))
-    .sort((left, right) => right[1].length - left[1].length);
-  const chosen = prefixes[0];
-  if (chosen !== undefined) return `${chosen[0]}${relative(chosen[1], target).split(sep).join('/')}`;
-  let path = relative(dirname(from), target).split(sep).join('/');
-  if (!path.startsWith('.')) path = `./${path}`;
-  return path;
 }
 
 /** @param {string} source @param {number} start @param {number} end */
@@ -1255,9 +1153,4 @@ function camelCase(value) {
 /** @param {string} value */
 function kebabCase(value) {
   return value.replace(/[A-Z]/gu, (character) => `-${character.toLowerCase()}`);
-}
-
-/** @param {string} value */
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }

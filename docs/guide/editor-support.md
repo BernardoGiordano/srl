@@ -20,6 +20,12 @@ The server provides:
 - semantic highlighting for interpolations and srl attributes, document links, template
   outlines, and workspace element symbols.
 
+Expression completion follows compiler types after a dot: `rows.` offers array members,
+loop items keep the iterable's element type, and `$event.` uses the bound element and DOM
+event. Loop names leave scope with their element. Tag rename changes parsed start and end
+tags, never tag-shaped text in comments or raw `script` and `style` content, and refuses
+an identity already registered by another element.
+
 JavaScript editing remains the editor's own JavaScript language service. The srl server
 adds the template half and project-model diagnostics; it does not replace JavaScript
 completion, formatting, or refactoring.

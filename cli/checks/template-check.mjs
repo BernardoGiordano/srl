@@ -938,26 +938,8 @@ function compilerState() {
  * @param {ts.CancellationToken} [cancellation]
  */
 function typecheck(shimPaths, generated, overrides = new Map(), cancellation = undefined) {
-  const state = compilerState();
+  const { program, state } = compilerProgram(shimPaths, generated, overrides);
   if (state.error !== undefined) return [state.error];
-
-  state.generated = generated;
-  state.overrides = new Map(
-    [...overrides].map(([path, source]) => [resolve(path), source]),
-  );
-  // TypeScript may reuse an old source file without asking the host for it, so a program
-  // built while a buffer differed from disk is only reusable for that same buffer text.
-  // The condition is the overlay itself rather than its absence: identical text means
-  // every file the old program retained is still the text this check is about, and an
-  // empty overlay after a non-empty one is a change like any other. ADR-0091.
-  const program = ts.createProgram({
-    rootNames: [...state.fileNames, ...shimPaths],
-    options: state.options,
-    host: state.host,
-    oldProgram: sameOverlay(state.overlay, state.overrides) ? state.program : undefined,
-  });
-  state.program = program;
-  state.overlay = state.overrides;
 
   // Asked per shim, not per program. `getPreEmitDiagnostics()` with no file typechecks
   // every file in the repository so that all but one file's findings can be discarded,
@@ -981,6 +963,39 @@ function typecheck(shimPaths, generated, overrides = new Map(), cancellation = u
   return ts.sortAndDeduplicateDiagnostics(found).filter((diagnostic) =>
     diagnostic.file === undefined ? true : wanted.has(resolve(diagnostic.file.fileName)),
   );
+}
+
+/**
+ * Build one compiler program for generated template source.
+ *
+ * Diagnostics and editor member lookup enter through this function, so overlays and
+ * reuse obey one rule. The generated root has a distinct path for each member query;
+ * TypeScript can then reuse the project while it must ask the host for the new source.
+ *
+ * @param {string[]} rootPaths
+ * @param {Map<string, GeneratedFile>} generated
+ * @param {ReadonlyMap<string, string>} [overrides]
+ */
+function compilerProgram(rootPaths, generated, overrides = new Map()) {
+  const state = compilerState();
+  state.generated = generated;
+  state.overrides = new Map(
+    [...overrides].map(([path, source]) => [resolve(path), source]),
+  );
+  // TypeScript may reuse an old source file without asking the host for it, so a program
+  // built while a buffer differed from disk is only reusable for that same buffer text.
+  // The condition is the overlay itself rather than its absence: identical text means
+  // every file the old program retained is still the text this check is about, and an
+  // empty overlay after a non-empty one is a change like any other. ADR-0091.
+  const program = ts.createProgram({
+    rootNames: [...state.fileNames, ...rootPaths],
+    options: state.options,
+    host: state.host,
+    oldProgram: sameOverlay(state.overlay, state.overrides) ? state.program : undefined,
+  });
+  state.program = program;
+  state.overlay = state.overrides;
+  return { program, state };
 }
 
 /**
@@ -1010,6 +1025,160 @@ function sameOverlay(left, right) {
  */
 export function invalidateCompiler() {
   compiler = undefined;
+}
+
+let semanticShim = 0;
+
+/**
+ * Properties of one value in template-expression scope.
+ *
+ * The language server supplies source context; this function supplies compiler meaning.
+ * It emits the same host access, signal unwrapping, loop element type, template globals,
+ * and DOM event target as diagnostics. No language feature reconstructs those types from
+ * class names or regular expressions. ADR-0092.
+ *
+ * @param {{
+ *   module: string,
+ *   className: string,
+ *   template: string,
+ *   expression: string,
+ *   loops?: Array<{ alias: string, iterable: string, indexAlias?: string }>,
+ *   event?: { tag: string, name: string },
+ *   elements?: Map<string, ElementType>,
+ *   globals?: Map<string, TemplateGlobal>,
+ *   files?: ReadonlyMap<string, string>,
+ * }} input
+ * @returns {Array<{ label: string, kind: number, detail: string, documentation: string }>}
+ */
+export function templateExpressionMembers(input) {
+  const component = {
+    module: resolve(input.module),
+    className: input.className,
+    template: input.template,
+    available: new Set(),
+  };
+  const builder = new ShimBuilder(
+    component,
+    [],
+    input.elements ?? new Map(),
+    input.globals ?? new Map(),
+  );
+  /** @type {Map<string, string>} */
+  const scope = new Map();
+  /** @type {string[]} */
+  const body = [];
+
+  for (const loop of input.loops ?? []) {
+    const iterable = builder.emit(
+      parseExpression(loop.iterable, input.template),
+      scope,
+      true,
+      0,
+    );
+    const listId = builder.id('completion_list');
+    const itemId = builder.id('completion_item');
+    const indexId = builder.id('completion_index');
+    const firstId = builder.id('completion_first');
+    const lastId = builder.id('completion_last');
+    const countId = builder.id('completion_count');
+    body.push(`  const ${listId} = ${iterable};\n`);
+    body.push(`  const ${itemId} = null as unknown as __Item<typeof ${listId}>;\n`);
+    body.push(`  const ${indexId}: number = 0;\n`);
+    body.push(`  const ${firstId}: boolean = false;\n`);
+    body.push(`  const ${lastId}: boolean = false;\n`);
+    body.push(`  const ${countId}: number = 0;\n`);
+    scope.set(loop.alias, itemId);
+    scope.set('$index', indexId);
+    scope.set('$first', firstId);
+    scope.set('$last', lastId);
+    scope.set('$count', countId);
+    if (loop.indexAlias !== undefined) scope.set(loop.indexAlias, indexId);
+  }
+
+  if (input.event !== undefined) {
+    const eventId = builder.id('completion_event');
+    body.push(
+      `  const ${eventId} = null as unknown as __TemplateEvent<${builder.elementType(input.event.tag)}, ${JSON.stringify(input.event.name)}>;\n`,
+    );
+    scope.set('$event', eventId);
+  }
+
+  const target = builder.emit(
+    parseExpression(input.expression, input.template),
+    scope,
+    true,
+    0,
+  );
+  body.push(`  const __target = ${target};\n  void __target;\n`);
+
+  const output = new GeneratedFile();
+  const componentSpecifier = moduleSpecifier(component.module, component.module);
+  output.write(`type __Host = InstanceType<typeof import(${JSON.stringify(componentSpecifier)})[${JSON.stringify(component.className)}]>;\n`);
+  output.write('type __Unwrap<T> = T extends import("@core/foundation/types.js").ReadonlySignal<infer V> ? V : T;\n');
+  output.write('type __Item<T> = __Unwrap<T> extends Iterable<infer I> ? I : never;\n');
+  output.write('declare function __unwrap<T>(value: T): __Unwrap<T>;\n');
+  output.write('type __Event<N extends string> = N extends keyof HTMLElementEventMap ? HTMLElementEventMap[N] : Event;\n');
+  output.write('type __TemplateEvent<E extends EventTarget, N extends string> = __Event<N> & { readonly target: E; readonly currentTarget: E };\n');
+  output.write('export {};\n');
+  for (const [name, global] of builder.globals) {
+    output.write(
+      `declare const ${globalIdentifier(name)}: typeof import(${JSON.stringify(moduleSpecifier(component.module, global.module))})[${JSON.stringify(global.exportName)}];\n`,
+    );
+  }
+  output.write('function __inspect(__host: __Host): void {\n');
+  for (const [name, id] of builder.hostNames) {
+    output.write(`  const ${id} = __unwrap(__host[${JSON.stringify(name)}]);\n`);
+  }
+  for (const line of body) output.write(line);
+  output.write('}\nvoid __inspect;\n');
+
+  semanticShim += 1;
+  const shim = resolve(
+    dirname(component.module),
+    `.${component.className}.template-semantics-${String(semanticShim)}.ts`,
+  );
+  const { program, state } = compilerProgram(
+    [shim],
+    new Map([[shim, output]]),
+    input.files,
+  );
+  if (state.error !== undefined) {
+    throw new Error(ts.flattenDiagnosticMessageText(state.error.messageText, '\n'));
+  }
+  const file = program.getSourceFile(shim);
+  if (file === undefined) return [];
+  /** @type {ts.Expression | undefined} */
+  let targetNode;
+  /** @param {ts.Node} node */
+  const visit = (node) => {
+    if (
+      targetNode === undefined &&
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === '__target'
+    ) targetNode = node.initializer;
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  if (targetNode === undefined) return [];
+
+  const checker = program.getTypeChecker();
+  const inspected = targetNode;
+  const type = checker.getNonNullableType(checker.getTypeAtLocation(inspected));
+  return checker
+    .getPropertiesOfType(type)
+    .map((symbol) => {
+      const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0] ?? inspected;
+      const memberType = checker.getTypeOfSymbolAtLocation(symbol, declaration);
+      const method = (symbol.flags & (ts.SymbolFlags.Method | ts.SymbolFlags.Function)) !== 0;
+      return {
+        label: symbol.name,
+        kind: method ? 2 : 10,
+        detail: `${symbol.name}: ${checker.typeToString(memberType, declaration, ts.TypeFormatFlags.NoTruncation)}`,
+        documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker)),
+      };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
 }
 
 /**

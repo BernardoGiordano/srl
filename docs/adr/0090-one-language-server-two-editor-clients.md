@@ -57,3 +57,7 @@ and structural reuse for overlays.
 ADR-0091 narrows that rule without waiting for such an interface: a program built while a
 buffer differed from disk is reused for exactly that buffer text, since every file it may
 have retained is then still the text the next check is about.
+
+ADR-0092 concentrates incomplete-template context, scope, compiler-backed expression
+members, and structural edit planning in one semantic snapshot used by every language
+feature.
