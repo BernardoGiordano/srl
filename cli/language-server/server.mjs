@@ -8,9 +8,11 @@
  * from the project's own `@srljs/cli`, so editor semantics match installed srl semantics.
  * ADR-0090.
  *
- * Dispatch answers messages; it does not decide when analysis runs. Document lifetime,
- * staleness and scheduling belong to `analysis.mjs`, so a message handler is a single
- * call with no ordering knowledge in it. ADR-0091.
+ * Dispatch answers messages; it does not decide when analysis runs, or where. Document
+ * lifetime, staleness, scheduling and the thread a check executes on belong to
+ * `analysis.mjs`, so a message handler is a single call with no ordering knowledge in it.
+ * This thread does no typechecking, which is what keeps a completion answerable while a
+ * template is being validated. ADR-0091, ADR-0095.
  *
  * What it asks of the client it asks once, and only where the client says it can answer:
  * the watchers for this project are registered here rather than also beside each editor
@@ -163,7 +165,9 @@ async function dispatch(method, params, answerable) {
     }
     case 'shutdown':
       shutdown = true;
-      analysis.dispose();
+      // Answered after the validation thread is gone, so `exit` cannot arrive while a
+      // compiler is still holding this project open.
+      await analysis.dispose();
       return null;
     case 'exit':
       process.exit(shutdown ? 0 : 1);

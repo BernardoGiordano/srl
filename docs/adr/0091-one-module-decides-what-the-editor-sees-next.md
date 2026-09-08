@@ -76,7 +76,8 @@ to the shim before any caller saw it — but the cost of computing it is now not
 
 Nothing preempts a running typecheck. One pathological template still holds the thread
 for its budget, and the honest fix is a worker thread, which means a second compiler and
-a second warmup to pay for it.
+a second warmup to pay for it. ADR-0095 takes that fix and replaces the budget with
+supersession; the rest of this record still holds.
 
 Revalidation covers open documents, as it did before. A template nobody has open keeps
 whatever the last `templates:check` run said about it.

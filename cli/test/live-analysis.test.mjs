@@ -316,3 +316,156 @@ function start() {
     },
   };
 }
+
+/**
+ * What isolated execution is for.
+ *
+ * These use a lane that is slow on purpose (`fixtures/slow-lane.mjs`) rather than a large
+ * fixture: the property under test is what the protocol thread can do while a check runs,
+ * and a fast real check would race every assertion. ADR-0095.
+ */
+const SLOW_LANE = new URL('./fixtures/slow-lane.mjs', import.meta.url);
+
+void test('a check does not occupy the thread that answers requests', async (context) => {
+  process.env.SRL_LANE_DELAY = '400';
+  const { analysis, published } = await slow(context);
+  analysis.open(uri(employees), 'html', 1, await readFile(employees, 'utf8'));
+
+  let ticks = 0;
+  const clock = setInterval(() => {
+    ticks += 1;
+  }, 10);
+  const started = Date.now();
+  await analysis.settle();
+  clearInterval(clock);
+
+  const waited = Date.now() - started;
+  assert.ok(waited >= 350, `the check took ${String(waited)} ms, so it was not the slow one`);
+  assert.ok(ticks >= 20, `only ${String(ticks)} timers ran on this thread during a check`);
+  assert.equal(published.length, 1, 'the document was not diagnosed once');
+});
+
+void test('an edit abandons the check it replaced', async (context) => {
+  process.env.SRL_LANE_DELAY = '400';
+  const { analysis, published } = await slow(context);
+  const source = await readFile(employees, 'utf8');
+  analysis.open(uri(employees), 'html', 1, source);
+  await inFlight();
+  analysis.change(uri(employees), 2, `${source}\n<p>replaced</p>`);
+  await analysis.settle();
+
+  assert.equal(published.length, 1, 'the superseded answer reached the editor');
+  assert.match(
+    String(published[0]?.diagnostics[0]?.message),
+    /check 2$/u,
+    'the published answer was the one the edit replaced',
+  );
+});
+
+void test('closing a document abandons its running check', async (context) => {
+  process.env.SRL_LANE_DELAY = '400';
+  const { analysis, published } = await slow(context);
+  analysis.open(uri(employees), 'html', 1, await readFile(employees, 'utf8'));
+  await inFlight();
+  analysis.close(uri(employees));
+  await analysis.settle();
+
+  assert.deepEqual(
+    published.map((entry) => entry.diagnostics),
+    [[]],
+    'a closed document was answered by the check it left behind',
+  );
+});
+
+void test('a configuration change replaces the validation thread', async (context) => {
+  process.env.SRL_LANE_DELAY = '0';
+  const { analysis, published } = await slow(context);
+  analysis.open(uri(employees), 'html', 1, await readFile(employees, 'utf8'));
+  await analysis.settle();
+  const first = thread(published);
+  assert.ok(first !== undefined, 'nothing was diagnosed');
+
+  published.length = 0;
+  analysis.watched([{ uri: uri(employeesHost) }]);
+  await analysis.settle();
+  assert.equal(thread(published), first, 'a source edit paid for a new compiler thread');
+
+  published.length = 0;
+  analysis.watched([{ uri: uri(resolve('tsconfig.json')) }]);
+  await analysis.settle();
+  assert.notEqual(
+    thread(published),
+    first,
+    'a configuration edit kept the thread built from the tsconfig.json it replaced',
+  );
+});
+
+void test('disposal ends the validation thread', async () => {
+  process.env.SRL_LANE_DELAY = '5000';
+  const service = new SrlLanguageService();
+  /** @type {Array<{ uri: string, diagnostics: Array<{ message: string }> }>} */
+  const published = [];
+  const analysis = new LiveAnalysis({
+    service,
+    publish: (where, diagnostics) =>
+      published.push({
+        uri: where,
+        diagnostics: /** @type {Array<{ message: string }>} */ (diagnostics),
+      }),
+    lane: SLOW_LANE,
+  });
+  await analysis.start();
+  analysis.open(uri(employees), 'html', 1, await readFile(employees, 'utf8'));
+  await inFlight();
+
+  const started = Date.now();
+  await analysis.dispose();
+  const waited = Date.now() - started;
+  assert.ok(waited < 1500, `disposal waited ${String(waited)} ms for a check to finish`);
+
+  published.length = 0;
+  await pause(150);
+  assert.deepEqual(published, [], 'a disposed analysis published on the way out');
+});
+
+/**
+ * A live analysis whose checks run in the slow lane.
+ *
+ * @param {import('node:test').TestContext} context
+ */
+async function slow(context) {
+  const service = new SrlLanguageService();
+  /** @type {Array<{ uri: string, diagnostics: Array<{ message: string }> }>} */
+  const published = [];
+  const analysis = new LiveAnalysis({
+    service,
+    publish: (where, diagnostics) =>
+      published.push({
+        uri: where,
+        diagnostics: /** @type {Array<{ message: string }>} */ (diagnostics),
+      }),
+    report: (text) => assert.fail(text),
+    lane: SLOW_LANE,
+  });
+  context.after(() => analysis.dispose());
+  await analysis.start();
+  published.length = 0;
+  return { analysis, published, service };
+}
+
+/** Long enough for the debounce to elapse and the lane to be inside a check. */
+function inFlight() {
+  return pause(260);
+}
+
+/** @param {number} ms */
+function pause(ms) {
+  return new Promise((done) => {
+    setTimeout(done, ms);
+  });
+}
+
+/** @param {Array<{ diagnostics: Array<{ message: string }> }>} published @returns {string | undefined} The thread the last answer came from. */
+function thread(published) {
+  return /^lane (\d+)/u.exec(String(published.at(-1)?.diagnostics[0]?.message))?.[1];
+}
