@@ -81,6 +81,48 @@ void test('language service exposes the srl template contract', async (context) 
     service.close(litHostUri);
   });
 
+  await context.test('offers no srl grammar inside handwritten Lit templates', async () => {
+    const litSource = [
+      "import { html } from 'lit';",
+      'const view = html`<ui-table *for="row of rows" (click)=${pick}></ui-table>`;',
+      '',
+    ].join('\n');
+    service.open(litHostUri, 'javascript', 2, litSource);
+    assert.deepEqual(
+      await service.completion(litHostUri, positionAt(litSource, litSource.indexOf('<ui-table') + 3)),
+      [],
+    );
+    assert.deepEqual(
+      await service.completion(litHostUri, positionAt(litSource, litSource.indexOf('*for'))),
+      [],
+    );
+    assert.deepEqual((await service.semanticTokens(litHostUri)).data, []);
+    assert.deepEqual(await service.documentSymbols(litHostUri), []);
+
+    // Tag identity is the one thing both authored forms share, so navigation still answers.
+    const onTag = positionAt(litSource, litSource.indexOf('ui-table') + 2);
+    assert.match((await service.definition(litHostUri, onTag))[0]?.uri ?? '', /ui-table\.js$/u);
+    assert.match((await service.hover(litHostUri, onTag))?.contents.value ?? '', /UiTable/u);
+    service.close(litHostUri);
+  });
+
+  await context.test('follows Lit tag uses through aliases, svg and nesting', async () => {
+    const litSource = [
+      "import { html as h, svg } from 'lit';",
+      'const badge = svg`<ui-date-range></ui-date-range>`;',
+      'const row = h`<div>${h`<ui-date-range></ui-date-range>`}</div>`;',
+      '',
+    ].join('\n');
+    service.open(litHostUri, 'javascript', 3, litSource);
+    const position = positionAt(litSource, litSource.indexOf('<ui-date-range') + 2);
+    const references = await service.references(litHostUri, position, false);
+    assert.deepEqual(
+      references.filter((reference) => reference.uri === litHostUri).map((reference) => reference.range.start.line),
+      [1, 1, 2, 2],
+    );
+    service.close(litHostUri);
+  });
+
   await context.test('offers a uses/import quick fix', async () => {
     const source = `${original}\n<ui-dialog></ui-dialog>`;
     service.change(uri, 6, source);

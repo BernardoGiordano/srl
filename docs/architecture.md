@@ -80,6 +80,7 @@ the reason is recorded in the module that owns it.
 | How an editor consumes the project model and template checker | `cli/language-server/`; editor launchers live under `editors/` |
 | What one editor session owns, and when it starts, stops or restarts | `editors/vscode/session.cjs`; the watchers it needs are registered by `cli/language-server/server.mjs` |
 | How an incomplete editor template becomes context, scope, typed members and edit ranges | `cli/language-server/semantics.mjs` |
+| Which authoring form a document is written in, and what each editor feature may ask of it | `cli/language-server/authoring.mjs` — one view over an external srl template or a module's inline Lit templates |
 | A dependency or layering rule | `tools/checks/verify-deps.mjs` |
 | Whether an application's import map still matches the library it installed | `cli/checks/importmap-check.mjs` — the one check a consumer runs, because the failures are blank pages |
 | What tsc has to know to resolve `@core/` | `source/tsconfig.base.json` — published, extended rather than copied |

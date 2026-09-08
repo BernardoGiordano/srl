@@ -406,13 +406,13 @@ function javaScriptDocuments(documents) {
  * Every tag the inline Lit templates of one JavaScript module name, at the module's own
  * offsets.
  *
- * A handwritten Lit component writes its markup in `html` tagged templates instead of a
- * sibling `.html` file, so a scan that visits template files alone reports no uses for
- * markup that is genuinely there, and a rename built from that scan leaves those uses
- * naming a tag nothing defines any more. Searching the module text instead would edit
- * the tag written in an import comment or a string.
+ * A handwritten Lit component writes its markup in tagged templates instead of a sibling
+ * `.html` file, so a scan that visits template files alone reports no uses for markup
+ * that is genuinely there, and a rename built from that scan leaves those uses naming a
+ * tag nothing defines any more. Searching the module text instead would edit the tag
+ * written in an import comment or a string.
  *
- * The literal chunks of every `html` template are copied into a blank of the module's
+ * The literal chunks of every markup template are copied into a blank of the module's
  * own length, so what the shared scanner reads is markup only and the spans it reports
  * are already offsets into the module. A template nested in a substitution is another
  * tagged template, copied by the same walk; everything else — code, comments, strings,
@@ -422,7 +422,7 @@ function javaScriptDocuments(documents) {
  * @returns {Array<{ name: string, start: number, end: number }>}
  */
 export function litTags(source) {
-  if (!source.includes('html`')) return [];
+  if (!source.includes('`')) return [];
   const markup = litMarkup(source);
   if (markup === null) return [];
   return scanTemplate(markup).tags.map(({ name, start, end }) => ({ name, start, end }));
@@ -431,6 +431,7 @@ export function litTags(source) {
 /** @param {string} source @returns {string | null} The module's Lit markup at its own offsets. */
 function litMarkup(source) {
   const tree = ts.createSourceFile('module.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const markupTags = markupTagNames(tree);
   const blank = new Array(source.length).fill(' ');
   let found = false;
 
@@ -442,7 +443,7 @@ function litMarkup(source) {
 
   /** @param {ts.Node} node */
   const visit = (node) => {
-    if (ts.isTaggedTemplateExpression(node) && ts.isIdentifier(node.tag) && node.tag.text === 'html') {
+    if (ts.isTaggedTemplateExpression(node) && ts.isIdentifier(node.tag) && markupTags.has(node.tag.text)) {
       const literal = node.template;
       if (ts.isNoSubstitutionTemplateLiteral(literal)) keep(literal.getStart(tree) + 1, literal.getEnd() - 1);
       else {
@@ -459,6 +460,27 @@ function litMarkup(source) {
 
   ts.forEachChild(tree, visit);
   return found ? blank.join('') : null;
+}
+
+/**
+ * The local names that tag markup in this module. `html` and `svg` are the names Lit
+ * documents, and both are markup; either may arrive under an alias, and a renamed import
+ * writes the same templates.
+ *
+ * @param {ts.SourceFile} tree
+ */
+function markupTagNames(tree) {
+  const names = new Set(['html', 'svg']);
+  for (const statement of tree.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      const imported = element.propertyName?.text ?? element.name.text;
+      if (imported === 'html' || imported === 'svg') names.add(element.name.text);
+    }
+  }
+  return names;
 }
 
 /** @param {string} source */

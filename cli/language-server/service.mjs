@@ -16,7 +16,7 @@ import ts from 'typescript';
 import { checkTemplateSource, parseTemplate } from '../checks/template-check.mjs';
 import { apps } from '../layout.mjs';
 import { readProject } from '../project-model/index.mjs';
-import { litTags, TemplateSemantics } from './semantics.mjs';
+import { AuthoredTemplates } from './authoring.mjs';
 
 /** @import { Diagnostic } from '../diagnostics/types.js' */
 /** @import { ElementRecord, ProjectModel } from '../project-model/types.js' */
@@ -99,15 +99,6 @@ const DIRECTIVES = [
   },
 ];
 
-const TOKEN_TYPES = {
-  event: 11,
-  keyword: 15,
-  method: 12,
-  operator: 21,
-  property: 9,
-  variable: 8,
-};
-
 /**
  * One long-lived language service per repository root.
  */
@@ -116,6 +107,8 @@ export class SrlLanguageService {
   documents = new Map();
   /** @type {ProjectModel[]} */
   models = [];
+  /** Which authoring form each document is in, and what may be asked of it. ADR-0092. */
+  #authoring = new AuthoredTemplates({ documents: this.documents });
 
   /** Rebuild project models after source, declarations, or import maps change. */
   async reload() {
@@ -176,7 +169,7 @@ export class SrlLanguageService {
 
     for (const [uri, document] of this.documents) {
       const template = fromUri(uri);
-      if (!template.endsWith('.html')) continue;
+      if (this.#authoring.form(template) !== 'srl') continue;
       const model = this.model(uri);
       if (model === undefined) continue;
       const component = this.component(model, template);
@@ -256,7 +249,7 @@ export class SrlLanguageService {
       found.push(...project.diagnostics.filter((diagnostic) => diagnostic.file === path));
     }
 
-    if (path.endsWith('.html')) {
+    if (this.#authoring.form(path) === 'srl') {
       const component = this.component(model, path);
       if (component !== undefined) {
         try {
@@ -309,12 +302,12 @@ export class SrlLanguageService {
     const model = this.model(uri);
     if (model === undefined) return [];
     const component = this.component(model, fromUri(uri));
-    const semantics = this.#semantics(uri, source, model, component);
-    const context = semantics.at(offset);
+    const view = this.#view(uri, source, model, component);
+    const context = view.at(offset);
 
     if (context.kind === 'tag' && context.typed) return tagCompletions(model, component);
     if (context.kind === 'expression') {
-      const members = semantics.membersAt(offset);
+      const members = view.membersAt(offset);
       if (members !== undefined) return members;
       const symbols =
         component === undefined
@@ -338,12 +331,14 @@ export class SrlLanguageService {
     const model = this.model(uri);
     if (model === undefined) return null;
     const component = this.component(model, fromUri(uri));
-    const context = this.#semantics(uri, source, model, component).at(offset);
-    if (context.kind === 'tag') {
-      const record = model.elements.get(context.name);
+    const view = this.#view(uri, source, model, component);
+    const tag = view.tagAt(offset);
+    if (tag !== undefined) {
+      const record = model.elements.get(tag.name);
       if (record !== undefined) return elementHover(record);
     }
 
+    const context = view.at(offset);
     if (context.kind === 'attribute') {
       const record = model.elements.get(context.tag);
       const hover = attributeHover(context.name, record);
@@ -380,12 +375,14 @@ export class SrlLanguageService {
     const model = this.model(uri);
     if (model === undefined) return [];
     const component = this.component(model, fromUri(uri));
-    const context = this.#semantics(uri, source, model, component).at(offset);
-    if (context.kind === 'tag') {
-      const record = model.elements.get(context.name);
+    const view = this.#view(uri, source, model, component);
+    const tag = view.tagAt(offset);
+    if (tag !== undefined) {
+      const record = model.elements.get(tag.name);
       if (record !== undefined) return [await elementLocation(record, this.documents)];
     }
 
+    const context = view.at(offset);
     if (context.kind === 'attribute') {
       const record = model.elements.get(context.tag);
       const name = bindingName(context.name);
@@ -425,25 +422,14 @@ export class SrlLanguageService {
     const uses = [];
     const seen = new Set();
     for (const project of this.models) {
-      for (const template of project.templates.values()) {
-        if (seen.has(template.path)) continue;
-        seen.add(template.path);
-        const uri = toUri(template.path);
-        const text = await this.source(uri);
-        if (!text.includes(name)) continue;
-        const owner = this.component(project, template.path);
-        const spans = this.#semantics(uri, text, project, owner).tags(name);
-        if (spans.length > 0) uses.push({ uri, text, spans });
-      }
-      for (const path of project.modules.keys()) {
+      for (const path of [...project.templates.keys(), ...project.modules.keys()]) {
         if (seen.has(path)) continue;
         seen.add(path);
         const uri = toUri(path);
         const text = await this.source(uri);
         if (!text.includes(name)) continue;
-        const spans = litTags(text)
-          .filter((candidate) => candidate.name === name)
-          .map(({ start, end }) => ({ start, end }));
+        const owner = this.component(project, path);
+        const spans = this.#view(uri, text, project, owner).tags(name);
         if (spans.length > 0) uses.push({ uri, text, spans });
       }
     }
@@ -455,7 +441,7 @@ export class SrlLanguageService {
     const source = await this.source(uri);
     const model = this.model(uri);
     if (model === undefined) return [];
-    const tag = await tagIdentityAt(uri, source, position, model, this.documents);
+    const tag = await this.#tagIdentityAt(uri, source, position, model);
     if (tag === undefined || !model.elements.has(tag.name)) return [];
     const locations = [];
     for (const use of await this.#tagUses(tag.name)) {
@@ -475,7 +461,7 @@ export class SrlLanguageService {
     const source = await this.source(uri);
     const model = this.model(uri);
     if (model === undefined) return null;
-    const tag = await tagIdentityAt(uri, source, position, model, this.documents);
+    const tag = await this.#tagIdentityAt(uri, source, position, model);
     if (tag === undefined || model.elements.has(tag.name) !== true) return null;
     return { range: rangeAt(source, tag.start, tag.end), placeholder: tag.name };
   }
@@ -488,7 +474,7 @@ export class SrlLanguageService {
     const source = await this.source(uri);
     const model = this.model(uri);
     if (model === undefined) return null;
-    const tag = await tagIdentityAt(uri, source, position, model, this.documents);
+    const tag = await this.#tagIdentityAt(uri, source, position, model);
     if (tag === undefined) return null;
     const record = model.elements.get(tag.name);
     if (record === undefined) return null;
@@ -520,20 +506,20 @@ export class SrlLanguageService {
     const model = this.model(uri);
     if (model === undefined) return { data: [] };
     const component = this.component(model, fromUri(uri));
-    const semantics = this.#semantics(uri, source, model, component);
-    return { data: encodeSemanticTokens(source, semanticSpans(source, semantics)) };
+    const view = this.#view(uri, source, model, component);
+    return { data: encodeSemanticTokens(source, view.highlights()) };
   }
 
   /** @param {string} uri Custom tag names link to their declaring JavaScript modules. */
   async documentLinks(uri) {
     const source = await this.source(uri);
     const model = this.model(uri);
-    if (model === undefined || !fromUri(uri).endsWith('.html')) return [];
+    if (model === undefined) return [];
     const component = this.component(model, fromUri(uri));
-    const semantics = this.#semantics(uri, source, model, component);
+    const view = this.#view(uri, source, model, component);
     const links = [];
     for (const [tag, record] of model.elements) {
-      for (const span of semantics.tags(tag)) {
+      for (const span of view.tags(tag)) {
         links.push({
           range: rangeAt(source, span.start, span.end),
           target: toUri(record.module),
@@ -547,11 +533,10 @@ export class SrlLanguageService {
   /** @param {string} uri Template outline preserving element nesting. */
   async documentSymbols(uri) {
     const source = await this.source(uri);
-    if (!fromUri(uri).endsWith('.html')) return [];
     const model = this.model(uri);
     if (model === undefined) return [];
     const component = this.component(model, fromUri(uri));
-    const roots = this.#semantics(uri, source, model, component).roots;
+    const roots = this.#view(uri, source, model, component).roots;
     const symbols = [];
     for (const node of roots) {
       if (node.kind === 'element') symbols.push(elementSymbol(source, node));
@@ -591,13 +576,11 @@ export class SrlLanguageService {
         continue;
       }
       const start = offsetAt(source, range.start);
-      const semantics = this.#semantics(uri, source, model, owner);
-      const first = semantics.at(start);
-      const second = semantics.at(Math.min(source.length, start + 1));
-      const tag = first.kind === 'tag' ? first : second.kind === 'tag' ? second : undefined;
+      const view = this.#view(uri, source, model, owner);
+      const tag = view.tagAt(start) ?? view.tagAt(Math.min(source.length, start + 1));
       const target = tag === undefined ? undefined : model.elements.get(tag.name);
       if (target === undefined || !target.exported) continue;
-      const edit = await semantics.addUse(target);
+      const edit = await view.addUse(target);
       if (edit === null) continue;
       actions.push({
         title: `Add ${target.className} to ${owner.className}.uses`,
@@ -611,14 +594,40 @@ export class SrlLanguageService {
   }
 
   /** @param {string} uri @param {string} source @param {ProjectModel} model @param {ElementRecord | undefined} component */
-  #semantics(uri, source, model, component) {
-    return new TemplateSemantics({
-      source,
-      where: fromUri(uri),
-      model,
-      component,
-      documents: this.documents,
-    });
+  #view(uri, source, model, component) {
+    return this.#authoring.view({ path: fromUri(uri), source, model, component });
+  }
+
+  /**
+   * Resolve custom-element identity from a tag written in either authored form, or from
+   * its JavaScript registration literal. The last lets rename start at the declaration
+   * while retaining one project-wide tag operation. ADR-0090, ADR-0092.
+   *
+   * @param {string} uri
+   * @param {string} source
+   * @param {Position} position
+   * @param {ProjectModel} model
+   */
+  async #tagIdentityAt(uri, source, position, model) {
+    const offset = offsetAt(source, position);
+    const path = fromUri(uri);
+    const view = this.#view(uri, source, model, this.component(model, path));
+    if (view.form === 'srl') return view.tagAt(offset);
+
+    for (const record of model.elements.values()) {
+      if (record.module !== path) continue;
+      const declaration = await tagDeclaration(record, this.documents);
+      if (declaration === null) continue;
+      const start = offsetAt(source, declaration.range.start);
+      const end = offsetAt(source, declaration.range.end);
+      if (start <= offset && offset <= end) return { name: record.tag, start, end };
+    }
+
+    // A handwritten Lit component names other elements in its own markup templates, and
+    // the tag under the cursor there is the same identity as one written in a template
+    // file, not a string the caller happens to be editing.
+    const inline = view.tagAt(offset);
+    return inline !== undefined && model.elements.has(inline.name) ? inline : undefined;
   }
 }
 
@@ -809,52 +818,6 @@ function bindingName(name) {
   return camelCase(name.slice(2, -1));
 }
 
-/**
- * Resolve custom-element identity from either an actual template tag or its JavaScript
- * registration literal. The latter lets rename start at the declaration while retaining
- * one project-wide tag operation. ADR-0090, ADR-0092.
- *
- * @param {string} uri
- * @param {string} source
- * @param {Position} position
- * @param {ProjectModel} model
- * @param {Map<string, { text: string }>} documents
- */
-async function tagIdentityAt(uri, source, position, model, documents) {
-  const offset = offsetAt(source, position);
-  if (fromUri(uri).endsWith('.html')) {
-    const semantics = new TemplateSemantics({
-      source,
-      where: fromUri(uri),
-      model,
-      documents,
-    });
-    const context = semantics.at(offset);
-    if (context.kind === 'tag') {
-      return { name: context.name, start: context.start, end: context.end };
-    }
-    return undefined;
-  }
-
-  const path = fromUri(uri);
-  for (const record of model.elements.values()) {
-    if (record.module !== path) continue;
-    const declaration = await tagDeclaration(record, documents);
-    if (declaration === null) continue;
-    const start = offsetAt(source, declaration.range.start);
-    const end = offsetAt(source, declaration.range.end);
-    if (start <= offset && offset <= end) return { name: record.tag, start, end };
-  }
-
-  // A handwritten Lit component names other elements in its own `html` templates, and
-  // the tag under the cursor there is the same identity as one written in a template
-  // file, not a string the caller happens to be editing.
-  const inline = litTags(source).find(
-    (candidate) => candidate.start <= offset && offset <= candidate.end && model.elements.has(candidate.name),
-  );
-  return inline;
-}
-
 /** @param {ElementRecord} record @param {Map<string, { text: string }>} documents @returns {Promise<{ uri: string, range: Range }>} */
 async function elementLocation(record, documents) {
   return (await tagDeclaration(record, documents)) ?? moduleLocation(record.module, record.className, documents);
@@ -994,47 +957,6 @@ function wordAt(source, offset) {
   while (start > 0 && /[A-Za-z0-9_$]/u.test(source[start - 1] ?? '')) start -= 1;
   while (end < source.length && /[A-Za-z0-9_$]/u.test(source[end] ?? '')) end += 1;
   return start === end ? undefined : { text: source.slice(start, end), start, end };
-}
-
-/** @param {string} source @param {TemplateSemantics} semantics */
-function semanticSpans(source, semantics) {
-  /** @type {Array<{ start: number, length: number, type: number }>} */
-  const spans = [];
-  addPattern(/\{\{|\}\}/gu, TOKEN_TYPES.operator);
-  addPattern(/\*(?:if|else|for)\b/gu, TOKEN_TYPES.keyword);
-  addCaptured(/\(([A-Za-z][\w:-]*)\)/gu, 1, TOKEN_TYPES.event);
-  addCaptured(/\[([.?]?[A-Za-z][\w:-]*)\]/gu, 1, TOKEN_TYPES.property);
-  for (const expression of semantics.expressionSpans()) {
-    const text = source.slice(expression.start, expression.end);
-    for (const match of text.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/gu)) {
-      const start = expression.start + (match.index ?? 0);
-      const after = text.slice((match.index ?? 0) + match[0].length).trimStart()[0];
-      spans.push({
-        start,
-        length: match[0].length,
-        type: after === '(' ? TOKEN_TYPES.method : TOKEN_TYPES.variable,
-      });
-    }
-  }
-  return spans
-    .sort((left, right) => left.start - right.start || right.length - left.length)
-    .filter((span, index, all) => index === 0 || span.start >= (all[index - 1]?.start ?? 0) + (all[index - 1]?.length ?? 0));
-
-  /** @param {RegExp} pattern @param {number} type */
-  function addPattern(pattern, type) {
-    for (const match of source.matchAll(pattern)) {
-      spans.push({ start: match.index ?? 0, length: match[0].length, type });
-    }
-  }
-
-  /** @param {RegExp} pattern @param {number} group @param {number} type */
-  function addCaptured(pattern, group, type) {
-    for (const match of source.matchAll(pattern)) {
-      const value = match[group];
-      if (value === undefined) continue;
-      spans.push({ start: (match.index ?? 0) + match[0].indexOf(value), length: value.length, type });
-    }
-  }
 }
 
 /** @param {string} source @param {Array<{ start: number, length: number, type: number }>} spans */
