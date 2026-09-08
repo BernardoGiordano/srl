@@ -7,8 +7,11 @@
 
   <description><![CDATA[
     Language support for srl templates: inline diagnostics, completion, hover,
-    navigation, references, rename, quick fixes, semantic highlighting, and outlines.
-    Uses the project's own @srljs/cli so editor behavior matches the installed runtime.
+    navigation, references, quick fixes, semantic highlighting, outlines, and srl live
+    templates. Uses the project's own @srljs/cli so editor behavior matches the installed
+    runtime.
+    <p>Rename over LSP arrives in the platform in 2026.1.1. On 2026.1 every other feature
+    listed here works and rename stays with WebStorm's own JavaScript refactoring.</p>
   ]]></description>
 
   <depends>com.intellij.modules.platform</depends>
@@ -18,5 +21,7 @@
 
   <extensions defaultExtensionNs="com.intellij">
     <platform.lsp.serverSupportProvider implementation="dev.santella.srl.SrlLspServerSupportProvider"/>
+    <!-- The same six snippets editors/vscode/snippets/*.json contributes. ADR-0090. -->
+    <defaultLiveTemplates file="/liveTemplates/srl.xml"/>
   </extensions>
 </idea-plugin>

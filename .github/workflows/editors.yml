@@ -1,0 +1,63 @@
+name: editors
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The two plugins are the only things in this repository a user installs rather than
+# imports, and neither is built by `npm run check`: check runs the contract CONTRIBUTING.md
+# states, and that contract does not ask a contributor for Java. So packaging lives here,
+# beside it, and the artifacts it uploads are the ones a reviewer installs to try a change.
+# ADR-0094.
+jobs:
+  vscode:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - run: npm ci
+        working-directory: editors/vscode
+
+      - run: npm test
+        working-directory: editors/vscode
+
+      # Packaging is the check: it bundles the extension host entry point, so a syntax
+      # error or a missing require fails here rather than on somebody's first install.
+      - run: npm run package
+        working-directory: editors/vscode
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: editors/vscode/*.vsix
+
+  webstorm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: maven
+
+      # `package` compiles against the platform, runs the locator tests and lays out the
+      # ZIP the marketplace and Install Plugin from Disk expect. The Plugin Verifier needs
+      # an installed IDE, so it stays a local command; see editors/webstorm/pom.xml.
+      - run: mvn -B package
+        working-directory: editors/webstorm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webstorm-plugin
+          path: editors/webstorm/target/*.zip

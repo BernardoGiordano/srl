@@ -11,8 +11,15 @@
  * Dispatch answers messages; it does not decide when analysis runs. Document lifetime,
  * staleness and scheduling belong to `analysis.mjs`, so a message handler is a single
  * call with no ordering knowledge in it. ADR-0091.
+ *
+ * What it asks of the client it asks once, and only where the client says it can answer:
+ * the watchers for this project are registered here rather than also beside each editor
+ * adapter, and an unimplemented method is refused rather than answered. ADR-0094.
  */
 
+import { pathToFileURL } from 'node:url';
+
+import { REPO } from '../layout.mjs';
 import { LiveAnalysis } from './analysis.mjs';
 import { SrlLanguageService } from './service.mjs';
 
@@ -25,10 +32,25 @@ const analysis = new LiveAnalysis({
 let buffer = Buffer.alloc(0);
 let shutdown = false;
 let nextRequest = 1;
+/** What the client said it can do, read once from `initialize`. @type {any} */
+let clientCapabilities = {};
 /** Requests being answered. @type {Set<string | number>} */
 const pending = new Set();
 /** Requests the client withdrew before an answer was written. @type {Set<string | number>} */
 const cancelled = new Set();
+
+/**
+ * A failure that names the code the protocol reserves for it. Without one every failure
+ * is an internal error, and a client cannot tell a method this server does not implement
+ * from a method that implements it and threw.
+ */
+class RpcError extends Error {
+  /** @param {number} code @param {string} message */
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+  }
+}
 
 process.stdin.on('data', (chunk) => {
   buffer = Buffer.concat([buffer, Buffer.from(chunk)]);
@@ -73,7 +95,7 @@ async function receive(message) {
   const answerable = id !== undefined && id !== null;
   if (answerable) pending.add(id);
   try {
-    const result = await dispatch(message.method, message.params ?? {});
+    const result = await dispatch(message.method, message.params ?? {}, answerable);
     if (!answerable) return;
     // A withdrawn request gets the answer the protocol reserves for one. A client that
     // asked to forget a request should not have to work out which reply to ignore.
@@ -81,7 +103,8 @@ async function receive(message) {
     else respond(id, result);
   } catch (cause) {
     const error = cause instanceof Error ? cause.message : String(cause);
-    if (answerable) respondError(id, cancelled.has(id) ? -32800 : -32603, error);
+    const code = cause instanceof RpcError ? cause.code : -32603;
+    if (answerable) respondError(id, cancelled.has(id) ? -32800 : code, error);
     else process.stderr.write(`srl language server: ${message.method}: ${error}\n`);
   } finally {
     if (answerable) {
@@ -91,10 +114,11 @@ async function receive(message) {
   }
 }
 
-/** @param {string} method @param {any} params */
-async function dispatch(method, params) {
+/** @param {string} method @param {any} params @param {boolean} answerable */
+async function dispatch(method, params, answerable) {
   switch (method) {
     case 'initialize': {
+      clientCapabilities = params.capabilities ?? {};
       await analysis.start();
       return {
         capabilities: {
@@ -125,24 +149,18 @@ async function dispatch(method, params) {
         serverInfo: { name: 'srl', version: '0.7.0' },
       };
     }
-    case 'initialized':
-      request('client/registerCapability', {
-        registrations: [
-          {
-            id: 'srl-source-watch',
-            method: 'workspace/didChangeWatchedFiles',
-            registerOptions: {
-              watchers: [
-                { globPattern: '**/*.html', kind: 7 },
-                { globPattern: '**/*.js', kind: 7 },
-                { globPattern: '**/*.mjs', kind: 7 },
-                { globPattern: '**/{package,tsconfig}.json', kind: 7 },
-              ],
-            },
-          },
-        ],
-      });
+    case 'initialized': {
+      const registration = sourceWatchRegistration();
+      if (registration === null) {
+        process.stderr.write(
+          'srl language server: the client does not register file watchers, so edits made ' +
+            'outside its open buffers refresh only on restart\n',
+        );
+      } else {
+        request('client/registerCapability', { registrations: [registration] });
+      }
       return null;
+    }
     case 'shutdown':
       shutdown = true;
       analysis.dispose();
@@ -211,9 +229,41 @@ async function dispatch(method, params) {
     case 'workspace/didChangeConfiguration':
       return null;
     default:
-      if (params.id !== undefined) throw new Error(`Method not found: ${method}`);
+      // A notification is ignored, as the protocol requires; a request is answered with
+      // the code that says so. `params.id` was read here, and a request carries its id
+      // on the message rather than in its parameters, so every unknown method was
+      // answered `null` — a client cannot negotiate against a server that pretends.
+      if (answerable) throw new RpcError(-32601, `Method not found: ${method}`);
       return null;
   }
+}
+
+/**
+ * The files this server reads, as a watch registration the client owns, or null when the
+ * client cannot take one.
+ *
+ * Watching is asked for once, here, rather than also being set up beside each client: the
+ * VS Code adapter used to add a folder watcher of its own, so one edit reloaded a project
+ * twice, and a global glob meant every root in a multi-root window reloaded for every
+ * other root's edit. The patterns are rooted at this server's own project when the client
+ * supports a relative pattern, which is what keeps one root's edit out of another root's
+ * model. ADR-0094.
+ */
+function sourceWatchRegistration() {
+  const watched = clientCapabilities.workspace?.didChangeWatchedFiles;
+  if (watched?.dynamicRegistration !== true) return null;
+  const baseUri = watched.relativePatternSupport === true ? pathToFileURL(REPO).href : null;
+  const patterns = ['**/*.html', '**/*.js', '**/*.mjs', '**/{package,tsconfig}.json'];
+  return {
+    id: 'srl-source-watch',
+    method: 'workspace/didChangeWatchedFiles',
+    registerOptions: {
+      watchers: patterns.map((pattern) => ({
+        globPattern: baseUri === null ? pattern : { baseUri, pattern },
+        kind: 7,
+      })),
+    },
+  };
 }
 
 /** @param {string | number} id @param {unknown} result */

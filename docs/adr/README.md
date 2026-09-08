@@ -92,6 +92,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0091](0091-one-module-decides-what-the-editor-sees-next.md) | One module decides what the editor sees next | accepted | `cli/language-server/analysis.mjs`, `cli/language-server/server.mjs`, `cli/language-server/service.mjs`, `cli/checks/template-check.mjs` |
 | [ADR-0092](0092-one-semantic-snapshot-interprets-an-editing-template.md) | One semantic snapshot interprets an editing template | accepted | `cli/language-server/semantics.mjs`, `cli/language-server/service.mjs`, `cli/checks/template-check.mjs` |
 | [ADR-0093](0093-one-element-model-preserves-authored-meaning.md) | One Element model preserves authored meaning | accepted | `cli/project-model/`, `cli/checks/template-check.mjs`, `cli/language-server/` |
+| [ADR-0094](0094-an-editor-session-owns-what-it-started.md) | An editor session owns what it started | accepted | `editors/vscode/`, `editors/webstorm/`, `cli/language-server/server.mjs` |
 
 <!-- /generated:adr-index -->
 

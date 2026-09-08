@@ -1,0 +1,84 @@
+<templateSet group="srl">
+  <!--
+    The WebStorm half of the snippets editors/vscode/snippets/*.json contributes. Snippets
+    are declarative editor resources rather than language-server features, so each editor
+    carries its own copy of the same six. ADR-0090.
+
+    A literal dollar is written `$$`: `$$event` is the srl template global, not a variable
+    this template asks for.
+  -->
+  <template name="srl-interpolation"
+            value="{{ $VALUE$ }}$END$"
+            description="Interpolate a typed srl template expression"
+            toReformat="false"
+            toShortenFQNames="false">
+    <variable name="VALUE" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="HTML" value="true"/>
+    </context>
+  </template>
+
+  <template name="srl-if"
+            value="&lt;$TAG$ *if=&quot;$CONDITION$&quot;&gt;&#10;  $END$&#10;&lt;/$TAG$&gt;"
+            description="srl conditional element"
+            toReformat="true"
+            toShortenFQNames="false">
+    <variable name="TAG" expression="" defaultValue="&quot;div&quot;" alwaysStopAt="true"/>
+    <variable name="CONDITION" expression="" defaultValue="&quot;condition&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="HTML" value="true"/>
+    </context>
+  </template>
+
+  <template name="srl-for"
+            value="&lt;$TAG$ *for=&quot;$ITEM$ of $ITEMS$; key: $ITEM$.$KEY$&quot;&gt;&#10;  {{ $ITEM$.$FIELD$ }}&#10;&lt;/$TAG$&gt;$END$"
+            description="srl keyed loop"
+            toReformat="true"
+            toShortenFQNames="false">
+    <variable name="TAG" expression="" defaultValue="&quot;div&quot;" alwaysStopAt="true"/>
+    <variable name="ITEM" expression="" defaultValue="&quot;item&quot;" alwaysStopAt="true"/>
+    <variable name="ITEMS" expression="" defaultValue="&quot;items&quot;" alwaysStopAt="true"/>
+    <variable name="KEY" expression="" defaultValue="&quot;id&quot;" alwaysStopAt="true"/>
+    <variable name="FIELD" expression="" defaultValue="&quot;name&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="HTML" value="true"/>
+    </context>
+  </template>
+
+  <template name="srl-event"
+            value="($EVENT$)=&quot;$HANDLER$($$event)&quot;$END$"
+            description="srl typed DOM event binding"
+            toReformat="false"
+            toShortenFQNames="false">
+    <variable name="EVENT" expression="" defaultValue="&quot;click&quot;" alwaysStopAt="true"/>
+    <variable name="HANDLER" expression="" defaultValue="&quot;handler&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="HTML" value="true"/>
+    </context>
+  </template>
+
+  <template name="srl-property"
+            value="[.$PROPERTY$]=&quot;$VALUE$&quot;$END$"
+            description="srl custom-element property binding"
+            toReformat="false"
+            toShortenFQNames="false">
+    <variable name="PROPERTY" expression="" defaultValue="&quot;property&quot;" alwaysStopAt="true"/>
+    <variable name="VALUE" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="HTML" value="true"/>
+    </context>
+  </template>
+
+  <template name="srl-component"
+            value="import { defineComponent } from '@core/elements/component.js';&#10;import { SignalElement } from '@core/elements/signal-element.js';&#10;&#10;export class $CLASS$ extends SignalElement {&#10;  $END$&#10;}&#10;&#10;await defineComponent({&#10;  tag: '$TAG$',&#10;  element: $CLASS$,&#10;  uses: [$USES$],&#10;});&#10;"
+            description="Define an srl component with a sibling HTML template"
+            toReformat="true"
+            toShortenFQNames="false">
+    <variable name="CLASS" expression="" defaultValue="&quot;ExampleElement&quot;" alwaysStopAt="true"/>
+    <variable name="TAG" expression="" defaultValue="&quot;example-element&quot;" alwaysStopAt="true"/>
+    <variable name="USES" expression="" defaultValue="&quot;&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="JAVA_SCRIPT" value="true"/>
+    </context>
+  </template>
+</templateSet>

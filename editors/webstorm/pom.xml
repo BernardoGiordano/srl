@@ -27,7 +27,15 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>21</maven.compiler.release>
 
-    <!-- Platform build for WebStorm 2026.1, the first release this plugin supports. -->
+    <!--
+      Platform build for WebStorm 2026.1, the first release this plugin supports.
+
+      The minimum stays at 261 rather than rising to the build that first ships LSP
+      rename: every other feature this plugin offers works on 2026.1, and refusing to
+      install there would cost a working editor to gate one refactor. The limit is stated
+      in plugin.xml and docs/guide/editor-support.md instead of being implied by a version
+      the descriptor does not enforce. ADR-0094.
+    -->
     <intellij.platform.version>261.22158.277</intellij.platform.version>
     <plugin.since.build>261</plugin.since.build>
 

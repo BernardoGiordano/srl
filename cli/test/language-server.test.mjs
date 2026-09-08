@@ -103,7 +103,74 @@ void test('language service exposes the srl template contract', async (context) 
   });
 });
 
-void test('stdio server speaks framed JSON-RPC', async () => {
+void test('stdio server speaks framed JSON-RPC', async (context) => {
+  await context.test('answers initialize and shuts down', async () => {
+    const server = startServer({});
+    const initialize = await server.request(1, 'initialize', {
+      processId: process.pid,
+      rootUri: pathToFileURL(process.cwd()).href,
+      capabilities: {},
+    });
+    assert.equal(initialize.result.serverInfo.name, 'srl');
+    assert.equal((await server.request(2, 'shutdown', null)).result, null);
+    assert.equal(await server.exit(), 0);
+  });
+
+  await context.test('answers an unknown request with Method not found', async () => {
+    const server = startServer({});
+    await server.request(1, 'initialize', { processId: process.pid, capabilities: {} });
+    const response = await server.request(2, 'textDocument/inlayHint', {});
+    assert.equal(response.result, undefined);
+    assert.equal(response.error.code, -32601);
+    assert.match(response.error.message, /textDocument\/inlayHint/u);
+    // A notification for the same unknown method is ignored rather than answered.
+    server.send({ jsonrpc: '2.0', method: '$/unknownNotification', params: {} });
+    assert.equal((await server.request(3, 'shutdown', null)).result, null);
+    assert.equal(await server.exit(), 0);
+  });
+
+  await context.test('watches its own project, once, and only where the client can', async () => {
+    const capable = startServer({
+      workspace: { didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true } },
+    });
+    await capable.request(1, 'initialize', {
+      processId: process.pid,
+      rootUri: pathToFileURL(process.cwd()).href,
+      capabilities: capable.capabilities,
+    });
+    capable.send({ jsonrpc: '2.0', method: 'initialized', params: {} });
+    const registration = await capable.serverRequest('client/registerCapability');
+    const [registered] = registration.params.registrations;
+    assert.equal(registered.method, 'workspace/didChangeWatchedFiles');
+    const base = pathToFileURL(process.cwd()).href;
+    /** @type {unknown[]} */
+    const globs = registered.registerOptions.watchers.map(
+      (/** @type {{ globPattern: unknown }} */ watcher) => watcher.globPattern,
+    );
+    assert.deepEqual(globs, [
+      { baseUri: base, pattern: '**/*.html' },
+      { baseUri: base, pattern: '**/*.js' },
+      { baseUri: base, pattern: '**/*.mjs' },
+      { baseUri: base, pattern: '**/{package,tsconfig}.json' },
+    ]);
+    assert.equal((await capable.request(2, 'shutdown', null)).result, null);
+    assert.equal(await capable.exit(), 0);
+
+    const plain = startServer({});
+    await plain.request(1, 'initialize', { processId: process.pid, capabilities: {} });
+    plain.send({ jsonrpc: '2.0', method: 'initialized', params: {} });
+    assert.equal((await plain.request(2, 'shutdown', null)).result, null);
+    assert.equal(plain.serverRequests.length, 0, 'registered watchers the client cannot take');
+    assert.equal(await plain.exit(), 0);
+  });
+});
+
+/**
+ * One server over stdio, with the framing both sides speak.
+ *
+ * @param {any} capabilities What the client claims, which decides what the server asks of it.
+ */
+function startServer(capabilities) {
   const server = resolve('cli/language-server/server.mjs');
   const child = spawn(process.execPath, [server], {
     cwd: process.cwd(),
@@ -114,6 +181,11 @@ void test('stdio server speaks framed JSON-RPC', async () => {
   let stderr = '';
   /** @type {Map<string | number, (message: any) => void>} */
   const waiting = new Map();
+  /** Requests the server sent this client. @type {any[]} */
+  const serverRequests = [];
+  /** @type {Map<string, (message: any) => void>} */
+  const watchingFor = new Map();
+
   child.stderr.on('data', (chunk) => {
     stderr += String(chunk);
   });
@@ -128,24 +200,28 @@ void test('stdio server speaks framed JSON-RPC', async () => {
       if (buffer.length < end) break;
       const message = JSON.parse(buffer.subarray(separator + 4, end).toString('utf8'));
       buffer = buffer.subarray(end);
-      const resolveMessage = waiting.get(message.id);
-      if (resolveMessage !== undefined) {
+      if (typeof message.method === 'string') {
+        if (message.id !== undefined) serverRequests.push(message);
+        watchingFor.get(message.method)?.(message);
+        watchingFor.delete(message.method);
+        continue;
+      }
+      const answer = waiting.get(message.id);
+      if (answer !== undefined) {
         waiting.delete(message.id);
-        resolveMessage(message);
+        answer(message);
       }
     }
   });
 
-  const response = request(1, 'initialize', {
-    processId: process.pid,
-    rootUri: pathToFileURL(process.cwd()).href,
-    capabilities: {},
-  });
-  assert.equal((await response).result.serverInfo.name, 'srl');
-  assert.equal((await request(2, 'shutdown', null)).result, null);
-  send({ jsonrpc: '2.0', method: 'exit' });
-  const [code] = await new Promise((resolveExit) => child.once('exit', (...args) => resolveExit(args)));
-  assert.equal(code, 0, stderr);
+  return {
+    capabilities,
+    serverRequests,
+    request,
+    serverRequest,
+    send,
+    exit,
+  };
 
   /** @param {string | number} id @param {string} method @param {unknown} params */
   function request(id, method, params) {
@@ -161,13 +237,35 @@ void test('stdio server speaks framed JSON-RPC', async () => {
     return response;
   }
 
+  /** A request the server sends this client. @param {string} method */
+  function serverRequest(method) {
+    const existing = serverRequests.find((message) => message.method === method);
+    if (existing !== undefined) return Promise.resolve(existing);
+    return new Promise((resolveMessage, reject) => {
+      watchingFor.set(method, resolveMessage);
+      const timeout = setTimeout(
+        () => reject(new Error(`Timed out waiting for ${method}. ${stderr}`)),
+        10_000,
+      );
+      timeout.unref();
+    });
+  }
+
   /** @param {unknown} message */
   function send(message) {
     const body = Buffer.from(JSON.stringify(message));
     child.stdin.write(`Content-Length: ${String(body.length)}\r\n\r\n`);
     child.stdin.write(body);
   }
-});
+
+  async function exit() {
+    send({ jsonrpc: '2.0', method: 'exit' });
+    /** @type {number} */
+    const code = await new Promise((resolveExit) => child.once('exit', (value) => resolveExit(value ?? 0)));
+    assert.equal(stderr.includes('Error'), false, stderr);
+    return code;
+  }
+}
 
 /** @param {string} source @param {number} offset */
 function positionAt(source, offset) {

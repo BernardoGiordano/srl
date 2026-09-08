@@ -4,4 +4,5 @@ test/**
 package-lock.json
 extension.cjs
 server-path.cjs
+session.cjs
 node_modules/**

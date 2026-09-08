@@ -61,3 +61,7 @@ have retained is then still the text the next check is about.
 ADR-0092 concentrates incomplete-template context, scope, compiler-backed expression
 members, and structural edit planning in one semantic snapshot used by every language
 feature.
+
+ADR-0094 keeps the launchers thin without keeping them careless: a session owns the
+resources it started, one project is watched once by the client the server asks, and the
+settings each plugin declares are the settings it reads.

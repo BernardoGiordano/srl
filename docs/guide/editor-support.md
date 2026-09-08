@@ -58,10 +58,18 @@ code --install-extension srl-0.7.0.vsix
 ```
 
 The extension starts one server per workspace folder, so a multi-root workspace may hold
-projects on different srl versions. Set `srl.nodePath` when `node` is not on the extension
-host's `PATH`. Use **srl: Restart Language Server** after changing that setting. Protocol
-traces are available through `srl.trace.server` and the **srl Language Server** output
-channel.
+projects on different srl versions. Each server watches only its own folder, so one root's
+edit reloads one root's model.
+
+Set `srl.nodePath` when `node` is not on the extension host's `PATH`; changing it restarts
+the folders it applies to. Use **srl: Restart Language Server** after installing the
+toolchain into a folder that did not have it. Protocol traces are available through
+`srl.trace.server`, in the **srl Language Server** output channel of the folder they
+belong to.
+
+A folder whose `package.json` asks for `@srljs/cli` or `@srljs/core` and has no server
+installed says so. A folder that asks for neither is left to VS Code's ordinary HTML and
+JavaScript support without comment.
 
 The VS Code package also injects TextMate scopes for `{{ expression }}`, directives,
 events, and bindings, and contributes HTML and JavaScript snippets. Ordinary HTML, CSS,
@@ -87,6 +95,14 @@ found on the login shell's `PATH` rather than the IDE process's, so an install m
 nvm, fnm, or Volta is reachable from a desktop-launched IDE; `SRL_NODE_PATH` names a
 specific executable instead.
 
+It contributes the same six snippets as the VS Code package, as live templates in the
+`srl` group: `srl-interpolation`, `srl-if`, `srl-for`, `srl-event`, `srl-property` and
+`srl-component`.
+
+One feature-specific limit: the platform's LSP rename arrives in 2026.1.1. On 2026.1 every
+other feature listed at the top of this page works, and renaming a tag is available in VS
+Code or by upgrading the IDE.
+
 `mvn -Pverify-plugin verify` runs the IntelliJ Plugin Verifier over the ZIP against an
 installed IDE. It defaults to `/Applications/WebStorm.app/Contents`; elsewhere pass
 `-Dwebstorm.home=<directory containing lib/>`.
@@ -101,6 +117,13 @@ srl language-server
 
 Run it with the repository root as its working directory. `SRL_ROOT` may name that root
 explicitly for clients whose server working directory cannot be configured.
+
+The server registers the file watchers it needs through `client/registerCapability`, and
+only when the client declares `workspace.didChangeWatchedFiles.dynamicRegistration`. A
+client that declares it and `relativePatternSupport` gets patterns rooted at the project,
+which is what keeps one project's edits out of another's model. A client that declares
+neither is told on stderr that changes made outside its open buffers refresh only on
+restart.
 
 ## What counts as a template
 
