@@ -1,0 +1,22 @@
+<idea-plugin>
+  <id>dev.santella.srl</id>
+  <name>srl</name>
+  <version>${project.version}</version>
+  <vendor url="https://github.com/BernardoGiordano/srl">Bernardo Giordano</vendor>
+  <idea-version since-build="${plugin.since.build}"/>
+
+  <description><![CDATA[
+    Language support for srl templates: inline diagnostics, completion, hover,
+    navigation, references, rename, quick fixes, semantic highlighting, and outlines.
+    Uses the project's own @srljs/cli so editor behavior matches the installed runtime.
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <!-- The LSP client is a paid-IDE API, so the plugin has to say it needs one. -->
+  <depends>com.intellij.modules.ultimate</depends>
+  <depends>JavaScript</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <platform.lsp.serverSupportProvider implementation="dev.santella.srl.SrlLspServerSupportProvider"/>
+  </extensions>
+</idea-plugin>

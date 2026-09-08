@@ -66,14 +66,22 @@ Build the JetBrains plugin with Java 21, then install the ZIP from
 
 ```bash
 cd editors/webstorm
-./gradlew buildPlugin
+mvn package
 ```
 
-The artifact is written under `build/distributions/`. The plugin targets WebStorm 2026.1
-and newer and uses WebStorm's native LSP client. It starts only when the project contains
-the srl server. Set `SRL_NODE_PATH` in WebStorm's environment when `node` is not on its
-`PATH`. Set `WEBSTORM_HOME` to a local WebStorm installation before building to avoid
-downloading a separate target IDE.
+The artifact is written to `target/srl-webstorm-<version>.zip`. The build resolves the
+IntelliJ Platform as ordinary Maven artifacts, so no WebStorm installation is needed to
+compile.
+
+The plugin targets WebStorm 2026.1 and newer and uses WebStorm's native LSP client. It
+starts only when the project contains the srl server. It runs that server with the `node`
+found on the login shell's `PATH` rather than the IDE process's, so an install managed by
+nvm, fnm, or Volta is reachable from a desktop-launched IDE; `SRL_NODE_PATH` names a
+specific executable instead.
+
+`mvn -Pverify-plugin verify` runs the IntelliJ Plugin Verifier over the ZIP against an
+installed IDE. It defaults to `/Applications/WebStorm.app/Contents`; elsewhere pass
+`-Dwebstorm.home=<directory containing lib/>`.
 
 ## Other LSP clients
 

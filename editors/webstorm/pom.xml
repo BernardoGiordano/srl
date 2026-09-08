@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>dev.santella.srl</groupId>
+  <artifactId>srl-webstorm</artifactId>
+  <version>0.7.0</version>
+  <packaging>jar</packaging>
+
+  <name>srl WebStorm plugin</name>
+  <description>WebStorm client over the srl toolchain's language server</description>
+
+  <!--
+    JetBrains supports only Gradle for plugin development, so the three things their
+    Gradle plugin does for a plugin this small are done here explicitly: compile against
+    the platform, fill in the descriptor, and lay the ZIP out as <name>/lib/<jar>. What
+    is not reproduced is a sandboxed runIde; install the ZIP from disk instead.
+
+    The platform is resolved as ordinary Maven artifacts rather than an IDE download.
+    com.jetbrains.intellij.platform:lsp declares the rest of the platform it needs, and
+    a provided-scope dependency promotes those runtime-scoped transitives to the compile
+    classpath, which is where GeneralCommandLine, Project and VirtualFile come from.
+  -->
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+
+    <!-- Platform build for WebStorm 2026.1, the first release this plugin supports. -->
+    <intellij.platform.version>261.22158.277</intellij.platform.version>
+    <plugin.since.build>261</plugin.since.build>
+
+    <!-- Only the verify-plugin profile reads this: the IDE to verify the ZIP against. -->
+    <webstorm.home>/Applications/WebStorm.app/Contents</webstorm.home>
+    <plugin.verifier.version>1.410</plugin.verifier.version>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>intellij-platform</id>
+      <url>https://cache-redirector.jetbrains.com/intellij-repository/releases</url>
+      <releases><enabled>true</enabled></releases>
+      <snapshots><enabled>false</enabled></snapshots>
+    </repository>
+    <!-- The third-party libraries the platform modules pull in (jcef, fastutil, jediterm
+         and the rest) are published here rather than to Maven Central. -->
+    <repository>
+      <id>intellij-dependencies</id>
+      <url>https://cache-redirector.jetbrains.com/intellij-dependencies</url>
+      <releases><enabled>true</enabled></releases>
+      <snapshots><enabled>false</enabled></snapshots>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.jetbrains.intellij.platform</groupId>
+      <artifactId>lsp</artifactId>
+      <version>${intellij.platform.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains</groupId>
+      <artifactId>annotations</artifactId>
+      <version>26.1.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.14.4</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>${project.artifactId}-${project.version}</finalName>
+
+    <!-- plugin.xml is the only filtered resource: it carries ${project.version} and the
+         since-build the IDE reads. Everything else is copied verbatim. -->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes>
+          <include>META-INF/plugin.xml</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+        <excludes>
+          <exclude>META-INF/plugin.xml</exclude>
+        </excludes>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.5.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.16.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.6.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.5.1</version>
+      </plugin>
+
+      <!-- The distribution the marketplace and Install Plugin from Disk expect:
+           srl-webstorm/lib/srl-webstorm-<version>.jar inside srl-webstorm-<version>.zip -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>3.8.0</version>
+        <configuration>
+          <appendAssemblyId>false</appendAssemblyId>
+          <descriptors>
+            <descriptor>src/assembly/plugin-distribution.xml</descriptor>
+          </descriptors>
+        </configuration>
+        <executions>
+          <execution>
+            <id>plugin-distribution</id>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!--
+      mvn -Pverify-plugin verify
+      Runs the same IntelliJ Plugin Verifier the Gradle plugin's verifyPlugin task runs,
+      against a local IDE rather than downloaded ones. Override -Dwebstorm.home on Linux
+      and Windows, where the default macOS path does not exist.
+    -->
+    <profile>
+      <id>verify-plugin</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.jetbrains.intellij.plugins</groupId>
+          <artifactId>verifier-cli</artifactId>
+          <version>${plugin.verifier.version}</version>
+          <classifier>all</classifier>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.6.3</version>
+            <executions>
+              <execution>
+                <id>plugin-verifier</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>java</goal>
+                </goals>
+                <configuration>
+                  <mainClass>com.jetbrains.pluginverifier.PluginVerifierMain</mainClass>
+                  <classpathScope>test</classpathScope>
+                  <arguments>
+                    <argument>check-plugin</argument>
+                    <argument>-verification-reports-dir</argument>
+                    <argument>${project.build.directory}/plugin-verifier</argument>
+                    <argument>-verification-reports-formats</argument>
+                    <argument>plain</argument>
+                    <argument>${project.build.directory}/${project.build.finalName}.zip</argument>
+                    <argument>${webstorm.home}</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

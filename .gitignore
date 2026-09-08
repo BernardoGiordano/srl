@@ -1,5 +1,7 @@
 node_modules/
 dist/
+/editors/vscode/*.vsix
+/editors/webstorm/target/
 
 # Two working documents rather than repository content
 docs/position-and-non-goals.md
