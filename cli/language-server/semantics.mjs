@@ -402,6 +402,65 @@ function javaScriptDocuments(documents) {
   return new Map([...documents].filter(([uri]) => /\.m?js$/u.test(fromUri(uri))));
 }
 
+/**
+ * Every tag the inline Lit templates of one JavaScript module name, at the module's own
+ * offsets.
+ *
+ * A handwritten Lit component writes its markup in `html` tagged templates instead of a
+ * sibling `.html` file, so a scan that visits template files alone reports no uses for
+ * markup that is genuinely there, and a rename built from that scan leaves those uses
+ * naming a tag nothing defines any more. Searching the module text instead would edit
+ * the tag written in an import comment or a string.
+ *
+ * The literal chunks of every `html` template are copied into a blank of the module's
+ * own length, so what the shared scanner reads is markup only and the spans it reports
+ * are already offsets into the module. A template nested in a substitution is another
+ * tagged template, copied by the same walk; everything else — code, comments, strings,
+ * the substitutions themselves — stays blank.
+ *
+ * @param {string} source
+ * @returns {Array<{ name: string, start: number, end: number }>}
+ */
+export function litTags(source) {
+  if (!source.includes('html`')) return [];
+  const markup = litMarkup(source);
+  if (markup === null) return [];
+  return scanTemplate(markup).tags.map(({ name, start, end }) => ({ name, start, end }));
+}
+
+/** @param {string} source @returns {string | null} The module's Lit markup at its own offsets. */
+function litMarkup(source) {
+  const tree = ts.createSourceFile('module.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const blank = new Array(source.length).fill(' ');
+  let found = false;
+
+  /** @param {number} start @param {number} end */
+  const keep = (start, end) => {
+    found = true;
+    for (let index = start; index < end; index += 1) blank[index] = source[index];
+  };
+
+  /** @param {ts.Node} node */
+  const visit = (node) => {
+    if (ts.isTaggedTemplateExpression(node) && ts.isIdentifier(node.tag) && node.tag.text === 'html') {
+      const literal = node.template;
+      if (ts.isNoSubstitutionTemplateLiteral(literal)) keep(literal.getStart(tree) + 1, literal.getEnd() - 1);
+      else {
+        // A head or middle chunk ends with the `${` that opens the next substitution.
+        keep(literal.head.getStart(tree) + 1, literal.head.getEnd() - 2);
+        for (const span of literal.templateSpans) {
+          const closing = span.literal.kind === ts.SyntaxKind.TemplateTail ? 1 : 2;
+          keep(span.literal.getStart(tree) + 1, span.literal.getEnd() - closing);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  ts.forEachChild(tree, visit);
+  return found ? blank.join('') : null;
+}
+
 /** @param {string} source */
 function scanTemplate(source) {
   /** @type {TemplateNode[]} */

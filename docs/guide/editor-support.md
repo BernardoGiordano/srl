@@ -14,7 +14,8 @@ The server provides:
   template globals, loop locals, and `$event`;
 - hover and go-to-definition for custom elements, their properties, component members,
   and template globals;
-- find references and project-wide rename for custom-element tags, including their
+- find references and project-wide rename for custom-element tags, across template files
+  and the `html` templates of handwritten Lit components, including their
   `defineComponent()` declaration;
 - a quick fix that adds both the import and `uses` entry for a known component;
 - semantic highlighting for interpolations and srl attributes, document links, template
@@ -23,8 +24,9 @@ The server provides:
 Expression completion follows compiler types after a dot: `rows.` offers array members,
 loop items keep the iterable's element type, and `$event.` uses the bound element and DOM
 event. Loop names leave scope with their element. Tag rename changes parsed start and end
-tags, never tag-shaped text in comments or raw `script` and `style` content, and refuses
-an identity already registered by another element.
+tags, in template files and in the `html` templates a handwritten Lit component writes in
+JavaScript, never tag-shaped text in comments, strings or raw `script` and `style`
+content, and refuses an identity already registered by another element.
 
 JavaScript editing remains the editor's own JavaScript language service. The srl server
 adds the template half and project-model diagnostics; it does not replace JavaScript

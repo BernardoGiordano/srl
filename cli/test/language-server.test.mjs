@@ -9,6 +9,8 @@ import { SrlLanguageService } from '../language-server/service.mjs';
 
 const template = resolve('example/src/pages/people/employees-page.html');
 const uri = pathToFileURL(template).href;
+const litHost = resolve('source/components/data/ui-dynamic-filter.js');
+const litHostUri = pathToFileURL(litHost).href;
 
 void test('language service exposes the srl template contract', async (context) => {
   const service = new SrlLanguageService();
@@ -51,6 +53,32 @@ void test('language service exposes the srl template contract', async (context) 
     assert.ok(references.length > 2);
     const renamed = await service.rename(uri, position, 'ui-grid');
     assert.ok(Object.values(renamed?.changes ?? {}).flat().length > 2);
+  });
+
+  await context.test('renames tag uses written in handwritten Lit templates', async () => {
+    const litSource = [
+      "import { html } from 'lit';",
+      "import { UiDateRange } from '../inputs/ui-date-range.js';",
+      '// <ui-date-range> named in a comment',
+      "const label = '<ui-date-range>';",
+      'const view = html`<ui-date-range .range=${range}></ui-date-range>`;',
+      '',
+    ].join('\n');
+    service.open(litHostUri, 'javascript', 1, litSource);
+    const markup = litSource.indexOf('html`<ui-date-range') + 'html`<'.length;
+    const position = positionAt(litSource, markup + 1);
+
+    const references = await service.references(litHostUri, position, false);
+    assert.deepEqual(
+      references.filter((reference) => reference.uri === litHostUri).map((reference) => reference.range.start.line),
+      [4, 4],
+    );
+
+    const renamed = await service.rename(litHostUri, position, 'ui-date-window');
+    const edits = renamed?.changes[litHostUri] ?? [];
+    assert.equal(edits.length, 2, 'a comment, a string or an import specifier was edited');
+    assert.ok(Object.keys(renamed?.changes ?? {}).some((file) => /ui-date-range\.js$/u.test(file)));
+    service.close(litHostUri);
   });
 
   await context.test('offers a uses/import quick fix', async () => {

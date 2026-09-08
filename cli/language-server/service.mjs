@@ -16,7 +16,7 @@ import ts from 'typescript';
 import { checkTemplateSource, parseTemplate } from '../checks/template-check.mjs';
 import { apps } from '../layout.mjs';
 import { readProject } from '../project-model/index.mjs';
-import { TemplateSemantics } from './semantics.mjs';
+import { litTags, TemplateSemantics } from './semantics.mjs';
 
 /** @import { Diagnostic } from '../diagnostics/types.js' */
 /** @import { ElementRecord, ProjectModel } from '../project-model/types.js' */
@@ -404,6 +404,52 @@ export class SrlLanguageService {
     return global === undefined ? [] : [await moduleLocation(global.module, global.exportName, this.documents)];
   }
 
+  /**
+   * Every place a tag is named as a tag, in both authoring forms this project supports.
+   *
+   * An external srl template is read through the shared semantic snapshot, so a name
+   * written in a comment or inside `<script>` text is not a use. A handwritten Lit
+   * component writes its markup in `html` templates in JavaScript instead, and a scan
+   * that visited template files alone reported no uses for markup that is really there
+   * — which made rename edit half a project and call it done.
+   *
+   * A file whose text never contains the name cannot contain a span of it, so it is
+   * skipped before it is parsed. Callers receive the text each span was measured in,
+   * because a range is only meaningful against it.
+   *
+   * @param {string} name
+   * @returns {Promise<Array<{ uri: string, text: string, spans: Array<{ start: number, end: number }> }>>}
+   */
+  async #tagUses(name) {
+    /** @type {Array<{ uri: string, text: string, spans: Array<{ start: number, end: number }> }>} */
+    const uses = [];
+    const seen = new Set();
+    for (const project of this.models) {
+      for (const template of project.templates.values()) {
+        if (seen.has(template.path)) continue;
+        seen.add(template.path);
+        const uri = toUri(template.path);
+        const text = await this.source(uri);
+        if (!text.includes(name)) continue;
+        const owner = this.component(project, template.path);
+        const spans = this.#semantics(uri, text, project, owner).tags(name);
+        if (spans.length > 0) uses.push({ uri, text, spans });
+      }
+      for (const path of project.modules.keys()) {
+        if (seen.has(path)) continue;
+        seen.add(path);
+        const uri = toUri(path);
+        const text = await this.source(uri);
+        if (!text.includes(name)) continue;
+        const spans = litTags(text)
+          .filter((candidate) => candidate.name === name)
+          .map(({ start, end }) => ({ start, end }));
+        if (spans.length > 0) uses.push({ uri, text, spans });
+      }
+    }
+    return uses;
+  }
+
   /** @param {string} uri @param {Position} position @param {boolean} includeDeclaration Every use of a custom-element tag in templates, optionally including its declaration. */
   async references(uri, position, includeDeclaration) {
     const source = await this.source(uri);
@@ -412,18 +458,9 @@ export class SrlLanguageService {
     const tag = await tagIdentityAt(uri, source, position, model, this.documents);
     if (tag === undefined || !model.elements.has(tag.name)) return [];
     const locations = [];
-    const seen = new Set();
-    for (const project of this.models) {
-      for (const template of project.templates.values()) {
-        if (seen.has(template.path)) continue;
-        seen.add(template.path);
-        const templateUri = toUri(template.path);
-        const text = await this.source(templateUri);
-        const owner = this.component(project, template.path);
-        const semantics = this.#semantics(templateUri, text, project, owner);
-        for (const span of semantics.tags(tag.name)) {
-          locations.push({ uri: templateUri, range: rangeAt(text, span.start, span.end) });
-        }
+    for (const use of await this.#tagUses(tag.name)) {
+      for (const span of use.spans) {
+        locations.push({ uri: use.uri, range: rangeAt(use.text, span.start, span.end) });
       }
     }
     if (includeDeclaration) {
@@ -462,21 +499,11 @@ export class SrlLanguageService {
 
     /** @type {Record<string, Array<{ range: Range, newText: string }>>} */
     const changes = {};
-    const seen = new Set();
-    for (const project of this.models) {
-      for (const template of project.templates.values()) {
-        if (seen.has(template.path)) continue;
-        seen.add(template.path);
-        const templateUri = toUri(template.path);
-        const text = await this.source(templateUri);
-        const owner = this.component(project, template.path);
-        const semantics = this.#semantics(templateUri, text, project, owner);
-        const edits = semantics.tags(tag.name).map((span) => ({
-          range: rangeAt(text, span.start, span.end),
-          newText: newName,
-        }));
-        if (edits.length > 0) changes[templateUri] = edits;
-      }
+    for (const use of await this.#tagUses(tag.name)) {
+      changes[use.uri] = use.spans.map((span) => ({
+        range: rangeAt(use.text, span.start, span.end),
+        newText: newName,
+      }));
     }
     const declaration = await tagDeclaration(record, this.documents);
     if (declaration !== null) {
@@ -818,7 +845,14 @@ async function tagIdentityAt(uri, source, position, model, documents) {
     const end = offsetAt(source, declaration.range.end);
     if (start <= offset && offset <= end) return { name: record.tag, start, end };
   }
-  return undefined;
+
+  // A handwritten Lit component names other elements in its own `html` templates, and
+  // the tag under the cursor there is the same identity as one written in a template
+  // file, not a string the caller happens to be editing.
+  const inline = litTags(source).find(
+    (candidate) => candidate.start <= offset && offset <= candidate.end && model.elements.has(candidate.name),
+  );
+  return inline;
 }
 
 /** @param {ElementRecord} record @param {Map<string, { text: string }>} documents @returns {Promise<{ uri: string, range: Range }>} */
