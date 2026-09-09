@@ -117,10 +117,14 @@ export async function srl(root, args) {
 /**
  * Pack both workspaces and install the application's declared dependencies.
  *
- * `npm install` receives the two local tarballs and resolves everything else from npm's
- * cache. The repository setup already ran `npm install`, so every exact version is there.
- * No package is linked or copied from this checkout's node_modules, and offline mode turns
- * an undeclared or uncached dependency into the same install failure a consumer gets.
+ * `npm install` receives the two local tarballs and resolves everything else, preferring
+ * npm's cache. No package is linked or copied from this checkout's node_modules, so the
+ * root holds the layout a consumer gets rather than a view of this repository.
+ *
+ * The install cannot be `--offline`. This root carries no lockfile, so npm resolves every
+ * declared name against a registry packument, and `npm ci` installs from resolved URLs
+ * without ever fetching one. A CI runner therefore has the tarballs cached and no
+ * packument to resolve them by.
  *
  * @param {string} root
  * @returns {Promise<void>}
@@ -155,7 +159,7 @@ export async function install(root) {
 
   await run(
     'npm',
-    ['install', '--offline', '--no-save', '--no-audit', '--no-fund', ...packages],
+    ['install', '--prefer-offline', '--no-save', '--no-audit', '--no-fund', ...packages],
     { cwd: root },
   );
 }
