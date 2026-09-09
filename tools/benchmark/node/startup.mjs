@@ -376,6 +376,133 @@ const NAVIGATE_ROUTE_TOUR = `async (input) => {
 }`;
 
 /**
+ * The stated conditions one journey is measured under.
+ *
+ * 40 ms of added round-trip time on 5 Mbit/s down and 1 Mbit/s up: an ordinary broadband
+ * or good mobile connection, and a round trip a user would not call slow. The numbers are
+ * fixed rather than sampled because the point is repeatability — a chain that grows a hop
+ * costs 40 ms more here on every machine, which is the fact `chainDepth` stands in for
+ * everywhere else in this harness. ADR-0100.
+ */
+const JOURNEY_NETWORK = {
+  latencyMs: 40,
+  downloadBytesPerSecond: 5 * 1_048_576 / 8,
+  uploadBytesPerSecond: 1_048_576 / 8,
+};
+
+/**
+ * Sign in, then open a route, on one page clock.
+ *
+ * Both marks come back from one evaluation because the journey is one number: the time
+ * from the document starting to the destination view being on screen. Reading it in two
+ * calls would put protocol latency between the halves and then add it to the total.
+ */
+const JOURNEY = `async (input) => {
+  const settleBy = performance.now() + input.timeout;
+  while (performance.now() < settleBy) {
+    if (location.pathname === '/login' && document.querySelector('login-page') !== null) break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if (location.pathname !== '/login' || document.querySelector('login-page') === null) {
+    return { ok: false, detail: 'the authenticated session did not settle on the login route.' };
+  }
+  const signedIn = performance.now();
+
+  const previous = [...document.querySelectorAll('x-route-outlet')]
+    .at(-1)?.firstElementChild;
+  previous?.setAttribute('data-benchmark-previous', '');
+  const started = performance.now();
+  history.pushState(null, '', input.path);
+  dispatchEvent(new PopStateEvent('popstate'));
+  const deadline = started + input.timeout;
+  let element = null;
+  while (performance.now() < deadline) {
+    element = document.querySelector(input.tag + ':not([data-benchmark-previous])');
+    if (location.pathname === input.path && element !== null) break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const arrived = performance.now();
+  if (element === null || location.pathname !== input.path) {
+    return { ok: false, detail: 'the route did not render at its requested path.' };
+  }
+  return {
+    ok: true,
+    signedIn,
+    navigation: arrived - started,
+    journey: arrived,
+    timeOrigin: performance.timeOrigin,
+  };
+}`;
+
+/**
+ * One journey, under stated network conditions, reported as one sample.
+ *
+ * Cold every time: the cache is off and the page is new, so the sample is what a user
+ * opening the deployed application for the first time pays. ADR-0100.
+ *
+ * @param {NodeWorkloadContext} context
+ * @param {{ path: string, tag: string }} route
+ * @returns {Promise<BenchmarkSample[]>}
+ */
+async function repeatJourney(context, route) {
+  /** @type {BenchmarkSample[]} */
+  const samples = [];
+  for (let index = 0; index < context.warmup + context.samples; index += 1) {
+    const page = await context.browser.load('/login?__benchmark_session=authenticated', {
+      cache: false,
+      network: JOURNEY_NETWORK,
+    });
+    try {
+      const result = /** @type {{ ok: boolean, detail?: string, signedIn: number, navigation: number, journey: number, timeOrigin: number }} */ (
+        await page.evaluate(JOURNEY, { ...route, timeout: LOAD_TIMEOUT_MS })
+      );
+      /** @type {BenchmarkSample} */
+      let sample;
+      if (!result.ok) {
+        sample = { ok: false, detail: result.detail ?? 'the journey did not complete.' };
+      } else {
+        const requests = page.requests();
+        const offOrigin = page.offOrigin();
+        const errors = page.errors();
+        const failed = requests.filter((request) => request.status >= 400);
+        if (offOrigin.length > 0) {
+          sample = {
+            ok: false,
+            detail: `the page requested off-origin URLs: ${offOrigin.join(', ')}`,
+          };
+        } else if (errors.length > 0) {
+          sample = { ok: false, detail: `the page reported errors: ${errors.join(' | ')}` };
+        } else if (failed.length > 0) {
+          sample = {
+            ok: false,
+            detail: `journey requests failed: ${failed.map((request) => `${request.url} ${String(request.status)}`).join(', ')}`,
+          };
+        } else {
+          const chain = requestChain(until(requests, result.timeOrigin + result.journey));
+          sample = {
+            ok: true,
+            duration: result.journey,
+            metrics: {
+              signedIn: result.signedIn,
+              navigation: result.navigation,
+              requests: requests.length,
+              chainDepth: chain.depth,
+              encodedBytes: requests.reduce((total, request) => total + request.encodedBytes, 0),
+              latency: JOURNEY_NETWORK.latencyMs,
+            },
+          };
+        }
+      }
+      if (index >= context.warmup || !sample.ok) samples.push(sample);
+      if (!sample.ok) break;
+    } finally {
+      await page.close();
+    }
+  }
+  return samples;
+}
+
+/**
  * @param {NodeWorkloadContext} context
  * @param {boolean} cache
  */
@@ -699,6 +826,30 @@ export function artifactWorkloads(declaration) {
       run: (context) => repeatCachedRouteTour(context, declaration.lazyRoutes),
     },
   ];
+
+  const journey = declaration.lazyRoutes[0];
+  if (journey !== undefined) {
+    workloads.push({
+      id: 'delivery/journey-40ms',
+      suite: 'delivery',
+      title: `Cold authenticated journey to ${journey.path} at 40 ms round trip, 5 Mbit/s`,
+      driver: 'node',
+      samples: { local: 5, ci: 3 },
+      warmup: { local: 1, ci: 1 },
+      apps,
+      origins,
+      units: {
+        duration: 'ms',
+        signedIn: 'ms',
+        navigation: 'ms',
+        requests: 'count',
+        chainDepth: 'depth',
+        encodedBytes: 'bytes',
+        latency: 'ms',
+      },
+      run: (context) => repeatJourney(context, journey),
+    });
+  }
 
   const stale = declaration.staleReleaseRoute;
   if (stale !== undefined) {

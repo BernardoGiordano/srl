@@ -49,6 +49,7 @@ import {
   unstableReference,
 } from './measure.mjs';
 import { describeEnvironment } from './environment.mjs';
+import { DIST_BASELINE, performanceEvidence } from './evidence.mjs';
 import { launchBrowser } from './browser.mjs';
 import { renderReport, writeResults } from './report.mjs';
 import { startOrigin } from './origin.mjs';
@@ -67,6 +68,12 @@ const BASELINE = join(HERE, 'baseline.json');
  */
 const ARTIFACT_BASELINE = join(REPO, 'benchmark', 'artifact-baseline.json');
 const BUDGETS = join(HERE, 'budgets.json');
+
+/**
+ * Report inventory is deterministic and does not become incomparable because Chrome or
+ * the host changed. Browser timings still obey the environment gate.
+ */
+const ENVIRONMENT_INDEPENDENT = ['delivery/artifact-size'];
 
 /**
  * @param {string} name
@@ -241,31 +248,8 @@ async function main() {
     product: budgets.product,
     comparable,
     speedBySuite,
-    // Report inventory is deterministic and does not become incomparable because Chrome
-    // or the host changed. Browser timings still obey the environment gate.
-    environmentIndependent: ['delivery/artifact-size'],
+    environmentIndependent: ENVIRONMENT_INDEPENDENT,
   });
-
-  console.log(
-    renderReport({
-      results,
-      comparisons,
-      environment,
-      mode,
-      app: originAdapter === 'dist' ? `${app.name}:dist` : app.name,
-      elapsedMs,
-      failures: failed,
-      pending:
-        originAdapter === 'dist'
-          ? PENDING.filter((item) => item.id !== 'startup/templates-bundle')
-          : PENDING,
-      baseline,
-      comparable,
-      reason: gateReason(baseline, baselinePath, originAdapter, reason),
-      calibration,
-      speedBySuite,
-    }),
-  );
 
   /** @type {BaselineFile} */
   const file = {
@@ -277,13 +261,58 @@ async function main() {
     calibration,
     results,
   };
+
+  // The run, as evidence: the same call the performance guide makes over the checked-in
+  // baselines. What this run covered and what each of its numbers is worth are decided
+  // once, so the report a person reads here and the tables a reader is pointed at cannot
+  // say different things about the same measurement.
+  const gate = gateReason(baseline, baselinePath, originAdapter, reason);
+  const pending =
+    originAdapter === 'dist'
+      ? PENDING.filter((item) => item.id !== 'startup/templates-bundle')
+      : PENDING;
+  const evidence = performanceEvidence({
+    origin: originAdapter,
+    from: `this ${mode} run`,
+    file,
+    declared: selectWorkloads('local', { app: app.name, origin: originAdapter }),
+    inGate: new Set(
+      selectWorkloads('ci', { app: app.name, origin: originAdapter }).map(
+        (workload) => workload.id,
+      ),
+    ),
+    pending,
+    product: budgets.product,
+    environmentIndependent: ENVIRONMENT_INDEPENDENT,
+    comparable,
+    reason: gate,
+    ...(originAdapter === 'dist' ? { recorded: DIST_BASELINE } : {}),
+  });
+
+  console.log(
+    renderReport({
+      results,
+      comparisons,
+      environment,
+      mode,
+      app: originAdapter === 'dist' ? `${app.name}:dist` : app.name,
+      elapsedMs,
+      failures: failed,
+      evidence,
+      baseline,
+      comparable,
+      reason: gate,
+      calibration,
+      speedBySuite,
+    }),
+  );
   const baselineFile =
     originAdapter === 'dist'
       ? {
           ...file,
-          // Dist timings remain evidence, not gates, until their sample policy is settled.
-          // The first artifact baseline owns only deterministic inventory drift.
-          results: results.filter((record) => record.id === 'delivery/artifact-size'),
+          // DIST_BASELINE says which results this file carries, and the evidence explains
+          // the rest as a decision rather than as missing measurements.
+          results: results.filter((record) => DIST_BASELINE.ids.includes(record.id)),
         }
       : file;
 

@@ -793,3 +793,86 @@ void test('the checked-in baseline carries what a comparison needs', async () =>
     assert.ok(Object.keys(record.metrics).length > 0, `${record.id} recorded no metric`);
   }
 });
+
+void test('a journey workload states the conditions it is measured under', () => {
+  const workload = artifactWorkloads({
+    app: 'fixture',
+    lazyRoutes: [{ id: 'dashboard', path: '/dashboard', tag: 'dashboard-page' }],
+  }).find((entry) => entry.id === 'delivery/journey-40ms');
+
+  assert.ok(workload !== undefined, 'a declaration with a lazy route declares a journey');
+  // The conditions live in the title because that is what travels with a quoted number.
+  assert.match(workload.title, /40 ms round trip, 5 Mbit\/s/u);
+  assert.equal(workload.units?.latency, 'ms');
+  assert.deepEqual(workload.origins, ['dist']);
+});
+
+void test('a journey pays its stated latency, and says it did', async () => {
+  const workload = artifactWorkloads({
+    app: 'fixture',
+    lazyRoutes: [{ id: 'dashboard', path: '/dashboard', tag: 'dashboard-page' }],
+  }).find((entry) => entry.id === 'delivery/journey-40ms');
+  assert.ok(workload?.run !== undefined);
+
+  /** @type {Array<{ path: string, options: { cache?: boolean, network?: { latencyMs: number } } }>} */
+  const loads = [];
+  const page = {
+    evaluate: () =>
+      Promise.resolve({
+        ok: true,
+        signedIn: 800,
+        navigation: 120,
+        journey: 920,
+        timeOrigin: 0,
+      }),
+    requests: () => [
+      {
+        url: '/index.html',
+        type: 'Document',
+        status: 200,
+        encodedBytes: 1000,
+        fromCache: false,
+        startedAt: 10,
+        initiator: { type: 'other', url: null },
+      },
+      {
+        url: '/assets/entry.js',
+        type: 'Script',
+        status: 200,
+        encodedBytes: 2000,
+        fromCache: false,
+        startedAt: 20,
+        initiator: { type: 'parser', url: '/index.html' },
+      },
+    ],
+    offOrigin: () => [],
+    errors: () => [],
+    close: () => Promise.resolve(),
+  };
+
+  const samples = await workload.run(
+    /** @type {import('../benchmark/types.js').NodeWorkloadContext} */ (
+      /** @type {unknown} */ ({
+        samples: 1,
+        warmup: 0,
+        browser: {
+          /** @param {string} path @param {{ cache?: boolean, network?: { latencyMs: number } }} options */
+          load: (path, options) => {
+            loads.push({ path, options });
+            return Promise.resolve(page);
+          },
+        },
+      })
+    ),
+  );
+
+  assert.equal(loads.length, 1);
+  assert.equal(loads[0]?.options.cache, false, 'a journey is cold on every sample');
+  assert.equal(loads[0]?.options.network?.latencyMs, 40);
+
+  const sample = samples[0];
+  assert.equal(sample?.ok, true);
+  assert.equal(sample?.duration, 920, 'the journey is one number on the page clock');
+  assert.equal(sample?.metrics?.latency, 40, 'the conditions travel with the sample');
+  assert.equal(sample?.metrics?.chainDepth, 2);
+});

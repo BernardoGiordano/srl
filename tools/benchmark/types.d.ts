@@ -283,12 +283,29 @@ export interface RequestRecord {
   initiator: RequestInitiator;
 }
 
+/**
+ * Simulated network, applied before the page's first request.
+ *
+ * The harness resolves no host, so every request is answered locally in well under a
+ * millisecond. A workload that wants a round trip to cost something states what it
+ * costs here, and states it in its own title too. ADR-0100.
+ */
+export interface NetworkConditions {
+  /** Added round-trip time, in milliseconds. */
+  latencyMs: number;
+  downloadBytesPerSecond: number;
+  uploadBytesPerSecond: number;
+}
+
 /** The Chrome the harness drives, with the two capabilities workloads need. */
 export interface BenchmarkBrowser {
   /** A page on the benchmark origin, with the application's own import map. */
   harnessPage(): Promise<BenchmarkPage>;
   /** A page that has navigated to a path on the benchmark origin. */
-  load(path: string, options?: { cache?: boolean; init?: string }): Promise<BenchmarkPage>;
+  load(
+    path: string,
+    options?: { cache?: boolean; init?: string; network?: NetworkConditions },
+  ): Promise<BenchmarkPage>;
   close(): Promise<void>;
   version: string;
 }
@@ -311,4 +328,108 @@ export interface BenchmarkPage {
   /** Uncaught page errors, which no workload is allowed to have produced. */
   errors(): string[];
   close(): Promise<void>;
+}
+
+/**
+ * What one measured number is worth as proof.
+ *
+ * `limited` has an absolute product budget: it is compared raw, on any machine.
+ * `gated` is compared against a baseline, scaled by how fast the machine was.
+ * `reported` is measured and nothing fails when it moves, which is what an
+ * incomparable run, an absent baseline entry and an ungated unit all produce.
+ */
+export type Standing = 'limited' | 'gated' | 'reported';
+
+/** One measured number, with what may be claimed about it. */
+export interface Claim {
+  id: string;
+  suite: Suite;
+  title: string;
+  metric: string;
+  unit: string;
+  median: number;
+  p95: number;
+  samples: number;
+  /** The number the workload is quoted by, one per workload. */
+  primary: boolean;
+  standing: Standing;
+  /** Why it has that standing, in a sentence a reader can act on. */
+  basis: string;
+  /** The absolute limit, when one applies. */
+  limit: number | null;
+}
+
+/** Where a set of claims came from, in the terms that make them reproducible. */
+export interface Provenance {
+  recorded: string;
+  mode: Mode;
+  app: string;
+  machine: string;
+  runtime: string;
+  profile: string;
+  dependencies: Record<string, string>;
+  readings: number;
+  references: ReferenceReading;
+  spread: ReferenceReading;
+}
+
+/** Why a workload contributes no claim. */
+export type CoverageKind =
+  | 'pending'
+  | 'unmeasured'
+  | 'local only'
+  | 'unrecorded'
+  | 'undeclared';
+
+/** One thing the evidence does not cover, and why. */
+export interface CoverageGap {
+  id: string;
+  kind: CoverageKind;
+  reason: string;
+}
+
+export interface EvidenceCoverage {
+  /** Declared in the registry as a task, not implemented. */
+  pending: CoverageGap[];
+  /** A workload this origin runs that the evidence carries no number for. */
+  unmeasured: CoverageGap[];
+  /** Measured locally and never by the bounded gate profile. */
+  outsideGate: CoverageGap[];
+  /** A number in the evidence that no declared workload produces any more. */
+  undeclared: CoverageGap[];
+}
+
+export interface EvidenceGate {
+  comparable: boolean;
+  /** Why nothing is gated, when nothing is. */
+  reason: string | null;
+  /** Whether an automated workflow runs the gate. `null` when nothing was read. */
+  automated: boolean | null;
+  limited: number;
+  gated: number;
+  reported: number;
+  /**
+   * Every absolute limit the budgets declare, measured or not. A limit on a workload
+   * nothing recorded holds nothing, and reading it from the claims alone would make it
+   * disappear rather than say so.
+   */
+  limits: Array<{
+    id: string;
+    metric: string;
+    limit: number;
+    /** Absent until something measures it, because the unit is the record's. */
+    unit: string | null;
+    recorded: number | null;
+  }>;
+}
+
+/** Every performance claim from one measured set, with its provenance and its gaps. */
+export interface EvidenceDocument {
+  origin: 'source' | 'dist';
+  /** The file the numbers were read from, repository-relative. */
+  from: string;
+  provenance: Provenance | null;
+  claims: Claim[];
+  coverage: EvidenceCoverage;
+  gate: EvidenceGate;
 }

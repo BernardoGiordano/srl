@@ -34,7 +34,7 @@ import puppeteer from 'puppeteer-core';
 
 import { HARNESS_PATH } from './origin.mjs';
 
-/** @import { BenchmarkPage, RequestRecord } from './types.js' */
+/** @import { BenchmarkPage, NetworkConditions, RequestRecord } from './types.js' */
 /** @import { Browser, CDPSession } from 'puppeteer-core' */
 
 /**
@@ -79,7 +79,10 @@ function launchFlags(originUrl) {
  * @returns {Promise<{
  *   version: string,
  *   harnessPage: () => Promise<BenchmarkPage>,
- *   load: (path: string, options?: { cache?: boolean }) => Promise<BenchmarkPage>,
+ *   load: (
+ *     path: string,
+ *     options?: { cache?: boolean, init?: string, network?: NetworkConditions },
+ *   ) => Promise<BenchmarkPage>,
  *   close: () => Promise<void>,
  * }>}
  */
@@ -140,16 +143,31 @@ function findChrome() {
  * booted. It is therefore plain script rather than a module, and must not import —
  * bare specifiers do not resolve yet.
  *
+ * `network` is the other thing that has to be in place before the first byte moves. The
+ * harness resolves no host, so a request costs nothing to make and a serial chain reads
+ * like a flat one — which is why depth rather than duration is the gated delivery fact
+ * (ADR-0082). A workload that wants the round trip back asks for it here, in stated
+ * conditions, and pays it on every request the page makes. ADR-0100.
+ *
  * @param {Browser} browser
  * @param {string} originUrl
  * @param {string} path
- * @param {{ cache?: boolean, init?: string }} options
+ * @param {{ cache?: boolean, init?: string, network?: NetworkConditions }} options
  * @returns {Promise<BenchmarkPage>}
  */
 async function openPage(browser, originUrl, path, options) {
   const page = await browser.newPage();
   const session = await page.createCDPSession();
   const traffic = await recordTraffic(session, originUrl, options.cache ?? true);
+
+  if (options.network !== undefined) {
+    await session.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: options.network.latencyMs,
+      downloadThroughput: options.network.downloadBytesPerSecond,
+      uploadThroughput: options.network.uploadBytesPerSecond,
+    });
+  }
 
   /** @type {string[]} */
   const pageErrors = [];

@@ -97,6 +97,8 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0096](0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md) | The editor latency claim is a workload, not an assertion | accepted | `tools/benchmark/node/editor.mjs`, `tools/benchmark/budgets.json`, `cli/test/support/language-server-client.mjs`, `cli/test/live-analysis.test.mjs` |
 | [ADR-0097](0097-an-installed-editor-is-proved-by-installing-it.md) | An installed editor is proved by installing it | accepted | `tools/conformance/`, `tools/fixtures/installed-layout.mjs`, `.github/workflows/editors.yml`, `editors/vscode/`, `editors/webstorm/` |
 | [ADR-0098](0098-the-first-application-is-proved-from-its-declarations.md) | The first application is proved from its declared dependencies | accepted | `tools/fixtures/installed-layout.mjs`, `tools/checks/pack-check.mjs`, `tools/conformance/fixture.mjs`, `cli/scaffold/application.mjs`, `cli/delivery/build.mjs`, `cli/README.md` |
+| [ADR-0099](0099-a-performance-claim-carries-its-standing.md) | A performance claim carries its standing | accepted | `tools/benchmark/evidence.mjs`, `tools/benchmark/run.mjs`, `tools/benchmark/report.mjs`, `tools/checks/performance-check.mjs`, `docs/guide/performance.md` |
+| [ADR-0100](0100-a-journey-is-measured-under-stated-network-conditions.md) | A journey is measured under stated network conditions | accepted | `tools/benchmark/browser.mjs`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/types.d.ts`, `docs/guide/performance.md` |
 
 <!-- /generated:adr-index -->
 

@@ -6,32 +6,16 @@
  * by suite with medians and p95s side by side; the machine half is the file the next
  * run compares against and the one that gets checked in as a baseline.
  *
- * Units are formatted at the edge only. Everything upstream is milliseconds, bytes
- * or counts, so nothing has to parse "1.2 MB" back into a number to compare it.
+ * Units and coverage both come from `evidence.mjs`, so the report a person reads and the
+ * guide a reader is pointed at cannot describe the same run differently.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-/** @import { BaselineFile, CalibrationRecord, Comparison, Environment, Mode, WorkloadRecord } from './types.js' */
+import { coverageLines, formatValue, standingLine } from './evidence.mjs';
 
-/**
- * @param {number} value
- * @param {string} unit
- * @returns {string}
- */
-function formatValue(value, unit) {
-  if (unit.endsWith('bytes')) {
-    if (Math.abs(value) >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
-    if (Math.abs(value) >= 1024) return `${(value / 1024).toFixed(1)} KB`;
-    return `${value.toFixed(0)} B`;
-  }
-  if (unit === 'count') return value.toFixed(0);
-  if (unit === 'depth') return `${value.toFixed(0)} deep`;
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(2)} s`;
-  if (Math.abs(value) >= 10) return `${value.toFixed(1)} ms`;
-  return `${value.toFixed(2)} ms`;
-}
+/** @import { BaselineFile, CalibrationRecord, Comparison, Environment, EvidenceDocument, Mode, WorkloadRecord } from './types.js' */
 
 /**
  * @param {number | null} change
@@ -67,7 +51,7 @@ function ratioOf(now, then) {
  *   app: string,
  *   elapsedMs: number,
  *   failures: readonly { id: string, reason: string }[],
- *   pending: readonly { id: string, reason: string }[],
+ *   evidence: EvidenceDocument,
  *   baseline: BaselineFile | null,
  *   comparable: boolean,
  *   reason: string | null,
@@ -167,11 +151,7 @@ export function renderReport(run) {
     lines.push('');
   }
 
-  if (run.pending.length > 0) {
-    lines.push('  not covered yet');
-    for (const pending of run.pending) lines.push(`    ${pending.id}: ${pending.reason}`);
-    lines.push('');
-  }
+  lines.push(...coverageLines(run.evidence));
 
   const regressions = run.comparisons.filter(
     (comparison) => comparison.status === 'regressed' || comparison.status === 'over-budget',
@@ -181,6 +161,9 @@ export function renderReport(run) {
       `${String(regressions.length)} over budget, ${String(run.failures.length)} failed, ` +
       `${(run.elapsedMs / 1000).toFixed(1)} s`,
   );
+  // What the run proved, which is a different count from what it measured: an
+  // incomparable machine still produces every median and gates none of them.
+  lines.push(standingLine(run.evidence));
   lines.push('');
 
   return lines.join('\n');

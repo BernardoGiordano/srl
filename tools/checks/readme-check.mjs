@@ -22,15 +22,8 @@
  *
  *   <!-- generated:elements -->  … <!-- /generated:elements -->
  *
- * WHAT IT REFUSES
- *
- * A missing marker, a duplicate marker, an unterminated block, and a generated name this
- * tool does not produce. All four mean the document and the generator disagree about what
- * is generated, which is the failure this check exists to make loud.
- *
- * Every refusal is returned as a `Diagnostic`, never printed here: the reporting is
- * cli/diagnostics/index.mjs's, so `--json` costs this file nothing and a suite can assert
- * which marker was wrong rather than that something was. ADR-0072.
+ * The marker grammar, and what it refuses, belong to `generated.mjs`: this file owns the
+ * tables, not the mechanics of a page that carries them.
  *
  * No network, no npm install: it reads source and writes one file.
  */
@@ -38,14 +31,14 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { error, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
+import { outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { apps, readText, repoPath, REPO } from '../../cli/layout.mjs';
 import { readProject } from '../../cli/project-model/index.mjs';
+import { rewriteGenerated, table } from './generated.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
-/** @import { ProjectModel } from '../../cli/project-model/types.js' */
 
-const OPEN = /<!-- generated:([a-z-]+) -->/gu;
+/** @import { ProjectModel } from '../../cli/project-model/types.js' */
 
 /** The page the generated contract tables live on, unless `--file` says otherwise. */
 const DEFAULT_TARGET = 'docs/reference/project-index.md';
@@ -65,13 +58,6 @@ function publishedElements(model) {
       return path.startsWith('source/') && !path.includes('/test/');
     })
     .sort((left, right) => left.tag.localeCompare(right.tag));
-}
-
-/** @param {string[][]} rows @param {string[]} head */
-function table(head, rows) {
-  const lines = [`| ${head.join(' | ')} |`, `|${head.map(() => '---').join('|')}|`];
-  for (const row of rows) lines.push(`| ${row.join(' | ')} |`);
-  return lines.join('\n');
 }
 
 /** @param {string | null} path */
@@ -150,123 +136,6 @@ async function sections() {
 }
 
 /**
- * Split a document into its generated blocks.
- *
- * A marker this cannot make sense of is a diagnostic rather than a throw, and the
- * blocks it did read are still returned: a document with two broken markers should
- * report both in one run.
- *
- * @param {string} text
- * @param {string} where
- * @returns {{ found: Array<{ name: string, start: number, end: number, body: string }>, diagnostics: Diagnostic[] }}
- */
-function blocks(text, where) {
-  /** @type {Array<{ name: string, start: number, end: number, body: string }>} */
-  const found = [];
-  /** @type {Diagnostic[]} */
-  const diagnostics = [];
-  const seen = new Set();
-  OPEN.lastIndex = 0;
-  for (let match = OPEN.exec(text); match !== null; match = OPEN.exec(text)) {
-    const name = match[1] ?? '';
-    if (seen.has(name)) {
-      diagnostics.push(
-        error('docs/duplicate-marker', `<!-- generated:${name} --> appears twice.`, { file: where }),
-      );
-      continue;
-    }
-    seen.add(name);
-    const close = `<!-- /generated:${name} -->`;
-    const end = text.indexOf(close, match.index);
-    if (end === -1) {
-      diagnostics.push(
-        error('docs/unterminated-marker', `<!-- generated:${name} --> is never closed.`, {
-          file: where,
-        }),
-      );
-      continue;
-    }
-    found.push({
-      name,
-      start: match.index + match[0].length,
-      end,
-      body: text.slice(match.index + match[0].length, end).trim(),
-    });
-  }
-  return { found, diagnostics };
-}
-
-/**
- * @param {string} text
- * @param {Map<string, string>} expected
- * @param {string} where
- * @param {boolean} write
- * @returns {{ out: string | null, drifted: string[], diagnostics: Diagnostic[] }}
- */
-function rewrite(text, expected, where, write) {
-  const { found: present, diagnostics } = blocks(text, where);
-
-  for (const block of present) {
-    if (!expected.has(block.name)) {
-      diagnostics.push(
-        error(
-          'docs/unknown-section',
-          `<!-- generated:${block.name} --> is not a section this tool generates.`,
-          { file: where },
-        ),
-      );
-    }
-  }
-  for (const name of expected.keys()) {
-    if (!present.some((block) => block.name === name)) {
-      diagnostics.push(
-        error(
-          'docs/missing-marker',
-          `no <!-- generated:${name} --> block. Add the markers where the table belongs.`,
-          { file: where },
-        ),
-      );
-    }
-  }
-
-  // A document whose markers do not describe the sections this tool owns cannot be
-  // rewritten into one that does, so nothing is returned to write.
-  if (diagnostics.length > 0) return { out: null, drifted: [], diagnostics };
-
-  let out = text;
-  /** @type {string[]} */
-  const drifted = [];
-  // Backwards, so an earlier replacement cannot move a later block's offsets.
-  for (const block of [...present].reverse()) {
-    const body = /** @type {string} */ (expected.get(block.name));
-    if (body !== block.body) drifted.push(block.name);
-    out = `${out.slice(0, block.start)}\n\n${body}\n\n${out.slice(block.end)}`;
-  }
-  drifted.reverse();
-
-  if (drifted.length === 0) {
-    diagnostics.push(
-      info('docs/current', 'generated sections are current', { file: where }),
-    );
-  } else if (write) {
-    diagnostics.push(
-      info('docs/rewritten', `rewrote ${drifted.join(', ')}`, { file: where }),
-    );
-  } else {
-    diagnostics.push(
-      error(
-        'docs/generated-drift',
-        `${drifted.join(', ')} no longer match the project model.\n` +
-          `    Run \`npm run docs:write\` and commit the result.`,
-        { file: where },
-      ),
-    );
-  }
-
-  return { out, drifted, diagnostics };
-}
-
-/**
  * @param {{ file?: string, write?: boolean }} [options]
  * @returns {Promise<{ diagnostics: Diagnostic[], drifted: string[], text: string | null }>}
  */
@@ -277,7 +146,11 @@ export async function checkReadme(options = {}) {
   // The absolute path, spelled by cli/diagnostics rather than here: a page inside the
   // repository is reported relative to it and one outside keeps its full path, and that
   // is one rule for every check rather than a `show()` helper per tool.
-  const { out, drifted, diagnostics } = rewrite(text, await sections(), file, write);
+  const { out, drifted, diagnostics } = rewriteGenerated(text, await sections(), {
+    file,
+    write,
+    command: 'npm run docs:write',
+  });
   if (write && out !== null && out !== text) await writeFile(file, out, 'utf8');
   return { diagnostics, drifted, text: out };
 }
