@@ -41,6 +41,13 @@ not acceptance limits.
 | Fifty route cycles, fifty losing outlet races | 0 leaked listeners, 9–13 retained nodes |
 | Typecheck / template check / verify / lint | 0.22 s / 3.1 s / 0.43 s / 3.6 s |
 
+The editor suite is newer than this baseline and reports as `new` until the baseline
+machine re-records it. Its first numbers — a 2.3 s cold session over one application and
+4.0 s over ten, a 9 ms cold host-expression completion, 0.7–1.6 ms median and 4–6 ms p95
+for warm completion and hover with validation outstanding — are recorded in
+[ADR-0096](../adr/0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md), which
+is also where the sample policy behind them is.
+
 Two facts these numbers settle: **no route index is needed** at this scale, and **no row
 windowing is justified** — because no timing budget exists to fail (below). Sticky
 columns are the table's sharpest cost curve and the first place to look if a wide table
@@ -51,7 +58,10 @@ feels slow.
 The rules that make comparison meaningful. Ignoring them produces confident nonsense:
 
 - **The gate reads the median, not the p95.** Both are reported; a p95 over a handful of
-  samples moves tens of percent between identical runs.
+  samples moves tens of percent between identical runs. The editor target is a p95 —
+  100 ms is what a keystroke is judged against — and it is reported over a hundred samples
+  rather than gated
+  ([ADR-0096](../adr/0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md)).
 - **Correctness is checked before timing, twice.** Every workload has a cheap observable
   answer verified per sample in the page, and aggregation refuses any workload with a
   failed sample. A workload that returns the wrong DOM fails even when it is fast.
@@ -80,6 +90,11 @@ The rules that make comparison meaningful. Ignoring them produces confident nons
   already carries, and it is the number that moves when a transfer stops being discovered
   and starts being announced ([ADR-0082](../adr/0082-chain-depth-is-the-gated-delivery-fact.md)).
   Its minimum delta is 1: unlike a request total, it does not move on noise.
+- **The editor suite measures a fixture, not this checkout.** `editor/*` drives the real
+  language server over stdio against temporary copies of the selected application — one
+  copy, then ten — because the srl repository is a project no consumer has. Each
+  interactive sample carries its answer *and* whether validation was still queued when
+  that answer arrived, so an idle server cannot produce a latency figure.
 - **Forced collection happens only in the memory workloads**, and the leak check is
   batch-by-batch monotonic growth rather than one before/after pair.
 - **Every run prints what it does not cover**, so a green gate cannot be mistaken for full
@@ -96,10 +111,10 @@ Two kinds, in `tools/benchmark/budgets.json`:
 |---|---|---|
 | `regressionThreshold` | 0.10 | A median may not exceed the machine-scaled baseline by more than 10% |
 | `suiteThresholds.tooling` | 1.0 | Child-process workloads on a shared machine only catch order-of-magnitude change |
-| `product` | one entry | `delivery/artifact-size.chainDepth` at 3. A product limit is compared raw: no speed scaling, no noise slack |
+| `product` | two entries | `delivery/artifact-size.chainDepth` at 3 and `editor/edit-burst.validations` at 1. A product limit is compared raw: no speed scaling, no noise slack |
 | `maxSpeedDrift` | where scaling stops being credible | A machine twice as slow is a different machine, and its numbers are incomparable |
 | `maxRunSpread` | how far a reference may move inside one run | Above it, the run reports and cannot gate |
-| ci ceiling | 420 s | `--ci` takes about 105 s here; the ceiling failing means reconsidering sample counts, not raising it |
+| ci ceiling | 420 s | `--ci` takes about 150 s here, 45 s of it the editor suite; the ceiling failing means reconsidering sample counts, not raising it |
 
 `product` carries no timing on purpose, and that is a decision rather than a deferral.
 Absolute limits set near this machine's medians would fail on any slower machine and on
@@ -109,7 +124,7 @@ target machine and a known target application scale. Neither is fixed, so the re
 carries that work, and the consequence stays visible: with no required timing budget, the
 row-windowing question is unasked rather than answered.
 
-The one absolute limit is not a timing. `delivery/artifact-size.chainDepth` is how many
+Neither absolute limit is a timing. `delivery/artifact-size.chainDepth` is how many
 round trips deep the entry's static chunk graph is, derived by the build from
 `chunks[].imports`, admitted by `parseReport` against the graph it came from, and read from
 a verified report without starting a browser. A count of hops does not change with the
@@ -117,6 +132,11 @@ machine, so it needs neither the speed scaling nor the noise slack that make an 
 duration unfair here. It applies to the dist origin alone — the source origin ships no
 bundler, and its depth describes the source layout rather than a delivery defect. Raising
 it is a decision to ship a deeper startup graph, taken deliberately.
+
+`editor/edit-burst.validations` is the same kind of fact one subsystem over: ten edits
+written into one debounce window are one check, on any machine. It is limited to 1, and the
+relative gate could not hold it — a count's minimum delta is 20, so one check becoming two
+is invisible to it.
 
 **Baseline discipline.** A baseline moves only in the commit that moved the number, with
 the reason recorded beside it. Do not re-record one as a side effect of an unrelated

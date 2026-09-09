@@ -94,6 +94,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0093](0093-one-element-model-preserves-authored-meaning.md) | One Element model preserves authored meaning | accepted | `cli/project-model/`, `cli/checks/template-check.mjs`, `cli/language-server/` |
 | [ADR-0094](0094-an-editor-session-owns-what-it-started.md) | An editor session owns what it started | accepted | `editors/vscode/`, `editors/webstorm/`, `cli/language-server/server.mjs` |
 | [ADR-0095](0095-diagnostics-run-on-a-thread-the-editor-is-not-waiting-on.md) | Diagnostics run on a thread the editor is not waiting on | accepted | `cli/language-server/analysis.mjs`, `cli/language-server/validation.mjs`, `cli/language-server/server.mjs` |
+| [ADR-0096](0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md) | The editor latency claim is a workload, not an assertion | accepted | `tools/benchmark/node/editor.mjs`, `tools/benchmark/budgets.json`, `cli/test/support/language-server-client.mjs`, `cli/test/live-analysis.test.mjs` |
 
 <!-- /generated:adr-index -->
 

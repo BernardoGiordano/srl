@@ -17,7 +17,8 @@ export type Suite =
   | 'collection'
   | 'memory'
   | 'delivery'
-  | 'tooling';
+  | 'tooling'
+  | 'editor';
 
 /** How much work a run does. `ci` is the bounded profile the gate uses. */
 export type Mode = 'local' | 'ci';

@@ -679,8 +679,11 @@ void test('the ci profile is bounded and declares what it does not cover', async
   // scaling nor the noise slack an absolute timing would. ADR-0082.
   assert.deepEqual(
     budgets.product,
-    { 'delivery/artifact-size': { chainDepth: 3 } },
-    'a product budget is a decision, and only the chain-depth one has been taken',
+    {
+      'delivery/artifact-size': { chainDepth: 3 },
+      'editor/edit-burst': { validations: 1 },
+    },
+    'a product budget is a decision, and both taken ones are counts rather than durations',
   );
   assert.equal(budgets.minDelta?.depth, 1, 'a single added serial hop has to be a regression');
 
@@ -719,12 +722,45 @@ void test('the ci profile is bounded and declares what it does not cover', async
 
   const ids = new Set(WORKLOADS.map((workload) => workload.id));
   assert.equal(ids.size, WORKLOADS.length, 'workload ids must be unique');
-  for (const suite of ['startup', 'template', 'router', 'collection', 'memory', 'delivery', 'tooling']) {
+  for (const suite of [
+    'startup',
+    'template',
+    'router',
+    'collection',
+    'memory',
+    'delivery',
+    'tooling',
+    'editor',
+  ]) {
     assert.ok(
       WORKLOADS.some((workload) => workload.suite === suite),
       `no workload covers the ${suite} suite`,
     );
   }
+
+  // A p95 over a handful of samples is not a tail, and the editor target is a p95.
+  // ADR-0096 fixes the interactive sample count at a hundred.
+  for (const workload of WORKLOADS.filter((candidate) =>
+    candidate.id.startsWith('editor/interactive'),
+  )) {
+    assert.ok(
+      workload.samples.ci >= 100,
+      `${workload.id} would report a p95 over ${String(workload.samples.ci)} samples`,
+    );
+  }
+  assert.deepEqual(
+    selectWorkloads('ci', { app: 'example', origin: 'dist' }).filter(
+      (workload) => workload.suite === 'editor',
+    ),
+    [],
+    'an editor session reads sources, so its workloads must not select on the dist origin',
+  );
+  assert.ok(
+    selectWorkloads('ci', { app: 'example', origin: 'source' }).some(
+      (workload) => workload.suite === 'editor',
+    ),
+    'the editor suite has to reach the source origin, where an editor works',
+  );
 
   for (const pending of PENDING) {
     assert.ok(!ids.has(pending.id), `${pending.id} is listed as pending but also implemented`);

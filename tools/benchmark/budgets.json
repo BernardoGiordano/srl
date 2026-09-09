@@ -43,6 +43,22 @@
     "scaled by the machine, because nothing but ms is: how many requests waited for",
     "another request is a property of the graph, not of the hardware. ADR-0082.",
     "",
+    "The editor suite arrived under these rules rather than beside them. Two consecutive",
+    "ci runs of unchanged code on this machine reported every millisecond figure it",
+    "gates within 1.00x to 1.03x — cold start 2.32 s and 2.33 s, its initialize 706 ms",
+    "and 716 ms, the edit burst 188 ms and 194 ms — so the default threshold covers it",
+    "and it needs no suiteThresholds entry. Its interactive medians are 0.7 ms to 1.2 ms",
+    "and moved 1.43x between those same two runs, which is the minDelta story above and",
+    "not a repeatability problem: a change under one millisecond cannot regress, and the",
+    "p95 beside it (4.3 ms to 5.3 ms against a 100 ms editor target) is reported.",
+    "",
+    "editor/edit-burst.validations is the second product limit, and it is a count for the",
+    "same reason the first one is: ten edits written into one debounce window are one",
+    "check, however fast or slow the machine reading them is. It is also the only editor",
+    "fact an absolute limit can hold — no duration here carries one, for the reasons",
+    "above — and the relative gate cannot see it, because minDelta.count is 20 and a",
+    "regression from one check per burst to two is a change of one. ADR-0096.",
+    "",
     "product is absolute: workload id -> metric -> hard limit, derived from the target",
     "application and its hardware rather than from a previous run. It carries exactly",
     "one entry, and the reason no timing joins it is unchanged. A product limit is",
@@ -90,8 +106,9 @@
     "repository, so tighten it on a dedicated runner rather than widening it here.",
     "",
     "ciMaxSeconds bounds the gate. Overrunning it fails the run, so the suite cannot",
-    "grow into something that gets skipped. The ci profile currently takes about 105 s on",
-    "a quiet machine, of which about 5 s is the reference readings."
+    "grow into something that gets skipped. The ci profile currently takes about 150 s on",
+    "a quiet machine: about 5 s of reference readings, and about 45 s of the editor suite,",
+    "most of that its two cold-start workloads starting a compiler per sample."
   ],
   "regressionThreshold": 0.1,
   "suiteThresholds": {
@@ -109,6 +126,9 @@
   "product": {
     "delivery/artifact-size": {
       "chainDepth": 3
+    },
+    "editor/edit-burst": {
+      "validations": 1
     }
   }
 }

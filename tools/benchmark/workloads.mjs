@@ -15,6 +15,7 @@
  * gap is what the next agent needs.
  */
 
+import { EDITOR_WORKLOADS } from './node/editor.mjs';
 import { MEMORY_WORKLOADS } from './node/lifecycle.mjs';
 import { STARTUP_WORKLOADS } from './node/startup.mjs';
 import { TOOLING_WORKLOADS } from './node/tooling.mjs';
@@ -296,6 +297,7 @@ export const WORKLOADS = [
   ...COLLECTION_WORKLOADS,
   ...MEMORY_WORKLOADS,
   ...TOOLING_WORKLOADS,
+  ...EDITOR_WORKLOADS,
 ];
 
 /**

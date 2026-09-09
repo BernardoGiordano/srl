@@ -8,7 +8,6 @@
  */
 
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -17,6 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { checkTemplateSource, invalidateCompiler } from '../checks/template-check.mjs';
 import { LiveAnalysis } from '../language-server/analysis.mjs';
 import { SrlLanguageService } from '../language-server/service.mjs';
+import { startLanguageServer } from './support/language-server-client.mjs';
 
 const employees = resolve('example/src/pages/people/employees-page.html');
 const employeesHost = resolve('example/src/pages/people/employees-page.js');
@@ -139,13 +139,13 @@ void test('a discarded compiler is rebuilt with the same answers', () => {
   );
 });
 
-void test('the stdio server stays answerable while it validates', async () => {
-  const client = start();
+void test('the stdio server answers a request before the validation it queued', async () => {
+  const client = startLanguageServer({ root: process.cwd() });
   try {
     const employeesSource = await readFile(employees, 'utf8');
     const teamsSource = await readFile(teams, 'utf8');
 
-    await client.request(1, 'initialize', {
+    await client.request('initialize', {
       processId: process.pid,
       rootUri: pathToFileURL(process.cwd()).href,
       capabilities: {},
@@ -153,8 +153,8 @@ void test('the stdio server stays answerable while it validates', async () => {
     client.notify('initialized', {});
 
     // Both in one write, so the second open cannot be waiting on the first one's answer.
-    client.send([
-      framed({
+    client.write([
+      client.frame({
         jsonrpc: '2.0',
         method: 'textDocument/didOpen',
         params: {
@@ -166,7 +166,7 @@ void test('the stdio server stays answerable while it validates', async () => {
           },
         },
       }),
-      framed({
+      client.frame({
         jsonrpc: '2.0',
         method: 'textDocument/didOpen',
         params: {
@@ -180,16 +180,16 @@ void test('the stdio server stays answerable while it validates', async () => {
       }),
     ]);
 
-    // Answered from the queue's gaps, not after it: a completion behind a whole-project
-    // check was the 5-second wait this test exists to keep out.
-    const asked = Date.now();
-    const completion = await client.request(2, 'textDocument/completion', {
+    // Ordering, not a duration: the completion is asked for after two documents were
+    // queued for validation and has to come back before their diagnostics do. What that
+    // costs in milliseconds is the editor workload's question, measured against a fixture
+    // over a hundred samples rather than asserted once here. ADR-0096.
+    const completion = await client.request('textDocument/completion', {
       textDocument: { uri: uri(employees) },
       position: { line: 0, character: 0 },
     });
-    const waited = Date.now() - asked;
     assert.ok(Array.isArray(completion.result), 'completion did not answer');
-    assert.ok(waited < 1000, `completion waited ${String(waited)} ms behind validation`);
+    assert.deepEqual(client.publishes, [], 'the completion waited for validation to finish');
 
     const first = await client.diagnostics(uri(employees));
     const second = await client.diagnostics(uri(teams));
@@ -204,20 +204,20 @@ void test('the stdio server stays answerable while it validates', async () => {
 
     // Request and withdrawal in one write, so the cancellation is registered before the
     // handler resolves rather than whenever the pipe happens to flush.
-    const withdrawn = client.expect(3);
-    client.send([
-      framed({
+    const id = client.nextId();
+    const withdrawn = client.expect(id);
+    client.write([
+      client.frame({
         jsonrpc: '2.0',
-        id: 3,
+        id,
         method: 'textDocument/hover',
         params: { textDocument: { uri: uri(employees) }, position: { line: 0, character: 0 } },
       }),
-      framed({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 3 } }),
+      client.frame({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id } }),
     ]);
     assert.equal((await withdrawn).error?.code, -32800, 'a withdrawn request was answered anyway');
 
-    await client.request(4, 'shutdown', null);
-    client.notify('exit', undefined);
+    await client.request('shutdown');
     assert.equal(await client.exit(), 0, client.stderr());
   } finally {
     client.kill();
@@ -227,94 +227,6 @@ void test('the stdio server stays answerable while it validates', async () => {
 /** @param {string} path */
 function uri(path) {
   return pathToFileURL(path).href;
-}
-
-/** @param {unknown} message */
-function framed(message) {
-  const body = Buffer.from(JSON.stringify(message));
-  return Buffer.concat([Buffer.from(`Content-Length: ${String(body.length)}\r\n\r\n`), body]);
-}
-
-function start() {
-  const child = spawn(process.execPath, [resolve('cli/language-server/server.mjs')], {
-    cwd: process.cwd(),
-    env: { ...process.env, SRL_ROOT: process.cwd() },
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  let buffer = Buffer.alloc(0);
-  let stderr = '';
-  /** @type {Map<string | number, (message: any) => void>} */
-  const waiting = new Map();
-  /** @type {Map<string, any[]>} */
-  const diagnostics = new Map();
-  /** @type {Map<string, (value: any[]) => void>} */
-  const wantedDiagnostics = new Map();
-
-  child.stderr.on('data', (chunk) => {
-    stderr += String(chunk);
-  });
-  child.stdout.on('data', (chunk) => {
-    buffer = Buffer.concat([buffer, Buffer.from(chunk)]);
-    for (;;) {
-      const separator = buffer.indexOf('\r\n\r\n');
-      if (separator === -1) break;
-      const header = buffer.subarray(0, separator).toString('ascii');
-      const length = Number(/Content-Length:\s*(\d+)/iu.exec(header)?.[1]);
-      const end = separator + 4 + length;
-      if (buffer.length < end) break;
-      const message = JSON.parse(buffer.subarray(separator + 4, end).toString('utf8'));
-      buffer = buffer.subarray(end);
-      if (message.method === 'textDocument/publishDiagnostics') {
-        diagnostics.set(message.params.uri, message.params.diagnostics);
-        wantedDiagnostics.get(message.params.uri)?.(message.params.diagnostics);
-        wantedDiagnostics.delete(message.params.uri);
-        continue;
-      }
-      const answer = waiting.get(message.id);
-      if (answer !== undefined) {
-        waiting.delete(message.id);
-        answer(message);
-      }
-    }
-  });
-
-  return {
-    stderr: () => stderr,
-    /** @param {Buffer[]} parts */
-    send: (parts) => child.stdin.write(Buffer.concat(parts)),
-    /** @param {string} method @param {unknown} params */
-    notify: (method, params) => child.stdin.write(framed({ jsonrpc: '2.0', method, params })),
-    /** @param {string | number} id */
-    expect: (id) =>
-      new Promise((answer, reject) => {
-        waiting.set(id, answer);
-        const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${String(id)}. ${stderr}`)), 30_000);
-        timeout.unref();
-      }),
-    /** @param {string | number} id @param {string} method @param {unknown} params */
-    request(id, method, params) {
-      const answer = this.expect(id);
-      child.stdin.write(framed({ jsonrpc: '2.0', id, method, params }));
-      return answer;
-    },
-    /** @param {string} where @returns {Promise<any[]>} */
-    diagnostics: (where) => {
-      const already = diagnostics.get(where);
-      if (already !== undefined) return Promise.resolve(already);
-      return new Promise((answer, reject) => {
-        wantedDiagnostics.set(where, answer);
-        const timeout = setTimeout(() => reject(new Error(`No diagnostics for ${where}. ${stderr}`)), 30_000);
-        timeout.unref();
-      });
-    },
-    exit: () =>
-      new Promise((answer) => {
-        child.once('exit', (code) => answer(code));
-      }),
-    kill: () => {
-      if (child.exitCode === null) child.kill();
-    },
-  };
 }
 
 /**

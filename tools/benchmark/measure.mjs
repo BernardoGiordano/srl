@@ -54,6 +54,7 @@ export const BASELINE_VERSION = 2;
  * The tooling suite is scaled by arithmetic because neither reference describes a
  * fresh `tsc` process reading a few hundred files, and arithmetic at least tracks the
  * clock. What actually carries that suite is its much wider threshold in budgets.json.
+ * The editor suite is the same case: child processes and a worker thread, no renderer.
  *
  * @type {Record<Suite, ReferenceKind>}
  */
@@ -65,6 +66,7 @@ export const REFERENCE_FOR_SUITE = {
   memory: 'layout',
   delivery: 'layout',
   tooling: 'arithmetic',
+  editor: 'arithmetic',
 };
 
 /**
@@ -344,10 +346,11 @@ export function comparability(input) {
 /**
  * Compare a run against a checked-in baseline.
  *
- * Two kinds of budget. A *regression* budget is relative: median and p95 may not
- * exceed the baseline by more than `threshold`. A *product* budget is absolute,
- * comes from the target application rather than from a previous run, and is only
- * applied to the metrics that declare one.
+ * Two kinds of budget. A *regression* budget is relative: the median may not exceed
+ * the baseline by more than `threshold`, and the p95 is reported beside it rather
+ * than gated. A *product* budget is absolute, comes from the target application
+ * rather than from a previous run, and is only applied to the metrics that declare
+ * one.
  *
  * A regression has to be over the threshold *and* over a minimum meaningful delta
  * for its unit, thresholds are per suite, and the gate reads the median rather than
