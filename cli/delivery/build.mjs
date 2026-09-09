@@ -2525,9 +2525,20 @@ function artifactError(app, phase, detail, options) {
   return new Error(`artifact:${app.name}:${phase}: ${detail}`, options);
 }
 
-/** @returns {Promise<ReleaseInput>} */
-async function releaseFromEnvironment() {
-  const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: REPO });
+/** @param {BuildApplication} app @returns {Promise<ReleaseInput>} */
+async function releaseFromEnvironment(app) {
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: REPO }));
+  } catch (cause) {
+    throw artifactError(
+      app,
+      'release',
+      'no Git commit identifies these source bytes. Initialize the repository and commit ' +
+        'the application before building.',
+      { cause },
+    );
+  }
   const rawEpoch = process.env.SOURCE_DATE_EPOCH;
   if (rawEpoch !== undefined && !/^\d+$/u.test(rawEpoch)) {
     throw new Error(`SOURCE_DATE_EPOCH must be a non-negative integer: ${rawEpoch}`);
@@ -2542,7 +2553,7 @@ async function releaseFromEnvironment() {
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
   try {
     const app = await selectedApp();
-    const release = await releaseFromEnvironment();
+    const release = await releaseFromEnvironment(app);
     const outputIndex = process.argv.indexOf('--out');
     const output = outputIndex === -1 ? undefined : process.argv[outputIndex + 1];
     if (outputIndex !== -1 && output === undefined) {

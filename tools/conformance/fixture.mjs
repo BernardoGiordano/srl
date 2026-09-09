@@ -4,16 +4,17 @@
  * Four roots, because what an editor does with a project is decided by what the project
  * is: two installed ones (a window may hold more than a single server), one that asks for
  * srl and has not installed it, one that never asked. The installed pair is built from
- * the tarballs this repository would publish and scaffolded by the published `srl new`,
- * so the fixture is the toolchain's own idea of an application rather than a second one
- * written here.
+ * the tarballs this repository would publish, installed from the same declared dependency
+ * set as the packaged-install probe and scaffolded by the published `srl new`, so the
+ * fixture is the toolchain's own idea of an application rather than a second one written
+ * here. ADR-0098.
  */
 
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { install, srl } from '../fixtures/installed-layout.mjs';
+import { applicationManifest, install, srl } from '../fixtures/installed-layout.mjs';
 
 /** @import { Fixture } from './types.js' */
 
@@ -48,19 +49,19 @@ export async function build() {
   const declared = join(root, 'declared');
   const plain = join(root, 'plain');
 
-  await mkdir(join(one, 'node_modules'), { recursive: true });
+  await mkdir(one, { recursive: true });
+  await writeFile(join(one, 'package.json'), applicationManifest('conformance-one'));
   await install(one);
-  await writeFile(join(one, 'package.json'), manifest('conformance-one', { '@srljs/cli': '0.0.0' }));
 
   const scaffold = await srl(one, ['new', APP]);
   if (scaffold.code !== 0) throw new Error(`\`srl new ${APP}\` failed:\n${scaffold.output}`);
   await useDetailFromMain(one);
   await writeFile(join(one, APP, 'src', 'widget.js'), WIDGET);
 
-  // The second project is a copy: `verbatimSymlinks` keeps the dependency links pointing
-  // at this repository rather than resolving them into a second gigabyte.
-  await cp(one, two, { recursive: true, verbatimSymlinks: true });
-  await writeFile(join(two, 'package.json'), manifest('conformance-two', { '@srljs/cli': '0.0.0' }));
+  // The second project is a byte-for-byte install copy with its own manifest name. Both
+  // editor sessions therefore start from real package directories, never checkout links.
+  await cp(one, two, { recursive: true });
+  await writeFile(join(two, 'package.json'), applicationManifest('conformance-two'));
 
   for (const [directory, name, dependencies] of /** @type {Array<[string, string, Record<string, string>]>} */ ([
     [declared, 'conformance-declared', { '@srljs/cli': '0.0.0' }],

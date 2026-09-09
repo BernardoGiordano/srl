@@ -13,10 +13,11 @@
  * a tsconfig extending the published base so `@core/` resolves for tsc.
  *
  * Getting any one of them wrong is a blank page or a refused build, which is why
- * `srl check importmap` exists. Until this module, the only executable description of
- * a correct application was the fixture inside tools/checks/pack-check.mjs — reachable
- * by `npm run pack:check` and by nothing else — and an adopter re-derived the same nine
- * files from prose. ADR-0073.
+ * `srl check importmap` exists. The installed journey also proves the declared build and
+ * type dependencies, local bin and Git commit around these files. ADR-0098. Until this
+ * module, the only executable description of a correct application was the fixture inside
+ * tools/checks/pack-check.mjs — reachable by `npm run pack:check` and by nothing else —
+ * and an adopter re-derived the same nine files from prose. ADR-0073.
  *
  * Two halves, deliberately:
  *
@@ -358,8 +359,8 @@ if (
     report(await emitApplication(REPO, { name }), {
       format: outputFormat(),
       summary:
-        `An application. \`srl serve --app ${app}\` runs it, and ` +
-        `\`tailwindcss -i ${app}/src/app.css -o ${app}/app.css\` compiles its stylesheet.`,
+        `An application. \`npx --no-install srl serve --app ${app}\` runs it. ` +
+        `Check it, commit it, then \`npx --no-install srl build --app ${app}\` builds it.`,
     }),
   );
 }

@@ -17,9 +17,11 @@
  * ADR-0067, ADR-0068.
  *
  * So this builds the layout instead of assuming it. tools/fixtures/installed-layout.mjs
- * packs both workspaces and extracts them into `node_modules/@srljs/`; the probe then:
+ * declares every dependency a first application needs, packs both workspaces and
+ * gives their tarballs to a real offline `npm install`; the probe then:
  *
- *   1. Scaffolds the application with the published `srl new`, so the fixture is not
+ *   1. Scaffolds the application with the published `srl new`, through the same local-bin
+ *      command the install guide gives an adopter, so the fixture is not
  *      written here at all: the shape lives in cli/scaffold/application.mjs, the one
  *      module `srl new` and this probe both cross, and a consumer's first command is
  *      the thing under test. ADR-0073.
@@ -31,18 +33,18 @@
  *
  * Every step's verdict is a `Diagnostic`, and cli/diagnostics/index.mjs prints them:
  * the probe is expensive enough that a caller wanting to know which step failed should
- * not have to scrape a terminal for it. ADR-0072.
+ * not have to scrape a terminal for it. ADR-0072, ADR-0098.
  */
 
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { error, hasErrors, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { exists } from '../../cli/layout.mjs';
-import { install, srl } from '../fixtures/installed-layout.mjs';
+import { applicationManifest, install, srl } from '../fixtures/installed-layout.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
 
@@ -67,23 +69,15 @@ function refuse(code, message) {
  * fifth description of a contract the toolchain enforces. It is now
  * cli/scaffold/application.mjs, and this runs it as a consumer does. ADR-0073.
  *
- * Through the bin rather than by import, for the same reason everything else here is:
- * imported, the scaffold would find the library beside `cli/` in this checkout and
+ * Through the local bin rather than by import, for the same reason everything else here
+ * is: imported, the scaffold would find the library beside `cli/` in this checkout and
  * paste *that* import map. Run inside the probe, it resolves the installed package, and
  * the fixture is made of the bytes actually under test.
- *
- * What stays here is what belongs to the probe rather than to an application: a
- * package.json naming it, and the commit the artifact stamps.
  *
  * @param {string} probe
  * @returns {Promise<Diagnostic[]>}
  */
 async function create(probe) {
-  await writeFile(
-    join(probe, 'package.json'),
-    `${JSON.stringify({ name: 'pack-probe', private: true, type: 'module', version: '0.0.0' }, null, 2)}\n`,
-  );
-
   const scaffold = await srl(probe, ['new', APP]);
   if (scaffold.code !== 0) {
     return [
@@ -96,7 +90,7 @@ async function create(probe) {
 
   // The artifact stamps the commit it was built from, so the probe has to be one.
   await run('git', ['init', '-q', '.'], { cwd: probe });
-  await run('git', ['add', '-A'], { cwd: probe });
+  await run('git', ['add', 'package.json', 'tsconfig.json', APP], { cwd: probe });
   await run(
     'git',
     ['-c', 'user.email=pack@check', '-c', 'user.name=pack-check', 'commit', '-qm', 'probe'],
@@ -211,8 +205,19 @@ export async function checkPackagedInstall(options = {}) {
   /** @type {Diagnostic[]} */
   const found = [info('pack/probe', probe, { group: GROUP })];
   try {
-    await mkdir(join(probe, 'node_modules'), { recursive: true });
-    await install(probe, { bundled: true });
+    await writeFile(join(probe, 'package.json'), applicationManifest('pack-probe'));
+    try {
+      await install(probe);
+      found.push(
+        info('pack/install', '`npm install` resolved only the declared dependencies', {
+          group: GROUP,
+        }),
+      );
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      found.push(refuse('pack/install-failed', `the declared dependencies did not install:\n\n${indent(detail)}`));
+      return found;
+    }
 
     // A scaffold that refused wrote no application, and every step below would then
     // report the absence of one rather than the reason for it.

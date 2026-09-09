@@ -14,18 +14,37 @@ Full documentation, the guides and the decision records are in
 
 ## Install
 
+Node.js 22 or later, npm and Git are prerequisites. From a new repository:
+
 ```bash
-npm install --save-dev @srljs/cli
-srl new web
+git init
+npm init -y
+npm install --save-dev --save-exact @srljs/core@0.7.0 @srljs/cli@0.7.0 \
+  tailwindcss@4.3.3 @tailwindcss/cli@4.3.3 @types/node@24.13.3
+npx --no-install srl new web
+npx --no-install srl check importmap
+npx --no-install srl check templates
+printf "node_modules/\ndist/\n" > .gitignore
+git add .
+git commit -m "Create web application"
+npx --no-install srl build --app web
 ```
 
-`srl new` writes the smallest application that builds: the document with the library's
-import map pasted and the vendored script hashed, an entry module and a lazy chunk with
-their templates, the stylesheet, the manifest, a locale bundle, and a `tsconfig.json`
+`npx --no-install` runs the repository's installed binary and cannot silently download a
+different one. `srl new` writes the smallest application that builds: the document with the
+library's import map pasted and the vendored script hashed, an entry module and a lazy chunk
+with their templates, the stylesheet, the manifest, a locale bundle, and a `tsconfig.json`
 extending the published base. Nine interdependent files, each of them a contract the tools
 below enforce — so they come from one module, the same one this toolchain's own packaged-
-install probe drives end to end on every run, rather than from prose here for you to
-retype. It refuses rather than overwrites.
+install probe drives through this complete journey on every run. It refuses rather than
+overwrites.
+
+Tailwind is declared by the application because it compiles the application's stylesheet;
+the CLI does not choose that version transitively. The generated `tsconfig.json` names the
+Node type library, so `@types/node` is declared too. A build records the current Git commit,
+so the repository needs at least one commit before the first build. The install probe uses
+only these declared dependencies and refuses an absent local binary, type library,
+Tailwind or commit before a release can appear.
 
 `@srljs/core` is a peer dependency, pinned to the exact matching version: this package reads
 the library's own manifest for the mounts and specifier prefixes, and imports three of its
@@ -64,34 +83,34 @@ below its own root.
 ```bash
 # A new application in the repository root. Refuses an existing directory; leaves an
 # existing tsconfig.json alone and says which `include` entry to add.
-srl new web
+npx --no-install srl new web
 
 # Static server for one application: the library's two mounts, history fallback,
 # watch and live reload. Plain Node, no dependencies of its own.
-srl serve --app web --open
+npx --no-install srl serve --app web --open
 
 # --proxy forwards a prefix to a backend instead of serving it from disk, so an
 # application whose session is a cookie its backend sets develops on one origin —
 # the arrangement it is deployed into — rather than on two. Repeatable. Routes
 # only: the prefix is not stripped, and status and headers pass through untouched.
-srl serve --app web --proxy /api/=http://127.0.0.1:8001 --proxy /auth/=http://127.0.0.1:8001
+npx --no-install srl serve --app web --proxy /api/=http://127.0.0.1:8001 --proxy /auth/=http://127.0.0.1:8001
 
 # The application's inline import map against the library it installed: entries
 # the library publishes and the map omits or hand-edited, prefixes resolving to
 # a second copy of the framework, integrity hashes that no longer match their
 # bytes. Every one of those is a blank page rather than a build error, so this is
 # the check to put in CI. Prints the script-src hash a CSP has to allow.
-srl check importmap
+npx --no-install srl check importmap
 
 # Type-check every template against the same JSDoc types as the JavaScript,
 # without compiling anything. Needs a tsconfig.json at the repository root.
-srl check templates
+npx --no-install srl check templates
 
 # Either check with --json prints its findings as one document instead of a
 # terminal report: a severity, a stable code, a message and the file, line and
 # column, per finding. A check returns them as values and this is the second
 # adapter over that — same findings, same exit code.
-srl check templates --json
+npx --no-install srl check templates --json
 
 # The production artifact: minified, hash-named chunks, a production index.html
 # whose import map pins a sha384 for every one of them, the compiled stylesheet,
@@ -99,14 +118,14 @@ srl check templates --json
 # each file expects. Templates are minified too, one immutable file each, fetched
 # by the component that names it; `--templates bundle` collapses them into the
 # single JSON the manifest seeds from at startup instead.
-srl build --app web
+npx --no-install srl build --app web
 
 # Every element, global and template the project model can see.
-srl model --app web --json
+npx --no-install srl model --app web --json
 
 # The same model and template checker as an LSP server over stdio. Normally
 # started by the VS Code or WebStorm plugin rather than by hand.
-srl language-server
+npx --no-install srl language-server
 ```
 
 Editor installation and the complete feature list are in the repository's
@@ -193,16 +212,16 @@ means one more `include` entry, which is the only edit this file needs per appli
 
 ## What the build expects of you
 
-A scaffolded application satisfies all four already; this is what they are and why.
+The complete setup above satisfies all four; this is what they are and why.
 
 - **Tailwind, yours.** The build shells out to your own `node_modules/.bin/tailwindcss`,
   because the stylesheet it compiles is yours — written against your config and your
-  version. Install `tailwindcss` and `@tailwindcss/cli` yourself; a copy pinned here would
+  version. They are direct application dependencies; a copy pinned inside the CLI would
   compile your CSS with a compiler you did not choose.
 - **An import map in `index.html`.** It is the resolver: the build reads the application's
   own map and admits only the bare specifiers already declared there. A module importing
   something the map does not name fails the build rather than 404ing on one route.
-- **A git repository.** The artifact records the commit it was built from.
+- **A Git commit.** The artifact records the commit it was built from.
 - **At least two JavaScript chunks.** An application with nothing behind an `import()`
   carries every route in its entry, which is the shape the chunking exists to avoid.
 
@@ -211,7 +230,7 @@ A scaffolded application satisfies all four already; this is what they are and w
 The build is separate from the transport, and consumes only the verified report and bytes.
 
 ```bash
-srl release --artifact dist/web --out staged --remote-root /srv/www/example.com
+npx --no-install srl release --artifact dist/web --out staged --remote-root /srv/www/example.com
 ```
 
 `srl verify-release` and `srl verify-http` check a staged tree and a live origin against the
