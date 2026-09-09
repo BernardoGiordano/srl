@@ -165,13 +165,20 @@ class SrlSessions {
    * No `synchronize.fileEvents` here: the server registers the watchers it needs, scoped
    * to the project it serves, and the client owns and disposes them.
    *
+   * The selector's patterns are absolute glob strings rather than `RelativePattern`s. A
+   * language client round-trips this selector through the protocol before it registers
+   * the editor's providers with it, and a `RelativePattern` does not survive that trip:
+   * it converts to `undefined`, which leaves each folder's providers claiming every
+   * folder's files. Two srl projects in one window then answered each other's requests —
+   * a rename in one edited the other's files. A string is matched against the document's
+   * absolute path and comes back as itself. ADR-0097.
+   *
    * @param {any} folder
    * @param {string} root
    * @param {string} server
    */
   #options(folder, root, server) {
-    const vscode = this.#vscode;
-    const node = vscode.workspace.getConfiguration('srl', folder.uri).get('nodePath', 'node');
+    const node = this.#vscode.workspace.getConfiguration('srl', folder.uri).get('nodePath', 'node');
     return {
       id: 'srl',
       name: `srl (${folder.name})`,
@@ -182,16 +189,8 @@ class SrlSessions {
       },
       clientOptions: {
         documentSelector: [
-          {
-            scheme: 'file',
-            language: 'html',
-            pattern: new vscode.RelativePattern(folder, '**/*.html'),
-          },
-          {
-            scheme: 'file',
-            language: 'javascript',
-            pattern: new vscode.RelativePattern(folder, '**/*.{js,mjs}'),
-          },
+          { scheme: 'file', language: 'html', pattern: `${within(folder)}/**/*.html` },
+          { scheme: 'file', language: 'javascript', pattern: `${within(folder)}/**/*.{js,mjs}` },
         ],
         workspaceFolder: folder,
         outputChannelName: `srl Language Server (${folder.name})`,
@@ -223,6 +222,17 @@ class SrlSessions {
     );
     return next;
   }
+}
+
+/**
+ * The folder's path as a glob prefix. Separators are `/` on every platform: a glob is
+ * matched against the path, and a Windows backslash reads as an escape.
+ *
+ * @param {any} folder
+ * @returns {string}
+ */
+function within(folder) {
+  return String(folder.uri.fsPath).replaceAll('\\', '/');
 }
 
 /** @param {unknown} cause */

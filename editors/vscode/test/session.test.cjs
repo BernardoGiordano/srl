@@ -18,6 +18,13 @@ test('a session owns its client, its settings, and its own restart', async (cont
     assert.deepEqual(created.serverOptions.options.cwd, '/app');
     assert.equal(created.serverOptions.options.env.SRL_ROOT, '/app');
     assert.match(created.clientOptions.outputChannelName, /app/u);
+    // Absolute globs, not `RelativePattern`s: the client round-trips this selector
+    // through the protocol, which drops a relative pattern and leaves every folder's
+    // providers claiming every folder's files. ADR-0097.
+    assert.deepEqual(
+      created.clientOptions.documentSelector.map((filter) => filter.pattern),
+      ['/app/**/*.html', '/app/**/*.{js,mjs}'],
+    );
     // The server registers the watchers it needs, scoped to its own project. A second
     // watcher here is the duplicate reload the adapter used to cause.
     assert.equal(created.clientOptions.synchronize, undefined);

@@ -113,6 +113,29 @@ Code or by upgrading the IDE.
 installed IDE. It defaults to `/Applications/WebStorm.app/Contents`; elsewhere pass
 `-Dwebstorm.home=<directory containing lib/>`.
 
+## Conformance
+
+Packaging proves the artifact and the Plugin Verifier proves the plugin loads. Neither
+proves that installing one makes an editor start the project's toolchain and answer with
+it, so one command does:
+
+```bash
+npm run conformance                  # VS Code, minimum and current
+npm run conformance -- --webstorm    # and the WebStorm installed on this machine
+```
+
+It builds four projects from the tarballs this repository would publish — two installed,
+one that declares srl without installing it, one that never asked — installs the packed
+extension into a profile of its own, and drives the scenarios in
+`tools/conformance/scenarios.mjs` through the editor's own providers. The result is one
+parity table over every editor it could reach; `--report <path>` writes it as Markdown.
+
+VS Code answers every scenario. WebStorm answers the session ones — a project that starts
+its toolchain, projects that stay quiet, nothing left running — because the platform
+exposes no way to ask an installed IDE for a completion from outside it. The table says
+which is which on every run. CI runs the VS Code half; WebStorm needs a licensed IDE, so
+it is local and opt-in. ADR-0097.
+
 ## Other LSP clients
 
 Any client that can start a stdio language server can use the same implementation:

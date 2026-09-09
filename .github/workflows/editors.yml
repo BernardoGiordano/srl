@@ -61,3 +61,35 @@ jobs:
         with:
           name: webstorm-plugin
           path: editors/webstorm/target/*.zip
+
+  # Packaging proves the artifact; this proves installing it does anything. The two
+  # editions are the minimum `engines.vscode` claims and current stable, which is where
+  # the platform's API drift shows up. WebStorm needs a licensed IDE, so its adapter
+  # stays a local command. ADR-0097.
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The fixture is built from `npm pack` of both workspaces and links the rest of its
+      # dependencies from here, so the repository has to be installed first.
+      - run: npm ci
+
+      # VS Code is an Electron application: it needs an X server. The libraries it links
+      # against are already on the image, which ships two browsers.
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - run: xvfb-run -a npm run conformance -- --report conformance.md
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: editor-conformance
+          path: conformance.md

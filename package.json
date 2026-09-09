@@ -51,6 +51,7 @@
     "docs:write": "node tools/checks/readme-check.mjs --write",
     "docs:adr": "node tools/checks/adr-check.mjs",
     "docs:adr:write": "node tools/checks/adr-check.mjs --write",
+    "conformance": "node tools/conformance/conformance.mjs",
     "benchmark": "node tools/benchmark/run.mjs",
     "benchmark:ci": "node tools/benchmark/run.mjs --ci",
     "check": "npm run typecheck && npm run templates:check && npm run lint && npm run test:tools && npm run test:editors && npm run vendor && npm run package && npm run verify && npm run pack:check && npm run docs:check && npm run docs:adr && npm run test"

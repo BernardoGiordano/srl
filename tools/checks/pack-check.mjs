@@ -16,19 +16,14 @@
  * the checkout could notice, because in the checkout the condition is false.
  * ADR-0067, ADR-0068.
  *
- * So this builds the layout instead of assuming it:
+ * So this builds the layout instead of assuming it. tools/fixtures/installed-layout.mjs
+ * packs both workspaces and extracts them into `node_modules/@srljs/`; the probe then:
  *
- *   1. `npm pack` both workspaces — the actual tarballs, so `files` is under test too.
- *   2. Extract them into `node_modules/@srljs/` as real directories. Not symlinks: a
- *      symlink resolves to the checkout and the whole point is lost, because Node
- *      resolves realpaths and every "am I installed?" test would answer no.
- *   3. Symlink every other dependency from this repository's node_modules, so the
- *      probe needs no network and pins nothing of its own.
- *   4. Scaffold the application with the published `srl new`, so the fixture is not
+ *   1. Scaffolds the application with the published `srl new`, so the fixture is not
  *      written here at all: the shape lives in cli/scaffold/application.mjs, the one
  *      module `srl new` and this probe both cross, and a consumer's first command is
  *      the thing under test. ADR-0073.
- *   5. Run the toolchain against it through the published `srl` bin: the import-map
+ *   2. Runs the toolchain against it through the published `srl` bin: the import-map
  *      check, the template checker, the build.
  *
  * What it does not cover: remotes, i18n, the release transport. Those are checked in
@@ -40,13 +35,14 @@
  */
 
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { error, hasErrors, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
-import { REPO, exists } from '../../cli/layout.mjs';
+import { exists } from '../../cli/layout.mjs';
+import { install, srl } from '../fixtures/installed-layout.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
 
@@ -59,138 +55,6 @@ const GROUP = 'packaged install';
 /** @param {string} code @param {string} message @returns {Diagnostic} */
 function refuse(code, message) {
   return error(code, message, { group: GROUP });
-}
-
-/**
- * Run a command in the probe, capturing both streams. A non-zero exit is data here,
- * not a throw: the point is to report which step failed and what it said.
- *
- * @param {string} probe
- * @param {string[]} args
- * @returns {Promise<{ code: number, output: string }>}
- */
-async function srl(probe, args) {
-  const bin = join(probe, 'node_modules', '@srljs', 'cli', 'bin', 'srl.mjs');
-  try {
-    const { stdout, stderr } = await run(process.execPath, [bin, ...args], { cwd: probe });
-    return { code: 0, output: `${stdout}${stderr}` };
-  } catch (error) {
-    const detail = /** @type {{ code?: unknown, stdout?: unknown, stderr?: unknown }} */ (error);
-    return {
-      code: typeof detail.code === 'number' ? detail.code : 1,
-      output: [detail.stdout, detail.stderr].filter((s) => typeof s === 'string').join(''),
-    };
-  }
-}
-
-/**
- * Pack both workspaces and extract them into the probe's node_modules.
- *
- * @param {string} probe
- * @returns {Promise<void>}
- */
-async function install(probe) {
-  const tarballs = join(probe, 'tarballs');
-  await mkdir(tarballs, { recursive: true });
-  await run(
-    'npm',
-    [
-      'pack',
-      '--workspace',
-      '@srljs/core',
-      '--workspace',
-      '@srljs/cli',
-      '--pack-destination',
-      tarballs,
-    ],
-    { cwd: REPO },
-  );
-
-  const scoped = join(probe, 'node_modules', '@srljs');
-  for (const [tarball, name] of [
-    ['srljs-core-', 'core'],
-    ['srljs-cli-', 'cli'],
-  ]) {
-    const files = await readdir(tarballs);
-    const file = files.find((entry) => entry.startsWith(String(tarball)));
-    if (file === undefined) throw new Error(`npm pack produced no ${String(tarball)}*.tgz`);
-    const target = join(scoped, String(name));
-    await mkdir(target, { recursive: true });
-    // --strip-components drops the `package/` prefix every npm tarball carries.
-    await run('tar', ['xzf', join(tarballs, file), '-C', target, '--strip-components', '1']);
-  }
-
-  // Everything else comes from this repository, so the probe pins nothing and downloads
-  // nothing: a dependency resolves from its own realpath here exactly as it would from a
-  // real install.
-  //
-  // Mostly by symlink, with one exception that is not cosmetic. A production bundle
-  // inlines the library's runtime dependencies from npm rather than from lib/vendor —
-  // the vendored copy is the buildless path's, and `npm run verify` is what keeps the
-  // two at one version — so those packages end up as modules *in the artifact*, and the
-  // artifact records every module's path relative to the repository. A symlink resolves
-  // to this checkout, which is outside the probe, and the build refuses it. Correctly: a
-  // module it cannot place inside the repository is a module it cannot describe. So the
-  // bundled ones are real copies, as the transitive closure rather than a hand-written
-  // list, because lit's own layout is lit's business.
-  //
-  // A scope is a real directory with symlinked packages inside it, never a symlinked
-  // directory. Linking the scope would make every path under it a way out of the probe,
-  // and a write meant for the copy would land in this repository's node_modules instead.
-  const own = join(REPO, 'node_modules');
-  const bundled = await bundledClosure(own);
-
-  /** @param {string} name */
-  const place = async (name) => {
-    const target = join(probe, 'node_modules', name);
-    if (bundled.has(name)) await cp(join(own, name), target, { recursive: true, dereference: true });
-    else await symlink(join(own, name), target);
-  };
-
-  for (const entry of await readdir(own, { withFileTypes: true })) {
-    if (entry.name === '@srljs') continue;
-    if (!entry.name.startsWith('@')) {
-      await place(entry.name);
-      continue;
-    }
-    await mkdir(join(probe, 'node_modules', entry.name), { recursive: true });
-    for (const scoped of await readdir(join(own, entry.name))) {
-      await place(`${entry.name}/${scoped}`);
-    }
-  }
-}
-
-/**
- * The library's runtime dependencies and everything they depend on, as installed.
- *
- * @param {string} own this repository's node_modules
- * @returns {Promise<Set<string>>}
- */
-async function bundledClosure(own) {
-  const manifest = /** @type {{ dependencies?: Record<string, string> }} */ (
-    JSON.parse(await readFile(join(REPO, 'source', 'package.json'), 'utf8'))
-  );
-  /** @type {Set<string>} */
-  const found = new Set();
-  const queue = Object.keys(manifest.dependencies ?? {});
-
-  while (queue.length > 0) {
-    const name = queue.pop();
-    if (name === undefined || found.has(name)) continue;
-    let nested;
-    try {
-      nested = /** @type {{ dependencies?: Record<string, string> }} */ (
-        JSON.parse(await readFile(join(own, name, 'package.json'), 'utf8'))
-      );
-    } catch {
-      // Not installed at the top level: npm nested it under a dependent, where it is
-      // already inside the copy that dependent brings along.
-      continue;
-    }
-    found.add(name);
-    queue.push(...Object.keys(nested.dependencies ?? {}));
-  }
-  return found;
 }
 
 /**
@@ -348,7 +212,7 @@ export async function checkPackagedInstall(options = {}) {
   const found = [info('pack/probe', probe, { group: GROUP })];
   try {
     await mkdir(join(probe, 'node_modules'), { recursive: true });
-    await install(probe);
+    await install(probe, { bundled: true });
 
     // A scaffold that refused wrote no application, and every step below would then
     // report the absence of one rather than the reason for it.

@@ -95,6 +95,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0094](0094-an-editor-session-owns-what-it-started.md) | An editor session owns what it started | accepted | `editors/vscode/`, `editors/webstorm/`, `cli/language-server/server.mjs` |
 | [ADR-0095](0095-diagnostics-run-on-a-thread-the-editor-is-not-waiting-on.md) | Diagnostics run on a thread the editor is not waiting on | accepted | `cli/language-server/analysis.mjs`, `cli/language-server/validation.mjs`, `cli/language-server/server.mjs` |
 | [ADR-0096](0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md) | The editor latency claim is a workload, not an assertion | accepted | `tools/benchmark/node/editor.mjs`, `tools/benchmark/budgets.json`, `cli/test/support/language-server-client.mjs`, `cli/test/live-analysis.test.mjs` |
+| [ADR-0097](0097-an-installed-editor-is-proved-by-installing-it.md) | An installed editor is proved by installing it | accepted | `tools/conformance/`, `tools/fixtures/installed-layout.mjs`, `.github/workflows/editors.yml`, `editors/vscode/`, `editors/webstorm/` |
 
 <!-- /generated:adr-index -->
 

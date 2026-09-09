@@ -85,4 +85,5 @@ the reason is recorded in the module that owns it.
 | Whether an application's import map still matches the library it installed | `cli/checks/importmap-check.mjs` — the one check a consumer runs, because the failures are blank pages |
 | What tsc has to know to resolve `@core/` | `source/tsconfig.base.json` — published, extended rather than copied |
 | Whether the published tarballs work when installed | `tools/checks/pack-check.mjs` — packs both, installs them, scaffolds an application with `srl new` and drives it |
+| Whether an installed editor does what the plugins claim | `tools/conformance/` — installs the packed extension into a real editor and drives one scenario list through it |
 | A performance budget | `tools/benchmark/budgets.json` |

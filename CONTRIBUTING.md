@@ -101,6 +101,11 @@ npm run test:tools            # the Node-side tools, no browser
 
 [Writing a test](docs/guide/testing.md) has the rules the existing suites already learned.
 
+The editor plugins have one more, outside the chain because it downloads an editor:
+`npm run conformance` installs the packed extension into a real VS Code and drives it
+against a project built from the tarballs this repository would publish
+([editor support](docs/guide/editor-support.md#conformance)).
+
 ## Performance
 
 `npm run benchmark` measures against committed budgets. A regression has to be both

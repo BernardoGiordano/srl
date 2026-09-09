@@ -1,0 +1,11 @@
+{
+  "name": "srl-conformance-probe",
+  "displayName": "srl conformance probe",
+  "description": "Drives the installed srl extension through the shared conformance scenarios",
+  "version": "0.0.0",
+  "publisher": "srl",
+  "private": true,
+  "engines": { "vscode": "^1.95.0" },
+  "main": "./extension.cjs",
+  "activationEvents": []
+}
