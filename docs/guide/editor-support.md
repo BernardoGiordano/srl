@@ -93,7 +93,13 @@ The plugin targets WebStorm 2026.1 and newer and uses WebStorm's native LSP clie
 starts only when the project contains the srl server. It runs that server with the `node`
 found on the login shell's `PATH` rather than the IDE process's, so an install managed by
 nvm, fnm, or Volta is reachable from a desktop-launched IDE; `SRL_NODE_PATH` names a
-specific executable instead.
+specific executable instead. A project with no reachable Node.js says so rather than
+failing to spawn quietly.
+
+A project whose `package.json` asks for `@srljs/cli` or `@srljs/core` and has no server
+installed says so once, in a notification. A project that asks for neither is left to
+WebStorm's ordinary HTML and JavaScript support without comment. Opening an srl file again
+after installing the dependencies starts the server.
 
 It contributes the same six snippets as the VS Code package, as live templates in the
 `srl` group: `srl-interpolation`, `srl-if`, `srl-for`, `srl-event`, `srl-property` and

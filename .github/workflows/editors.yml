@@ -51,7 +51,7 @@ jobs:
           distribution: temurin
           cache: maven
 
-      # `package` compiles against the platform, runs the locator tests and lays out the
+      # `package` compiles against the platform, runs the editor-session tests and lays out the
       # ZIP the marketplace and Install Plugin from Disk expect. The Plugin Verifier needs
       # an installed IDE, so it stays a local command; see editors/webstorm/pom.xml.
       - run: mvn -B package
