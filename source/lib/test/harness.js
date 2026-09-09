@@ -87,6 +87,47 @@ export function present(value, message) {
   return value;
 }
 
+/**
+ * A real `AbortController` whose signal reports the listeners still on it.
+ *
+ * Native `AbortSignal` removes a listener registered with `signal:` on its own,
+ * without calling `removeEventListener`, so a request that ends by abort leaves
+ * nothing behind here either way. What this catches is the request that settles
+ * and never aborts, and keeps its listener on a signal that outlives it.
+ *
+ * @returns {{ controller: AbortController, listeners: Set<EventListenerOrEventListenerObject> }}
+ */
+export function instrumentedAbort() {
+  const controller = new AbortController();
+  const signal = controller.signal;
+  /** @type {Set<EventListenerOrEventListenerObject>} */
+  const listeners = new Set();
+  const add = signal.addEventListener.bind(signal);
+  const remove = signal.removeEventListener.bind(signal);
+
+  /**
+   * @param {string} type
+   * @param {EventListenerOrEventListenerObject} handler
+   * @param {boolean | AddEventListenerOptions} [options]
+   */
+  signal.addEventListener = (type, handler, options) => {
+    listeners.add(handler);
+    add(type, handler, options);
+  };
+
+  /**
+   * @param {string} type
+   * @param {EventListenerOrEventListenerObject} handler
+   * @param {boolean | EventListenerOptions} [options]
+   */
+  signal.removeEventListener = (type, handler, options) => {
+    listeners.delete(handler);
+    remove(type, handler, options);
+  };
+
+  return { controller, listeners };
+}
+
 /* ── Assertions ────────────────────────────────────────────────────────── */
 
 export const assert = {

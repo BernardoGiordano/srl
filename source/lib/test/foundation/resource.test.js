@@ -1,6 +1,6 @@
 import { effect, signal } from '@core/foundation/reactive.js';
 import { resource } from '@core/foundation/resource.js';
-import { assert } from '../harness.js';
+import { assert, instrumentedAbort } from '../harness.js';
 
 /**
  * A promise a test settles by hand, plus the abort signal the loader was given.
@@ -49,44 +49,14 @@ function loader() {
 }
 
 /**
- * A real `AbortController` whose signal reports the listeners still on it.
- *
- * Native `AbortSignal` removes a listener registered with `signal:` on its own,
- * without calling `removeEventListener`, so a request that ends by supersession
- * leaves nothing behind here either way. What this catches is the request that
- * settles and never aborts.
+ * The owner an in-flight request is bound to, reporting the listeners still on it.
+ * `instrumentedAbort` in the harness, under the name this suite reads it by.
  *
  * @returns {{ owner: AbortController, listeners: Set<EventListenerOrEventListenerObject> }}
  */
 function instrumentedLifetime() {
-  const owner = new AbortController();
-  const signal = owner.signal;
-  /** @type {Set<EventListenerOrEventListenerObject>} */
-  const listeners = new Set();
-  const add = signal.addEventListener.bind(signal);
-  const remove = signal.removeEventListener.bind(signal);
-
-  /**
-   * @param {string} type
-   * @param {EventListenerOrEventListenerObject} handler
-   * @param {boolean | AddEventListenerOptions} [options]
-   */
-  signal.addEventListener = (type, handler, options) => {
-    listeners.add(handler);
-    add(type, handler, options);
-  };
-
-  /**
-   * @param {string} type
-   * @param {EventListenerOrEventListenerObject} handler
-   * @param {boolean | EventListenerOptions} [options]
-   */
-  signal.removeEventListener = (type, handler, options) => {
-    listeners.delete(handler);
-    remove(type, handler, options);
-  };
-
-  return { owner, listeners };
+  const { controller, listeners } = instrumentedAbort();
+  return { owner: controller, listeners };
 }
 
 describe('resource', () => {

@@ -1,5 +1,5 @@
 import { ApiClient, ApiError } from '@core/http/client.js';
-import { assert, present } from '../harness.js';
+import { assert, instrumentedAbort, present } from '../harness.js';
 
 /**
  * The HTTP client, against a recorded transport.
@@ -29,6 +29,36 @@ function transport(answer) {
       return Promise.resolve(answer?.(url) ?? json({ ok: true }));
     },
   };
+}
+
+/** @typedef {{ url: string, signal: AbortSignal | undefined, answer: (response: Response) => void }} Pending */
+
+/**
+ * A transport that hands every call to the test unanswered, and rejects one whose
+ * signal aborts — which is the half of `fetch` these assertions are about.
+ *
+ * @returns {{ fetch: import('@core/http/client.js').HttpTransport, calls: Pending[] }}
+ */
+function deferred() {
+  /** @type {Pending[]} */
+  const calls = [];
+  return {
+    calls,
+    fetch: (url, init) =>
+      new Promise((resolve, reject) => {
+        const signal = init?.signal ?? undefined;
+        calls.push({ url, signal, answer: resolve });
+        // An aborted signal rejects before anything is sent, and an abort while the
+        // request is open rejects it. Both are `fetch`, and both matter here.
+        if (signal?.aborted === true) return reject(aborted());
+        signal?.addEventListener('abort', () => reject(aborted()), { once: true });
+      }),
+  };
+}
+
+/** @returns {Error} What `fetch` rejects an aborted request with, by default. */
+function aborted() {
+  return new DOMException('The operation was aborted.', 'AbortError');
 }
 
 /**
@@ -104,14 +134,29 @@ describe('ApiClient', () => {
   });
 
   describe('the request it sends', () => {
-    it('asks for JSON on every call and carries the abort signal of a get', async () => {
+    it('asks for JSON on every call', async () => {
       const sent = transport();
-      const controller = new AbortController();
-      await new ApiClient('/api', { fetch: sent.fetch }).get('/orders', undefined, controller.signal);
+      await new ApiClient('/api', { fetch: sent.fetch }).get('/orders');
+      assert.equal(headers(present(sent.calls[0])).Accept, 'application/json');
+    });
 
+    it('sends a get under a signal of its own, which the caller aborts through', async () => {
+      const sent = deferred();
+      const controller = new AbortController();
+      const read = new ApiClient('/api', { fetch: sent.fetch }).get(
+        '/orders',
+        undefined,
+        controller.signal,
+      );
+
+      // Not the caller's signal: the request is shared, and one caller leaving may
+      // not cancel what the others are waiting for. It aborts when the last does.
       const call = present(sent.calls[0]);
-      assert.equal(headers(call).Accept, 'application/json');
-      assert.equal(call.init.signal, controller.signal);
+      assert.notOk(call.signal === controller.signal, 'the request carries its own signal');
+
+      controller.abort();
+      await assert.rejects(() => read);
+      assert.ok(call.signal?.aborted, 'the last caller out aborts the request');
     });
 
     it('serialises a body and declares its type, for each writing verb', async () => {
@@ -224,6 +269,145 @@ describe('ApiClient', () => {
       const sent = transport(() => json({ error: 'boom', fields: { amount: 'required' } }, 500));
       const error = await apiError(new ApiClient('/api', { fetch: sent.fetch }).post('/movements', {}));
       assert.sameArray(Object.keys(error.fields), []);
+    });
+  });
+
+  describe('the read it shares', () => {
+    it('sends one request for two concurrent gets of the same URL, and answers both', async () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+
+      /** @type {Promise<{ id: number }>} */
+      const header = client.get('/orders/7');
+      /** @type {Promise<{ id: number }>} */
+      const tab = client.get('/orders/7');
+      assert.equal(sent.calls.length, 1, 'the second get joined the first');
+
+      present(sent.calls[0]).answer(json({ id: 7 }));
+      assert.equal((await header).id, 7);
+      assert.equal((await tab).id, 7);
+    });
+
+    it('hands each caller its own copy, so no screen can edit what another one holds', async () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+
+      /** @type {Promise<{ lines: string[] }>} */
+      const header = client.get('/orders/7');
+      /** @type {Promise<{ lines: string[] }>} */
+      const tab = client.get('/orders/7');
+      present(sent.calls[0]).answer(json({ lines: [] }));
+
+      const own = await header;
+      const other = await tab;
+      assert.notOk(own === other, 'two callers, two objects');
+
+      own.lines.push('edited');
+      assert.equal(other.lines.length, 0, 'the copy is not the same array either');
+    });
+
+    it('shares nothing between two URLs, however close', () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+
+      void client.get('/orders', { status: 'open' });
+      void client.get('/orders', { status: 'held' });
+      assert.equal(sent.calls.length, 2);
+    });
+
+    it('is not a cache: a get after the first settled asks again', async () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+
+      const first = client.get('/orders/7');
+      present(sent.calls[0]).answer(json({ id: 7, status: 'open' }));
+      await first;
+
+      void client.get('/orders/7');
+      assert.equal(sent.calls.length, 2, 'the settled read was not kept');
+    });
+
+    it('lets one caller cancel without touching what the others are waiting for', async () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+      const controller = new AbortController();
+
+      const left = client.get('/orders/7', undefined, controller.signal);
+      /** @type {Promise<{ id: number }>} */
+      const stayed = client.get('/orders/7');
+
+      controller.abort();
+      await assert.rejects(() => left);
+
+      const call = present(sent.calls[0]);
+      assert.notOk(call.signal?.aborted, 'one caller leaving is not a cancellation');
+      call.answer(json({ id: 7 }));
+      assert.equal((await stayed).id, 7);
+    });
+
+    it('starts a fresh request for a get that arrives after the last caller left', async () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+      const controller = new AbortController();
+
+      const abandoned = client.get('/orders/7', undefined, controller.signal);
+      controller.abort();
+      await assert.rejects(() => abandoned);
+
+      void client.get('/orders/7');
+      assert.equal(sent.calls.length, 2, 'the aborted read was not joined');
+    });
+
+    it('does not join an aborted caller to a read, or a read to it', async () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+      const controller = new AbortController();
+      controller.abort();
+
+      /** @type {Promise<{ id: number }>} */
+      const shared = client.get('/orders/7');
+      await assert.rejects(() => client.get('/orders/7', undefined, controller.signal));
+
+      assert.equal(sent.calls.length, 2, 'the aborted caller was sent on its own');
+      present(sent.calls[0]).answer(json({ id: 7 }));
+      assert.equal((await shared).id, 7);
+    });
+
+    it('reports one failure to every caller', async () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+
+      const header = client.get('/orders/7');
+      const tab = client.get('/orders/7');
+      present(sent.calls[0]).answer(json({ error: 'not_found' }, 404));
+
+      for (const read of [header, tab]) {
+        const error = await apiError(read);
+        assert.equal(error.status, 404);
+        assert.equal(error.code, 'not_found');
+      }
+    });
+
+    it('keeps no listener on the caller signal after the read settles', async () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+      const { controller, listeners } = instrumentedAbort();
+
+      const read = client.get('/orders/7', undefined, controller.signal);
+      assert.equal(listeners.size, 1, 'the waiting caller listens for its own abort');
+
+      present(sent.calls[0]).answer(json({ id: 7 }));
+      await read;
+      assert.equal(listeners.size, 0, 'the settled read lets the caller go');
+    });
+
+    it('shares no write, however identical', () => {
+      const sent = deferred();
+      const client = new ApiClient('/api', { fetch: sent.fetch });
+
+      void client.post('/orders/7/close', {});
+      void client.post('/orders/7/close', {});
+      assert.equal(sent.calls.length, 2, 'two closes are two closes');
     });
   });
 });

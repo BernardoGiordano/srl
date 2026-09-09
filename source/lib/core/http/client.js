@@ -14,7 +14,9 @@ import { token } from '@core/foundation/inject.js';
  *    parameters, so no service assembles a query string by hand;
  *  - one error type carrying the status and the server's own error code, so a
  *    screen can tell "you may not" (403) from "it broke" (500) and can put a 422
- *    under the input that caused it, without parsing a message.
+ *    under the input that caused it, without parsing a message;
+ *  - one request for concurrent identical GETs, because a layout route and the tab
+ *    inside it ask for the same record at the same time. See `SharedRead`.
  *
  * WHY THE TRANSPORT IS A PARAMETER
  *
@@ -122,6 +124,10 @@ export class ApiClient {
   #fetch;
   #errorCode;
 
+  /** Reads in flight, by URL. Emptied as each one settles; see `SharedRead`. */
+  /** @type {Map<string, SharedRead>} */
+  #reads = new Map();
+
   /**
    * @param {string} baseUrl
    * @param {ApiClientOptions} options
@@ -133,6 +139,9 @@ export class ApiClient {
   }
 
   /**
+   * A read, joining one already in flight for the same URL rather than sending a
+   * second. `signal` still cancels this caller alone.
+   *
    * @template T
    * @param {string} path
    * @param {Query} [query]
@@ -140,7 +149,21 @@ export class ApiClient {
    * @returns {Promise<T>}
    */
   get(path, query, signal) {
-    return this.#send(path, { signal }, query);
+    const url = this.#url(path, query);
+
+    // Already gone. `fetch` rejects an aborted signal without sending, and joining
+    // would make this caller's answer wait on requests it no longer wants.
+    if (signal?.aborted === true) return this.#sendUrl(url, { signal }, path);
+
+    const joined = this.#reads.get(url);
+    if (joined !== undefined) return /** @type {Promise<T>} */ (joined.join(signal));
+
+    const read = new SharedRead(
+      (shared) => this.#sendUrl(url, { signal: shared }, path),
+      () => this.#reads.delete(url),
+    );
+    this.#reads.set(url, read);
+    return /** @type {Promise<T>} */ (read.join(signal));
   }
 
   /**
@@ -205,8 +228,23 @@ export class ApiClient {
    * @param {Query} [query]
    * @returns {Promise<T>}
    */
-  async #send(path, init, query) {
-    const response = await this.#fetch(this.#url(path, query), {
+  #send(path, init, query) {
+    return this.#sendUrl(this.#url(path, query), init, path);
+  }
+
+  /**
+   * The send itself, over a URL that has already been built: `get` needs that URL
+   * as the key it shares a read under, and building it twice would be building it
+   * differently one day.
+   *
+   * @template T
+   * @param {string} url
+   * @param {RequestInit} init
+   * @param {string} path Carried on the error, where the base URL would be noise.
+   * @returns {Promise<T>}
+   */
+  async #sendUrl(url, init, path) {
+    const response = await this.#fetch(url, {
       ...init,
       headers: { Accept: 'application/json', ...init.headers },
     });
@@ -229,6 +267,138 @@ export class ApiClient {
       for (const entry of queryValues(value)) url.searchParams.append(key, entry);
     }
     return url.href;
+  }
+}
+
+/**
+ * One caller waiting on a shared read.
+ *
+ * @typedef {object} Waiting
+ * @property {(value: unknown) => void} resolve
+ * @property {(cause: unknown) => void} reject
+ * @property {() => void} stopListening Drops this caller's abort listener. Called on every path that settles it.
+ */
+
+/**
+ * One GET in flight, and everybody waiting on it.
+ *
+ * WHY THIS EXISTS
+ *
+ * A layout route fetches the record for its header and the tab rendered inside it
+ * fetches the same record for its body, on the same navigation, because the router
+ * hands a child no data and the injector has one root scope. Two identical GETs
+ * left the browser for every detail screen. Coalescing them is one round trip
+ * saved with no interface for a screen to learn.
+ *
+ * WHAT IT IS NOT
+ *
+ * Not a cache. The entry lives from the send to the settle and no longer, so a
+ * second read that starts after the first finished is a second request and reads
+ * whatever the server says now. Keying, staleness and revalidation are a store's
+ * decisions, and a store is application code. ADR-0076, ADR-0101.
+ *
+ * WHAT IT OWNS
+ *
+ *  - **One request, many callers.** Each gets its own copy of the body, so sharing
+ *    is invisible: two screens that both mutate what they were handed cannot see
+ *    each other's edits, exactly as when each had its own response to parse.
+ *  - **Cancellation per caller.** One caller's `signal` rejects that caller and
+ *    nothing else. The request is aborted when the *last* one leaves, because a
+ *    response nobody is waiting for is one worth not receiving.
+ *  - **Its listeners.** Every terminal path drops the abort listener it put on a
+ *    caller's signal, which for a long-lived screen is the same rule
+ *    `resource()` follows for the same reason.
+ */
+class SharedRead {
+  /** @type {Set<Waiting>} */
+  #waiting = new Set();
+
+  #request = new AbortController();
+
+  /** @type {() => void} */
+  #drop;
+
+  #dropped = false;
+
+  /**
+   * @param {(signal: AbortSignal) => Promise<unknown>} send
+   * @param {() => void} drop Removes this read from the client's map. Called once, before anybody is settled.
+   */
+  constructor(send, drop) {
+    this.#drop = drop;
+    void this.#run(send);
+  }
+
+  /**
+   * Wait on this read, cancelled by `signal` alone.
+   *
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<unknown>}
+   */
+  join(signal) {
+    return new Promise((resolve, reject) => {
+      /** @type {Waiting} */
+      const waiting = { resolve, reject, stopListening: () => {} };
+      this.#waiting.add(waiting);
+
+      if (signal === undefined) return;
+
+      const leave = () => {
+        this.#waiting.delete(waiting);
+        if (this.#waiting.size === 0) {
+          // Dropped before the abort, or a `get` for this URL in the window between
+          // the two would join a read that is already on its way to rejecting.
+          this.#release();
+          this.#request.abort(signal.reason);
+        }
+        // What `fetch` would have rejected this caller with, had it been the only
+        // one. Relayed rather than wrapped: a caller that aborts with its own reason
+        // reads that reason back, and `AbortSignal.reason` is typed `any`.
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        reject(signal.reason);
+      };
+
+      signal.addEventListener('abort', leave, { once: true });
+      waiting.stopListening = () => signal.removeEventListener('abort', leave);
+    });
+  }
+
+  /** @param {(signal: AbortSignal) => Promise<unknown>} send */
+  async #run(send) {
+    try {
+      const body = await send(this.#request.signal);
+      this.#release();
+      this.#settle((waiting, own) => waiting.resolve(own ? body : structuredClone(body)));
+    } catch (cause) {
+      this.#release();
+      this.#settle((waiting) => waiting.reject(cause));
+    }
+  }
+
+  /**
+   * Settle everybody still waiting, in the order they arrived.
+   *
+   * The first of them owns the parsed body: it is the caller whose request this is,
+   * and cloning for it would charge the common case — one caller, nothing shared —
+   * for a copy nobody can observe.
+   *
+   * @param {(waiting: Waiting, own: boolean) => void} settle
+   */
+  #settle(settle) {
+    let own = true;
+    for (const waiting of this.#waiting) {
+      waiting.stopListening();
+      settle(waiting, own);
+      own = false;
+    }
+    this.#waiting.clear();
+  }
+
+  /** Once. A second call would delete a newer read stored under the same URL. */
+  #release() {
+    if (this.#dropped) return;
+    this.#dropped = true;
+    this.#drop();
   }
 }
 

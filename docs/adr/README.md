@@ -99,6 +99,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0098](0098-the-first-application-is-proved-from-its-declarations.md) | The first application is proved from its declared dependencies | accepted | `tools/fixtures/installed-layout.mjs`, `tools/checks/pack-check.mjs`, `tools/conformance/fixture.mjs`, `cli/scaffold/application.mjs`, `cli/delivery/build.mjs`, `cli/README.md` |
 | [ADR-0099](0099-a-performance-claim-carries-its-standing.md) | A performance claim carries its standing | accepted | `tools/benchmark/evidence.mjs`, `tools/benchmark/run.mjs`, `tools/benchmark/report.mjs`, `tools/checks/performance-check.mjs`, `docs/guide/performance.md` |
 | [ADR-0100](0100-a-journey-is-measured-under-stated-network-conditions.md) | A journey is measured under stated network conditions | accepted | `tools/benchmark/browser.mjs`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/types.d.ts`, `docs/guide/performance.md` |
+| [ADR-0101](0101-concurrent-identical-reads-are-one-request.md) | Concurrent identical reads are one request | accepted | `source/lib/core/http/client.js`, `source/lib/test/http/client.test.js`, `example/test/app.smoke.test.js` |
 
 <!-- /generated:adr-index -->
 

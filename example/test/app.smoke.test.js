@@ -225,6 +225,21 @@ describe('operations application', () => {
     assert.notOk(innerOutlet().querySelector('order-summary-tab'), 'the previous tab must be gone');
   });
 
+  it('fetches the record once for a layout route and the tab inside it', async () => {
+    await goto('/sales/orders');
+    const before = requested.length;
+
+    // Two components ask for this record on this navigation: the layout for its header
+    // and the index tab for the customer block. The client coalesces the concurrent
+    // pair into one request, so the screen costs one round trip rather than two.
+    await goto('/sales/orders/OR-00002');
+    await tick();
+
+    const asked = requested.slice(before).filter((entry) => entry === 'GET /api/orders/OR-00002');
+    assert.ok(present(innerOutlet().querySelector('order-summary-tab')), 'the index tab must mount');
+    assert.equal(asked.length, 1, 'the layout and its tab must share one request');
+  });
+
   it('re-renders every mounted component when the locale changes', async () => {
     await goto('/sales/orders');
     const heading = present(main().querySelector('h2'), 'the card heading must render');
