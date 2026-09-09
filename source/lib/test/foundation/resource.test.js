@@ -48,6 +48,47 @@ function loader() {
   };
 }
 
+/**
+ * A real `AbortController` whose signal reports the listeners still on it.
+ *
+ * Native `AbortSignal` removes a listener registered with `signal:` on its own,
+ * without calling `removeEventListener`, so a request that ends by supersession
+ * leaves nothing behind here either way. What this catches is the request that
+ * settles and never aborts.
+ *
+ * @returns {{ owner: AbortController, listeners: Set<EventListenerOrEventListenerObject> }}
+ */
+function instrumentedLifetime() {
+  const owner = new AbortController();
+  const signal = owner.signal;
+  /** @type {Set<EventListenerOrEventListenerObject>} */
+  const listeners = new Set();
+  const add = signal.addEventListener.bind(signal);
+  const remove = signal.removeEventListener.bind(signal);
+
+  /**
+   * @param {string} type
+   * @param {EventListenerOrEventListenerObject} handler
+   * @param {boolean | AddEventListenerOptions} [options]
+   */
+  signal.addEventListener = (type, handler, options) => {
+    listeners.add(handler);
+    add(type, handler, options);
+  };
+
+  /**
+   * @param {string} type
+   * @param {EventListenerOrEventListenerObject} handler
+   * @param {boolean | EventListenerOptions} [options]
+   */
+  signal.removeEventListener = (type, handler, options) => {
+    listeners.delete(handler);
+    remove(type, handler, options);
+  };
+
+  return { owner, listeners };
+}
+
 describe('resource', () => {
   it('holds its initial value until the first request settles', async () => {
     const { load, calls } = /** @type {{ load: (signal: AbortSignal) => Promise<string>, calls: Array<Deferred<string>> }} */ (
@@ -232,5 +273,62 @@ describe('resource', () => {
     stop();
     calls[1]?.resolve('rows');
     await Promise.resolve();
+  });
+
+  it('keeps no owner listener after a request settles', async () => {
+    const { load, calls } = /** @type {{ load: (signal: AbortSignal) => Promise<string>, calls: Array<Deferred<string>> }} */ (
+      loader()
+    );
+    const { owner, listeners } = instrumentedLifetime();
+    const read = resource(load, { initial: 'none', lifetime: owner.signal });
+
+    // A long-lived screen reloads a table for every page, sort and filter change.
+    // One retained callback and controller per reload is the leak.
+    for (let index = 0; index < 5; index += 1) {
+      const settled = read.reload();
+      assert.equal(listeners.size, 1, 'the in-flight request listens for the owner');
+      calls[index]?.resolve(`page ${index}`);
+      assert.equal(await settled, `page ${index}`);
+      assert.equal(listeners.size, 0, 'the settled request lets the owner go');
+    }
+
+    owner.abort();
+    assert.equal(read.value.value, 'page 4', 'a departed owner writes nothing late');
+  });
+
+  it('keeps no owner listener after a request rejects', async () => {
+    const { load, calls } = /** @type {{ load: (signal: AbortSignal) => Promise<string>, calls: Array<Deferred<string>> }} */ (
+      loader()
+    );
+    const { owner, listeners } = instrumentedLifetime();
+    const read = resource(load, { initial: 'none', lifetime: owner.signal });
+
+    const settled = read.reload();
+    calls[0]?.reject(new Error('server said no'));
+    assert.equal(await settled, undefined);
+    assert.ok(read.failed.value);
+    assert.equal(listeners.size, 0, 'a failed request lets the owner go too');
+  });
+
+  it('keeps no owner listener after a superseded request settles', async () => {
+    const { load, calls } = /** @type {{ load: (signal: AbortSignal) => Promise<string>, calls: Array<Deferred<string>> }} */ (
+      loader()
+    );
+    const { owner, listeners } = instrumentedLifetime();
+    const read = resource(load, { initial: 'none', lifetime: owner.signal });
+
+    const abandoned = read.reload();
+    const settled = read.reload();
+
+    // The counter sees explicit removals only, so the superseded request still
+    // shows here until its loader settles, even though native `signal:` removal
+    // already dropped its listener when it was aborted.
+    calls[0]?.resolve('superseded');
+    assert.equal(await abandoned, undefined);
+
+    calls[1]?.resolve('rows');
+    assert.equal(await settled, 'rows');
+    assert.equal(read.value.value, 'rows');
+    assert.equal(listeners.size, 0);
   });
 });

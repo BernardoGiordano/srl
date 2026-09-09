@@ -21,7 +21,8 @@ import { batch, signal, untracked } from '@core/foundation/reactive.js';
  *    button one call. `pending` starts true because a component's first paint
  *    happens before its `onMount`.
  *  - **The lifetime.** The request aborts when the owner's does, so `onDestroy` has
- *    nothing to write. ADR-0076.
+ *    nothing to write, and every terminal path drops the owner listener so a
+ *    long-lived screen keeps none per reload. ADR-0076.
  *
  * WHAT IT DOES NOT
  *
@@ -101,10 +102,13 @@ export function resource(load, options) {
     const request = new AbortController();
     current = request;
 
-    // Bound to `request.signal`, so the listener is removed when this request
-    // ends rather than accumulating one per reload on a lifetime that outlives
-    // all of them.
-    lifetime?.addEventListener('abort', () => request.abort(lifetime.reason), {
+    const abortWithOwner = () => request.abort(lifetime?.reason);
+
+    // Two removals, because a request ends in two ways. `signal: request.signal`
+    // covers a supersession whose loader never settles; the `finally` covers a
+    // request that settles, which never aborts and would otherwise leave one
+    // listener per reload on a lifetime that outlives all of them.
+    lifetime?.addEventListener('abort', abortWithOwner, {
       once: true,
       signal: request.signal,
     });
@@ -135,6 +139,7 @@ export function resource(load, options) {
       });
       return undefined;
     } finally {
+      lifetime?.removeEventListener('abort', abortWithOwner);
       if (current === request) current = undefined;
     }
   }
