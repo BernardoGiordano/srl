@@ -21,13 +21,49 @@
     (action)="load()"
   ></app-notice>
 
+  <div
+    *if="selectionCount > 0"
+    class="flex flex-wrap items-center gap-2 rounded-md border border-ui-border bg-canvas px-3 py-2 text-[13px]"
+  >
+    <span class="me-auto font-semibold text-ink" aria-live="polite">
+      {{ t('settings.bulkSelected', { count: selectionCount }) }}
+    </span>
+    <button
+      type="button"
+      class="cursor-pointer rounded-md border border-ui-border px-2.5 py-1 font-semibold transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+      [?disabled]="busy"
+      (click)="applyToSelection('suspended')"
+    >
+      {{ t('settings.bulkSuspend') }}
+    </button>
+    <button
+      type="button"
+      class="cursor-pointer rounded-md border border-ui-border px-2.5 py-1 font-semibold transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+      [?disabled]="busy"
+      (click)="applyToSelection('active')"
+    >
+      {{ t('settings.bulkActivate') }}
+    </button>
+    <button
+      type="button"
+      class="cursor-pointer rounded-md px-2.5 py-1 text-muted transition-colors hover:text-ink"
+      (click)="clearSelection()"
+    >
+      {{ t('settings.bulkClear') }}
+    </button>
+  </div>
+
   <ui-table
     pagination="client"
     page-size="10"
     page-sizes="10,25"
+    selectable
     [.rows]="rows"
     [.loading]="loading"
     [.row-key]="rowKey"
+    [.selected-keys]="selectedKeys"
+    [.row-selectable]="rowSelectable"
+    (selection-change)="captureSelection($event)"
     caption="{{ t('nav.settingsUsers') }}"
     empty-label="{{ t('settings.usersEmpty') }}"
   >

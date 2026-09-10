@@ -98,6 +98,24 @@
     <thead data-ui-part="table-head">
       <tr>
         <th
+          *if="selectable"
+          scope="col"
+          data-ui-part="table-selection-header"
+          class="w-10 border-b border-ui-border bg-canvas px-4 py-3 text-start"
+        >
+          <input
+            type="checkbox"
+            data-ui-part="table-select-all"
+            class="cursor-pointer accent-accent focus-visible:ring-2 focus-visible:ring-accent"
+            [aria-label]="text('selectAll')"
+            [title]="text('selectAll')"
+            [.checked]="allPageRowsSelected"
+            [.indeterminate]="somePageRowsSelected"
+            [?disabled]="selectAllDisabled"
+            (change)="toggleAllOnPage()"
+          />
+        </th>
+        <th
           *for="column of visibleColumns; key: column.key"
           scope="col"
           data-ui-part="table-header"
@@ -163,6 +181,21 @@
         (click)="activate(row, rowIndex, $event)"
         (keydown)="activateFromKeyboard(row, rowIndex, $event)"
       >
+        <td
+          *if="selectable"
+          data-ui-part="table-selection-cell"
+          class="px-4 py-3"
+        >
+          <input
+            type="checkbox"
+            data-ui-part="table-select-row"
+            class="cursor-pointer accent-accent focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
+            [aria-label]="text('selectRow')"
+            [.checked]="isSelected(row, rowIndex)"
+            [?disabled]="!canSelectRow(row, rowIndex)"
+            (click)="toggleRow(row, rowIndex, $event)"
+          />
+        </td>
         <td
           *for="column of visibleColumns; key: column.key"
           data-ui-part="table-cell"

@@ -279,6 +279,61 @@ describe('operations application', () => {
     );
   });
 
+  /**
+   * The bulk write, end to end.
+   *
+   * The table owns which accounts are chosen and the screen owns what choosing them
+   * means, so this is the case that proves the two halves meet: two checkboxes, one
+   * button, two PATCHes and no third one for the row nobody chose.
+   */
+  it('suspends the accounts chosen in the table', async () => {
+    await signOut();
+    await signIn('admin');
+    await goto('/settings/users');
+
+    const page = present(main().querySelector('settings-users'));
+    const boxes = /** @type {HTMLInputElement[]} */ ([
+      ...page.querySelectorAll('[data-ui-part="table-select-row"]'),
+    ]);
+    assert.equal(boxes.length, 3, 'three accounts, each offering a choice');
+
+    present(boxes[0]).click();
+    present(boxes[2]).click();
+    await tick();
+
+    const bar = present(
+      [...page.querySelectorAll('button')].find(
+        (button) => present(button.textContent).trim() === 'Suspend selected',
+      ),
+      'choosing rows must offer the bulk action',
+    );
+
+    const before = requested.length;
+    /** @type {HTMLButtonElement} */ (bar).click();
+    await tick();
+
+    const writes = requested.slice(before).filter((entry) => entry.startsWith('PATCH /api/users/'));
+    assert.sameArray(
+      writes,
+      ['PATCH /api/users/US-0001', 'PATCH /api/users/US-0003'],
+      'one write per chosen account, in the order they were chosen, and none for the third',
+    );
+    assert.ok(
+      requested.slice(before).includes('GET /api/users'),
+      'the list is re-read rather than patched in place',
+    );
+
+    const statuses = [...page.querySelectorAll('app-badge')].map((badge) =>
+      present(badge.textContent).trim(),
+    );
+    assert.sameArray(statuses, ['Suspended', 'Active', 'Suspended']);
+    assert.equal(
+      page.querySelectorAll('[data-ui-part="table-select-row"]:checked').length,
+      0,
+      'a landed write clears the choice',
+    );
+  });
+
   it('sends a signed-in user without the scope to /forbidden, not to /login', async () => {
     await signOut();
     await signIn('viewer');

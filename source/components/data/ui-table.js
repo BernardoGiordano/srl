@@ -42,6 +42,11 @@ const PERSIST_DEBOUNCE_MS = 250;
  *   sort: { key: string, direction: TableSortDirection },
  *   filters: readonly TableFilter[],
  * }} TableQuery
+ * @typedef {{
+ *   keys: readonly unknown[],
+ *   rows: readonly unknown[],
+ *   scope: 'loaded',
+ * }} TableSelection
  * @typedef {'start' | 'end' | ''} TableStickyPosition
  * @typedef {{
  *   revision: number,
@@ -79,6 +84,7 @@ const PERSIST_DEBOUNCE_MS = 250;
  * - `page-change`, `sort-change`, `filter-change`: same full query, scoped signal
  * - `load-more`: full query with the next accumulated offset
  * - `row-activate`: `{ row, index }` when `interactive` is set
+ * - `selection-change`: selected keys, the loaded rows behind them, and their scope
  * - `column-change`: current serializable column configuration
  * - `state-restore`: restored table state and query
  */
@@ -97,6 +103,9 @@ export class UiTable extends SignalElement {
     rowKey: { attribute: false },
     loading: { type: Boolean, reflect: true },
     interactive: { type: Boolean, reflect: true },
+    selectable: { type: Boolean, reflect: true },
+    selectedKeys: { attribute: false },
+    rowSelectable: { attribute: false },
     tableClass: { type: String, attribute: 'table-class' },
     caption: { type: String },
     emptyLabel: { type: String, attribute: 'empty-label' },
@@ -138,6 +147,36 @@ export class UiTable extends SignalElement {
 
   loading = false;
   interactive = false;
+
+  /**
+   * Render the selection column.
+   *
+   * A selection is a set of row keys rather than a set of positions, so sorting,
+   * paging and filtering leave it alone, and it covers the rows this table has
+   * been given and no others. ADR-0105.
+   */
+  selectable = false;
+
+  /**
+   * The chosen keys, first choice first.
+   *
+   * Consumer-owned the way `rows` is: assign a new array to change it from
+   * outside. The caches keyed on it compare identity, so an array mutated in place
+   * is the same array and nothing re-reads it.
+   *
+   * @type {readonly unknown[]}
+   */
+  selectedKeys = [];
+
+  /**
+   * Which rows may be chosen. A row this refuses renders a disabled checkbox and
+   * is skipped by select-all and by a shift range, so a screen never has to undo a
+   * choice the user should not have been offered.
+   *
+   * @type {((row: unknown, index: number) => boolean) | undefined}
+   */
+  rowSelectable;
+
   tableClass = '';
   caption = '';
 
@@ -214,6 +253,23 @@ export class UiTable extends SignalElement {
    * result: readonly unknown[],
    * } | undefined} */
   #processedCache;
+
+  /** @type {{ keys: readonly unknown[], set: Set<unknown> } | undefined} */
+  #selectionCache;
+
+  /** @type {{
+   * rows: readonly unknown[],
+   * keys: readonly unknown[],
+   * predicate: UiTable['rowSelectable'],
+   * page: number,
+   * pageSize: number,
+   * mode: string,
+   * value: { selectable: number, selected: number },
+   * } | undefined} */
+  #pageSelectionCache;
+
+  /** The key a shift-click measures its range from, or `undefined`. @type {unknown} */
+  #selectionAnchor;
 
   /**
    * Everything derived from the column declarations and the user's configuration
@@ -487,7 +543,7 @@ export class UiTable extends SignalElement {
   }
 
   get columnSpan() {
-    return Math.max(1, this.visibleColumns.length);
+    return Math.max(1, this.visibleColumns.length + (this.selectable ? 1 : 0));
   }
 
   get rowTabIndex() {
@@ -505,6 +561,7 @@ export class UiTable extends SignalElement {
       this.#lastInfiniteRequest = '';
     }
     this.#clampPage();
+    if (this.selectable && changed.has('rows')) this.#pruneSelection();
     this.#watchInfiniteSentinel();
     this.toggleAttribute('data-mode-client', this.normalizedMode === 'client');
     this.toggleAttribute('data-mode-server', this.normalizedMode === 'server');
@@ -944,6 +1001,231 @@ export class UiTable extends SignalElement {
     return key ?? `${String(this.page)}:${String(index)}`;
   }
 
+  /* ── Selection ─────────────────────────────────────────────────────────── */
+
+  /**
+   * A row's identity, or `undefined` when it has none.
+   *
+   * Deliberately not `keyFor`, whose positional fallback exists to keep a `*for`
+   * keyed when rows carry no id. A position is not an identity — `2:3` names a
+   * different record after a sort — so a selection built on it would follow the
+   * slot rather than the row. A row the caller cannot name cannot be chosen.
+   *
+   * @param {unknown} row @param {number} index
+   */
+  #identity(row, index) {
+    const key =
+      typeof this.rowKey === 'function' ? this.rowKey(row, index) : readPath(row, this.rowKey);
+    return key ?? undefined;
+  }
+
+  /** The chosen keys as a set, rebuilt when the array is replaced. */
+  #selectedSet() {
+    const keys = Array.isArray(this.selectedKeys) ? this.selectedKeys : [];
+    const cached = this.#selectionCache;
+    if (cached !== undefined && cached.keys === this.selectedKeys) return cached.set;
+    const set = new Set(keys);
+    this.#selectionCache = { keys: this.selectedKeys, set };
+    return set;
+  }
+
+  /**
+   * The selected rows this table is holding, in row order.
+   *
+   * A key whose row is not loaded is absent here and still selected: a server
+   * table pages through a collection it never holds all of, so the keys are the
+   * selection and these are the rows it can hand over now.
+   */
+  get selectedRows() {
+    const set = this.#selectedSet();
+    if (set.size === 0) return [];
+    return this.rows.filter((row, index) => {
+      const key = this.#identity(row, index);
+      return key !== undefined && set.has(key);
+    });
+  }
+
+  get selectionCount() {
+    return this.#selectedSet().size;
+  }
+
+  /**
+   * How many rows on this page may be chosen, and how many are.
+   *
+   * Cached on what `visibleRows` is derived from, because the header asks three
+   * questions of it per render and `pagination="none"` puts every supplied row on
+   * the page. `processedRows` is itself cached, so the identity check is the
+   * whole comparison rather than a re-filter.
+   */
+  #pageSelection() {
+    const rows = this.processedRows;
+    const cached = this.#pageSelectionCache;
+    if (
+      cached !== undefined &&
+      cached.rows === rows &&
+      cached.keys === this.selectedKeys &&
+      cached.predicate === this.rowSelectable &&
+      cached.page === this.page &&
+      cached.pageSize === this.validPageSize &&
+      cached.mode === this.normalizedMode
+    ) {
+      return cached.value;
+    }
+
+    const set = this.#selectedSet();
+    let selectable = 0;
+    let selected = 0;
+    this.visibleRows.forEach((row, index) => {
+      if (!this.canSelectRow(row, index)) return;
+      selectable += 1;
+      const key = this.#identity(row, index);
+      if (key !== undefined && set.has(key)) selected += 1;
+    });
+
+    const value = { selectable, selected };
+    this.#pageSelectionCache = {
+      rows,
+      keys: this.selectedKeys,
+      predicate: this.rowSelectable,
+      page: this.page,
+      pageSize: this.validPageSize,
+      mode: this.normalizedMode,
+      value,
+    };
+    return value;
+  }
+
+  get allPageRowsSelected() {
+    const { selectable, selected } = this.#pageSelection();
+    return selectable > 0 && selected === selectable;
+  }
+
+  /** Some but not all, which is what the header checkbox shows as indeterminate. */
+  get somePageRowsSelected() {
+    const { selectable, selected } = this.#pageSelection();
+    return selected > 0 && selected < selectable;
+  }
+
+  get selectAllDisabled() {
+    return this.loading || this.#pageSelection().selectable === 0;
+  }
+
+  /** @param {unknown} row @param {number} index */
+  isSelected(row, index) {
+    const key = this.#identity(row, index);
+    return key !== undefined && this.#selectedSet().has(key);
+  }
+
+  /** @param {unknown} row @param {number} index */
+  canSelectRow(row, index) {
+    if (!this.selectable || this.#identity(row, index) === undefined) return false;
+    return this.rowSelectable?.(row, index) ?? true;
+  }
+
+  /**
+   * Toggle one row, or every row between the last one chosen and this one.
+   *
+   * A shift range applies the state the clicked row is moving to, so shift-click
+   * after a plain click selects the span and shift-click on a selected row clears
+   * it. The range covers the current page, since that is what the user can see;
+   * rows `rowSelectable` refuses are stepped over rather than flipped.
+   *
+   * @param {unknown} row @param {number} index @param {MouseEvent} [event]
+   */
+  toggleRow(row, index, event) {
+    if (!this.canSelectRow(row, index)) return;
+    const key = this.#identity(row, index);
+    if (key === undefined) return;
+
+    const next = new Set(this.#selectedSet());
+    const select = !next.has(key);
+    const anchor = event?.shiftKey === true ? this.#anchorIndex() : -1;
+    const rows = this.visibleRows;
+    const from = anchor < 0 ? index : Math.min(anchor, index);
+    const to = anchor < 0 ? index : Math.max(anchor, index);
+    for (let position = from; position <= to; position += 1) {
+      const candidate = rows[position];
+      if (candidate === undefined || !this.canSelectRow(candidate, position)) continue;
+      const candidateKey = this.#identity(candidate, position);
+      if (candidateKey === undefined) continue;
+      if (select) next.add(candidateKey);
+      else next.delete(candidateKey);
+    }
+
+    this.#selectionAnchor = key;
+    this.#commitSelection(next);
+  }
+
+  /** Choose every selectable row on this page, or clear them when all are chosen. */
+  toggleAllOnPage() {
+    const { selectable, selected } = this.#pageSelection();
+    if (selectable === 0) return;
+    const next = new Set(this.#selectedSet());
+    const select = selected < selectable;
+    this.visibleRows.forEach((row, index) => {
+      if (!this.canSelectRow(row, index)) return;
+      const key = this.#identity(row, index);
+      if (key === undefined) return;
+      if (select) next.add(key);
+      else next.delete(key);
+    });
+    this.#selectionAnchor = undefined;
+    this.#commitSelection(next);
+  }
+
+  /** Drop the whole selection. What a bulk action calls once its write has landed. */
+  clearSelection() {
+    this.#selectionAnchor = undefined;
+    this.#commitSelection(new Set());
+  }
+
+  /** Where the shift anchor sits on this page, or -1 when it is not on it. */
+  #anchorIndex() {
+    const anchor = this.#selectionAnchor;
+    if (anchor === undefined) return -1;
+    return this.visibleRows.findIndex((row, index) => this.#identity(row, index) === anchor);
+  }
+
+  /**
+   * Drop keys whose rows are gone.
+   *
+   * Only where this table was given the whole collection. In `server` mode `rows`
+   * is one page, so a key absent from it means "on another page", and pruning
+   * would empty the selection on every page change — which is the one thing
+   * keying it exists to prevent.
+   */
+  #pruneSelection() {
+    if (this.normalizedMode === 'server') return;
+    const set = this.#selectedSet();
+    if (set.size === 0) return;
+
+    /** @type {Set<unknown>} */
+    const live = new Set();
+    this.rows.forEach((row, index) => {
+      const key = this.#identity(row, index);
+      if (key !== undefined && set.has(key)) live.add(key);
+    });
+    if (live.size === set.size) return;
+    this.#commitSelection(new Set([...set].filter((key) => live.has(key))));
+  }
+
+  /** @param {ReadonlySet<unknown>} next */
+  #commitSelection(next) {
+    const keys = Object.freeze([...next]);
+    const current = this.#selectedSet();
+    if (keys.length === current.size && keys.every((key) => current.has(key))) return;
+
+    this.selectedKeys = keys;
+    this.#selectionCache = undefined;
+    this.#pageSelectionCache = undefined;
+    this.dispatchEvent(
+      new CustomEvent('selection-change', {
+        bubbles: true,
+        detail: /** @type {TableSelection} */ ({ keys, rows: this.selectedRows, scope: 'loaded' }),
+      }),
+    );
+  }
+
   /** @param {number} next */
   goTo(next) {
     if (this.loading) return;
@@ -992,9 +1274,20 @@ export class UiTable extends SignalElement {
     );
   }
 
-  /** @param {unknown} row @param {number} index @param {KeyboardEvent} event */
+  /**
+   * Enter or Space on the row itself.
+   *
+   * The target is checked here as well as in `activate`, because the row is what
+   * carries the handler and a keypress inside a cell reaches it by bubbling.
+   * Preventing the default first would take Space away from the control the user
+   * is actually on — a selection checkbox, or the button a screen rendered in a
+   * cell — and the row would refuse to activate anyway.
+   *
+   * @param {unknown} row @param {number} index @param {KeyboardEvent} event
+   */
   activateFromKeyboard(row, index, event) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (!this.interactive || isInteractiveTarget(event.target)) return;
     event.preventDefault();
     this.activate(row, index, event);
   }

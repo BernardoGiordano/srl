@@ -416,6 +416,13 @@
     "usersLead": "Accounts, not employees: an employee is a person in the HR system and a user is a login, administered by different people with different permissions.",
     "usersEmpty": "No accounts.",
     "readOnlyNotice": "This session can read accounts but not change them. The controls are shown disabled rather than hidden, because a control that vanishes is indistinguishable from a broken page.",
+    "bulkSelected": {
+      "one": "{count} account selected",
+      "other": "{count} accounts selected"
+    },
+    "bulkSuspend": "Suspend selected",
+    "bulkActivate": "Activate selected",
+    "bulkClear": "Clear selection",
     "suspend": "Suspend",
     "activate": "Activate",
     "needsWriteScope": "Changing an account needs the users:write scope.",
@@ -473,7 +480,9 @@
       "stickyEnd": "Pin column to end",
       "unstick": "Unpin column",
       "resize": "Resize column; use arrow keys",
-      "reorder": "Reorder column; use arrow keys"
+      "reorder": "Reorder column; use arrow keys",
+      "selectAll": "Select every row on this page",
+      "selectRow": "Select this row"
     },
     "filter": {
       "free": "Text",

@@ -25,7 +25,7 @@ Everything the library and the shared collection define:
 | `ui-sidebar-group` | `UiSidebarGroup` | `source/components/shell/ui-sidebar-group.js` | `source/components/shell/ui-sidebar-group.html` | — | 5 | 0 | 5 | 0 | 2 |
 | `ui-sidebar-item` | `UiSidebarItem` | `source/components/shell/ui-sidebar-item.js` | `source/components/shell/ui-sidebar-item.html` | — | 4 | 0 | 4 | 0 | 1 |
 | `ui-sidebar-toggle` | `UiSidebarToggle` | `source/components/shell/ui-sidebar-toggle.js` | `source/components/shell/ui-sidebar-toggle.html` | — | 3 | 0 | 3 | 0 | 1 |
-| `ui-table` | `UiTable` | `source/components/data/ui-table.js` | `source/components/data/ui-table.html` | `ui-table-column` | 23 | 0 | 19 | 9 | 1 |
+| `ui-table` | `UiTable` | `source/components/data/ui-table.js` | `source/components/data/ui-table.html` | `ui-table-column` | 26 | 0 | 20 | 10 | 1 |
 | `ui-table-column` | `UiTableColumn` | `source/components/data/ui-table-column.js` | — | — | 0 | 0 | 15 | 1 | 0 |
 | `ui-topbar` | `UiTopbar` | `source/components/shell/ui-topbar.js` | `source/components/shell/ui-topbar.html` | — | 1 | 0 | 1 | 0 | 1 |
 | `x-outlet` | `ComponentOutlet` | `source/lib/core/elements/outlet.js` | — | — | 0 | 0 | 0 | 1 | 0 |

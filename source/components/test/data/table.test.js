@@ -36,6 +36,47 @@ function cellValues(table) {
   );
 }
 
+/** @param {Element} table */
+function rowCheckboxes(table) {
+  return /** @type {HTMLInputElement[]} */ ([
+    ...table.querySelectorAll('[data-ui-part="table-select-row"]'),
+  ]);
+}
+
+/** @param {Element} table */
+function selectAllCheckbox(table) {
+  return /** @type {HTMLInputElement} */ (
+    present(table.querySelector('[data-ui-part="table-select-all"]'))
+  );
+}
+
+/**
+ * A click carrying its modifier keys, which `element.click()` cannot express and
+ * a shift range is decided by.
+ *
+ * @param {HTMLElement} element @param {{ shiftKey?: boolean }} [modifiers]
+ */
+function clickWith(element, modifiers = {}) {
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...modifiers }));
+}
+
+/** A selectable table over three keyed rows, two to a page. */
+function selectionFixture() {
+  const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (
+    mount(`
+      <ui-table page-size="2" page-sizes="2,5" selectable>
+        <ui-table-column key="name" label="Name" sortable></ui-table-column>
+      </ui-table>
+    `)
+  );
+  table.rows = [
+    { id: 1, name: 'Ada' },
+    { id: 2, name: 'Grace' },
+    { id: 3, name: 'Linus' },
+  ];
+  return table;
+}
+
 /** @returns {import('@components/data/ui-table.js').UiTable} */
 function tableFixture() {
   return mount(`
@@ -645,6 +686,209 @@ describe('ui-table', () => {
     table.rows = [{ id: 1, name: 'Ada' }, { id: 2, name: 'Grace' }, { id: 3, name: 'Linus' }];
     await settled(table);
     assert.equal(table.page, 1, 'state-id wins, so the table-name entry is not read');
+  });
+
+  /* ── Selection ─────────────────────────────────────────────────────────── */
+
+  /**
+   * The reason a selection is keyed rather than positional: a bulk action is
+   * chosen on one page, under one sort, and performed after both have moved.
+   */
+  it('keeps chosen rows through sorting and page changes', async () => {
+    const table = selectionFixture();
+    await settled(table);
+
+    /** @type {import('@components/data/ui-table.js').UiTable['selectedKeys'][]} */
+    const emitted = [];
+    table.addEventListener('selection-change', (event) => {
+      emitted.push(/** @type {CustomEvent<{ keys: readonly unknown[] }>} */ (event).detail.keys);
+    });
+
+    clickWith(present(rowCheckboxes(table)[0]));
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1]);
+    assert.equal(emitted.length, 1);
+
+    table.toggleSort(present(table.columns[0]));
+    table.sortDirection = 'desc';
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1], 'a sort moves rows, not the selection');
+
+    // Descending puts Ada last, so page two is the row that was chosen on page one.
+    table.goTo(2);
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1]);
+    assert.ok(
+      present(rowCheckboxes(table)[0]).checked,
+      'the chosen row is still chosen where the sort moved it',
+    );
+
+    table.goTo(1);
+    await settled(table);
+    assert.sameArray(
+      table.selectedRows.map((row) => /** @type {{ name: string }} */ (row).name),
+      ['Ada'],
+      'the rows behind the keys come back in row order',
+    );
+  });
+
+  /**
+   * The header acts on what the user can see. Anything wider than the page —
+   * every loaded row, every matching record on a server — is a screen's decision,
+   * not a checkbox's.
+   */
+  it('selects the page from the header and reports a mixed page as indeterminate', async () => {
+    const table = selectionFixture();
+    await settled(table);
+
+    selectAllCheckbox(table).click();
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1, 2], 'the page, not the collection');
+    assert.ok(selectAllCheckbox(table).checked);
+    assert.notOk(selectAllCheckbox(table).indeterminate);
+
+    clickWith(present(rowCheckboxes(table)[1]));
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1]);
+    assert.notOk(selectAllCheckbox(table).checked);
+    assert.ok(selectAllCheckbox(table).indeterminate, 'one of two is mixed');
+
+    selectAllCheckbox(table).click();
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1, 2]);
+
+    selectAllCheckbox(table).click();
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [], 'a full page toggles off');
+  });
+
+  it('extends a range with shift, and starts a new anchor from the last row clicked', async () => {
+    const table = selectionFixture();
+    table.pagination = 'none';
+    table.rows = [
+      { id: 1, name: 'Ada' },
+      { id: 2, name: 'Grace' },
+      { id: 3, name: 'Linus' },
+      { id: 4, name: 'Alan' },
+    ];
+    await settled(table);
+
+    clickWith(present(rowCheckboxes(table)[0]));
+    await settled(table);
+    clickWith(present(rowCheckboxes(table)[2]), { shiftKey: true });
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1, 2, 3]);
+
+    // The anchor is the row last clicked, so this shift-click clears back to it.
+    clickWith(present(rowCheckboxes(table)[1]), { shiftKey: true });
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1], 'a shift range applies the clicked row\'s new state');
+  });
+
+  it('refuses rows the screen disables, one by one and in bulk', async () => {
+    const table = selectionFixture();
+    table.pagination = 'none';
+    table.rowSelectable = (row) => /** @type {{ name: string }} */ (row).name !== 'Grace';
+    await settled(table);
+
+    const boxes = rowCheckboxes(table);
+    assert.notOk(present(boxes[0]).disabled);
+    assert.ok(present(boxes[1]).disabled, 'a refused row says so rather than failing on click');
+
+    table.toggleRow(present(table.rows[1]), 1);
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [], 'the interface refuses it too, not only the DOM');
+
+    selectAllCheckbox(table).click();
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1, 3], 'select-all steps over what it may not choose');
+    assert.ok(selectAllCheckbox(table).checked, 'every row it may choose is chosen');
+
+    clickWith(present(boxes[0]));
+    clickWith(present(rowCheckboxes(table)[2]), { shiftKey: true });
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [], 'a range steps over it as well');
+  });
+
+  it('drops keys whose rows are gone, and keeps them across server pages', async () => {
+    const table = selectionFixture();
+    await settled(table);
+
+    selectAllCheckbox(table).click();
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1, 2]);
+
+    /** @type {readonly unknown[] | undefined} */
+    let pruned;
+    table.addEventListener('selection-change', (event) => {
+      pruned = /** @type {CustomEvent<{ keys: readonly unknown[] }>} */ (event).detail.keys;
+    });
+    table.rows = [{ id: 2, name: 'Grace' }, { id: 3, name: 'Linus' }];
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [2], 'a row this table no longer holds is not chosen');
+    assert.sameArray([...present(pruned)], [2], 'and the screen is told');
+
+    // A server table holds one page, so an absent key means "elsewhere".
+    table.pagination = 'server';
+    table.totalRows = 4;
+    table.rows = [{ id: 7, name: 'Alan' }, { id: 8, name: 'Edsger' }];
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [2], 'paging must not empty a server selection');
+    assert.sameArray([...table.selectedRows], [], 'and the rows behind it are the loaded ones');
+  });
+
+  it('will not select a row it cannot name', async () => {
+    const table = selectionFixture();
+    table.pagination = 'none';
+    table.rows = [{ id: 1, name: 'Ada' }, { name: 'Anonymous' }];
+    await settled(table);
+
+    const boxes = rowCheckboxes(table);
+    assert.notOk(present(boxes[0]).disabled);
+    assert.ok(present(boxes[1]).disabled, 'no id, no identity, no selection');
+
+    selectAllCheckbox(table).click();
+    await settled(table);
+    assert.sameArray([...table.selectedKeys], [1]);
+  });
+
+  /**
+   * The row carries the activation handler, so a keypress inside a cell reaches
+   * it by bubbling. Preventing the default there would take Space away from the
+   * control the user is standing on.
+   */
+  it('leaves Space to the checkbox in an interactive table', async () => {
+    const table = selectionFixture();
+    table.interactive = true;
+    await settled(table);
+
+    let activated = 0;
+    table.addEventListener('row-activate', () => {
+      activated += 1;
+    });
+
+    const box = present(rowCheckboxes(table)[0]);
+    const keypress = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    box.dispatchEvent(keypress);
+    assert.notOk(keypress.defaultPrevented, 'the checkbox still owns Space');
+    assert.equal(activated, 0);
+
+    const row = present(table.querySelector('[data-ui-part="table-row"]'));
+    const onRow = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    row.dispatchEvent(onRow);
+    assert.equal(activated, 1, 'the row itself still activates');
+  });
+
+  it('spans the selection column in the empty and loading rows', async () => {
+    const table = selectionFixture();
+    table.rows = [];
+    await settled(table);
+
+    assert.equal(
+      present(table.querySelector('[data-ui-part="table-empty"] td')).getAttribute('colspan'),
+      '2',
+      'one declared column plus the selection column',
+    );
   });
 
   /**

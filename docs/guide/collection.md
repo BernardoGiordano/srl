@@ -99,6 +99,24 @@ Left/Right keys reorder; resize handles accept pointer drag and Left/Right keys;
 `sticky="start|end"` uses logical CSS insets, so the same declaration works in LTR and
 RTL. Widths are pixel numbers; sticky offsets use configured, resized or measured widths.
 
+`selectable` adds the selection column. A selection is a set of row keys read through
+`rowKey`, so sorting, paging and filtering leave it alone, and a row the key cannot name
+renders a disabled checkbox rather than a choice that would follow a position
+([ADR-0105](../adr/0105-a-selection-is-a-set-of-row-keys.md)). `selected-keys` is
+consumer-owned like `rows` — assign a new array, because the caches keyed on it compare
+identity. `row-selectable` refuses individual rows, and select-all and shift ranges step
+over what it refuses. The header checkbox covers the current page and reads indeterminate
+when the page is mixed; shift-click extends from the last row clicked.
+
+`selection-change` bubbles `{ keys, rows, scope: 'loaded' }`. `rows` holds the loaded rows
+behind those keys and is shorter than `keys` on a server table, which pages through a
+collection it never holds all of — "every matching record" is the screen's operation, not
+the table's. Keys whose rows are gone are pruned in `client`, `none` and `infinite`, where
+`rows` is the whole collection, and kept in `server`, where an absent key means another
+page. `selectedRows`, `selectionCount` and `clearSelection()` are the imperative side.
+Selection is never persisted. `example/src/pages/settings/settings-users.js` drives a bulk
+suspend from it.
+
 `state-id` opts the table into the persistence of [preference persistence](preferences.md) (`table-name` is a compatibility
 alias; `state-id` wins). The versioned payload holds page, page size, sort, order, hidden
 columns, widths and sticky positions — never rows, renderers or predicates. Add

@@ -392,6 +392,13 @@
     "usersLead": "Account, non dipendenti: un dipendente è una persona nel sistema HR, un utente è un accesso, e li amministrano persone diverse con permessi diversi.",
     "usersEmpty": "Nessun account.",
     "readOnlyNotice": "Questa sessione può leggere gli account ma non modificarli. I controlli restano visibili e disabilitati: un controllo che scompare è indistinguibile da una pagina rotta.",
+    "bulkSelected": {
+      "one": "{count} account selezionato",
+      "other": "{count} account selezionati"
+    },
+    "bulkSuspend": "Sospendi selezionati",
+    "bulkActivate": "Attiva selezionati",
+    "bulkClear": "Annulla selezione",
     "suspend": "Sospendi",
     "activate": "Attiva",
     "needsWriteScope": "Modificare un account richiede lo scope users:write.",
@@ -442,7 +449,9 @@
       "stickyEnd": "Fissa la colonna alla fine",
       "unstick": "Sblocca la colonna",
       "resize": "Ridimensiona la colonna; usa le frecce",
-      "reorder": "Riordina la colonna; usa le frecce"
+      "reorder": "Riordina la colonna; usa le frecce",
+      "selectAll": "Seleziona tutte le righe della pagina",
+      "selectRow": "Seleziona questa riga"
     },
     "filter": {
       "free": "Testo",

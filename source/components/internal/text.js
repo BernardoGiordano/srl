@@ -68,6 +68,8 @@ export const STANDARD_TEXT = {
       'unstick',
       'resize',
       'reorder',
+      'selectAll',
+      'selectRow',
     ],
   },
   filter: {

@@ -35,6 +35,8 @@ export const STANDARD_TEXT_FIXTURE = {
   'ui.table.unstick': 'Unpin',
   'ui.table.resize': 'Resize',
   'ui.table.reorder': 'Reorder',
+  'ui.table.selectAll': 'Select page',
+  'ui.table.selectRow': 'Select row',
   'ui.filter.free': 'Text',
   'ui.filter.loading': 'Loading',
   'ui.filter.from': 'from',

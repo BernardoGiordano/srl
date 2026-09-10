@@ -87,6 +87,23 @@ function initialCustomers() {
   ];
 }
 
+/**
+ * Accounts, mutable because the Settings screen writes to them. Three rows rather than
+ * one, so a bulk action has something to leave alone.
+ *
+ * @type {Array<{ id: string, name: string, email: string, role: string, status: string, lastSeen: string, scopeCount: number }>}
+ */
+let USERS = [];
+
+/** @returns {typeof USERS} */
+function initialUsers() {
+  return [
+    { id: 'US-0001', name: 'Ada Rossi', email: 'ada@example.com', role: 'administrator', status: 'active', lastSeen: '2026-09-09T08:00:00.000Z', scopeCount: 9 },
+    { id: 'US-0002', name: 'Grace Bianchi', email: 'grace@example.com', role: 'viewer', status: 'active', lastSeen: '2026-09-08T08:00:00.000Z', scopeCount: 3 },
+    { id: 'US-0003', name: 'Linus Verdi', email: 'linus@example.com', role: 'viewer', status: 'active', lastSeen: '2026-09-07T08:00:00.000Z', scopeCount: 3 },
+  ];
+}
+
 const SCOPES = {
   administrator: [
     'sales:read',
@@ -133,6 +150,7 @@ export function installFakeServer(options = {}) {
   expireOnce = false;
   requested.length = 0;
   CUSTOMERS = initialCustomers();
+  USERS = initialUsers();
 
   globalThis.fetch = /** @type {typeof fetch} */ (
     async (input, init) => {
@@ -304,7 +322,18 @@ function answer(url, method, bodyText) {
     );
   }
 
-  if (path === '/api/users') return refuse('users:read') ?? json({ rows: [] });
+  if (path === '/api/users') return refuse('users:read') ?? json({ rows: USERS });
+
+  const userId = /^\/api\/users\/([\w-]+)$/u.exec(path)?.[1];
+  if (userId !== undefined && method === 'PATCH') {
+    const denied = refuse('users:write');
+    if (denied !== undefined) return denied;
+    const user = USERS.find((candidate) => candidate.id === userId);
+    if (user === undefined) return json({ error: 'not_found' }, 404);
+    const status = readJson(bodyText).status;
+    if (status === 'active' || status === 'suspended') user.status = status;
+    return json(user);
+  }
   if (path === '/api/audit') return refuse('audit:read') ?? json({ rows: [], total: 0 });
   if (path === '/api/employees') return refuse('people:read') ?? json({ rows: [], total: 0 });
   if (path === '/api/products') return refuse('inventory:read') ?? json({ rows: [], total: 0, offset: 0 });
