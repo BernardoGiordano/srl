@@ -19,7 +19,7 @@ Node.js 22 or later, npm and Git are prerequisites. From a new repository:
 ```bash
 git init
 npm init -y
-npm install --save-dev --save-exact @srljs/core@0.7.0 @srljs/cli@0.7.0 \
+npm install --save-dev --save-exact @srljs/core@0.8.0 @srljs/cli@0.8.0 \
   tailwindcss@4.3.3 @tailwindcss/cli@4.3.3 @types/node@24.13.3
 npx --no-install srl new web
 npx --no-install srl check importmap
