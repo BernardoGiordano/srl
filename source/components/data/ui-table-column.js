@@ -3,12 +3,25 @@ import { defineComponent } from '@core/elements/component.js';
 /**
  * Declarative column metadata consumed by `<ui-table>`.
  *
- * Keep columns beside table use, like CDK column definitions, without teaching
- * template compiler cross-component lexical scopes. Rich cells use `renderer`:
- * a function receiving `(row, rowIndex, value)` and returning any Lit-renderable
- * value. `sortValue` and `filterValue` expose orthogonal values when rendered
- * content is not suitable for local sorting/filtering. Plain columns need only
- * `key` and `label`.
+ * Keep columns beside table use, like CDK column definitions. A rich cell is
+ * written one of two ways, both receiving `(row, rowIndex, value)`.
+ *
+ * `cell` is authored markup, declared in the page's own template and checked
+ * there:
+ *
+ *     <ui-table-column key="name" label="Name">
+ *       <template *fragment="cell(row)">
+ *         <a [href]="'/people/' + row.id">{{ row.name }}</a>
+ *       </template>
+ *     </ui-table-column>
+ *
+ * `renderer` is a function returning any Lit-renderable value, for cells a page
+ * would rather compute than write down. It is the escape hatch, and it stays: a
+ * cell built from data the markup has no name for is a real case.
+ *
+ * `sortValue` and `filterValue` expose orthogonal values when rendered content is
+ * not suitable for local sorting/filtering. Plain columns need only `key` and
+ * `label`. ADR-0104.
  */
 export class UiTableColumn extends HTMLElement {
   static observedAttributes = [
@@ -28,6 +41,9 @@ export class UiTableColumn extends HTMLElement {
     'max-width',
     'sticky',
   ];
+
+  /** @type {((row: unknown, rowIndex: number, value: unknown) => unknown) | undefined} */
+  #cell;
 
   /** @type {((row: unknown, rowIndex: number, value: unknown) => unknown) | undefined} */
   #renderer;
@@ -111,6 +127,25 @@ export class UiTableColumn extends HTMLElement {
   get sticky() {
     const value = this.getAttribute('sticky');
     return value === 'start' || value === 'end' ? value : '';
+  }
+
+  /**
+   * Markup for this column's cells, from a `<template *fragment="cell(...)">`.
+   *
+   * Typed as a call rather than as an opaque fragment so the checker can give the
+   * declared locals real types: it contextually types the fragment body against
+   * this signature, and a page writing `row.nmae` is a compile error in the page's
+   * own template.
+   *
+   * @type {((row: unknown, rowIndex: number, value: unknown) => unknown) | undefined}
+   */
+  get cell() {
+    return this.#cell;
+  }
+
+  set cell(value) {
+    this.#cell = typeof value === 'function' ? value : undefined;
+    if (this.isConnected) this.#notify();
   }
 
   get renderer() {

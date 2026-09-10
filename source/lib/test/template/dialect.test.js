@@ -1,7 +1,8 @@
-import { assert } from '../harness.js';
+import { assert, present } from '../harness.js';
 import {
   classifyAttributeName,
   classifyBindingTarget,
+  parseFragmentHead,
   refusedMember,
   securityContextFor,
   strictOperator,
@@ -64,5 +65,28 @@ describe('template dialect', () => {
     assert.equal(strictOperator('!='), '!==');
     assert.equal(strictOperator('==='), '===');
     assert.equal(strictOperator('<='), '<=');
+  });
+
+  it('reads a fragment head into a property and its locals', () => {
+    const cell = present(parseFragmentHead('cell(row, index)'));
+    assert.equal(cell.property, 'cell');
+    assert.sameArray(cell.params.map((param) => param.name), ['row', 'index']);
+    assert.sameArray(cell.params.map((param) => param.iterable), [undefined, undefined]);
+
+    assert.sameArray(present(parseFragmentHead('empty()')).params, []);
+
+    // Kebab-cased like every other property binding, and the `of` clause names the
+    // collection the local's type comes from.
+    const header = present(parseFragmentHead('header-cell(row of people.list)'));
+    assert.equal(header.property, 'headerCell');
+    assert.sameArray(header.params.map((param) => param.iterable), ['people.list']);
+  });
+
+  it('refuses a fragment head both adapters would read differently', () => {
+    assert.equal(parseFragmentHead('cell'), undefined, 'no parameter list');
+    assert.equal(parseFragmentHead('cell(row'), undefined, 'unterminated');
+    assert.equal(parseFragmentHead('cell(row, row)'), undefined, 'a repeated local');
+    assert.equal(parseFragmentHead('cell(1row)'), undefined, 'not an identifier');
+    assert.equal(parseFragmentHead('cell(row of pick(a))'), undefined, 'a call in the annotation');
   });
 });

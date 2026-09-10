@@ -3,7 +3,7 @@ import { defineComponent } from '@core/elements/component.js';
 import { computed, signal } from '@core/foundation/reactive.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
-import { cur, dt, num, t } from '@core/localization/i18n.js';
+import { cur, dt, t } from '@core/localization/i18n.js';
 import { ANY_COLUMN } from '@components/data/filter-descriptor.js';
 import { UiTable } from '@components/data/ui-table.js';
 import { UiTableColumn } from '@components/data/ui-table-column.js';
@@ -35,9 +35,10 @@ import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
  * values — but never the rows, which is the one thing table state deliberately does not
  * store.
  *
- * The stock column is a rendered cell with a badge in it: a renderer may return a DOM
- * node, so "below reorder point" is visible rather than something the reader has to
- * work out by comparing two columns.
+ * The stock column is a cell fragment with a badge in it, so "below reorder point" is
+ * visible rather than something the reader has to work out by comparing two columns. It
+ * is ordinary markup — `*if` and `app-badge`, both checked here — rather than DOM this
+ * page builds by hand.
  */
 export class ProductsPage extends SignalElement {
   /** The query the accumulated rows belong to. */
@@ -200,27 +201,6 @@ export class ProductsPage extends SignalElement {
   }
 
   /* ── Cells ──────────────────────────────────────────────────────────────── */
-
-  /** @param {unknown} row */
-  renderStock = (row) => {
-    const product = /** @type {Product} */ (row);
-    const wrapper = document.createElement('span');
-    wrapper.className = 'flex items-center justify-end gap-2 tabular-nums';
-
-    const count = document.createElement('span');
-    count.textContent = num(product.stock);
-    wrapper.append(count);
-
-    if (product.stock < product.reorderPoint) {
-      // `app-badge` is a defined element, so creating it here mounts a real component:
-      // a renderer may return any node, and the node may be one of ours.
-      const badge = document.createElement('app-badge');
-      badge.setAttribute('tone', 'bad');
-      badge.textContent = t('products.low');
-      wrapper.append(badge);
-    }
-    return wrapper;
-  };
 
   /** @param {unknown} row */
   sortStock = (row) => /** @type {Product} */ (row).stock;

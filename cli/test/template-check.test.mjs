@@ -267,3 +267,155 @@ void test('an unsaved JavaScript buffer overrides the file on disk', async () =>
 
   assert.match(diagnostics.map((diagnostic) => diagnostic.message).join('\n'), /label/u);
 });
+
+/**
+ * `*fragment` bodies are checked in the page that wrote them, against the property
+ * they are assigned to. Two things have to hold: the locals get real types, and the
+ * body is not silently skipped — a checker that walked past a `<template>` would
+ * report nothing at all and look like it passed.
+ */
+void test('checks a fragment body against the property it is assigned to', () => {
+  assert.deepEqual(
+    check(`
+      <test-child>
+        <template *fragment="cell(row of rows)">{{ row.name }}</template>
+      </test-child>
+    `),
+    [],
+  );
+  assert.deepEqual(
+    check(`
+      <test-child>
+        <template *fragment="typed-cell(row)">{{ row.name }}</template>
+      </test-child>
+    `),
+    [],
+  );
+});
+
+void test('reports a bad member of a fragment local', () => {
+  assert.match(
+    check(`
+      <test-child>
+        <template *fragment="cell(row of rows)">{{ row.missing }}</template>
+      </test-child>
+    `).join('\n'),
+    /missing/u,
+  );
+  assert.match(
+    check(`
+      <test-child>
+        <template *fragment="typed-cell(row)">{{ row.missing }}</template>
+      </test-child>
+    `).join('\n'),
+    /missing/u,
+  );
+});
+
+void test('leaves an unannotated local with the type the property declares', () => {
+  assert.match(
+    check(`
+      <test-child>
+        <template *fragment="cell(row)">{{ row.name }}</template>
+      </test-child>
+    `).join('\n'),
+    /unknown/u,
+  );
+});
+
+void test('checks the iterable a fragment local is annotated with', () => {
+  assert.match(
+    check(`
+      <test-child>
+        <template *fragment="cell(row of missingRows)">{{ row.name }}</template>
+      </test-child>
+    `).join('\n'),
+    /missingRows/u,
+  );
+});
+
+void test('reports a fragment named after a property the element does not have', () => {
+  assert.match(
+    check(`
+      <test-child>
+        <template *fragment="missing-cell(row of rows)">{{ row.name }}</template>
+      </test-child>
+    `).join('\n'),
+    /missingCell/u,
+  );
+  assert.match(
+    check(`
+      <test-child>
+        <template *fragment="caption(row of rows)">{{ row.name }}</template>
+      </test-child>
+    `).join('\n'),
+    /not assignable/u,
+  );
+});
+
+void test('refuses a fragment on an element that is not a template', () => {
+  assert.match(
+    check('<test-child><p *fragment="cell(row)">x</p></test-child>').join('\n'),
+    /Only <template> may declare one/u,
+  );
+});
+
+void test('refuses a template that declares no fragment, wherever it sits', () => {
+  assert.match(
+    check('<test-child><template>{{ label }}</template></test-child>').join('\n'),
+    /<template> has no \*fragment/u,
+  );
+  assert.match(check('<template>{{ label }}</template>').join('\n'), /has no \*fragment/u);
+  assert.match(
+    check('<template *fragment="cell(row)">{{ label }}</template>').join('\n'),
+    /no element to belong to/u,
+  );
+});
+
+void test('refuses an unreadable or repeated fragment head', () => {
+  assert.match(
+    check('<test-child><template *fragment="cell row"></template></test-child>').join('\n'),
+    /invalid \*fragment expression/u,
+  );
+  assert.match(
+    check(
+      '<test-child><template *fragment="cell(a)"></template>' +
+        '<template *fragment="cell(b)"></template></test-child>',
+    ).join('\n'),
+    /duplicate \*fragment cell/u,
+  );
+});
+
+void test('refuses a fragment named after internal state or a text sink', () => {
+  assert.match(
+    check('<test-child><template *fragment="internal(row)"></template></test-child>').join('\n'),
+    /internal reactive state/u,
+  );
+  assert.match(
+    check('<test-child><template *fragment="inner-h-t-m-l(row)"></template></test-child>').join('\n'),
+    /text sink/u,
+  );
+});
+
+void test('sees enclosing loop locals inside a fragment body, and shadows them', () => {
+  assert.deepEqual(
+    check(`
+      <div *for="row of rows; key: row.id">
+        <test-child>
+          <template *fragment="cell(item of rows)">{{ row.name }} {{ item.name }} {{ $index }}</template>
+        </test-child>
+      </div>
+    `),
+    [],
+  );
+  assert.match(
+    check(`
+      <div *for="row of rows; key: row.id">
+        <test-child>
+          <template *fragment="cell(row)">{{ row.name }}</template>
+        </test-child>
+      </div>
+    `).join('\n'),
+    /unknown/u,
+  );
+});

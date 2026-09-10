@@ -40,6 +40,11 @@
       caption="{{ t('nav.peopleEmployees') }}"
       empty-label="{{ t('people.empty') }}"
     >
+      <!--
+        A rich cell as markup. `person of rows` is what gives the fragment a typed
+        row: the table takes rows of any shape, so it can only offer `unknown`, and
+        this page is where the answer is known.
+      -->
       <ui-table-column
         key="name"
         label="{{ t('people.name') }}"
@@ -47,10 +52,26 @@
         sticky="start"
         width="260"
         locked
-        [.renderer]="renderName"
         [.sort-value]="nameValue"
         [.filter-value]="nameValue"
-      ></ui-table-column>
+      >
+        <template *fragment="cell(person of rows)">
+          <span class="flex min-w-0 items-center gap-2.5">
+            <ui-avatar
+              name="{{ person.name }}"
+              fallback-class="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-brand-contrast"
+            ></ui-avatar>
+            <span class="min-w-0">
+              <a
+                class="block truncate font-medium text-brand hover:text-accent-strong"
+                href="/people/employees/{{ person.id }}"
+                >{{ person.name }}</a
+              >
+              <span class="block truncate text-[11.5px] text-muted">{{ person.email }}</span>
+            </span>
+          </span>
+        </template>
+      </ui-table-column>
       <ui-table-column key="role" label="{{ t('people.role') }}" sortable hideable width="190"></ui-table-column>
       <ui-table-column key="team" label="{{ t('people.team') }}" sortable hideable width="150"></ui-table-column>
       <ui-table-column key="location" label="{{ t('people.location') }}" sortable hideable width="150"></ui-table-column>

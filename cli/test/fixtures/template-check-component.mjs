@@ -38,4 +38,24 @@ export class TemplateCheckChild extends HTMLElement {
 
   /** Internal implementation state, never caller input. */
   internal = [];
+
+  /**
+   * A fragment property over rows this element cannot type, the way a table
+   * cannot type the rows a page hands it. A caller writing a fragment for it has
+   * to say what a row is.
+   *
+   * @type {((row: unknown, index: number) => unknown) | undefined}
+   */
+  cell;
+
+  /**
+   * A fragment property that already knows its row, so the declared signature is
+   * the whole answer and no annotation is needed.
+   *
+   * @type {((row: { id: number, name: string }) => unknown) | undefined}
+   */
+  typedCell;
+
+  /** Not a fragment property. A fragment declared against it is a type error. */
+  caption = '';
 }

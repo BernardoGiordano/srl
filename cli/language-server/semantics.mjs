@@ -18,6 +18,7 @@ import {
   FOR_HEAD,
   FOR_INDEX_CLAUSE,
   FOR_KEY_CLAUSE,
+  parseFragmentHead,
   VOID_ELEMENTS,
 } from '@srljs/core/lib/core/template/dialect.js';
 import { templateExpressionMembers } from '../checks/template-check.mjs';
@@ -29,7 +30,9 @@ import { templateExpressionMembers } from '../checks/template-check.mjs';
 /** @typedef {{ kind: 'element', tag: string, attributes: Attribute[], children: TemplateNode[], at: number, nameStart: number, nameEnd: number, openEnd: number, end: number }} ElementNode */
 /** @typedef {{ name: string, start: number, end: number, opening: boolean }} TagSpan */
 /** @typedef {{ start: number, end: number, attribute: string | undefined, element: ElementNode | undefined, event: string | undefined }} ExpressionSpan */
-/** @typedef {{ alias: string, iterable: string, indexAlias: string | undefined }} LoopScope */
+/** @typedef {{ alias: string, iterable: string, indexAlias: string | undefined, at: number }} LoopScope */
+/** @typedef {{ tag: string, property: string, at: number,
+ *   params: Array<{ name: string, iterable: string | undefined }> }} FragmentScope */
 
 const RAW_TEXT_ELEMENTS = new Set(['script', 'style']);
 
@@ -105,6 +108,7 @@ export class TemplateSemantics {
     const expression = narrowest(this.#expressions, offset);
     if (expression !== undefined) {
       const loops = this.#loopsAt(offset, expression);
+      const fragments = this.#fragmentsAt(offset, expression);
       return {
         kind: /** @type {const} */ ('expression'),
         start: expression.start,
@@ -113,7 +117,8 @@ export class TemplateSemantics {
         event: expression.event,
         tag: expression.element?.tag,
         loops,
-        locals: localNames(loops, expression.event !== undefined),
+        fragments,
+        locals: localNames(loops, fragments, expression.event !== undefined),
       };
     }
 
@@ -202,6 +207,7 @@ export class TemplateSemantics {
         component: [component.module, component.className],
         target,
         loops: context.loops,
+        fragments: context.fragments,
         event: context.event === undefined ? undefined : [context.tag, context.event],
       });
       return cachedMembers(this.#documents, this.#model, key, () =>
@@ -211,6 +217,7 @@ export class TemplateSemantics {
           template: this.#where,
           expression: target,
           loops: context.loops,
+          fragments: context.fragments,
           event:
             context.event === undefined || context.tag === undefined
               ? undefined
@@ -336,9 +343,54 @@ export class TemplateSemantics {
         const candidate = FOR_INDEX_CLAUSE.exec(clause.trim())?.[1];
         if (candidate !== undefined) indexAlias = candidate;
       }
-      loops.push({ alias: parsed[1], iterable: parsed[2], indexAlias });
+      loops.push({ alias: parsed[1], iterable: parsed[2], indexAlias, at: element.at });
     }
     return loops;
+  }
+
+  /**
+   * Fragment scopes an offset sits inside.
+   *
+   * The property whose signature types the locals belongs to the *parent* element,
+   * not to the `<template>` that carries the body, because that is the element the
+   * fragment is assigned to and eventually called by.
+   *
+   * @param {number} offset @param {ExpressionSpan} expression
+   * @returns {FragmentScope[]}
+   */
+  #fragmentsAt(offset, expression) {
+    /** @type {FragmentScope[]} */
+    const fragments = [];
+    const ancestors = this.#elements
+      .filter((element) => element.at <= offset && offset <= element.end)
+      .sort((left, right) => left.at - right.at);
+
+    for (const element of ancestors) {
+      if (element.tag !== 'template') continue;
+      const attribute = element.attributes.find((candidate) => candidate.name === '*fragment');
+      if (attribute === undefined) continue;
+      // The head's own `of` expressions are read in the enclosing scope, so they
+      // must not see the locals this fragment introduces.
+      if (expression.start >= attribute.valueStart && expression.end <= attribute.valueEnd) continue;
+
+      const head = readFragmentHead(attribute.value);
+      if (head === undefined) continue;
+      const parent = innermost(
+        this.#elements.filter(
+          (candidate) =>
+            candidate !== element && candidate.at < element.at && element.end <= candidate.end,
+        ),
+      );
+      if (parent === undefined) continue;
+
+      fragments.push({
+        tag: parent.tag,
+        property: head.property,
+        params: head.params,
+        at: element.at,
+      });
+    }
+    return fragments;
   }
 
   /** @param {number} offset */
@@ -624,6 +676,20 @@ function recordAttributeExpressions(expressions, element) {
       }
       continue;
     }
+    if (attribute.name === '*fragment') {
+      // Only the `of` clauses are expressions. The property name and the parameter
+      // names are declarations, and offering completion inside them would offer
+      // the host's members where a new name is being written.
+      const head = readFragmentHead(attribute.value);
+      let search = 0;
+      for (const param of head?.params ?? []) {
+        if (param.iterable === undefined) continue;
+        const at = attribute.valueStart + attribute.value.indexOf(param.iterable, search);
+        search = at - attribute.valueStart + param.iterable.length;
+        expressions.push({ start: at, end: at + param.iterable.length, attribute: attribute.name, element, event: undefined });
+      }
+      continue;
+    }
     if (syntax.kind === 'event' || syntax.kind === 'binding' || attribute.name === '*if') {
       expressions.push({
         start: attribute.valueStart,
@@ -713,13 +779,27 @@ function narrowest(spans, offset) {
     .sort((left, right) => left.end - left.start - (right.end - right.start))[0];
 }
 
+/**
+ * A `*fragment` head, read the way an editor needs it.
+ *
+ * The dialect's parser wants the closing parenthesis, and rightly so — the runtime
+ * and the checker must refuse `*fragment="cell(row"`. An editor sees that text on
+ * the way to the finished one, so a head still being typed is closed here and read
+ * with the same grammar rather than a second, looser one.
+ *
+ * @param {string} value
+ */
+function readFragmentHead(value) {
+  return parseFragmentHead(value) ?? parseFragmentHead(`${value})`);
+}
+
 /** @param {ElementNode[]} elements */
 function innermost(elements) {
   return elements.sort((left, right) => right.at - left.at)[0];
 }
 
-/** @param {LoopScope[]} loops @param {boolean} event */
-function localNames(loops, event) {
+/** @param {LoopScope[]} loops @param {FragmentScope[]} fragments @param {boolean} event */
+function localNames(loops, fragments, event) {
   /** @type {Set<string>} */
   const found = new Set();
   for (const loop of loops) {
@@ -729,6 +809,9 @@ function localNames(loops, event) {
     found.add('$last');
     found.add('$count');
     if (loop.indexAlias !== undefined) found.add(loop.indexAlias);
+  }
+  for (const fragment of fragments) {
+    for (const param of fragment.params) found.add(param.name);
   }
   if (event) found.add('$event');
   return [...found];

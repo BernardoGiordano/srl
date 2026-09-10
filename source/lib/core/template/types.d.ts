@@ -54,6 +54,19 @@ export interface Scope {
 export type Evaluator = (scope: Scope) => unknown;
 
 /**
+ * Authored markup an element renders on its own terms, as many times as it needs.
+ *
+ * A `<template *fragment="cell(row, index)">` compiles to one of these and is
+ * assigned to the named property of the element it sits in. Calling it returns a
+ * renderable value, so a consumer puts a fragment wherever it would put any other
+ * bound value. Arguments become the body's lexical locals, in declaration order.
+ *
+ * The body still reads the *declaring* component's members, because it was written
+ * there. A consumer supplies row locals; it does not supply a scope.
+ */
+export type TemplateFragment = (...args: readonly unknown[]) => unknown;
+
+/**
  * One lit template's worth of compiled output. `strings` is handed to lit's
  * `html` tag on every render and must keep its identity forever: lit caches the
  * parsed template against it, and a rebuilt array means a rebuilt DOM.

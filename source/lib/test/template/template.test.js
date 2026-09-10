@@ -640,4 +640,188 @@ describe('template prefetching', () => {
       removeEventListener('unhandledrejection', record);
     }
   });
+
+  /* ── Fragments ─────────────────────────────────────────────────────────── */
+
+  /**
+   * A `*fragment` is markup a page writes and another element renders, so these
+   * tests do what a consumer does: read the property off the element, call it, and
+   * render what comes back. The identity assertions are the ones that matter, for
+   * the same reason they matter for a whole template — a fragment that rebuilt its
+   * DOM per call would still show the right text.
+   */
+
+  /** @param {Element | null} element @returns {(...args: unknown[]) => unknown} */
+  function fragmentOf(element) {
+    const holder = /** @type {Record<string, unknown>} */ (
+      /** @type {unknown} */ (present(element))
+    );
+    const fragment = holder.cell;
+    assert.equal(typeof fragment, 'function', 'the element received no cell fragment');
+    return /** @type {(...args: unknown[]) => unknown} */ (fragment);
+  }
+
+  it('assigns a fragment to the element that declares it and leaves no markup', () => {
+    paint(
+      '<div data-consumer><template *fragment="cell(person)"><b>{{ person.name }}</b></template></div>',
+      {},
+    );
+
+    const consumer = present(host.querySelector('[data-consumer]'));
+    assert.equal(consumer.querySelector('template'), null, 'the template must be consumed');
+    assert.equal(consumer.childNodes.length, 0, 'a fragment renders nothing where it is written');
+    assert.equal(typeof fragmentOf(consumer), 'function');
+  });
+
+  it('renders a fragment with its arguments as lexical locals', () => {
+    paint(
+      '<div data-consumer><template *fragment="cell(person, position)">' +
+        '<b>{{ position }}: {{ person.name }}</b></template></div>',
+      {},
+    );
+
+    const cells = document.createElement('div');
+    host.append(cells);
+    render(fragmentOf(host.querySelector('[data-consumer]'))({ name: 'Ada' }, 0), cells);
+    assert.equal(present(cells.querySelector('b')).textContent, '0: Ada');
+  });
+
+  it('reads the declaring component members, not the consumer', () => {
+    paint(
+      '<div data-consumer><template *fragment="cell(person)">' +
+        '<b>{{ greeting }} {{ person.name }}</b></template></div>',
+      { greeting: 'Hello' },
+    );
+
+    const cells = document.createElement('div');
+    host.append(cells);
+    render(fragmentOf(host.querySelector('[data-consumer]'))({ name: 'Ada' }), cells);
+    assert.equal(present(cells.querySelector('b')).textContent, 'Hello Ada');
+  });
+
+  it('patches a rendered fragment in place when its locals change', () => {
+    paint(
+      '<div data-consumer><template *fragment="cell(person)"><b>{{ person.name }}</b></template></div>',
+      {},
+    );
+
+    const cell = fragmentOf(host.querySelector('[data-consumer]'));
+    const cells = document.createElement('div');
+    host.append(cells);
+
+    render(cell({ name: 'Ada' }), cells);
+    const first = present(cells.querySelector('b'));
+    render(cell({ name: 'Grace' }), cells);
+
+    assert.equal(present(cells.querySelector('b')), first, 'the cell node must survive');
+    assert.equal(first.textContent, 'Grace');
+  });
+
+  it('gives each rendered position its own locals', () => {
+    paint(
+      '<div data-consumer><template *fragment="cell(person)"><b>{{ person.name }}</b></template></div>',
+      {},
+    );
+
+    const cell = fragmentOf(host.querySelector('[data-consumer]'));
+    const left = document.createElement('div');
+    const right = document.createElement('div');
+    host.append(left, right);
+
+    render(cell({ name: 'Ada' }), left);
+    render(cell({ name: 'Grace' }), right);
+
+    assert.equal(present(left.querySelector('b')).textContent, 'Ada');
+    assert.equal(present(right.querySelector('b')).textContent, 'Grace');
+  });
+
+  it('shadows an enclosing loop variable of the same name', () => {
+    paint(
+      '<ul><li *for="person of people; key: person.name">{{ person.name }}' +
+        '<div data-consumer><template *fragment="cell(person)"><b>{{ person.name }}</b></template></div>' +
+        '</li></ul>',
+      { people: [{ name: 'Ada' }] },
+    );
+
+    const cells = document.createElement('div');
+    host.append(cells);
+    render(fragmentOf(host.querySelector('[data-consumer]'))({ name: 'Grace' }), cells);
+    assert.equal(present(cells.querySelector('b')).textContent, 'Grace');
+  });
+
+  it('closes over the row a fragment was declared in', () => {
+    paint(
+      '<ul><li *for="team of teams; key: team.name">' +
+        '<div data-consumer="{{ team.name }}"><template *fragment="cell(person)">' +
+        '<b>{{ team.name }}/{{ person.name }}</b></template></div>' +
+        '</li></ul>',
+      { teams: [{ name: 'blue' }, { name: 'red' }] },
+    );
+
+    const cells = document.createElement('div');
+    host.append(cells);
+    render(fragmentOf(host.querySelector('[data-consumer="red"]'))({ name: 'Ada' }), cells);
+    assert.equal(present(cells.querySelector('b')).textContent, 'red/Ada');
+  });
+
+  it('hands the same fragment value to the element on every render', () => {
+    const compiled = compileTemplate(
+      '<div data-consumer><template *fragment="cell(person)"><b>{{ person.name }}</b></template></div>',
+      'test',
+    );
+    const model = { n: 1 };
+
+    render(compiled(model), host);
+    const first = fragmentOf(host.querySelector('[data-consumer]'));
+    render(compiled(model), host);
+
+    assert.equal(fragmentOf(host.querySelector('[data-consumer]')), first);
+  });
+
+  it('refuses a template element that declares no fragment', () => {
+    assert.throws(
+      () => compileTemplate('<div><template><b>x</b></template></div>', 'test'),
+      'has no *fragment',
+    );
+  });
+
+  it('refuses *fragment on anything but a template', () => {
+    assert.throws(
+      () => compileTemplate('<div><span *fragment="cell(row)">x</span></div>', 'test'),
+      'Only <template> may declare one',
+    );
+  });
+
+  it('refuses an unreadable fragment head', () => {
+    assert.throws(
+      () => compileTemplate('<div><template *fragment="cell row"></template></div>', 'test'),
+      'Cannot read *fragment="cell row"',
+    );
+    assert.throws(
+      () => compileTemplate('<div><template *fragment="cell(row, row)"></template></div>', 'test'),
+      'distinct local names',
+    );
+  });
+
+  it('refuses two fragments for the same property', () => {
+    assert.throws(
+      () =>
+        compileTemplate(
+          '<div><template *fragment="cell(a)"></template><template *fragment="cell(b)"></template></div>',
+          'test',
+        ),
+      'declares *fragment cell twice',
+    );
+  });
+
+  it('refuses a fragment named after a text sink', () => {
+    assert.throws(
+      () => compileTemplate('<div><template *fragment="inner-h-t-m-l(row)"></template></div>', 'test'),
+      'text sink',
+    );
+    assert.throws(
+      () => compileTemplate('<div><template *fragment="on-click(row)"></template></div>', 'test'),
+      'text sink',
+    );
+  });
 });

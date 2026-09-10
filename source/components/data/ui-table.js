@@ -567,9 +567,20 @@ export class UiTable extends SignalElement {
     if (next !== this.page) this.page = next;
   }
 
-  /** @param {UiTableColumn} column @param {unknown} row @param {number} index */
+  /**
+   * A cell's content: the column's authored fragment, its renderer, or the raw
+   * value.
+   *
+   * The fragment wins because it is the more specific declaration — a column
+   * carrying both said the markup twice — and because a fragment returns a
+   * renderable even when the row has nothing at `key`, so `??` would never reach
+   * it.
+   *
+   * @param {UiTableColumn} column @param {unknown} row @param {number} index
+   */
   renderCell(column, row, index) {
     const value = readPath(row, column.key);
+    if (column.cell !== undefined) return column.cell(row, index, value);
     return column.renderer?.(row, index, value) ?? value ?? nothing;
   }
 

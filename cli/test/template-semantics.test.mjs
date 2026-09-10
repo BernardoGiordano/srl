@@ -94,6 +94,38 @@ void test('one template semantic snapshot drives completion context', async (con
     assert.ok(!outside.some((item) => item.label === '$index'));
   });
 
+  await context.test('types fragment locals from the annotation, then from the property', async () => {
+    const annotated =
+      '<ui-table-column><template *fragment="cell(person of rows)">{{ person. }}' +
+      '</template></ui-table-column>';
+    const person = await complete(annotated, annotated.indexOf('person. ') + 'person.'.length);
+    assert.ok(person.some((item) => item.label === 'name'));
+    assert.ok(person.some((item) => item.label === 'email'));
+
+    // Without the annotation the column can only offer `unknown`, so the compiler
+    // has no members to give and the answer must be empty rather than the host's.
+    const bare =
+      '<ui-table-column><template *fragment="cell(person)">{{ person. }}' +
+      '</template></ui-table-column>';
+    const unknownRow = await complete(bare, bare.indexOf('person. ') + 'person.'.length);
+    assert.ok(!unknownRow.some((item) => item.label === 'name'));
+  });
+
+  await context.test('keeps fragment locals inside the fragment', async () => {
+    const source =
+      '<ui-table-column><template *fragment="cell(person of rows)">{{ person.name }}' +
+      '</template></ui-table-column><p>{{ per }}</p>';
+    const outside = await complete(source, source.lastIndexOf('per') + 'per'.length);
+    assert.ok(!outside.some((item) => item.label === 'person'));
+  });
+
+  await context.test('completes the iterable a fragment local is annotated with', async () => {
+    const source = '<ui-table-column><template *fragment="cell(person of ro';
+    const annotation = await complete(source);
+    assert.ok(annotation.some((item) => item.label === 'rows'));
+    assert.ok(!annotation.some((item) => item.label === 'person'));
+  });
+
   await context.test('keeps quotes and comparisons in expression context', async () => {
     const quoted = '<p [title]="t(\'people.title\', rows.length < ro';
     const inAttribute = await complete(quoted);

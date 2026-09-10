@@ -95,6 +95,67 @@ export const FOR_KEY_CLAUSE = /^key\s*:\s*([\s\S]+)$/u;
 export const FOR_INDEX_CLAUSE = /^index\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)$/u;
 
 /**
+ * `<template *fragment="cell(row of people, index)">`: markup the enclosing
+ * element renders later, once per thing it has, with `row` and `index` as lexical
+ * locals.
+ *
+ * The head reads as a function signature because that is what a fragment is. The
+ * name is the property it is assigned to on the parent element, kebab-cased like
+ * every other property binding, and the parameters are the locals its body sees.
+ * The consumer calls it positionally, so `<ui-table-column>` receives the same
+ * `(row, index, value)` a `renderer` receives.
+ *
+ * `of` names where a local's *type* comes from, and means what it means in `*for`
+ * — one element of that iterable. A table hands its columns rows typed `unknown`,
+ * because a table works for any row, so without this a cell fragment could name no
+ * member of the row it was written for. The page knows the answer and says it
+ * once, in the same expression language as everything else.
+ *
+ * Parentheses and commas may not appear inside the head. That keeps the parameter
+ * split unambiguous and keeps the annotation to what it is for: naming a
+ * collection already in scope, not computing one. ADR-0104.
+ *
+ * @internal
+ */
+export const FRAGMENT_HEAD = /^\s*([A-Za-z][A-Za-z0-9-]*)\s*\(([^()]*)\)\s*$/u;
+
+/** One parameter: a name, optionally with the iterable its element type comes from. */
+const FRAGMENT_PARAM = /^([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+of\s+(\S[\s\S]*))?$/u;
+
+/**
+ * Read a `*fragment` head, or `undefined` when it is not one.
+ *
+ * Shared rather than restated, because the runtime binds these names to values and
+ * the checker binds them to types, and a parameter list the two sides split
+ * differently would type-check one template and run another.
+ *
+ * @param {string} source
+ * @returns {{ property: string, params: { name: string, iterable: string | undefined }[] } | undefined}
+ * @internal
+ */
+export function parseFragmentHead(source) {
+  const parsed = FRAGMENT_HEAD.exec(source);
+  if (parsed === null) return undefined;
+
+  const [, name = '', list = ''] = parsed;
+  if (name === '') return undefined;
+
+  /** @type {{ name: string, iterable: string | undefined }[]} */
+  const params = [];
+  const trimmed = list.trim();
+  if (trimmed !== '') {
+    for (const piece of trimmed.split(',')) {
+      const param = FRAGMENT_PARAM.exec(piece.trim());
+      if (param?.[1] === undefined) return undefined;
+      params.push({ name: param[1], iterable: param[2]?.trim() });
+    }
+  }
+
+  if (new Set(params.map((param) => param.name)).size !== params.length) return undefined;
+  return { property: camelCase(name), params };
+}
+
+/**
  * Member names an expression may never name, and identifiers it may never
  * resolve. A template expression is authored data rather than user input, so
  * this is not a sandbox: it exists so `{{ thing.constructor }}` resolves to

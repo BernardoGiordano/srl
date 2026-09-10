@@ -27,7 +27,9 @@
  */
 
 import { html, nothing } from 'lit';
-import { AsyncDirective, directive } from 'lit/async-directive.js';
+// `Directive` comes from the same module: lit-html's async-directive re-exports
+// the base class and the factory, so one specifier covers both kinds.
+import { AsyncDirective, Directive, directive } from 'lit/async-directive.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { compileExpression } from '@core/template/expression.js';
 import {
@@ -37,6 +39,9 @@ import {
   FOR_INDEX_CLAUSE,
   FOR_KEY_CLAUSE,
   INTERPOLATION,
+  parseFragmentHead,
+  refusedProperty,
+  securityContextFor,
   VOID_ELEMENTS,
 } from '@core/template/dialect.js';
 import { effect } from '@core/foundation/reactive.js';
@@ -50,7 +55,7 @@ import {
 // template can be translated whether or not anything else pulled i18n in.
 import '@core/localization/i18n.js';
 
-/** @import { CompiledTemplate, Evaluator, Scope, TemplateChunks, TemplateLocals } from '@core/template/types.js' */
+/** @import { CompiledTemplate, Evaluator, Scope, TemplateChunks, TemplateFragment, TemplateLocals } from '@core/template/types.js' */
 
 /**
  * The runtime-loaded component template is framework-owned source, not a bound
@@ -518,6 +523,61 @@ function renderChunks(chunks, scope) {
   return html(chunks.strings, ...values);
 }
 
+/**
+ * One rendered instance of a `*fragment`, holding the row scope for its position.
+ *
+ * The scope has to live somewhere, and the consumer is the wrong place: a table
+ * would have to invent a cache key, keep it in step with its own rows, and drop
+ * entries nobody told it about. Lit already tracks this. A directive instance
+ * belongs to the Part it was committed to, so it survives exactly as long as the
+ * cell does, and a keyed `*for` that moves a row moves its Parts with it.
+ *
+ * Locals are updated in place and the version moves only when one of them, or the
+ * declaring scope, actually changed. That is `compileFor`'s rule, applied to a
+ * position in the DOM rather than an index in a list. ADR-0018, ADR-0104.
+ */
+class FragmentDirective extends Directive {
+  /** @type {Scope | undefined} */
+  #scope;
+
+  /** The declaring `scope.version` this instance's locals were refreshed against. */
+  #parentVersion = -1;
+
+  /**
+   * @param {TemplateChunks} chunks
+   * @param {Scope} parent
+   * @param {readonly string[]} params
+   * @param {readonly unknown[]} args
+   * @returns {unknown}
+   */
+  render(chunks, parent, params, args) {
+    let scope = this.#scope;
+    if (scope === undefined) {
+      scope = { host: parent.host, locals: childLocals(parent.locals), version: 0 };
+      this.#scope = scope;
+    }
+
+    let changed = this.#parentVersion !== parent.version;
+    for (const [index, param] of params.entries()) {
+      const value = args[index];
+      // `hasOwn`, not `in`: locals are prototype-chained, and a parameter named
+      // after an enclosing `*for` variable must shadow it rather than compare
+      // equal to it and be left unwritten.
+      if (Object.hasOwn(scope.locals, param) && scope.locals[param] === value) continue;
+      scope.locals[param] = value;
+      changed = true;
+    }
+
+    if (changed) {
+      this.#parentVersion = parent.version;
+      scope.version += 1;
+    }
+    return renderChunks(chunks, scope);
+  }
+}
+
+const fragmentInstance = directive(FragmentDirective);
+
 /* ── Compiler ──────────────────────────────────────────────────────────── */
 
 /**
@@ -697,14 +757,152 @@ function compileElement(element, context, chunks, consumed) {
     );
   }
 
+  // Reaching here means this `<template>` was not taken by a parent element, so it
+  // is either missing its head or written where no element can own it. Both are
+  // silent failures otherwise: the parser parks a template's children in `content`,
+  // where nothing would ever compile them.
+  if (tag === 'template') {
+    throw new Error(
+      element.hasAttribute('*fragment')
+        ? `<template *fragment> in ${context.where} has no element to belong to. ` +
+          `A fragment is a property of the element it is written inside.`
+        : `<template> in ${context.where} has no *fragment. A template element renders ` +
+          `nothing on its own; declare it as <template *fragment="name(row)"> inside ` +
+          `the element that renders it.`,
+    );
+  }
+
+  if (element.hasAttribute('*fragment')) {
+    throw new Error(
+      `<${tag}> in ${context.where} has *fragment. Only <template> may declare one, ` +
+        `so unrendered markup is never mistaken for markup that renders.`,
+    );
+  }
+
+  // Before the attributes, because a fragment compiles to a property binding on
+  // this element and every hole must be emitted inside the start tag.
+  const fragments = takeFragments(element, context);
+
   chunks.text(`<${tag}`);
   compileAttributes(element, context, chunks);
+  for (const fragment of fragments) {
+    chunks.text(` .${fragment.property}=`);
+    chunks.hole(fragment.evaluate);
+  }
   chunks.text('>');
 
   if (!VOID_ELEMENTS.has(tag)) {
     compileNodes([...element.childNodes], context, chunks);
     chunks.text(`</${tag}>`);
   }
+}
+
+/**
+ * Take this element's `<template *fragment>` children and compile each into the
+ * property binding that hands it to the element.
+ *
+ * Removed from the tree, so the fragment leaves no markup behind: `<template>` is
+ * where the body is *written*, and the element it sits in decides where the body
+ * is rendered. A stray `<template>` deeper in the tree is refused by
+ * `compileElement`, because its children are parked in `content` where nothing
+ * would ever compile them.
+ *
+ * @param {Element} element
+ * @param {CompileContext} context
+ * @returns {{ property: string, evaluate: Evaluator }[]}
+ */
+function takeFragments(element, context) {
+  /** @type {{ property: string, evaluate: Evaluator }[]} */
+  const fragments = [];
+  /** @type {Set<string>} */
+  const seen = new Set();
+
+  for (const child of [...element.children]) {
+    const source = child.getAttribute('*fragment');
+    if (source === null) continue;
+    if (child.localName !== 'template') continue;
+
+    const head = parseFragmentHead(source);
+    if (head === undefined) {
+      throw new Error(
+        `Cannot read *fragment="${source}" in ${context.where}. ` +
+          `Expected *fragment="name(local, local)" with distinct local names.`,
+      );
+    }
+
+    const { property, params } = head;
+
+    // A fragment is a function, and every name these two refuse wants a string:
+    // an event property, a forbidden member, or a sink that writes markup or a
+    // URL. None of them can hold a fragment, so the name is wrong rather than the
+    // value dangerous.
+    if (
+      refusedProperty(property) !== undefined ||
+      securityContextFor(element.localName, property) !== undefined
+    ) {
+      throw new Error(
+        `<${element.localName}> in ${context.where} declares *fragment ${property}. ` +
+          `That property is a text sink, not a place a fragment can go.`,
+      );
+    }
+
+    if (seen.has(property)) {
+      throw new Error(
+        `<${element.localName}> in ${context.where} declares *fragment ${property} twice.`,
+      );
+    }
+    seen.add(property);
+
+    child.remove();
+    fragments.push({
+      property,
+      // Only the names. `of` in a parameter says where the checker should get its
+      // type; at runtime a local is whatever the consumer passed for it.
+      evaluate: compileFragment(
+        /** @type {HTMLTemplateElement} */ (child),
+        property,
+        params.map((param) => param.name),
+        context,
+      ),
+    });
+  }
+
+  return fragments;
+}
+
+/**
+ * Compile a fragment body, and produce the evaluator that binds it to a host.
+ *
+ * The fragment function is cached per declaring scope, so the property receives
+ * the same value on every render of the declaring component. A fresh function each
+ * time would commit a new property on every render, and an element that reacts to
+ * the property being set — `<ui-table-column>` tells its table — would react to
+ * every unrelated render of the page it sits in.
+ *
+ * @param {HTMLTemplateElement} element
+ * @param {string} property
+ * @param {readonly string[]} params
+ * @param {CompileContext} context
+ * @returns {Evaluator}
+ */
+function compileFragment(element, property, params, context) {
+  const chunks = new Chunks();
+  // `content`, not `childNodes`: the HTML parser puts a template's children in its
+  // content fragment, and the element itself always has none.
+  compileNodes([...element.content.childNodes], { ...context, where: `${context.where} *fragment ${property}` }, chunks);
+  const body = chunks.finish();
+
+  /** @type {WeakMap<Scope, TemplateFragment>} */
+  const byScope = new WeakMap();
+
+  return (scope) => {
+    let fragment = byScope.get(scope);
+    if (fragment === undefined) {
+      fragment = (...args) => fragmentInstance(body, scope, params, args);
+      byScope.set(scope, fragment);
+    }
+    return fragment;
+  };
 }
 
 /**

@@ -76,9 +76,17 @@
         width="150"
         header-class="text-end"
         cell-class="text-end"
-        [.renderer]="renderStock"
         [.sort-value]="sortStock"
-      ></ui-table-column>
+      >
+        <template *fragment="cell(product of rows)">
+          <span class="flex items-center justify-end gap-2 tabular-nums">
+            <span>{{ num(product.stock) }}</span>
+            <app-badge *if="product.stock < product.reorderPoint" tone="bad">
+              {{ t('products.low') }}
+            </app-badge>
+          </span>
+        </template>
+      </ui-table-column>
       <ui-table-column
         key="reorderPoint"
         label="{{ t('products.reorderPoint') }}"

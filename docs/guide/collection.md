@@ -61,7 +61,11 @@ Columns stay at the use site; data stays application-owned:
   (query-change)="loadQuery($event)"
 >
   <ui-table-column key="supplier.name" label="Supplier" sortable></ui-table-column>
-  <ui-table-column key="value" label="Value" [.renderer]="renderValue"></ui-table-column>
+  <ui-table-column key="value" label="Value">
+    <template *fragment="cell(order of rows)">
+      <a [href]="'/orders/' + order.id">{{ cur(order.value, 'EUR') }}</a>
+    </template>
+  </ui-table-column>
 </ui-table>
 ```
 
@@ -79,8 +83,14 @@ Every page, page-size, sort or external filter change emits one bubbling `query-
 `page-change`, `sort-change` and `filter-change` emit the same detail for consumers
 needing scoped signals. Filter and sort changes reset the page to one. `infinite` emits
 `load-more` from its intersection sentinel or its accessible button. Pages are one-based,
-offsets zero-based. Optional `renderer(row, index, value)` may return text, a DOM node or
-a Lit template result.
+offsets zero-based.
+
+A rich cell is written one of two ways. A `<template *fragment="cell(row of rows)">` inside
+the column is markup, checked in the page that wrote it; `of rows` is what gives `row` a
+type, because the table takes rows of any shape and can only offer `unknown` on its own.
+See [templates](templates.md#fragments). `renderer(row, index, value)` is the computed
+alternative and may return text, a DOM node or a Lit template result. A column carrying
+both renders the fragment.
 
 Column customisation is opt-in and declarative: `hideable` offers a column in the
 visibility chooser, which also exposes logical start/end pinning and reorder controls;

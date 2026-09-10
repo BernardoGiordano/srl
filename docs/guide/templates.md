@@ -25,6 +25,7 @@
 | `(click)="expr"` | event listener, with `$event` in scope |
 | `*if` / `*else` | conditional; `*else` goes on the next element |
 | `*for="u of users; key: u.id; index as i"` | repetition, keyed |
+| `<template *fragment="cell(row of rows)">` | markup another element renders, with locals |
 | `&expr` | resolve without unwrapping a signal |
 
 Each compiled binding tracks its own signal dependencies and updates its own Lit part.
@@ -132,6 +133,45 @@ Three details worth knowing before writing a dialect change:
   once an event fires — `row[column] = value` — is refused by the evaluator against the
   same list. Templates are authored code rather than user input, so this is not a
   sandbox: it exists so a template can never be the interesting half of a gadget chain.
+
+## Fragments
+
+A `*fragment` is markup one component writes and another renders, as many times as it
+needs. The `<template>` carrying it renders nothing where it is written; it compiles to a
+function assigned to the named property of the element it sits in, and calling that
+function is what puts the markup somewhere.
+
+```html
+<ui-table-column key="name" label="Name">
+  <template *fragment="cell(person of rows)">
+    <a [href]="'/people/' + person.id">{{ person.name }}</a>
+  </template>
+</ui-table-column>
+```
+
+The head reads as a signature because that is what a fragment is. `cell` is the property —
+kebab-cased and converted like any property binding — and the parameters are the locals the
+body sees, filled positionally by whoever calls it. `<ui-table>` calls its column's `cell`
+with `(row, index, value)`, the same arguments a `renderer` gets.
+
+Three things follow from where the markup was written rather than where it renders:
+
+- **The body reads the declaring component's members.** `{{ t('...') }}`, a method, a
+  signal, an enclosing `*for`'s variables — all of them resolve in the page, because that
+  is where the fragment was written. A parameter shadows an enclosing local of the same
+  name.
+- **The body is checked in the declaring template**, against the property's declared
+  signature. A fragment named after a property the element does not have, or one whose
+  body names a field a row does not have, is a build error in the page's own `.html`.
+- **`of` names where a local's type comes from**, and means what it means in `*for` — one
+  element of that iterable. A table works for rows of any shape, so `ui-table-column` can
+  only declare `unknown`; the page is where the answer is known, and says it once. Without
+  the clause the local keeps whatever the property declares.
+
+The runtime ignores `of` entirely: a local holds whatever the consumer passed. Each
+rendered position keeps its own scope for as long as its DOM lives, so a fragment patches
+in place across renders rather than rebuilding, exactly as a `*for` row does
+([ADR-0104](../adr/0104-authored-markup-is-a-value-an-element-renders.md)).
 
 ## DOM security contexts and Trusted Types
 

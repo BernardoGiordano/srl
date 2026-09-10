@@ -21,10 +21,11 @@ import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
 /**
  * The staff directory.
  *
- * Client pagination over one request, like the customers screen, and a rendered name cell
- * that mounts a `ui-avatar` — the collection's own element, inside a table cell, built by
- * a renderer. That is the shape a "rich cell" takes here: a function returning a node,
- * not a template the table has to interpret.
+ * Client pagination over one request, like the customers screen, and a name cell written
+ * as markup: a `<template *fragment="cell(person of rows)">` inside the column, mounting
+ * the collection's own `ui-avatar`. The cell is checked like the rest of the page, and
+ * `person` has the type its `of` clause gives it, so a misspelled field is a build error
+ * rather than a blank column.
  *
  * The `daterange` rule filters the hire date. Its presets are the interesting part: the
  * stored interval is half-open, so "the last two years" ends *tomorrow*, and a preset
@@ -115,43 +116,6 @@ export class EmployeesPage extends SignalElement {
     if (next.length === 0 && this.filters.value.length === 0) return;
     this.filters.value = next;
   }
-
-  /**
-   * An avatar, the name as a link, and the email under it. Three nodes, so the renderer
-   * builds them rather than returning a string.
-   *
-   * @param {unknown} row
-   */
-  renderName = (row) => {
-    const employee = /** @type {Employee} */ (row);
-
-    const wrapper = document.createElement('span');
-    wrapper.className = 'flex min-w-0 items-center gap-2.5';
-
-    const avatar = document.createElement('ui-avatar');
-    avatar.setAttribute('name', employee.name);
-    avatar.setAttribute(
-      'fallback-class',
-      'flex size-8 shrink-0 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-brand-contrast',
-    );
-    wrapper.append(avatar);
-
-    const text = document.createElement('span');
-    text.className = 'min-w-0';
-
-    const link = document.createElement('a');
-    link.href = `/people/employees/${employee.id}`;
-    link.className = 'block truncate font-medium text-brand hover:text-accent-strong';
-    link.textContent = employee.name;
-
-    const email = document.createElement('span');
-    email.className = 'block truncate text-[11.5px] text-muted';
-    email.textContent = employee.email;
-
-    text.append(link, email);
-    wrapper.append(text);
-    return wrapper;
-  };
 
   /** The plain name, so sorting and free-text search do not see the markup. */
   /** @param {unknown} row */

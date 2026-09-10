@@ -1,4 +1,6 @@
+import { render } from 'lit';
 import { assert, mount, present, settled, unmountAll } from '../../../lib/test/harness.js';
+import { compileTemplate } from '@core/template/template.js';
 import { configureClock, createManualClock } from '@core/foundation/clock.js';
 import { configurePreferences, removePreference } from '@core/preferences/persistence.js';
 import { useStandardText } from '../standard-text.js';
@@ -412,6 +414,81 @@ describe('ui-table', () => {
     table.filters = [{ key: 'name', value: 'b', match: 'equals' }];
     await settled(table);
     assert.sameArray(cellValues(table), ['b'], 'a new filters array is a new identity');
+  });
+
+  /**
+   * The whole authoring path, as a page walks it: the compiler turns a
+   * `<template *fragment>` into a value, lit assigns it to the column, the table
+   * captures the column as projected content and moves it into `<x-content>`, and
+   * the cell renders from a scope that belongs to the page. Every earlier test
+   * here sets `cell` by hand, which would pass even if the column never survived
+   * projection with its property intact. ADR-0104.
+   */
+  it('renders a cell fragment a consumer template declared', async () => {
+    const page = compileTemplate(
+      `<ui-table page-size="5" [.rows]="rows">
+         <ui-table-column key="name" label="Name">
+           <template *fragment="cell(person of rows)">
+             <b>{{ prefix }}{{ person.name }}</b>
+           </template>
+         </ui-table-column>
+       </ui-table>`,
+      'page',
+    );
+    const model = { rows: [{ id: 1, name: 'Ada' }, { id: 2, name: 'Grace' }], prefix: '#' };
+
+    const container = mount('<div></div>');
+    render(page(model), container);
+    const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (
+      present(container.querySelector('ui-table'))
+    );
+    await settled(table);
+
+    assert.sameArray(cellValues(table), ['#Ada', '#Grace']);
+    assert.equal(
+      table.querySelector('template'),
+      null,
+      'the declaration must leave no markup behind',
+    );
+
+    // The fragment reads the page, so a page render reaches the cells.
+    model.prefix = '>';
+    render(page(model), container);
+    await settled(table);
+    assert.sameArray(cellValues(table), ['>Ada', '>Grace']);
+  });
+
+  /**
+   * A column offers two ways to write a rich cell, and the table has to choose
+   * between them the same way every time. `cell` is authored markup a page
+   * declares in its own template — `template.js` compiles it and hands the column
+   * a function — and `renderer` is the computed escape hatch. The fragment is more
+   * specific, so it wins, and it is reached even when the row holds nothing at the
+   * column's key.
+   */
+  it('prefers a column fragment over its renderer, empty value or not', async () => {
+    const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(`
+      <ui-table page-size="5">
+        <ui-table-column key="name" label="Name"></ui-table-column>
+        <ui-table-column key="missing" label="Missing"></ui-table-column>
+      </ui-table>
+    `));
+    table.rows = [{ id: 1, name: 'Ada' }];
+    await settled(table);
+
+    const [name, missing] = table.columns;
+    present(name).renderer = (_row, _index, value) => `computed ${String(value)}`;
+    await settled(table);
+    assert.sameArray(cellValues(table), ['computed Ada', '']);
+
+    present(name).cell = (_row, index, value) => `authored ${String(value)} ${String(index)}`;
+    present(missing).cell = () => 'always';
+    await settled(table);
+    assert.sameArray(cellValues(table), ['authored Ada 0', 'always']);
+
+    present(name).cell = undefined;
+    await settled(table);
+    assert.sameArray(cellValues(table), ['computed Ada', 'always']);
   });
 
   /**

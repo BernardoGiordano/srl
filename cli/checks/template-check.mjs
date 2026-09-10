@@ -30,6 +30,7 @@ import {
   FOR_INDEX_CLAUSE,
   FOR_KEY_CLAUSE,
   INTERPOLATION,
+  parseFragmentHead,
   refusedProperty,
   securityContextFor,
   strictOperator,
@@ -367,6 +368,7 @@ class ShimBuilder {
     output.write('type __Unwrap<T> = T extends import("@core/foundation/types.js").ReadonlySignal<infer V> ? V : T;\n');
     output.write('declare function __unwrap<T>(value: T): __Unwrap<T>;\n');
     output.write('declare function __iter<T>(value: Iterable<T> | null | undefined): Iterable<T>;\n');
+    output.write('type __Item<T> = __Unwrap<T> extends Iterable<infer I> ? I : never;\n');
     output.write('declare function __assign<T>(target: T, value: __Unwrap<T>): __Unwrap<T>;\n');
     output.write('declare function __boolean(value: boolean): void;\n');
     output.write('declare function __htmlSink(value: string | import("@core/template/types.js").TrustedHtml | null | undefined): void;\n');
@@ -517,6 +519,20 @@ class ShimBuilder {
 
   /** @param {ElementNode} node @param {Map<string, string>} scope @param {number} indent @param {Set<string>} skip */
   elementBody(node, scope, indent, skip) {
+    // A fragment is taken by the element it is written inside, so a `<template>`
+    // that arrives here has no owner. Its children live in a scope nothing
+    // supplies, which is why they are not checked in this one.
+    if (node.tag === 'template') {
+      this.problem(
+        node.at,
+        attribute(node, '*fragment') === undefined
+          ? `${this.component.template}: <template> has no *fragment. Declare it as ` +
+            '<template *fragment="name(row)"> inside the element that renders it.'
+          : `${this.component.template}: <template *fragment> has no element to belong to. ` +
+            'A fragment is a property of the element it is written inside.',
+      );
+      return;
+    }
     this.checkTag(node);
     for (const attr of node.attributes) {
       if (skip.has(attr.name)) continue;
@@ -596,7 +612,154 @@ class ShimBuilder {
       this.checkAttribute(node, attr, attr.name);
       this.interpolations(attr.value, attr.at, scope, indent);
     }
-    this.nodes(node.children, scope, indent);
+    this.nodes(this.fragments(node, scope, indent), scope, indent);
+  }
+
+  /**
+   * Emit this element's `<template *fragment>` children, and return the children
+   * that are ordinary markup.
+   *
+   * A fragment becomes an assignment of an arrow function to the named property,
+   * which is how the body gets checked against the element that will call it: the
+   * property's declared signature contextually types every parameter, so a
+   * consumer that changes what it passes breaks the pages that wrote a fragment
+   * for it. A parameter written `row of people` gets a type of its own instead,
+   * because a component generic over its rows — a table — can only declare
+   * `unknown`, and the page is the one that knows better. ADR-0104.
+   *
+   * @param {ElementNode} node
+   * @param {Map<string, string>} scope
+   * @param {number} indent
+   * @returns {TemplateNode[]}
+   */
+  fragments(node, scope, indent) {
+    /** @type {TemplateNode[]} */
+    const rest = [];
+    /** @type {Set<string>} */
+    const seen = new Set();
+
+    for (const child of node.children) {
+      if (child.kind !== 'element') {
+        rest.push(child);
+        continue;
+      }
+      const declaration = attribute(child, '*fragment');
+      if (declaration === undefined) {
+        if (child.tag === 'template') {
+          this.problem(
+            child.at,
+            `${this.component.template}: <template> has no *fragment. Declare it as ` +
+              '<template *fragment="name(row)"> inside the element that renders it.',
+          );
+          continue;
+        }
+        rest.push(child);
+        continue;
+      }
+      if (child.tag !== 'template') {
+        this.problem(
+          declaration.at,
+          `${this.component.template}: <${child.tag}> has *fragment. Only <template> may declare one.`,
+        );
+        continue;
+      }
+
+      const head = parseFragmentHead(declaration.value);
+      if (head === undefined) {
+        this.problem(
+          declaration.at,
+          `${this.component.template}: invalid *fragment expression ${JSON.stringify(declaration.value)}`,
+        );
+        continue;
+      }
+
+      const { property } = head;
+      if (
+        refusedProperty(property) !== undefined ||
+        securityContextFor(node.tag, property) !== undefined
+      ) {
+        this.problem(
+          declaration.at,
+          `${this.component.template}: *fragment ${property} names a text sink, not a place a fragment can go.`,
+        );
+        continue;
+      }
+      if (this.elements.get(node.tag)?.state?.includes(property) === true) {
+        this.problem(
+          declaration.at,
+          `${this.component.template}: <${node.tag}> declares ${property} as internal reactive ` +
+            'state, not a public input.',
+        );
+        continue;
+      }
+      if (seen.has(property)) {
+        this.problem(declaration.at, `${this.component.template}: duplicate *fragment ${property}`);
+        continue;
+      }
+      seen.add(property);
+
+      this.fragment(node, child, head, declaration, scope, indent);
+    }
+
+    return rest;
+  }
+
+  /**
+   * @param {ElementNode} node The element the fragment is assigned to.
+   * @param {ElementNode} declared The `<template>` carrying the body.
+   * @param {{ property: string, params: { name: string, iterable: string | undefined }[] }} head
+   * @param {{ source: string, at: number, value: string }} attr The `*fragment` attribute, for offsets.
+   * @param {Map<string, string>} scope
+   * @param {number} indent
+   */
+  fragment(node, declared, head, attr, scope, indent) {
+    const params = head.params.map((param) => ({ ...param, id: this.id('local') }));
+
+    // Each annotated parameter's source is evaluated in the *enclosing* scope, so
+    // it is read outside the arrow. `typeof` needs a name rather than an
+    // expression, which is what the binding is for.
+    /** @type {Map<string, string>} */
+    const sources = new Map();
+    for (const param of params) {
+      if (param.iterable === undefined) continue;
+      const sourceId = this.id('source');
+      this.line(indent, `const ${sourceId} = `);
+      this.expression(
+        { source: param.iterable, at: attr.at + attr.value.indexOf(param.iterable) },
+        scope,
+        false,
+      );
+      this.file.write(';\n');
+      sources.set(param.name, sourceId);
+    }
+
+    // Mapped, unlike a plain property binding: a fragment names its property in
+    // the directive head rather than in brackets, so an unknown name has an offset
+    // worth reporting and `<template>` is the wrong place to point at.
+    const target = `__element[${JSON.stringify(head.property)}]`;
+    this.line(indent, '{ const __element = null as unknown as ');
+    this.file.write(this.elementType(node.tag));
+    this.file.write('; void ');
+    this.file.mapped(target, this.component.template, attr.at);
+    this.file.write('; ');
+    this.file.mapped(target, this.component.template, attr.at);
+    this.file.write(' = (');
+    this.file.write(params.map((param) => `${param.id}_arg`).join(', '));
+    this.file.write(') => {\n');
+
+    const child = new Map(scope);
+    for (const param of params) {
+      const sourceId = sources.get(param.name);
+      if (sourceId === undefined) {
+        child.set(param.name, `${param.id}_arg`);
+        continue;
+      }
+      this.line(indent + 1, `const ${param.id} = null as unknown as __Item<typeof ${sourceId}>;\n`);
+      child.set(param.name, param.id);
+    }
+
+    this.nodes(declared.children, child, indent + 1);
+    this.line(indent, '}; }\n');
   }
 
   /**
@@ -1078,7 +1241,9 @@ let semanticShim = 0;
  *   className: string,
  *   template: string,
  *   expression: string,
- *   loops?: Array<{ alias: string, iterable: string, indexAlias?: string }>,
+ *   loops?: Array<{ alias: string, iterable: string, indexAlias?: string, at?: number }>,
+ *   fragments?: Array<{ tag: string, property: string, at?: number,
+ *     params: Array<{ name: string, iterable?: string | undefined }> }>,
  *   event?: { tag: string, name: string },
  *   elements?: Map<string, ElementType>,
  *   globals?: Map<string, TemplateGlobal>,
@@ -1104,31 +1269,74 @@ export function templateExpressionMembers(input) {
   /** @type {string[]} */
   const body = [];
 
-  for (const loop of input.loops ?? []) {
-    const iterable = builder.emit(
-      parseExpression(loop.iterable, input.template),
-      scope,
-      true,
-      0,
-    );
-    const listId = builder.id('completion_list');
-    const itemId = builder.id('completion_item');
-    const indexId = builder.id('completion_index');
-    const firstId = builder.id('completion_first');
-    const lastId = builder.id('completion_last');
-    const countId = builder.id('completion_count');
-    body.push(`  const ${listId} = ${iterable};\n`);
-    body.push(`  const ${itemId} = null as unknown as __Item<typeof ${listId}>;\n`);
-    body.push(`  const ${indexId}: number = 0;\n`);
-    body.push(`  const ${firstId}: boolean = false;\n`);
-    body.push(`  const ${lastId}: boolean = false;\n`);
-    body.push(`  const ${countId}: number = 0;\n`);
-    scope.set(loop.alias, itemId);
-    scope.set('$index', indexId);
-    scope.set('$first', firstId);
-    scope.set('$last', lastId);
-    scope.set('$count', countId);
-    if (loop.indexAlias !== undefined) scope.set(loop.indexAlias, indexId);
+  // Loops and fragments both introduce locals, and either can sit inside the other,
+  // so they are emitted in source order. Emitting one kind and then the other would
+  // let the outer one shadow the inner.
+  const loops = input.loops ?? [];
+  const fragments = input.fragments ?? [];
+  const introduced = [
+    ...loops.map((loop) => ({ at: loop.at ?? 0, loop, fragment: undefined })),
+    ...fragments.map((fragment) => ({ at: fragment.at ?? 0, loop: undefined, fragment })),
+  ].sort((left, right) => left.at - right.at);
+
+  for (const { loop, fragment } of introduced) {
+    if (loop !== undefined) {
+      const iterable = builder.emit(
+        parseExpression(loop.iterable, input.template),
+        scope,
+        true,
+        0,
+      );
+      const listId = builder.id('completion_list');
+      const itemId = builder.id('completion_item');
+      const indexId = builder.id('completion_index');
+      const firstId = builder.id('completion_first');
+      const lastId = builder.id('completion_last');
+      const countId = builder.id('completion_count');
+      body.push(`  const ${listId} = ${iterable};\n`);
+      body.push(`  const ${itemId} = null as unknown as __Item<typeof ${listId}>;\n`);
+      body.push(`  const ${indexId}: number = 0;\n`);
+      body.push(`  const ${firstId}: boolean = false;\n`);
+      body.push(`  const ${lastId}: boolean = false;\n`);
+      body.push(`  const ${countId}: number = 0;\n`);
+      scope.set(loop.alias, itemId);
+      scope.set('$index', indexId);
+      scope.set('$first', firstId);
+      scope.set('$last', lastId);
+      scope.set('$count', countId);
+      if (loop.indexAlias !== undefined) scope.set(loop.indexAlias, indexId);
+      continue;
+    }
+    if (fragment === undefined) continue;
+
+    // The property's declared signature is what types an unannotated local, which
+    // is the rule the checker applies too — it gets there by assigning an arrow to
+    // the property and letting contextual typing do it, because it is also
+    // verifying the assignment. Here only the types are wanted.
+    const holderId = builder.id('completion_holder');
+    const fragmentId = builder.id('completion_fragment');
+    body.push(`  const ${holderId} = null as unknown as ${builder.elementType(fragment.tag)};\n`);
+    body.push(`  const ${fragmentId} = ${holderId}[${JSON.stringify(fragment.property)}];\n`);
+
+    for (const [index, param] of fragment.params.entries()) {
+      const localId = builder.id('completion_local');
+      if (param.iterable === undefined) {
+        body.push(
+          `  const ${localId} = null as unknown as __Param<typeof ${fragmentId}, ${String(index)}>;\n`,
+        );
+      } else {
+        const listId = builder.id('completion_list');
+        const iterable = builder.emit(
+          parseExpression(param.iterable, input.template),
+          scope,
+          true,
+          0,
+        );
+        body.push(`  const ${listId} = ${iterable};\n`);
+        body.push(`  const ${localId} = null as unknown as __Item<typeof ${listId}>;\n`);
+      }
+      scope.set(param.name, localId);
+    }
   }
 
   if (input.event !== undefined) {
@@ -1152,6 +1360,7 @@ export function templateExpressionMembers(input) {
   output.write(`type __Host = InstanceType<typeof import(${JSON.stringify(componentSpecifier)})[${JSON.stringify(component.className)}]>;\n`);
   output.write('type __Unwrap<T> = T extends import("@core/foundation/types.js").ReadonlySignal<infer V> ? V : T;\n');
   output.write('type __Item<T> = __Unwrap<T> extends Iterable<infer I> ? I : never;\n');
+  output.write('type __Param<T, N extends number> = NonNullable<T> extends (...args: infer A) => unknown ? A[N] : unknown;\n');
   output.write('declare function __unwrap<T>(value: T): __Unwrap<T>;\n');
   output.write('type __Event<N extends string> = N extends keyof HTMLElementEventMap ? HTMLElementEventMap[N] : Event;\n');
   output.write('type __TemplateEvent<E extends EventTarget, T extends Event> = T & { readonly target: E; readonly currentTarget: E };\n');
