@@ -19,6 +19,16 @@
  * The codes are the collection's standard text keys under `ui.field.*`, so an
  * application that adds none of its own still gets sentences.
  *
+ * CONTAINER RULES
+ *
+ * The last four take a group's value or an array's rows rather than one field's
+ * value, and they are the same type: a validator over whatever the node holds.
+ * Their code belongs to the container, which is what `ui-form-error` displays.
+ *
+ * What is deliberately not here is anything asynchronous. Every such rule needs a
+ * service, an endpoint and a payload this library knows nothing about, so an
+ * application writes the function and hands it to `field(…, { async: […] })`.
+ *
  * @import { Validator } from '@core/forms/types.js'
  */
 
@@ -150,6 +160,98 @@ export function notBefore(earliest) {
     if (isEmpty(value)) return '';
     if (!/^\d{4}-\d{2}-\d{2}$/u.test(value) || Number.isNaN(Date.parse(value))) return 'malformed';
     return value >= (earliest ?? today()) ? '' : 'past';
+  };
+}
+
+/**
+ * Two of a group's members in order, as `YYYY-MM-DD` days or as any two strings
+ * that sort the way they read. The rule a date range is written with.
+ *
+ * Equal passes: a period that starts and ends on the same day is one day long,
+ * not an error. Either side empty passes too, because emptiness is `required`'s
+ * question and a half-filled range is not yet out of order.
+ *
+ * @param {string} earlier Member name.
+ * @param {string} later Member name.
+ * @param {string} [code]
+ * @returns {Validator<Readonly<Record<string, unknown>>>}
+ */
+export function ordered(earlier, later, code = 'outOfOrder') {
+  return (value) => {
+    const from = value[earlier];
+    const to = value[later];
+    if (typeof from !== 'string' || typeof to !== 'string') return '';
+    if (isEmpty(from) || isEmpty(to)) return '';
+    return from <= to ? '' : code;
+  };
+}
+
+/**
+ * Two of a group's members holding the same value. A confirmed password, a
+ * re-typed address.
+ *
+ * Either side empty passes, so the field that must be filled in says `required`
+ * rather than the group saying they differ.
+ *
+ * @param {string} source Member name.
+ * @param {string} copy Member name.
+ * @param {string} [code]
+ * @returns {Validator<Readonly<Record<string, unknown>>>}
+ */
+export function sameAs(source, copy, code = 'mismatched') {
+  return (value) => {
+    const left = value[source];
+    const right = value[copy];
+    if (isEmpty(left) || isEmpty(right)) return '';
+    return Object.is(left, right) ? '' : code;
+  };
+}
+
+/**
+ * At least this many rows. `minRows(1)` is the one nearly every field array has.
+ *
+ * @param {number} count
+ * @returns {Validator<readonly unknown[]>}
+ */
+export function minRows(count) {
+  return (rows) => (rows.length >= count ? '' : 'tooFewRows');
+}
+
+/**
+ * At most this many rows.
+ *
+ * @param {number} count
+ * @returns {Validator<readonly unknown[]>}
+ */
+export function maxRows(count) {
+  return (rows) => (rows.length <= count ? '' : 'tooManyRows');
+}
+
+/**
+ * No two rows share this member's value.
+ *
+ * Empty values are ignored: two rows the user has just added are not duplicates
+ * of each other, and the field that must be filled in says so itself.
+ *
+ * The answer belongs to the array, so it names no row. A message under *the* row
+ * that repeats is `applyErrors({ 'contacts.1.email': 'duplicated' })` — the same
+ * address a 422 carries, and it clears when that control is edited.
+ *
+ * @param {string} name Member name within a row.
+ * @param {string} [code]
+ * @returns {Validator<readonly Readonly<Record<string, unknown>>[]>}
+ */
+export function uniqueBy(name, code = 'duplicated') {
+  return (rows) => {
+    /** @type {Set<unknown>} */
+    const seen = new Set();
+    for (const row of rows) {
+      const value = row[name];
+      if (isEmpty(value)) continue;
+      if (seen.has(value)) return code;
+      seen.add(value);
+    }
+    return '';
   };
 }
 

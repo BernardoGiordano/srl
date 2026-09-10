@@ -1,6 +1,8 @@
 import { computed, signal } from '@core/foundation/reactive.js';
 
-/** @import { FormNode, FormRow, PartialValueOf, ValueOf } from '@core/forms/types.js' */
+import { whenSettled } from '@core/forms/settled.js';
+
+/** @import { FormNode, FormRow, PartialValueOf, Validator, ValueOf } from '@core/forms/types.js' */
 /** @import { ReadonlySignal, Signal } from '@core/foundation/types.js' */
 
 /**
@@ -28,6 +30,20 @@ import { computed, signal } from '@core/foundation/reactive.js';
  * The rows answer for their own values; only the array can answer whether the
  * *shape* changed. The baseline is the list of row keys rather than the row count,
  * because remove-one-add-one is the case a count gets wrong. ADR-0009.
+ *
+ * A RULE OVER THE ROWS
+ *
+ * The third argument is a list of validators over the whole list of row values:
+ * how many there are, and whether two of them collide. `minRows(1)` is the common
+ * one. The code belongs to the array rather than to a row, so it is shown by a
+ * `ui-form-error` bound to the array. ADR-0102.
+ *
+ * A code that belongs to *one* row — "this contact repeats the one above" — is
+ * `applyErrors({ 'contacts.1.email': 'duplicated' })` instead, which is the same
+ * address a 422 carries and clears when that control is edited.
+ *
+ * An empty array counts as untouched, which is what keeps "at least one contact"
+ * off a form nobody has filled in yet until they try to submit it.
  *
  * A ROW ADDED AFTER A SUBMIT STARTS QUIET
  *
@@ -75,6 +91,30 @@ export class FormArray {
   /** @type {ReadonlySignal<string | null>} */
   invalidPath;
 
+  /**
+   * Every row has been visited, and there is at least one.
+   *
+   * @type {ReadonlySignal<boolean>}
+   */
+  touched;
+
+  /** @type {ReadonlySignal<boolean>} */
+  pending;
+
+  /**
+   * This array's own code, ignoring its rows. Empty while it is disabled.
+   *
+   * @type {ReadonlySignal<string>}
+   */
+  error;
+
+  /**
+   * The same, after a submit or once every row has been visited.
+   *
+   * @type {ReadonlySignal<string>}
+   */
+  visibleError;
+
   /** @type {() => C} */
   #create;
 
@@ -107,8 +147,10 @@ export class FormArray {
    * @param {readonly PartialValueOf<C>[]} [initial] The rows to start with,
    *   already clean: a form that opens on two contacts is not a form with two
    *   unsaved changes in it.
+   * @param {readonly Validator<ValueOf<C>[]>[]} [validators] Rules over the whole
+   *   list. Run in order; the first failure wins.
    */
-  constructor(create, initial = []) {
+  constructor(create, initial = [], validators = []) {
     this.#create = create;
 
     // Before any row is built: `#build` hands this signal to each row, and a
@@ -118,7 +160,39 @@ export class FormArray {
 
     this.rows = computed(() => this.#entries.value.map((entry, index) => ({ ...entry, index })));
     this.length = computed(() => this.#entries.value.length);
-    this.valid = computed(() => this.#entries.value.every((entry) => entry.control.valid.value));
+
+    // A constant when there are no rules, for the reason `FormGroup` keeps one:
+    // a computed over `values` subscribes its readers to every keystroke in every
+    // row, and an array with no rule of its own has nothing to gain from that.
+    const own =
+      validators.length === 0
+        ? computed(() => '')
+        : computed(() => {
+            const values = this.values;
+            for (const validate of validators) {
+              const code = validate(values);
+              if (code !== '') return code;
+            }
+            return '';
+          });
+
+    this.valid = computed(
+      () =>
+        this.#entries.value.every((entry) => entry.control.valid.value) && (this.disabled.value || own.value === ''),
+    );
+    this.pending = computed(() => this.#entries.value.some((entry) => entry.control.pending.value));
+
+    this.touched = computed(
+      () =>
+        this.#entries.value.length > 0 &&
+        this.#entries.value.every((entry) => entry.control.disabled.value || entry.control.touched.value),
+    );
+
+    this.error = computed(() => (this.disabled.value ? '' : own.value));
+    this.visibleError = computed(() => {
+      if (this.error.value === '') return '';
+      return this.submitted.value || this.touched.value ? this.error.value : '';
+    });
 
     this.dirty = computed(() => {
       if (!sameKeys(this.#entries.value, this.#baselineKeys.value)) return true;
@@ -130,7 +204,8 @@ export class FormArray {
         const below = entry.control.invalidPath.value;
         if (below !== null) return prefix(index, below);
       }
-      return null;
+      // `''` is this array itself: a rule about the list, not about a row.
+      return this.disabled.value || own.value === '' ? null : '';
     });
 
     this.reset(initial);
@@ -267,6 +342,15 @@ export class FormArray {
     for (const entry of this.#entries.value) entry.control.clearServerErrors();
   }
 
+  /**
+   * Resolve once no asynchronous check in any row is waiting or in flight.
+   *
+   * @returns {Promise<void>}
+   */
+  whenSettled() {
+    return whenSettled(this.pending);
+  }
+
   /** @param {ReadonlySignal<boolean>} source */
   inheritDisabled(source) {
     this.#inheritedDisabled.value = source;
@@ -348,10 +432,11 @@ export class FormArray {
  * @template {FormNode} C
  * @param {() => C} create
  * @param {readonly PartialValueOf<C>[]} [initial]
+ * @param {readonly Validator<ValueOf<C>[]>[]} [validators]
  * @returns {FormArray<C>}
  */
-export function fieldArray(create, initial) {
-  return new FormArray(create, initial);
+export function fieldArray(create, initial, validators) {
+  return new FormArray(create, initial, validators);
 }
 
 /**

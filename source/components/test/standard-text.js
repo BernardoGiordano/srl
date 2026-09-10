@@ -59,6 +59,11 @@ export const STANDARD_TEXT_FIXTURE = {
   'ui.field.tooLarge': 'Too large',
   'ui.field.future': 'In the future',
   'ui.field.past': 'In the past',
+  'ui.field.outOfOrder': 'Out of order',
+  'ui.field.mismatched': 'Does not match',
+  'ui.field.tooFewRows': 'Too few rows',
+  'ui.field.tooManyRows': 'Too many rows',
+  'ui.field.duplicated': 'Repeated',
 };
 
 /**

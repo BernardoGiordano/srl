@@ -38,6 +38,9 @@ const COLLECTION_TAGS = [
   // Added with `@core/forms`: a field wrapper the collection did not have, because
   // the screen that needed one had not been written yet.
   'ui-field',
+  // Added with container validators: a group-level rule has a code and no
+  // control to sit under. ADR-0102.
+  'ui-form-error',
   'ui-menu',
   'ui-sidebar',
   'ui-sidebar-group',

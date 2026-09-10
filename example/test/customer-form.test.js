@@ -15,6 +15,10 @@ import { installFakeEventSource, installFakeServer, requested } from './fake-ser
  *
  *   - errors stay quiet until a field is left, and appear everywhere on submit;
  *   - a rule only the server can check comes back as a 422 and lands under its field;
+ *   - the same rule asked while the user types is a debounced check the field owns,
+ *     and a submit fired through one waits rather than sending an unchecked value;
+ *   - a rule about a set of rows is answered against the array and shown by an
+ *     element with no control under it;
  *   - editing that field clears the server's answer about the previous value;
  *   - leaving with unsaved work is refusable, and refusing it keeps the URL honest;
  *   - the entitlement is enforced by the route where there is one, and by the screen
@@ -237,6 +241,30 @@ function errorOfContact(path) {
   return paragraph === null ? '' : present(paragraph.textContent).trim();
 }
 
+/**
+ * The contacts array's own error, which belongs to no row and has no control.
+ *
+ * A rule about the set of rows has nothing to sit under, so what shows it is
+ * `<ui-form-error>` — a paragraph and a name, where a field would be a label, a
+ * control and an error.
+ */
+function errorOfContacts() {
+  const paragraph = form().querySelector('ui-form-error[name="contacts"] p[role="alert"]');
+  return paragraph === null ? '' : present(paragraph.textContent).trim();
+}
+
+/**
+ * Wait out an asynchronous check, which is 300 ms of debounce and then a request.
+ *
+ * `tick()` covers 80 ms, deliberately less than the quiet window. A check that
+ * fired inside it would be one keystroke away from firing on every keystroke, and
+ * that is the behaviour the debounce exists to prevent.
+ */
+async function checked() {
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  await tick();
+}
+
 /** @param {string} label */
 async function clickButton(label) {
   const button = present(
@@ -271,15 +299,31 @@ async function fillContact(index, values) {
   await typeContact(`contacts.${index}.role`, values.role);
 }
 
-/** Fill every required field with something acceptable. */
+/** Numbers the values `fillValid` writes, so no two calls save the same customer. */
+let filled = 0;
+
+/**
+ * Fill every required field with something acceptable, and settle what that starts.
+ *
+ * The address is checked against the server, so a form filled in this way is
+ * pending for the length of the debounce plus the request. A case that submitted
+ * before that would be testing the wait rather than its own subject — and one case
+ * below does exactly that, deliberately.
+ *
+ * The name and the address are numbered, because a case that saves leaves a
+ * customer behind and the next case's form would then be told its own suite's
+ * record is the clash. Every case that wants a clash asks for one by name.
+ */
 async function fillValid() {
-  await type('name', 'Caelum Energy');
-  await type('email', 'hello@caelum.example');
+  filled += 1;
+  await type('name', `Caelum Energy ${filled}`);
+  await type('email', `hello.${filled}@caelum.example`);
   await choose('segment', 'Enterprise');
   await choose('country', 'IT');
   await type('city', 'Torino');
   await type('owner', 'Ada Rossi');
   await type('since', '2025-03-01');
+  await checked();
 }
 
 describe('customer form', () => {
@@ -346,8 +390,76 @@ describe('customer form', () => {
     assert.equal(errorOf('email'), '', 'correcting the value clears the error');
   });
 
+  it('asks the server about an address while the user types', async () => {
+    // Uniqueness is a rule no client holds the data for, and the 422 at submit is
+    // still the authority. The check only moves the common case forward, so the
+    // user learns at the second field instead of after filling in nine.
+    await newCustomerForm();
+    await type('email', 'aurora.utilities@example.com');
+    await blur('email');
+
+    assert.equal(errorOf('email'), '', 'nothing is asked inside the quiet window');
+
+    await checked();
+    assert.ok(
+      requested.some((entry) => entry.startsWith('GET /api/customers/email-available')),
+      'the check must reach the server',
+    );
+    assert.equal(errorOf('email'), 'Another customer already uses this.');
+
+    await type('email', 'free@caelum.example');
+    assert.equal(errorOf('email'), '', 'a new value has no answer yet, so it shows none');
+    await checked();
+    assert.equal(errorOf('email'), '', 'and a free address stays clear');
+  });
+
+  it('does not ask about a malformed address, or about one the server sent', async () => {
+    await newCustomerForm();
+    const before = requested.length;
+
+    await type('email', 'not-an-address');
+    await blur('email');
+    await checked();
+    assert.equal(errorOf('email'), 'That is not a valid value.', 'the synchronous rule answers first');
+    assert.notOk(
+      requested.slice(before).some((entry) => entry.startsWith('GET /api/customers/email-available')),
+      'and a value that cannot be right is not worth a round trip',
+    );
+
+    // A saved customer's own address would otherwise be reported as taken by the
+    // record that holds it, which is the one form that must never say so.
+    const loaded = requested.length;
+    await goto('/sales/customers/CU-0001?edit=true');
+    await checked();
+    assert.equal(errorOf('email'), '', 'a loaded value is the server’s own and is not re-asked');
+    assert.notOk(
+      requested.slice(loaded).some((entry) => entry.startsWith('GET /api/customers/email-available')),
+      'nothing is asked for a value a load installed',
+    );
+  });
+
+  it('holds a submit until the check it started has settled', async () => {
+    await newCustomerForm();
+    await fillValid();
+    // Typed and submitted in the same breath, which is the case that sends an
+    // unchecked value if `pending` counts as valid. The submit is inside the quiet
+    // window, so nothing has even been asked yet when it fires.
+    await type('email', 'aurora.utilities@example.com');
+    const before = requested.length;
+
+    submit();
+    await checked();
+
+    assert.notOk(
+      requested.slice(before).some((entry) => entry.startsWith('POST /api/customers')),
+      'the submit waits for the answer rather than racing it',
+    );
+    assert.equal(errorOf('email'), 'Another customer already uses this.');
+    assert.equal(location.pathname, '/sales/customers/new', 'and the form keeps the user');
+  });
+
   it('creates a customer and returns to the list', async () => {
-    await goto('/sales/customers/new');
+    await newCustomerForm();
     await fillValid();
 
     submit();
@@ -436,26 +548,61 @@ describe('customer form', () => {
     assert.equal(survivor.value, 'Alan Verdi', 'the second row is now the first, values and all');
   });
 
-  it('puts a rule about the set of rows under the row that broke it', async () => {
-    // Two contacts may not share an address. It is a rule about the whole array, so
-    // no field validator can answer it and the form posts what it believes is valid;
-    // the server reports it against the second occurrence, by path.
+  it('answers a rule about the set of rows without naming one', async () => {
+    // Two contacts may not share an address. `uniqueBy('email')` on the array is
+    // that rule, and it belongs to the array because no row is more to blame than
+    // the other. So there is no control to put the message under, and the element
+    // that shows it is a paragraph with a name and nothing else.
     await newCustomerForm();
     await fillValid();
-    // A company no earlier case has created. `Caelum Energy` and its address are both
-    // taken by the time this runs, and a 422 naming either would be the first server
-    // error in declaration order — so the focus assertion below would fail for a reason
-    // that has nothing to do with rows.
     await type('name', 'Nimbus Freight');
     await type('email', 'hello@nimbus.example');
     await clickButton('Add contact');
     await clickButton('Add contact');
     await fillContact(0, { name: 'Grace Bianchi', email: 'same@caelum.example', role: 'billing' });
     await fillContact(1, { name: 'Alan Verdi', email: 'same@caelum.example', role: 'technical' });
+    const before = requested.length;
 
     submit();
-    await tick();
+    await checked();
 
+    assert.notOk(
+      requested.slice(before).some((entry) => entry.startsWith('POST /api/customers')),
+      'the client can answer this one, so nothing is sent',
+    );
+    assert.equal(errorOfContacts(), 'Another contact already uses this address.');
+    assert.equal(errorOfContact('contacts.0.email'), '', 'and neither row is blamed for it');
+    assert.equal(errorOfContact('contacts.1.email'), '');
+    assert.equal(
+      document.activeElement?.getAttribute('name'),
+      'contacts',
+      'a refused submit focuses the message, because there is no control to focus',
+    );
+
+    await typeContact('contacts.1.email', 'alan@caelum.example');
+    await tick();
+    assert.equal(errorOfContacts(), '', 'and the edit that resolves the clash clears it');
+  });
+
+  it('still takes the server’s answer about a row when the client’s rule misses it', async () => {
+    // `uniqueBy` compares the values as typed and the server compares them folded,
+    // so two addresses differing only in case pass here and clash there. The rule
+    // the client runs is a courtesy; the server is the authority, and its answer
+    // arrives by path and lands under the row that repeats.
+    await newCustomerForm();
+    await fillValid();
+    await type('name', 'Zephyr Rail');
+    await type('email', 'hello@zephyr.example');
+    await clickButton('Add contact');
+    await clickButton('Add contact');
+    await fillContact(0, { name: 'Grace Bianchi', email: 'shared@caelum.example', role: 'billing' });
+    await fillContact(1, { name: 'Alan Verdi', email: 'SHARED@caelum.example', role: 'technical' });
+
+    submit();
+    await checked();
+
+    assert.equal(errorOfContacts(), '', 'the client sees two different addresses');
+    assert.ok(requested.includes('POST /api/customers'), 'so it posts what it believes is valid');
     assert.equal(location.pathname, '/sales/customers/new', 'a refused save stays on the form');
     assert.equal(errorOfContact('contacts.0.email'), '', 'the first use of the address is not the problem');
     assert.equal(errorOfContact('contacts.1.email'), 'Another contact already uses this address.');

@@ -340,6 +340,20 @@ function answer(url, method, bodyText) {
     return json(created, 201);
   }
 
+  /*
+   * The uniqueness rule again, asked while the user types rather than at submit.
+   * Above the by-id branch, which would otherwise read `email-available` as an id.
+   */
+  if (path === '/api/customers/email-available' && method === 'GET') {
+    const denied = refuse('sales:read');
+    if (denied !== undefined) return denied;
+    const email = (url.searchParams.get('email') ?? '').trim().toLowerCase();
+    const exclude = url.searchParams.get('exclude') ?? '';
+    return json({
+      taken: email !== '' && CUSTOMERS.some((row) => row.id !== exclude && row.email.toLowerCase() === email),
+    });
+  }
+
   const customerId = /^\/api\/customers\/([\w-]+)$/u.exec(path)?.[1];
   if (customerId !== undefined) {
     const customer = CUSTOMERS.find((candidate) => candidate.id === customerId);

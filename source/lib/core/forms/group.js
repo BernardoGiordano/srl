@@ -1,6 +1,8 @@
 import { computed, signal } from '@core/foundation/reactive.js';
 
-/** @import { FormNode, PartialValueOf, ValueOf } from '@core/forms/types.js' */
+import { whenSettled } from '@core/forms/settled.js';
+
+/** @import { FormNode, PartialValueOf, Validator, ValueOf } from '@core/forms/types.js' */
 /** @import { ReadonlySignal, Signal } from '@core/foundation/types.js' */
 
 /**
@@ -23,6 +25,22 @@ import { computed, signal } from '@core/foundation/reactive.js';
  * addresses a control at any depth, and the same string is what a 422 carries,
  * what `applyErrors` resolves and what `<ui-field name>` is set to — so
  * `focusInvalidField` still finds the control with one `querySelector`.
+ *
+ * A RULE OVER THE WHOLE GROUP
+ *
+ * The second argument is a list of validators over this group's *value*, which is
+ * how "the end day may not precede the start day" is written. They answer with a
+ * code, like every other validator, and the code belongs to the group rather than
+ * to any one member — which is why it has an element of its own, `ui-form-error`,
+ * and why `invalidPath` can now answer `''`. ADR-0102.
+ *
+ * A code that belongs under one control is not this: put it there with
+ * `applyErrors`, the same call a 422 goes through, and it clears when that
+ * control is edited.
+ *
+ * They run last. A member that is itself invalid wins both `invalidPath` and the
+ * focus, because a specific control is a better place to send someone than a
+ * sentence about the form.
  *
  * @template {Record<string, FormNode>} F
  * @implements {FormNode}
@@ -70,6 +88,34 @@ export class FormGroup {
   /** @type {ReadonlySignal<string | null>} */
   invalidPath;
 
+  /**
+   * Every member has been visited, and there is at least one. Disabled members do
+   * not have to be: they cannot be visited, and waiting for them would keep a
+   * cross-field error off the screen for good.
+   *
+   * @type {ReadonlySignal<boolean>}
+   */
+  touched;
+
+  /** @type {ReadonlySignal<boolean>} */
+  pending;
+
+  /**
+   * This group's own code, ignoring its members. Empty while it is disabled.
+   *
+   * @type {ReadonlySignal<string>}
+   */
+  error;
+
+  /**
+   * The same, once the timing rule allows it: after a submit, or once every
+   * member has been visited. A cross-field rule has no single control to be left,
+   * so "every member touched" is what a blur is for one field.
+   *
+   * @type {ReadonlySignal<string>}
+   */
+  visibleError;
+
   /** @type {readonly (keyof F & string)[]} */
   #names;
 
@@ -78,23 +124,62 @@ export class FormGroup {
   /** @type {Signal<ReadonlySignal<boolean> | null>} */
   #inheritedDisabled = signal(null);
 
-  /** @param {F} fields Declaration order is significant: it is `firstInvalid`'s order. */
-  constructor(fields) {
+  /**
+   * @param {F} fields Declaration order is significant: it is `firstInvalid`'s order.
+   * @param {readonly Validator<{ [K in keyof F]: ValueOf<F[K]> }>[]} [validators]
+   *   Rules over the whole group's value. Run in order; the first failure wins.
+   */
+  constructor(fields, validators = []) {
     this.fields = fields;
     this.#names = /** @type {(keyof F & string)[]} */ (Object.keys(fields));
     this.disabled = computed(() => this.#ownDisabled.value || (this.#inheritedDisabled.value?.value ?? false));
 
     for (const name of this.#names) fields[name]?.inheritDisabled(this.disabled);
 
-    this.valid = computed(() => this.#names.every((name) => fields[name]?.valid.value === true));
+    // A group with no rules of its own keeps a constant here rather than a
+    // computed over `values`, which would subscribe every reader of `valid` to
+    // every keystroke in every member.
+    const own =
+      validators.length === 0
+        ? computed(() => '')
+        : computed(() => {
+            const values = this.values;
+            for (const validate of validators) {
+              const code = validate(values);
+              if (code !== '') return code;
+            }
+            return '';
+          });
+
+    this.valid = computed(
+      () => this.#names.every((name) => fields[name]?.valid.value === true) && (this.disabled.value || own.value === ''),
+    );
     this.dirty = computed(() => this.#names.some((name) => fields[name]?.dirty.value === true));
+    this.pending = computed(() => this.#names.some((name) => fields[name]?.pending.value === true));
+
+    this.touched = computed(
+      () =>
+        this.#names.length > 0 &&
+        this.#names.every((name) => {
+          const node = fields[name];
+          return node === undefined || node.disabled.value || node.touched.value;
+        }),
+    );
+
+    this.error = computed(() => (this.disabled.value ? '' : own.value));
+    this.visibleError = computed(() => {
+      if (this.error.value === '') return '';
+      return this.submitted.value || this.touched.value ? this.error.value : '';
+    });
 
     this.invalidPath = computed(() => {
       for (const name of this.#names) {
         const below = fields[name]?.invalidPath.value ?? null;
         if (below !== null) return prefix(name, below);
       }
-      return null;
+      // `''` is this group itself, which is what a group-level rule failing means
+      // and what `ui-form-error` with no name is bound to.
+      return this.disabled.value || own.value === '' ? null : '';
     });
 
     this.firstInvalid = computed(() => this.invalidPath.value ?? '');
@@ -134,6 +219,22 @@ export class FormGroup {
     this.submitted.value = true;
     for (const name of this.#names) this.fields[name]?.markSubmitted();
     return this.valid.value;
+  }
+
+  /**
+   * Resolve once no asynchronous check below here is waiting or in flight.
+   *
+   *     await this.form.whenSettled();
+   *     if (!this.form.markSubmitted()) return void focusInvalidField(this, this.form);
+   *
+   * Without the await, `markSubmitted()` refuses a form whose checks have not come
+   * back — correctly, since their values are not known to be acceptable, but with
+   * no error on screen to explain the refusal.
+   *
+   * @returns {Promise<void>}
+   */
+  whenSettled() {
+    return whenSettled(this.pending);
   }
 
   /**
@@ -295,10 +396,13 @@ function prefix(name, below) {
  *       email: field('', [required(), email()]),
  *     });
  *
+ *     const period = group({ start: field(''), end: field('') }, [ordered('start', 'end')]);
+ *
  * @template {Record<string, FormNode>} F
  * @param {F} fields
+ * @param {readonly Validator<{ [K in keyof F]: ValueOf<F[K]> }>[]} [validators]
  * @returns {FormGroup<F>}
  */
-export function group(fields) {
-  return new FormGroup(fields);
+export function group(fields, validators) {
+  return new FormGroup(fields, validators);
 }

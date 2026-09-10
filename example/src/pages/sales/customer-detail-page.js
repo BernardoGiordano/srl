@@ -9,9 +9,10 @@ import { AUTH_SESSION } from '@auth/session.js';
 import { fieldArray } from '@core/forms/array.js';
 import { field } from '@core/forms/field.js';
 import { group } from '@core/forms/group.js';
-import { email, maxLength, minLength, notAfter, oneOf, required } from '@core/forms/validators.js';
+import { email, maxLength, minLength, notAfter, oneOf, required, uniqueBy } from '@core/forms/validators.js';
 import { UiCombobox } from '@components/inputs/ui-combobox.js';
 import { UiField, focusInvalidField } from '@components/inputs/ui-field.js';
+import { UiFormError } from '@components/inputs/ui-form-error.js';
 import { UiDialog } from '@components/overlays/ui-dialog.js';
 
 import { AppCard } from '../../ui/app-card.js';
@@ -53,10 +54,19 @@ const CONTACTS_MAX = 5;
  *
  * `group()` is the whole of the form's state. Validity, touched, dirty, the
  * timing rule for showing an error, and the server's per-field answers are all
- * derived from it, and none of them appears as a signal in this class. Two of
- * the server's rules — a name and an email address are unique across the account
- * — have no counterpart here on purpose: no client holds the data to answer
- * them, so they arrive as a 422 and `applyErrors` puts each one under its field.
+ * derived from it, and none of them appears as a signal in this class.
+ *
+ * Two of the server's rules are about data no client holds — a name and an email
+ * address are unique across the account. The name still arrives as a 422 and
+ * `applyErrors` puts it under its field. The address is asked about while the user
+ * types, through an `async` validator on the field, so the answer arrives beside the
+ * control the user has just left rather than after eight more fields. The 422 is
+ * still the authority and still lands the same way; the check only moves the common
+ * case forward.
+ *
+ * A third rule is about the *set* of contacts rather than one of them. `uniqueBy`
+ * answers it against the array, and `<ui-form-error>` is where the answer goes,
+ * because there is no control on screen for "the contacts".
  *
  * WHAT IS STILL THIS SCREEN'S JOB
  *
@@ -77,7 +87,16 @@ const CONTACTS_MAX = 5;
 export class CustomerDetailPage extends SignalElement {
   form = group({
     name: field('', [required(), minLength(2), maxLength(80)]),
-    email: field('', [required(), email()]),
+    /*
+     * The one field that asks the server while the user types. What is written
+     * here is the request and the code; the debounce, the abort on the next
+     * keystroke, the memory of the value already answered for and the binding to
+     * this element's lifetime all belong to the field. ADR-0103.
+     */
+    email: field('', [required(), email()], {
+      async: [(value, signal) => this.#emailTaken(value, signal)],
+      lifetime: () => this.lifetime,
+    }),
     segment: field('', [required(), oneOf(SEGMENTS)]),
     country: field('', [required()]),
     city: field('', [required(), maxLength(60)]),
@@ -91,14 +110,36 @@ export class CustomerDetailPage extends SignalElement {
      * owns how many there are, what each is called in a 422, whether adding one
      * counts as an unsaved change, and putting the deleted ones back on cancel.
      */
-    contacts: fieldArray(() =>
-      group({
-        name: field('', [required(), maxLength(80)]),
-        email: field('', [required(), email()]),
-        role: field('', [required(), oneOf(CONTACT_ROLES)]),
-      }),
+    contacts: fieldArray(
+      () =>
+        group({
+          name: field('', [required(), maxLength(80)]),
+          email: field('', [required(), email()]),
+          role: field('', [required(), oneOf(CONTACT_ROLES)]),
+        }),
+      [],
+      // A rule about the set, so it is the array's and not any row's. The server
+      // reports the same clash against the row that repeats, because a 422 has a
+      // path to fill in; this one has an element of its own instead. ADR-0102.
+      [uniqueBy('email')],
     ),
   });
+
+  /**
+   * Is this address already another customer's?
+   *
+   * Editing a customer excludes that customer, or every saved record would report
+   * its own address as taken. A rejection reports nothing rather than inventing an
+   * error, which is the field's rule and not this method's.
+   *
+   * @param {string} value
+   * @param {AbortSignal} signal
+   * @returns {Promise<string>}
+   */
+  async #emailTaken(value, signal) {
+    const answer = await inject(SALES_SERVICE).emailAvailable(value, this.customerId, signal);
+    return answer.taken ? 'taken' : '';
+  }
 
   #customer = resource(
     (signal) => inject(SALES_SERVICE).customer(routeParams.value.id ?? '', signal),
@@ -305,25 +346,27 @@ export class CustomerDetailPage extends SignalElement {
   }
 
   /**
-   * The codes this application's server can send that the collection does not
-   * know. Passed to the fields that can receive one rather than to all of them:
-   * `ui.field.*` covers every code the framework's own validators produce, and
-   * `taken` and `duplicate` are this API's words, not the framework's.
+   * The codes this application owns, to sentences. Read by every `ui-field` and by
+   * the contacts' `ui-form-error`, both of which resolve an application's code
+   * before falling back to standard text. `ui.field.*` already covers every code
+   * the framework's own validators produce, which is why this table is three
+   * entries rather than a dozen.
    *
-   * `duplicate` is the interesting one. It is a rule about the *set* of contacts
-   * — two rows may not share an address — so no single field's validators can
-   * answer it, and the server reports it against the second occurrence. That is
-   * the same shape as `taken`, one level deeper.
+   * `taken` is the server's answer and the email check's alike — one rule, reached
+   * two ways. `duplicate` is the server's answer against the contact row that
+   * repeats and `duplicated` is `uniqueBy`'s against the array as a whole; they
+   * read as one sentence, because to the user they are one fact.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<Readonly<Record<string, string>>>}
    */
-  #serverMessages = computed(() => ({
+  #fieldMessages = computed(() => ({
     taken: t('customerForm.error.taken'),
     duplicate: t('customerForm.error.duplicateContact'),
+    duplicated: t('customerForm.error.duplicateContact'),
   }));
 
-  get serverMessages() {
-    return this.#serverMessages.value;
+  get fieldMessages() {
+    return this.#fieldMessages.value;
   }
 
   /**
@@ -456,7 +499,7 @@ export class CustomerDetailPage extends SignalElement {
   /* ── Saving ─────────────────────────────────────────────────────────────── */
 
   /** @param {Event} event */
-  submit(event) {
+  async submit(event) {
     event.preventDefault();
     // View mode has no submit button, but a `<form>` still submits on Enter — and
     // a disabled form reports valid, so this would post the record back to itself
@@ -464,6 +507,16 @@ export class CustomerDetailPage extends SignalElement {
     if (this.viewing || this.saving.value || this.loading.value) return;
 
     this.saveErrorKey.value = '';
+
+    // The email check may be in flight, or still inside the quiet window before
+    // its request. A pending field is not valid, so submitting through one would
+    // be refused with nothing on screen to explain it. ADR-0103.
+    await this.form.whenSettled();
+
+    // Re-read after the await. The mode is a signal over the session's scopes,
+    // and a form that lost `sales:write` while the check ran has nothing to send.
+    if (this.viewing || this.saving.value) return;
+
     if (!this.form.markSubmitted()) {
       focusInvalidField(this, this.form);
       return;
@@ -632,5 +685,5 @@ await defineComponent({
   tag: 'customer-detail-page',
   element: CustomerDetailPage,
   module: import.meta.url,
-  uses: [AppCard, AppNotice, UiCombobox, UiDialog, UiField],
+  uses: [AppCard, AppNotice, UiCombobox, UiDialog, UiField, UiFormError],
 });

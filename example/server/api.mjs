@@ -324,13 +324,17 @@ const CONTACT_LIMIT = 5;
 /**
  * The contacts, each addressed by its index.
  *
- * The duplicate rule is the one worth looking at: it is about the *set* of rows and
- * cannot be answered by looking at one, which is why it is reported against the
- * second occurrence rather than against the array. A code against `contacts` itself
- * would be true and useless — there is no control on the screen for "the contacts",
- * so the form would have nowhere to put it and would report it back as unmatched.
- * The over-the-limit rule is exactly that case, kept because the client is not an
- * authority on it even though its Add control stops before here.
+ * The duplicate rule is about the *set* of rows, so no single row answers it. It is
+ * reported against the second occurrence, because that is the row the user has to
+ * change and `contacts.1.email` is an address the form can place. The screen answers
+ * the same rule early with `uniqueBy('email')` on the array, which names no row and
+ * shows its code in a `<ui-form-error>`.
+ *
+ * The over-the-limit rule names `contacts` itself and the form hands it back as
+ * unmatched. A container takes rules of its own now, but a server code carries a
+ * clear-on-edit rule with it and which edit below an array answers a code about the
+ * array is undecided. Kept anyway, because the client is not an authority on the
+ * limit even though its Add control stops before here.
  *
  * @param {unknown} value The body's `contacts`, unvalidated.
  * @param {Record<string, string>} fields Written into, by path.
@@ -573,6 +577,27 @@ const ROUTES = [
       // Returned whole: 48 rows is a client-pagination screen, and the example
       // needs one of those as much as it needs a server-paginated one.
       json(response, { rows: CUSTOMERS, total: CUSTOMERS.length });
+    },
+  },
+  {
+    /*
+     * The uniqueness rule the save path enforces, asked while the user types.
+     * `ui-field` shows the answer under the control long before a submit, which
+     * is what `{ async: [...] }` on the field is for.
+     *
+     * Above the by-id route, because `[\w-]+` matches `email-available` too and
+     * the router takes the first pattern that fits.
+     */
+    method: 'GET',
+    pattern: /^\/api\/customers\/email-available$/u,
+    scope: 'sales:read',
+    handle: ({ response, url }) => {
+      const email = (url.searchParams.get('email') ?? '').trim().toLowerCase();
+      const exclude = url.searchParams.get('exclude') ?? '';
+      // An empty address is `required`'s answer, not this one. The field does not
+      // ask until its synchronous rules pass, so this is belt and braces.
+      const taken = email !== '' && CUSTOMERS.some((row) => row.id !== exclude && row.email.toLowerCase() === email);
+      json(response, { taken });
     },
   },
   {

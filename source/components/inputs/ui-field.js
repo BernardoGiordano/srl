@@ -317,23 +317,52 @@ export class UiField extends SignalElement {
  * Focus the field a refused submit should send the user to, and report whether
  * there was one.
  *
+ *     await this.form.whenSettled();
  *     if (!this.form.markSubmitted()) return void focusInvalidField(this, this.form);
  *
  * The server's answer wins over a client rule, because a 422 is about a value the
  * user has just been told is fine and is the more surprising of the two.
  *
+ * `invalidPath` rather than `firstInvalid`, because the two disagree on exactly
+ * one answer and it is the one a group-level rule produces: `firstInvalid` says
+ * `''` both for "nothing is wrong" and for "the group itself is", where
+ * `invalidPath` says `null` for the first. A path of `''` is a `ui-form-error`
+ * with no name — the message for a rule that belongs to no single control.
+ *
  * @param {ParentNode} root Where to look — usually the screen itself.
  * @param {FormGroup<any>} group
- * @returns {boolean} Whether a field was found to focus.
+ * @returns {boolean} Whether a target was found to focus.
  */
 export function focusInvalidField(root, group) {
-  const name = group.firstServerError === '' ? group.firstInvalid.value : group.firstServerError;
-  if (name === '') return false;
+  const path = group.firstServerError === '' ? group.invalidPath.value : group.firstServerError;
+  if (path === null) return false;
 
-  const field = root.querySelector(`ui-field[name="${CSS.escape(name)}"]`);
-  if (!(field instanceof UiField)) return false;
-  field.focusControl();
-  return true;
+  // A walk rather than a selector, because the target may be either tag and the
+  // path may be the empty string, which `[name=""]` matches on every unnamed
+  // element of both. Forms are small; this is a handful of comparisons.
+  for (const candidate of root.querySelectorAll('ui-field, ui-form-error')) {
+    if (!(candidate instanceof UiField) && !isFocusTarget(candidate)) continue;
+    if (/** @type {{ name: string }} */ (/** @type {unknown} */ (candidate)).name !== path) continue;
+    /** @type {{ focusControl: () => void }} */ (/** @type {unknown} */ (candidate)).focusControl();
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Duck-typed rather than an `instanceof UiFormError`, so that this module does
+ * not import the element that renders a container's error and the element does
+ * not have to avoid importing this one. ADR-0011 makes the same trade for
+ * `FormControl`.
+ *
+ * @param {Element} candidate
+ * @returns {boolean}
+ */
+function isFocusTarget(candidate) {
+  const target = /** @type {Partial<{ name: string, focusControl: () => void }>} */ (
+    /** @type {unknown} */ (candidate)
+  );
+  return typeof target.focusControl === 'function' && typeof target.name === 'string';
 }
 
 await defineComponent({ tag: 'ui-field', element: UiField, module: import.meta.url });

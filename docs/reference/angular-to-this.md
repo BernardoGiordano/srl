@@ -19,6 +19,8 @@
 | `CanDeactivate` | `canDeactivate` on the route, told the element it guards |
 | `children` / `<router-outlet>` | `children` / `<x-route-outlet>` |
 | `FormControl` / `FormGroup` / `Validators` | `field()` / `group()` / `@core/forms/validators.js`, returning codes |
+| A validator on a `FormGroup` or `FormArray` | the same, as a second argument: `group(fields, [ordered('start', 'end')])`. The code is the container's and `<ui-form-error>` shows it |
+| `AsyncValidator` / `PENDING` | `field(v, rules, { async: [...] })` and `pending`, with the debounce, the supersession and the lifetime owned by the field. A submit awaits `form.whenSettled()` before `markSubmitted()` |
 | `formControlName` + a Material field wrapper | `<ui-field [.field]>` around the control you already wrote |
 | `control.disable()` / `form.disable()` | `field.setDisabled(true)` / `group.setDisabled(true)`, and the value stays in `values` ([the collection contracts](../guide/collection.md)) |
 | `HttpInterceptor` | `AuthSession.fetch()` / `.json()`, `@auth/session.js` |

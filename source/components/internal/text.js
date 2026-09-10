@@ -88,10 +88,30 @@ export const STANDARD_TEXT = {
    * else. A code an application's server invents belongs to that application, and
    * reaches the field through `ui-field.messages` rather than through here — see
    * the note on that property for why the collection does not own it.
+   *
+   * Shared by `ui-form-error`, which resolves a container's code the same way: one
+   * vocabulary, whether the rule was about a value or about a set of them.
    */
   field: {
     element: 'ui-field',
-    names: ['required', 'tooShort', 'tooLong', 'malformed', 'notAllowed', 'tooSmall', 'tooLarge', 'future', 'past'],
+    names: [
+      'required',
+      'tooShort',
+      'tooLong',
+      'malformed',
+      'notAllowed',
+      'tooSmall',
+      'tooLarge',
+      'future',
+      'past',
+      // Container rules. The node that holds them is a group or an array, and
+      // `ui-form-error` is what shows them.
+      'outOfOrder',
+      'mismatched',
+      'tooFewRows',
+      'tooManyRows',
+      'duplicated',
+    ],
   },
 };
 

@@ -283,7 +283,7 @@
     "discardPrompt": "This form has changes that have not been saved.",
     "discard": "Discard them",
     "keepEditing": "Keep editing",
-    "$error-comment": "Only the codes this API invents. Everything the framework's own validators produce is standard collection text under ui.field.*, which is why this list is two entries rather than a dozen. duplicate is a rule about the set of contacts rather than about one of them, so no field validator could answer it.",
+    "$error-comment": "Codes this screen resolves itself. Everything the framework's own validators produce is standard collection text under ui.field.*, which is why this list is three entries rather than a dozen. taken is the server's answer and the email check's alike. duplicate names the contact row that repeats and duplicated is uniqueBy's answer against the array; one fact, so one sentence.",
     "error": {
       "taken": "Another customer already uses this.",
       "duplicateContact": "Another contact already uses this address."
@@ -505,7 +505,12 @@
       "tooSmall": "That is too small.",
       "tooLarge": "That is too large.",
       "future": "That date is in the future.",
-      "past": "That date is in the past."
+      "past": "That date is in the past.",
+      "outOfOrder": "The end must not come before the start.",
+      "mismatched": "These two values do not match.",
+      "tooFewRows": "Add at least one row.",
+      "tooManyRows": "There are too many rows.",
+      "duplicated": "Two rows hold the same value."
     }
   }
 }

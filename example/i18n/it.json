@@ -474,7 +474,12 @@
       "tooSmall": "Valore troppo piccolo.",
       "tooLarge": "Valore troppo grande.",
       "future": "La data è nel futuro.",
-      "past": "La data è nel passato."
+      "past": "La data è nel passato.",
+      "outOfOrder": "La fine non può precedere l’inizio.",
+      "mismatched": "I due valori non coincidono.",
+      "tooFewRows": "Aggiungi almeno una riga.",
+      "tooManyRows": "Ci sono troppe righe.",
+      "duplicated": "Due righe hanno lo stesso valore."
     }
   }
 }

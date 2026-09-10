@@ -40,6 +40,7 @@ and `avatar-fallback`; they are styling hooks, not state.
 | `ui-table` + `ui-table-column` | native table semantics; client/server/infinite pagination; sort, filters, column chooser, reorder, resize, sticky edges, persistence; its own accessible names | data fetching, column declarations, rich-cell renderers, the words behind `ui.table.*` |
 | `ui-combobox` | searchable multi-select: chips, grouped panel in the top layer, keyboard and ARIA, free-text tags, per-row expansions, scroll kept across option changes; the form-control contract, so a form binds it as codes | where options come from, label and placeholder, option and chip content |
 | `ui-field` | one field: the label, the error, the three ARIA attributes that tie them together, the value wiring in both directions, and the disabled state pushed onto the control plus `data-disabled` on itself | the control element itself, its classes, and the words behind `ui.field.*` |
+| `ui-form-error` | the message for a rule about a *set* of values: a group's or an array's own code, resolved from the same `ui.field.*` vocabulary, as a `role="alert"` paragraph that a refused submit can focus | the words behind the codes, the paragraph's classes, and where in the form it sits |
 | `ui-dynamic-filter` | nine rule types compiled into options, one value per ref, persistence, lazy and typeahead loading, the active-filter rail | rule declarations, group and option text, what the emitted state filters |
 | `ui-date-range` | two day fields and a confirm, plus the inclusive/exclusive conversion | the words behind `ui.dateRange.*`, and where to render it |
 | `internal/open-panel.js` | everything an open panel owes: the top layer and the placement (under the anchor, flipped when the room is above, clamped and re-measured), dismissal on an outside pointer and on Escape with focus return, `aria-expanded`/`aria-controls`, and the release | which element triggers what, and whether to decline the placement |
@@ -226,13 +227,13 @@ form = group({
 </ui-field>
 ```
 
-A field carries `value`, `touched`, `submitted`, `serverError` and the derived `error`,
-`visibleError`, `valid`, `dirty` and `disabled` — all signals — plus `setValue()`,
-`touch()`, `setDisabled()` and `reset()`. A group aggregates them and adds `values`,
-`markSubmitted()`, `applyErrors()`, `firstInvalid`, `disabled`, `setDisabled()`, `patch()`
-and `reset()`. A group's member may be a field, another group, or a `fieldArray` — see
-[repeating rows](#repeating-rows) below. Five rules are worth knowing because they are
-decisions rather than mechanics:
+A field carries `value`, `touched`, `submitted`, `serverError`, `asyncError` and the
+derived `error`, `visibleError`, `valid`, `dirty`, `disabled` and `pending` — all signals —
+plus `setValue()`, `touch()`, `setDisabled()`, `reset()` and `whenSettled()`. A group
+aggregates them and adds `values`, `markSubmitted()`, `applyErrors()`, `firstInvalid`,
+`disabled`, `setDisabled()`, `patch()` and `reset()`. A group's member may be a field,
+another group, or a `fieldArray` — see [repeating rows](#repeating-rows) below. Seven rules
+are worth knowing because they are decisions rather than mechanics:
 
 - **A validator returns a code, never a sentence.** `ui-field` resolves it: the
   collection's own codes through standard text under `ui.field.*`, an application's
@@ -249,6 +250,24 @@ decisions rather than mechanics:
 - **Values stay in whatever shape the control holds**, usually a string, and are
   converted once at the service boundary. `Number('')` is `0`, so a form that converts
   per keystroke cannot tell an empty amount from a deliberate zero.
+- **A rule about several values belongs to the container, and has an element of its own.**
+  `group(fields, [ordered('start', 'end')])` and `fieldArray(create, [], [minRows(1)])` take
+  the same `Validator` a field takes, over the container's value. Its code is shown by
+  `<ui-form-error [.node]="form">` rather than by any field, and `invalidPath` answers `''`
+  for it, which is where `focusInvalidField` sends the caret. It becomes visible after a
+  submit or once every member has been visited — a combination has no single control to be
+  left. A member that is invalid on its own wins both the path and the focus, because a
+  specific control is a better place to send someone than a sentence about the form
+  ([ADR-0102](../adr/0102-a-container-rule-has-an-element-of-its-own.md)).
+- **A rule the server has to answer is `{ async: [...] }` on the field, and the field owns
+  the plumbing.** An `AsyncValidator` is `(value, signal) => Promise<string>`; the field
+  debounces the keystrokes, aborts what the next one supersedes, remembers the value it
+  already has an answer for, and binds the request to `lifetime: () => this.lifetime`. It
+  runs only once every synchronous rule has passed, never for the value the field was built
+  with or one a `reset` installed, and a rejection reports nothing rather than inventing an
+  error. `pending` is a third state and it is not valid, so a submit awaits
+  `form.whenSettled()` before asking `markSubmitted()`
+  ([ADR-0103](../adr/0103-a-field-owns-its-asynchronous-check.md)).
 - **A disabled field stops being answerable for, and keeps its value.** Its validators do
   not run, it reports `valid` and it shows nothing — a rule the user cannot reach and
   cannot fix must not be what refuses a submit. Angular also drops the value out of the
@@ -311,9 +330,16 @@ form.values;                            // { name: '…', contacts: [{ name: '�
   under a row the user just asked for is the greeting the timing rule exists to prevent.
   The next submit marks it like everything else.
 - **A code naming a container is reported, not placed.** `applyErrors({ contacts:
-  'tooMany' })` returns `contacts` as unmatched, because there is no control on screen for
-  "the contacts" and putting it under a row that did not cause it would be worse than
-  telling the screen it could not be placed.
+  'tooMany' })` returns `contacts` as unmatched. `ui-form-error` gives a container's *own*
+  rule somewhere to live, but a server code carries the clear-on-edit rule with it, and
+  which edit below an array answers a code about the array is a question this library does
+  not decide. Putting it under a row that did not cause it would be worse than telling the
+  screen it could not be placed.
+- **A client-side rule about one row is `applyErrors` too.** "This contact repeats the one
+  above" is `applyErrors({ 'contacts.1.email': 'duplicated' })` — the same address a 422
+  carries, cleared by the edit that answers it. `uniqueBy('email')` on the array says the
+  same thing without naming the row, which is the right shape when the message reads "two
+  contacts share an address" rather than pointing at one.
 - **Disabled reaches rows built later.** A row inherits the array's state, which inherits
   the form's, so a form switched off while it saves also switches off a contact added
   while it was saving.

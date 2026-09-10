@@ -1,0 +1,7 @@
+<!--
+  `role="alert"` rather than a live region on a wrapper, for the reason `ui-field`
+  states: the paragraph appears and disappears, and an assertive region created
+  already holding text is announced where one emptied and refilled sometimes is
+  not.
+-->
+<p *if="errorText" [id]="errorId" role="alert" class="{{ errorClass }}">{{ errorText }}</p>

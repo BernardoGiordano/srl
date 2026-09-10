@@ -16,8 +16,51 @@ import type { FormGroup } from '@core/forms/group.js';
 /**
  * A rule over one field's value, answering with an error *code* or the empty
  * string. Codes rather than sentences: see `@core/forms/validators.js`.
+ *
+ * A container takes the same type over its own value, which is what makes
+ * `ordered('start', 'end')` a validator and not a second concept.
  */
 export type Validator<T> = (value: T) => string;
+
+/**
+ * A rule whose answer is somewhere else, which in practice means the server:
+ * whether this email address is already registered, whether this code is free.
+ *
+ * The same shape as `Validator`, plus the signal that aborts a superseded check.
+ * A validator that ignores the signal still works and costs one wasted response;
+ * one that passes it to `fetch` costs nothing.
+ *
+ * A rejection is not an invalid value. The field reports no code and lets the
+ * write decide, for the reason `resource` does not expose its rejection either:
+ * a check that could not run has not found anything wrong.
+ */
+export type AsyncValidator<T> = (value: T, signal: AbortSignal) => Promise<string>;
+
+/**
+ * The lifetime an in-flight asynchronous check is bound to.
+ *
+ * A function rather than only an `AbortSignal`, because an element's lifetime is
+ * a *new* signal after every re-attach. Write `() => this.lifetime` and the field
+ * reads the current one per check. Same shape and same reason as
+ * `ResourceLifetime`; the two are not one type because `@core/forms` does not
+ * import `@core/foundation/resource.js`.
+ */
+export type FormLifetime = AbortSignal | (() => AbortSignal);
+
+/** What `field()` takes beside its value and its rules. */
+export interface FieldOptions<T> {
+  /** How two values are compared for `dirty`. Element-wise for arrays by default. */
+  equals?: (left: T, right: T) => boolean;
+
+  /** Rules that need a round trip. Run only once every synchronous rule passes. */
+  async?: readonly AsyncValidator<T>[];
+
+  /** Milliseconds of quiet before an asynchronous check starts. Defaults to 300. */
+  debounce?: number;
+
+  /** Aborts the check in flight when it aborts. `() => this.lifetime` in a component. */
+  lifetime?: FormLifetime;
+}
 
 /**
  * What a container needs from whatever it holds, so that a group does not know
@@ -29,7 +72,7 @@ export type Validator<T> = (value: T) => string;
  * inherits `updateOn`, the status observables and the async-validator machinery
  * whether or not it uses them. Here there is no inheritance at all: `FormField`,
  * `FormGroup` and `FormArray` are three unrelated classes that happen to answer
- * the same fourteen questions, and a fourth kind of node costs nothing but
+ * the same seventeen questions, and a fourth kind of node costs nothing but
  * answering them too.
  *
  * The members below are the *untyped* half of each class. `FormField.snapshot`
@@ -43,6 +86,33 @@ export interface FormNode {
   readonly dirty: ReadonlySignal<boolean>;
   readonly disabled: ReadonlySignal<boolean>;
   readonly submitted: Signal<boolean>;
+
+  /**
+   * Visited at least once. A container's is every member's, and false while it
+   * holds none — an empty field array has not been anywhere, and a rule about
+   * its length must wait for the submit rather than greet the form.
+   *
+   * Disabled members are skipped, or a form with one switched-off control would
+   * never count as visited and its cross-field error would never appear.
+   */
+  readonly touched: ReadonlySignal<boolean>;
+
+  /**
+   * An asynchronous check is waiting or running below here. True through the
+   * debounce window as well as the request, so a submit that waits on this does
+   * not slip through the quiet gap between a keystroke and the call it causes.
+   *
+   * A pending node is not valid: the value is not known to be acceptable yet,
+   * and reporting it as valid is how an unchecked value reaches the server.
+   */
+  readonly pending: ReadonlySignal<boolean>;
+
+  /**
+   * The code this node has to show right now, or the empty string — its own
+   * error once the timing rule allows it. What `ui-field` and `ui-form-error`
+   * render; a container reads its members' `valid`, never this.
+   */
+  readonly visibleError: ReadonlySignal<string>;
 
   /** The value here, at whatever depth. A leaf's own, a container's structure. */
   readonly snapshot: unknown;

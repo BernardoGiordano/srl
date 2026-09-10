@@ -19,6 +19,7 @@ Everything the library and the shared collection define:
 | `ui-dialog` | `UiDialog` | `source/components/overlays/ui-dialog.js` | `source/components/overlays/ui-dialog.html` | — | 5 | 0 | 5 | 1 | 1 |
 | `ui-dynamic-filter` | `UiDynamicFilter` | `source/components/data/ui-dynamic-filter.js` | `source/components/data/ui-dynamic-filter.html` | `ui-combobox`, `ui-date-range` | 9 | 3 | 8 | 2 | 0 |
 | `ui-field` | `UiField` | `source/components/inputs/ui-field.js` | `source/components/inputs/ui-field.html` | — | 10 | 0 | 8 | 0 | 1 |
+| `ui-form-error` | `UiFormError` | `source/components/inputs/ui-form-error.js` | `source/components/inputs/ui-form-error.html` | — | 4 | 0 | 2 | 0 | 0 |
 | `ui-menu` | `UiMenu` | `source/components/shell/ui-menu.js` | `source/components/shell/ui-menu.html` | — | 5 | 0 | 5 | 0 | 2 |
 | `ui-sidebar` | `UiSidebar` | `source/components/shell/ui-sidebar.js` | `source/components/shell/ui-sidebar.html` | — | 2 | 0 | 2 | 0 | 1 |
 | `ui-sidebar-group` | `UiSidebarGroup` | `source/components/shell/ui-sidebar-group.js` | `source/components/shell/ui-sidebar-group.html` | — | 5 | 0 | 5 | 0 | 2 |

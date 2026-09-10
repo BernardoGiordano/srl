@@ -199,6 +199,25 @@ export class SalesService {
   }
 
   /**
+   * Whether another customer already holds this address.
+   *
+   * The same rule the save path enforces, asked while the user types rather than at
+   * submit. `signal` belongs to the field and aborts the check the next keystroke
+   * supersedes, so this method has nothing to say about debouncing or ordering.
+   *
+   * @param {string} email
+   * @param {string} exclude The customer being edited, which does not clash with itself.
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<{ taken: boolean }>}
+   */
+  emailAvailable(email, exclude, signal) {
+    // A create has no customer to exclude, and an empty `exclude` would be a
+    // parameter the server has to know is not an id. Dropped instead.
+    const query = { email, exclude: exclude === '' ? undefined : exclude };
+    return this.#client.get('/customers/email-available', query, signal);
+  }
+
+  /**
    * @param {CustomerInput} input
    * @returns {Promise<Customer>}
    */
