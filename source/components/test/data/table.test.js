@@ -937,4 +937,295 @@ describe('ui-table', () => {
       configurePreferences();
     }
   });
+
+  /* ── Row window ──────────────────────────────────────────────────────── */
+
+  /**
+   * A windowed table over `count` rows, with a scroller short enough that the
+   * window is a small fraction of them.
+   *
+   * The heights are declared rather than left to a stylesheet, so the arithmetic
+   * has something to start from; every assertion below reads the height the
+   * browser actually laid out, because a suite that hard-codes 24 is asserting
+   * this file's padding rather than the window.
+   *
+   * @param {number} count
+   * @param {string} [attributes]
+   */
+  function windowFixture(count, attributes = '') {
+    const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (
+      mount(`
+        <ui-table
+          pagination="none"
+          virtualized
+          row-height="24"
+          viewport-height="120"
+          ${attributes}
+        >
+          <ui-table-column key="name" label="Name" sortable></ui-table-column>
+        </ui-table>
+      `)
+    );
+    table.rows = Array.from({ length: count }, (_unused, index) => ({
+      id: index + 1,
+      name: `Row ${String(index + 1)}`,
+    }));
+    return table;
+  }
+
+  /** @param {Element} table */
+  function renderedRows(table) {
+    return [...table.querySelectorAll('[data-ui-part="table-row"]')];
+  }
+
+  /** The page indices the DOM is currently holding. @param {Element} table */
+  function renderedIndices(table) {
+    return renderedRows(table).map((row) => Number(row.getAttribute('data-row-index')));
+  }
+
+  /** @param {Element} table */
+  function scroller(table) {
+    return /** @type {HTMLElement} */ (present(table.querySelector('[data-ui-part="table-scroll"]')));
+  }
+
+  /** The height one laid-out row occupies, which the window is computed from. */
+  /** @param {Element} table */
+  function laidOutRowHeight(table) {
+    const first = present(renderedRows(table)[0], 'no row rendered to measure');
+    return Math.round(first.getBoundingClientRect().height);
+  }
+
+  /**
+   * Scroll to the row at `index` and let the window follow.
+   *
+   * @param {import('@components/data/ui-table.js').UiTable} table
+   * @param {number} index
+   */
+  async function scrollToRow(table, index) {
+    const element = scroller(table);
+    element.scrollTop = index * laidOutRowHeight(table);
+    element.dispatchEvent(new Event('scroll'));
+    await settled(table);
+  }
+
+  it('renders a window of the page rather than all of it', async () => {
+    const table = windowFixture(2000);
+    await settled(table);
+
+    const rows = renderedRows(table);
+    assert.ok(rows.length > 0, 'the window must render something');
+    assert.ok(rows.length < 100, `expected a small window, rendered ${String(rows.length)} rows`);
+    assert.equal(table.visibleRows.length, 2000, 'the page is still every row');
+    assert.equal(renderedIndices(table)[0], 0, 'an unscrolled window starts at the first row');
+    assert.includes(present(table.querySelector('tbody')).textContent ?? '', 'Row 1');
+  });
+
+  it('holds the scroll extent of the rows it did not render', async () => {
+    const table = windowFixture(2000);
+    await settled(table);
+
+    const height = laidOutRowHeight(table);
+    const below = present(table.querySelector('[data-ui-part="table-space-below"]'));
+    const rendered = renderedRows(table).length;
+
+    assert.equal(
+      Math.round(below.getBoundingClientRect().height),
+      (2000 - rendered) * height,
+      'the spacer stands in for every row outside the window',
+    );
+    assert.equal(
+      table.querySelector('[data-ui-part="table-space-above"]'),
+      null,
+      'nothing is above the first row',
+    );
+  });
+
+  it('moves the window to the rows the scroller is showing', async () => {
+    const table = windowFixture(2000);
+    await settled(table);
+    await scrollToRow(table, 900);
+
+    const indices = renderedIndices(table);
+    const first = present(indices[0]);
+    assert.ok(first > 880 && first <= 900, `window starts at ${String(first)}, expected near 900`);
+    assert.includes(
+      present(table.querySelector('tbody')).textContent ?? '',
+      `Row ${String(first + 1)}`,
+    );
+    assert.notOk(indices.includes(0), 'the first row is no longer in the DOM');
+
+    const above = present(table.querySelector('[data-ui-part="table-space-above"]'));
+    assert.equal(
+      Math.round(above.getBoundingClientRect().height),
+      first * laidOutRowHeight(table),
+      'the spacer above matches where the window starts',
+    );
+  });
+
+  it('numbers the rendered rows against the whole page for assistive technology', async () => {
+    const table = windowFixture(2000);
+    await settled(table);
+    await scrollToRow(table, 500);
+
+    assert.equal(
+      present(table.querySelector('[data-ui-part="table"]')).getAttribute('aria-rowcount'),
+      '2001',
+      'every row plus the header',
+    );
+    assert.equal(
+      present(table.querySelector('thead tr')).getAttribute('aria-rowindex'),
+      '1',
+    );
+    const first = present(renderedRows(table)[0]);
+    assert.equal(
+      first.getAttribute('aria-rowindex'),
+      String(Number(first.getAttribute('data-row-index')) + 2),
+      'a row is numbered one-based, after the header',
+    );
+    assert.equal(
+      present(table.querySelector('[data-ui-part="table-space-above"]')).getAttribute('aria-hidden'),
+      'true',
+      'a spacer is not a row',
+    );
+  });
+
+  it('keeps selection over the whole page while rendering a window of it', async () => {
+    const table = windowFixture(2000, 'selectable');
+    await settled(table);
+    assert.ok(renderedRows(table).length < 2000, 'the fixture is windowed');
+
+    /** @type {{ keys: readonly unknown[], scope: string } | undefined} */
+    let selection;
+    table.addEventListener('selection-change', (event) => {
+      selection = /** @type {CustomEvent<{ keys: readonly unknown[], scope: string }>} */ (event).detail;
+    });
+
+    selectAllCheckbox(table).click();
+    await settled(table);
+
+    assert.equal(selection?.keys.length, 2000, 'select-all covers the page, not the window');
+    assert.equal(table.selectionCount, 2000);
+    assert.ok(table.allPageRowsSelected, 'the header reads as fully selected');
+
+    await scrollToRow(table, 1500);
+    assert.ok(
+      rowCheckboxes(table).every((box) => box.checked),
+      'a row scrolled into the window arrives already selected',
+    );
+  });
+
+  it('keeps keyboard focus in the table when a scroll unmounts the focused row', async () => {
+    const table = windowFixture(2000, 'interactive');
+    await settled(table);
+
+    const focused = present(renderedRows(table)[1]);
+    /** @type {HTMLElement} */ (focused).focus();
+    assert.equal(document.activeElement, focused);
+
+    await scrollToRow(table, 1200);
+
+    const active = present(document.activeElement);
+    assert.ok(table.contains(active), 'focus stayed inside the table');
+    assert.equal(
+      active.getAttribute('data-ui-part'),
+      'table-row',
+      'focus moved to a row, not to the scroller',
+    );
+    assert.equal(
+      active.getAttribute('data-row-index'),
+      String(present(renderedIndices(table)[0])),
+      'focus landed on the nearest surviving row',
+    );
+  });
+
+  it('renders a replaced row that is inside the window', async () => {
+    const table = windowFixture(2000);
+    await settled(table);
+    await scrollToRow(table, 700);
+    assert.ok(renderedRows(table).length < 2000, 'the fixture is windowed');
+
+    const before = present(renderedIndices(table)[0]);
+    const index = present(renderedIndices(table)[2]);
+    const rows = [...table.rows];
+    rows[index] = { id: index + 1, name: 'Renamed' };
+    table.rows = rows;
+    await settled(table);
+
+    assert.includes(present(table.querySelector('tbody')).textContent ?? '', 'Renamed');
+    assert.equal(
+      present(renderedIndices(table)[0]),
+      before,
+      'the window did not move because a row changed',
+    );
+  });
+
+  it('sends the window back to the top when the page it shows changes', async () => {
+    const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (
+      mount(`
+        <ui-table pagination="client" page-size="500" page-sizes="500" virtualized
+                  row-height="24" viewport-height="120">
+          <ui-table-column key="name" label="Name" sortable></ui-table-column>
+        </ui-table>
+      `)
+    );
+    table.rows = Array.from({ length: 1500 }, (_unused, index) => ({
+      id: index + 1,
+      name: `Row ${String(index + 1)}`,
+    }));
+    await settled(table);
+    await scrollToRow(table, 300);
+    assert.ok(renderedRows(table).length < 500, 'the fixture is windowed');
+    assert.ok(scroller(table).scrollTop > 0, 'the fixture is scrolled before the page changes');
+
+    table.goTo(2);
+    await settled(table);
+
+    assert.equal(scroller(table).scrollTop, 0, 'a new page opens at its first row');
+    assert.equal(renderedIndices(table)[0], 0);
+    assert.includes(present(table.querySelector('tbody')).textContent ?? '', 'Row 501');
+  });
+
+  it('asks for the next page when the window reaches the last loaded row', async () => {
+    const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (
+      mount(`
+        <ui-table pagination="infinite" page-size="200" virtualized
+                  row-height="24" viewport-height="120">
+          <ui-table-column key="name" label="Name"></ui-table-column>
+        </ui-table>
+      `)
+    );
+    table.totalRows = 1000;
+    table.rows = Array.from({ length: 400 }, (_unused, index) => ({
+      id: index + 1,
+      name: `Row ${String(index + 1)}`,
+    }));
+    await settled(table);
+
+    /** @type {{ offset?: number } | undefined} */
+    let requested;
+    table.addEventListener('load-more', (event) => {
+      requested = /** @type {CustomEvent<{ offset: number }>} */ (event).detail;
+    });
+
+    await scrollToRow(table, 399);
+
+    assert.equal(requested?.offset, 400, 'the window asks for what comes after the loaded rows');
+  });
+
+  it('renders every row again when the window is turned off', async () => {
+    const table = windowFixture(300);
+    await settled(table);
+    assert.ok(renderedRows(table).length < 300);
+
+    table.virtualized = false;
+    await settled(table);
+
+    assert.equal(renderedRows(table).length, 300, 'an unwindowed table renders its page');
+    assert.equal(table.querySelector('[data-ui-part="table-space-below"]'), null);
+    assert.equal(
+      present(table.querySelector('[data-ui-part="table"]')).getAttribute('aria-rowcount'),
+      null,
+      'a table rendering every row does not have to say how many there are',
+    );
+  });
 });

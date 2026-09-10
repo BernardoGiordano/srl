@@ -60,15 +60,23 @@
     "regression from one check per burst to two is a change of one. ADR-0096.",
     "",
     "product is absolute: workload id -> metric -> hard limit, derived from the target",
-    "application and its hardware rather than from a previous run. It carries exactly",
-    "one entry, and the reason no timing joins it is unchanged. A product limit is",
+    "application and its hardware rather than from a previous run. A product limit is",
     "compared raw: no speed scaling, no minDelta slack, and it fails a run that the",
     "spread check already refused to gate. Duration limits set near this machine's",
     "medians would therefore red-build on any slower machine and on every busy moment",
     "here — the population measured at 1.46x to 2.63x below — and a gate that reds for",
-    "the environment teaches people to ignore it. Absolute duration limits belong to a",
-    "known target machine and a known target application scale. Neither is fixed yet,",
-    "so the relative gate carries that work.",
+    "the environment teaches people to ignore it. So a duration limit here has to be a",
+    "requirement with room in it, not a fence around a median.",
+    "",
+    "collection/table-window-10000.render is the first duration limit, and it is set that",
+    "way. 16 ms is one frame, which is what a table a user is scrolling has to produce a",
+    "paint in; it is the requirement, and it does not move with the hardware. A local run",
+    "measured 2.60 ms for the windowed render and 1.70 ms per scroll, so the limit sits well",
+    "clear of the 2.63x spread above and a machine six times slower still passes it.",
+    "What fails it is the thing it was written for: the same 10,000 rows rendered whole",
+    "take 468.9 ms. ADR-0107. table-window-scroll-10000 carries the same frame under the",
+    "same reasoning, for the cost paid on every scroll rather than once at mount. Neither",
+    "is in baseline.json yet, so both are reported and neither is relatively gated.",
     "",
     "delivery/artifact-size.chainDepth is the one limit those rules already permit,",
     "and it is not a timing. It is how many round trips deep the entry's static chunk",
@@ -82,10 +90,10 @@
     "and the browser walks the native module graph, where depth describes the source",
     "layout rather than a delivery defect. ADR-0082.",
     "",
-    "One consequence to keep visible: no timing carries a required budget, so the table",
-    "windowing question stays unasked rather than answered. That",
-    "is intended. Windowing justified by a budget invented to justify it is the wrong",
-    "way round.",
+    "The table windowing question was unasked for as long as no timing carried a required",
+    "budget, and the frame limit above is what asked it. The order matters and was kept:",
+    "the budget is a frame because that is what scrolling costs, not a number reverse",
+    "engineered from what the window happens to measure.",
     "",
     "maxSpeedDrift is where scaling stops being credible. A machine twice as slow as the",
     "one that recorded the baseline is a different machine, and its numbers are reported",
@@ -129,6 +137,12 @@
     },
     "editor/edit-burst": {
       "validations": 1
+    },
+    "collection/table-window-10000": {
+      "render": 16
+    },
+    "collection/table-window-scroll-10000": {
+      "duration": 16
     }
   }
 }

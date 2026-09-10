@@ -26,6 +26,21 @@ const TABLE_STATE_VERSION = 1;
 const PERSIST_DEBOUNCE_MS = 250;
 
 /**
+ * Rows rendered above and below the viewport when the window is on.
+ *
+ * Four is what a wheel notch or a trackpad flick moves before the scroll event
+ * that redraws the window arrives, so the user sees rows rather than the gap the
+ * spacer leaves. Larger buys nothing: the cost of the window is the rows in it.
+ */
+const WINDOW_OVERSCAN = 4;
+
+/** The row height assumed until a rendered row has been measured. */
+const DEFAULT_ROW_HEIGHT = 44;
+
+/** The scroller height used when `viewport-height` names none. */
+const DEFAULT_VIEWPORT_HEIGHT = 480;
+
+/**
  * A table filter *is* a filter descriptor: the vocabulary lives in
  * `filter-descriptor.js`, which both this element and `ui-dynamic-filter` import,
  * so neither one owns the meaning of "matches" and neither has to know the other
@@ -79,6 +94,11 @@ const PERSIST_DEBOUNCE_MS = 250;
  * accumulated rows and emits `load-more`. Same column/filter declarations serve
  * every mode.
  *
+ * `virtualized` bounds what reaches the DOM to the rows a scrolling viewport can
+ * show, with spacer rows holding the scroll extent. It changes what is rendered
+ * and nothing else: the page, the selection and the query still cover every row
+ * the table was given. ADR-0107.
+ *
  * Events:
  * - `query-change`: full query after page, page-size, sort or filter changes
  * - `page-change`, `sort-change`, `filter-change`: same full query, scoped signal
@@ -116,6 +136,9 @@ export class UiTable extends SignalElement {
     columnsOpen: { type: Boolean, attribute: 'columns-open', reflect: true },
     reorderableColumns: { type: Boolean, attribute: 'reorderable-columns' },
     resizableColumns: { type: Boolean, attribute: 'resizable-columns' },
+    virtualized: { type: Boolean, reflect: true },
+    rowHeight: { type: Number, attribute: 'row-height' },
+    viewportHeight: { type: Number, attribute: 'viewport-height' },
   };
 
   /** @type {readonly unknown[]} */
@@ -194,6 +217,31 @@ export class UiTable extends SignalElement {
   reorderableColumns = false;
   resizableColumns = false;
 
+  /**
+   * Render only the rows a scrolling viewport can show.
+   *
+   * Off by default, and opt-in rather than automatic, because it makes three
+   * promises about the screen that the table cannot check: the rows are uniform in
+   * height, the table is its own scroller, and the columns lay out fixed. ADR-0107.
+   */
+  virtualized = false;
+
+  /**
+   * The row height the window assumes before a row has been rendered to measure.
+   *
+   * A rendered row replaces it, so this only has to be close enough that the first
+   * paint covers the viewport.
+   */
+  rowHeight = DEFAULT_ROW_HEIGHT;
+
+  /**
+   * The scroller's height in pixels while `virtualized` is set.
+   *
+   * Written as `max-height`, so a stylesheet that constrains the scroller wins and
+   * the measured height is what the window is computed from either way.
+   */
+  viewportHeight = DEFAULT_VIEWPORT_HEIGHT;
+
   /** @type {UiTableColumn[]} */
   #columns = [];
 
@@ -238,6 +286,52 @@ export class UiTable extends SignalElement {
   #observedSentinel = null;
 
   #lastInfiniteRequest = '';
+
+  /** The scroller the window is computed against, or `null` before the first render. */
+  /** @type {HTMLElement | null} */
+  #scroller = null;
+
+  /** @type {AbortController | undefined} */
+  #scrollController;
+
+  /** @type {ResizeObserver | undefined} */
+  #viewportObserver;
+
+  #scrollTop = 0;
+
+  /** The scroller's content-box height, or 0 until it has been measured. */
+  #measuredViewport = 0;
+
+  /** A rendered row's height, or 0 until one has been measured. */
+  #measuredRowHeight = 0;
+
+  /**
+   * The row a scroll is about to unmount from under the keyboard, and which part
+   * of it had focus, so the same part of the nearest surviving row can take it.
+   *
+   * @type {{ index: number, part: string } | undefined}
+   */
+  #focusRecovery;
+
+  /** @type {{
+   * total: number,
+   * scrollTop: number,
+   * rowHeight: number,
+   * viewport: number,
+   * virtualized: boolean,
+   * value: { start: number, end: number, above: number, below: number },
+   * } | undefined} */
+  #windowCache;
+
+  /** @type {{
+   * rows: readonly unknown[],
+   * processed: readonly unknown[],
+   * page: number,
+   * pageSize: number,
+   * mode: string,
+   * value: readonly unknown[],
+   * } | undefined} */
+  #visibleCache;
 
   #hasUpdated = false;
 
@@ -347,6 +441,11 @@ export class UiTable extends SignalElement {
     this.#intersectionObserver?.disconnect();
     this.#intersectionObserver = undefined;
     this.#observedSentinel = null;
+    this.#scrollController?.abort();
+    this.#scrollController = undefined;
+    this.#viewportObserver?.disconnect();
+    this.#viewportObserver = undefined;
+    this.#scroller = null;
     // A debounced write must not be lost because the user navigated away half a
     // second after dragging a column: flush it, do not cancel it.
     this.#flushPersist();
@@ -465,11 +564,177 @@ export class UiTable extends SignalElement {
     return Math.max(1, Math.trunc(this.pageSize) || 1);
   }
 
+  /**
+   * The rows this page holds, which is what selection, the status line and the
+   * window are all measured against. Not what is in the DOM — `renderedRows` is.
+   *
+   * Cached because a render asks for it a dozen times, once per selection
+   * question and once per window arithmetic, and in `client` mode each of those
+   * was a fresh slice.
+   */
   get visibleRows() {
-    if (this.normalizedMode === 'none') return this.processedRows;
-    if (this.normalizedMode !== 'client') return this.rows;
-    const start = (this.page - 1) * this.validPageSize;
-    return this.processedRows.slice(start, start + this.validPageSize);
+    const mode = this.normalizedMode;
+    const processed = this.processedRows;
+    const cached = this.#visibleCache;
+    if (
+      cached !== undefined &&
+      cached.rows === this.rows &&
+      cached.processed === processed &&
+      cached.page === this.page &&
+      cached.pageSize === this.validPageSize &&
+      cached.mode === mode
+    ) {
+      return cached.value;
+    }
+
+    let value = this.rows;
+    if (mode === 'none') value = processed;
+    else if (mode === 'client') {
+      const start = (this.page - 1) * this.validPageSize;
+      value = processed.slice(start, start + this.validPageSize);
+    }
+
+    this.#visibleCache = {
+      rows: this.rows,
+      processed,
+      page: this.page,
+      pageSize: this.validPageSize,
+      mode,
+      value,
+    };
+    return value;
+  }
+
+  get validRowHeight() {
+    return Math.max(1, Math.trunc(this.rowHeight) || DEFAULT_ROW_HEIGHT);
+  }
+
+  get validViewportHeight() {
+    return Math.max(1, Math.trunc(this.viewportHeight) || DEFAULT_VIEWPORT_HEIGHT);
+  }
+
+  /**
+   * The rows the DOM actually holds, and their offset from the page's first row.
+   *
+   * Computed rather than stored, so a page change, a sort, a filter and a resize
+   * all move the window by moving what it is derived from. The overscan is applied
+   * to the top as well as the bottom, and the start is pulled back when the last
+   * screenful would otherwise render fewer rows than the viewport can show.
+   */
+  #window() {
+    const total = this.visibleRows.length;
+    const scrollTop = this.#scrollTop;
+    const rowHeight = this.#measuredRowHeight > 0 ? this.#measuredRowHeight : this.validRowHeight;
+    const viewport = this.#measuredViewport > 0 ? this.#measuredViewport : this.validViewportHeight;
+    const { virtualized } = this;
+
+    const cached = this.#windowCache;
+    if (
+      cached !== undefined &&
+      cached.total === total &&
+      cached.scrollTop === scrollTop &&
+      cached.rowHeight === rowHeight &&
+      cached.viewport === viewport &&
+      cached.virtualized === virtualized
+    ) {
+      return cached.value;
+    }
+
+    let value = { start: 0, end: total, above: 0, below: 0 };
+    if (virtualized && total > 0) {
+      const count = Math.ceil(viewport / rowHeight) + WINDOW_OVERSCAN * 2;
+      const first = Math.floor(scrollTop / rowHeight) - WINDOW_OVERSCAN;
+      const start = Math.max(0, Math.min(first, total - count));
+      const end = Math.min(total, start + count);
+      value = { start, end, above: start * rowHeight, below: (total - end) * rowHeight };
+    }
+
+    this.#windowCache = { total, scrollTop, rowHeight, viewport, virtualized, value };
+    return value;
+  }
+
+  /** The rows in the DOM: the whole page, or the part of it the window covers. */
+  get renderedRows() {
+    const rows = this.visibleRows;
+    const { start, end } = this.#window();
+    if (start === 0 && end === rows.length) return rows;
+    return rows.slice(start, end);
+  }
+
+  /**
+   * Where the row at `offset` in the rendered list sits on the page.
+   *
+   * Every question the row template asks about a row — its key, whether it is
+   * selected, which record to activate — is asked with this rather than with the
+   * loop index, because a window renders row 8,412 in slot 3.
+   *
+   * @param {number} offset
+   */
+  rowIndexAt(offset) {
+    return this.#window().start + offset;
+  }
+
+  /** The same index as an attribute, and absent when nothing is windowed. */
+  /** @param {number} offset */
+  rowIndexAttribute(offset) {
+    return this.virtualized ? this.rowIndexAt(offset) : nothing;
+  }
+
+  /**
+   * `aria-rowindex`, one-based and counting the header row, so assistive
+   * technology reads "row 8,413 of 10,000" from a tbody holding sixty rows.
+   *
+   * @param {number} offset
+   */
+  rowAria(offset) {
+    return this.virtualized ? this.rowIndexAt(offset) + 2 : nothing;
+  }
+
+  /** `aria-rowcount` for the whole page, including the header row. */
+  get rowCountAria() {
+    return this.virtualized ? this.visibleRows.length + 1 : nothing;
+  }
+
+  /** The header is row 1 of the count above, and unnumbered without one. */
+  get headerRowAria() {
+    return this.virtualized ? 1 : nothing;
+  }
+
+  get spaceAbove() {
+    return this.#window().above;
+  }
+
+  get spaceBelow() {
+    return this.#window().below;
+  }
+
+  /** @param {number} height */
+  spacerStyle(height) {
+    return `height:${String(Math.round(height))}px;border-top-width:0`;
+  }
+
+  /**
+   * The scroller becomes the table's own viewport while the window is on, and is
+   * focusable so a row unmounted from under the keyboard has somewhere to land.
+   */
+  get scrollStyle() {
+    if (!this.virtualized) return '';
+    return `overflow-y:auto;max-height:${String(this.validViewportHeight)}px`;
+  }
+
+  get scrollTabIndex() {
+    return this.virtualized ? '-1' : nothing;
+  }
+
+  /** Fixed layout, because a column that resizes as rows scroll past is unusable. */
+  get tableStyle() {
+    return this.virtualized ? 'table-layout:fixed' : '';
+  }
+
+  /** The selection header carries no column, so it sticks on its own. */
+  get selectionHeaderStyle() {
+    if (!this.virtualized) return '';
+    return 'position:sticky;top:0;z-index:3;background:var(--ui-color-canvas)';
   }
 
   get hasRows() {
@@ -562,6 +827,10 @@ export class UiTable extends SignalElement {
     }
     this.#clampPage();
     if (this.selectable && changed.has('rows')) this.#pruneSelection();
+    if (changed.has('virtualized')) this.#invalidateColumnPresentation();
+    this.#watchScroller();
+    this.#rewindWindow(changed);
+    this.#measureWindow();
     this.#watchInfiniteSentinel();
     this.toggleAttribute('data-mode-client', this.normalizedMode === 'client');
     this.toggleAttribute('data-mode-server', this.normalizedMode === 'server');
@@ -584,6 +853,7 @@ export class UiTable extends SignalElement {
     } else if (this.#hasUpdated && this.#queryStateChanged(changed)) {
       this.#schedulePersist();
     }
+    this.#restoreWindowFocus();
     this.#hasUpdated = true;
   }
 
@@ -1310,6 +1580,186 @@ export class UiTable extends SignalElement {
     );
   }
 
+  /* ── Row window ────────────────────────────────────────────────────────── */
+
+  /**
+   * Follow the scroller the window is measured against.
+   *
+   * The scroller is one static element in the template, so this normally binds
+   * once and does nothing on every render after it. It rebinds when the node
+   * changes and unbinds when `virtualized` is turned off, which is what makes the
+   * property live rather than a construction-time choice.
+   */
+  #watchScroller() {
+    const scroller = this.virtualized
+      ? /** @type {HTMLElement | null} */ (this.querySelector('[data-ui-part="table-scroll"]'))
+      : null;
+    if (scroller === this.#scroller) return;
+
+    this.#scrollController?.abort();
+    this.#scrollController = undefined;
+    this.#viewportObserver?.disconnect();
+    this.#viewportObserver = undefined;
+    this.#scroller = scroller;
+
+    if (scroller === null) {
+      this.#scrollTop = 0;
+      this.#measuredViewport = 0;
+      this.#measuredRowHeight = 0;
+      return;
+    }
+
+    this.#scrollController = new AbortController();
+    scroller.addEventListener('scroll', this.#onScroll, {
+      passive: true,
+      signal: this.#scrollController.signal,
+    });
+
+    if (typeof ResizeObserver === 'undefined') return;
+    // A scroller that grows shows more rows without anything scrolling, so the
+    // window has to move on a resize as well as on a scroll.
+    this.#viewportObserver = new ResizeObserver(() => {
+      this.#applyViewport(scroller.clientHeight);
+    });
+    this.#viewportObserver.observe(scroller);
+  }
+
+  /**
+   * Send the window back to the first row when the page it is showing changes.
+   *
+   * A new page, sort or filter is a different list, and leaving the scroller where
+   * it was would open it two thousand rows down. Arriving rows are deliberately
+   * not on the list: that is `infinite` mode extending the list the user is
+   * already reading.
+   *
+   * @param {Map<PropertyKey, unknown>} changed
+   */
+  #rewindWindow(changed) {
+    const scroller = this.#scroller;
+    if (scroller === null || !this.#hasUpdated) return;
+    const moved =
+      changed.has('page') ||
+      changed.has('pageSize') ||
+      changed.has('sortKey') ||
+      changed.has('sortDirection') ||
+      changed.has('filters');
+    if (!moved || this.#scrollTop === 0) return;
+    this.#scrollTop = 0;
+    scroller.scrollTop = 0;
+    this.requestUpdate();
+  }
+
+  /**
+   * Read the two lengths the window arithmetic needs from what was just rendered.
+   *
+   * Both converge: a measurement that moves the window causes one more render,
+   * which measures the same numbers and stops. The row height is taken from a
+   * rendered row rather than from `row-height`, so a screen whose cells are taller
+   * than it declared still gets spacers that match its scrollbar.
+   */
+  #measureWindow() {
+    const scroller = this.#scroller;
+    if (scroller === null) return;
+    this.#applyViewport(scroller.clientHeight);
+
+    const row = this.querySelector('[data-ui-part="table-row"]');
+    if (row === null) return;
+    const height = Math.round(row.getBoundingClientRect().height);
+    if (height <= 0 || height === this.#measuredRowHeight) return;
+    this.#measuredRowHeight = height;
+    this.requestUpdate();
+  }
+
+  /** @param {number} height */
+  #applyViewport(height) {
+    const measured = Math.round(height);
+    if (measured <= 0 || measured === this.#measuredViewport) return;
+    const before = this.#window();
+    this.#measuredViewport = measured;
+    if (this.#windowMoved(before)) this.requestUpdate();
+  }
+
+  #onScroll = () => {
+    const scroller = this.#scroller;
+    if (scroller === null) return;
+    const top = Math.max(0, Math.round(scroller.scrollTop));
+    if (top === this.#scrollTop) return;
+
+    const before = this.#window();
+    this.#scrollTop = top;
+    const after = this.#window();
+    if (after.start === before.start && after.end === before.end) return;
+
+    this.#planFocusRecovery(after);
+    this.#requestMoreAtWindowEnd(after);
+    this.requestUpdate();
+  };
+
+  /**
+   * Whether the window changed since `before` was computed.
+   *
+   * @param {{ start: number, end: number }} before
+   */
+  #windowMoved(before) {
+    const after = this.#window();
+    return after.start !== before.start || after.end !== before.end;
+  }
+
+  /**
+   * In `infinite` mode a bounded scroller puts the load-more sentinel permanently
+   * below the fold, where an intersection observer would either never fire or fire
+   * forever. The window already knows how close the user is to the last loaded
+   * row, so it asks instead.
+   *
+   * @param {{ end: number }} window
+   */
+  #requestMoreAtWindowEnd(window) {
+    if (!this.showInfiniteControl) return;
+    if (window.end < this.visibleRows.length - WINDOW_OVERSCAN) return;
+    this.requestMore();
+  }
+
+  /**
+   * Note the row a scroll is about to unmount from under the keyboard.
+   *
+   * Focus in a removed row falls to `document.body`, which drops the user out of
+   * the table entirely. The rule is that focus keeps its kind and moves to the
+   * nearest row that survives: a focused row becomes the edge row, a focused
+   * selection checkbox becomes that row's checkbox.
+   *
+   * @param {{ start: number, end: number }} after
+   */
+  #planFocusRecovery(after) {
+    const active = document.activeElement;
+    if (active === null || !this.contains(active)) return;
+    const row = active.closest('[data-ui-part="table-row"]');
+    if (row === null) return;
+
+    const index = Number(row.getAttribute('data-row-index'));
+    if (!Number.isInteger(index) || (index >= after.start && index < after.end)) return;
+    this.#focusRecovery = {
+      index: Math.min(Math.max(index, after.start), after.end - 1),
+      part: active.getAttribute('data-ui-part') ?? '',
+    };
+  }
+
+  /** Hand focus to the surviving row `#planFocusRecovery` chose, if there was one. */
+  #restoreWindowFocus() {
+    const plan = this.#focusRecovery;
+    if (plan === undefined) return;
+    this.#focusRecovery = undefined;
+
+    const row = this.querySelector(`[data-ui-part="table-row"][data-row-index="${String(plan.index)}"]`);
+    const inner = plan.part === '' ? null : row?.querySelector(`[data-ui-part="${plan.part}"]`);
+    // `preventScroll`, or focusing the row scrolls it into view, which moves the
+    // window, which recovers focus again.
+    for (const candidate of [inner, row, this.#scroller]) {
+      if (!(candidate instanceof HTMLElement)) continue;
+      candidate.focus({ preventScroll: true });
+      if (document.activeElement === candidate) return;
+    }
+  }
+
   /**
    * Watch the sentinel that asks for the next page when it scrolls into view.
    *
@@ -1323,7 +1773,7 @@ export class UiTable extends SignalElement {
    */
   #watchInfiniteSentinel() {
     const sentinel =
-      this.showInfiniteControl && typeof IntersectionObserver !== 'undefined'
+      this.showInfiniteControl && !this.virtualized && typeof IntersectionObserver !== 'undefined'
         ? this.querySelector('[data-ui-part="table-infinite"]')
         : null;
     if (sentinel === this.#observedSentinel) return;
@@ -1518,13 +1968,23 @@ export class UiTable extends SignalElement {
       declarations.push(`width:${String(width)}px`, `min-width:${String(width)}px`, `max-width:${String(width)}px`);
     }
     const position = this.columnSticky(column);
-    if (position !== '') {
+    // A windowed table is its own scroller, so the header sticks to the top of it
+    // rather than scrolling out of the viewport the window is measured against. One
+    // element can stick on both axes, and the four layers are: header over a sticky
+    // column, header, sticky cell, ordinary cell.
+    const stuckDown = header && this.virtualized;
+    if (position !== '' || stuckDown) {
+      declarations.push('position:sticky');
+      if (position !== '') {
+        declarations.push(
+          `${position === 'start' ? 'inset-inline-start' : 'inset-inline-end'}:${String(
+            presentation.stickyOffsets.get(column) ?? 0,
+          )}px`,
+        );
+      }
+      if (stuckDown) declarations.push('top:0');
       declarations.push(
-        'position:sticky',
-        `${position === 'start' ? 'inset-inline-start' : 'inset-inline-end'}:${String(
-          presentation.stickyOffsets.get(column) ?? 0,
-        )}px`,
-        `z-index:${header ? '3' : '2'}`,
+        `z-index:${String(header ? (position === '' ? 3 : 4) : 2)}`,
         `background:${header ? 'var(--ui-color-canvas)' : 'var(--ui-color-surface)'}`,
       );
     }

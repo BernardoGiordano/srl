@@ -195,9 +195,11 @@ Requests, bytes, chain depth, startup steps and heap, from the same loads.
 
 <!-- /generated:performance-facts -->
 
-Two facts these numbers settle: **no route index is needed** at this scale, and **no row
-windowing is justified** — because no timing budget exists to fail (below). Sticky columns
-are the table's sharpest cost curve and the first place to look if a wide table feels slow.
+Two facts these numbers settle. **No route index is needed** at this scale. And **rendering
+10,000 rows whole costs 468.9 ms**, which is what the frame budget below now fails, so
+`<ui-table>` renders a window of them when a screen asks for one
+([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)). Sticky columns are the
+table's sharpest cost curve and the first place to look if a wide table feels slow.
 
 The editor suite's own sample policy, and the first numbers it produced, are in
 [ADR-0096](../adr/0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md). A
@@ -219,7 +221,7 @@ its reason, and the runner prints the same list at the end of every run.
 | pending | `memory/remote-cycles` | Fifty remote mount/revoke/unmount cycles need a manifest, a remote host provider and an auth session in the harness page. Worth doing against the real example page rather than a synthetic one, which is a page-driven workload this harness can host but does not yet. |
 | pending | `collection/typeahead` | The typeahead path is defined by not loading options locally, so its workload is a request-timing measurement against a stubbed source rather than a render measurement. Needs a decision on what the stub is before a number means anything. |
 | pending | `delivery/edit-to-reload` | One-file edit to browser reload needs cli/dev/serve.mjs running with its watcher and a page listening on /__reload. That is a second origin shape, and mixing it into the measured origin would change the cache policy every other workload depends on. |
-| unmeasured | `editor/cold-start-1x`, `editor/cold-start-10x`, `editor/interactive-1x`, `editor/interactive-10x`, `editor/edit-burst`, `editor/cancellation` | declared and absent from tools/benchmark/baseline.json: nothing here proves it |
+| unmeasured | `collection/table-window-10000`, `collection/table-window-scroll-10000`, `editor/cold-start-1x`, `editor/cold-start-10x`, `editor/interactive-1x`, `editor/interactive-10x`, `editor/edit-burst`, `editor/cancellation` | declared and absent from tools/benchmark/baseline.json: nothing here proves it |
 
 **Artifact origin — the verified production build.**
 
@@ -228,7 +230,7 @@ its reason, and the runner prints the same list at the end of every run.
 | pending | `memory/remote-cycles` | Fifty remote mount/revoke/unmount cycles need a manifest, a remote host provider and an auth session in the harness page. Worth doing against the real example page rather than a synthetic one, which is a page-driven workload this harness can host but does not yet. |
 | pending | `collection/typeahead` | The typeahead path is defined by not loading options locally, so its workload is a request-timing measurement against a stubbed source rather than a render measurement. Needs a decision on what the stub is before a number means anything. |
 | pending | `delivery/edit-to-reload` | One-file edit to browser reload needs cli/dev/serve.mjs running with its watcher and a page listening on /__reload. That is a second origin shape, and mixing it into the measured origin would change the cache policy every other workload depends on. |
-| unrecorded | 58 workloads across startup, delivery, template, router, collection, memory, tooling | measured on the artifact origin and deliberately not recorded: dist timings stay evidence rather than gates until their sample policy is settled |
+| unrecorded | 60 workloads across startup, delivery, template, router, collection, memory, tooling | measured on the artifact origin and deliberately not recorded: dist timings stay evidence rather than gates until their sample policy is settled |
 
 <!-- /generated:performance-coverage -->
 
@@ -247,6 +249,8 @@ No workflow in `.github/workflows` runs the benchmark gate: every limit below fa
 |---|---|---|
 | `delivery/artifact-size.chainDepth` | 3 deep | 3 deep |
 | `editor/edit-burst.validations` | 1 | nothing has measured it |
+| `collection/table-window-10000.render` | 16 | nothing has measured it |
+| `collection/table-window-scroll-10000.duration` | 16 | nothing has measured it |
 
 <!-- /generated:performance-gating -->
 
@@ -319,15 +323,23 @@ Two kinds, in `tools/benchmark/budgets.json`:
 | `maxRunSpread` | how far a reference may move inside one run | Above it, the run reports and cannot gate |
 | ci ceiling | 420 s | `--ci` takes about 150 s here, 45 s of it the editor suite; the ceiling failing means reconsidering sample counts, not raising it |
 
-`product` carries no timing on purpose, and that is a decision rather than a deferral.
-Absolute limits set near this machine's medians would fail on any slower machine and on
+A duration limit here has to be a requirement with room in it rather than a fence around a
+median. Limits set near this machine's medians would fail on any slower machine and on
 every busy moment here — the busy population measured 1.46x to 2.63x — and a gate that
-reds for the environment teaches people to ignore it. An absolute *duration* needs a known
-target machine and a known target application scale. Neither is fixed, so the relative gate
-carries that work, and the consequence stays visible: with no required timing budget, the
-row-windowing question is unasked rather than answered.
+reds for the environment teaches people to ignore it.
 
-Neither absolute limit is a timing. `delivery/artifact-size.chainDepth` is how many
+`collection/table-window-10000.render` is the first duration limit and is set that way.
+16 ms is one frame, which is what a table a user is scrolling has to produce a paint in. A
+local run measured 2.60 ms for the windowed render and 1.70 ms per scroll, with 38 of the
+10,000 rows in the DOM, so the limit clears the 2.63x spread several times over; what fails
+it is the thing it was written for, the same 10,000 rows rendered whole at 468.9 ms.
+`collection/table-window-scroll-10000` carries the same frame for the cost paid on every
+scroll rather than once at mount. Neither is in `baseline.json` yet, so both are listed
+above as declared and unmeasured, and the two figures here are reported rather than gated:
+the run that produced them was on Chrome 152 against a baseline recorded on 151
+([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)).
+
+The other two absolute limits are not timings. `delivery/artifact-size.chainDepth` is how many
 round trips deep the entry's static chunk graph is, derived by the build from
 `chunks[].imports`, admitted by `parseReport` against the graph it came from, and read from
 a verified report without starting a browser. A count of hops does not change with the

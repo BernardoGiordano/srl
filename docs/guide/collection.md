@@ -37,7 +37,7 @@ and `avatar-fallback`; they are styling hooks, not state.
 | `ui-avatar` | initials from a name, fallback when the image 404s | shape, size, colours |
 | `ui-menu` | open/closed, close on outside pointer, Escape with focus return, navigation | trigger, panel, positioning |
 | `ui-dialog` | a native `<dialog>` shown modally: top layer, inert page, focus trap and return, blurred backdrop, document scroll lock; Escape and a backdrop click *ask* rather than close, and `mandatory` refuses even to ask | every word in the panel, and the panel's own box through `panel-class` |
-| `ui-table` + `ui-table-column` | native table semantics; client/server/infinite pagination; sort, filters, column chooser, reorder, resize, sticky edges, persistence; its own accessible names | data fetching, column declarations, rich-cell renderers, the words behind `ui.table.*` |
+| `ui-table` + `ui-table-column` | native table semantics; client/server/infinite pagination; sort, filters, column chooser, reorder, resize, sticky edges, row windowing, persistence; its own accessible names | data fetching, column declarations, rich-cell renderers, the words behind `ui.table.*` |
 | `ui-combobox` | searchable multi-select: chips, grouped panel in the top layer, keyboard and ARIA, free-text tags, per-row expansions, scroll kept across option changes; the form-control contract, so a form binds it as codes | where options come from, label and placeholder, option and chip content |
 | `ui-field` | one field: the label, the error, the three ARIA attributes that tie them together, the value wiring in both directions, and the disabled state pushed onto the control plus `data-disabled` on itself | the control element itself, its classes, and the words behind `ui.field.*` |
 | `ui-form-error` | the message for a rule about a *set* of values: a group's or an array's own code, resolved from the same `ui.field.*` vocabulary, as a `role="alert"` paragraph that a refused submit can focus | the words behind the codes, the paragraph's classes, and where in the form it sits |
@@ -116,6 +116,30 @@ the table's. Keys whose rows are gone are pruned in `client`, `none` and `infini
 page. `selectedRows`, `selectionCount` and `clearSelection()` are the imperative side.
 Selection is never persisted. `example/src/pages/settings/settings-users.js` drives a bulk
 suspend from it.
+
+`virtualized` bounds what reaches the DOM to a window of the rows a scrolling viewport can
+show, with a spacer row above and below holding the scroll extent
+([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)). It changes what is
+rendered and nothing else: the page, the selection, the status line and the query still
+cover every row the table was given, and the rendered rows carry `aria-rowindex` against an
+`aria-rowcount` for the whole page. Rendering 10,000 rows whole costs 468.9 ms against a
+16 ms frame budget; windowed, the same rows render in 2.60 ms with 38 of them in the DOM
+([the performance envelope](performance.md)).
+
+It is opt-in because it makes three promises the table cannot check. The rows are uniform
+in height — a windowed table measures one rendered row and sizes every spacer from it, so a
+cell that wraps to two lines gives a scrollbar that lies. The table is its own scroller —
+`viewport-height` writes a `max-height` in pixels, and a stylesheet constraining the
+scroller wins. And columns lay out `table-layout: fixed`, so declared `width` matters more
+here than on a table the browser can size from content it can all see. `row-height` is only
+the estimate the first paint uses.
+
+Focus keeps its kind across a window change: a focused row becomes the edge row of the new
+window, a focused selection checkbox becomes that row's checkbox. A page, sort or filter
+change opens the scroller at its first row; rows arriving in `infinite` mode do not, because
+that is the same list getting longer. `infinite` and `virtualized` together drop the
+intersection sentinel — a bounded scroller keeps it permanently below the fold — and the
+window asks for the next page when it comes within its overscan of the last loaded row.
 
 `state-id` opts the table into the persistence of [preference persistence](preferences.md) (`table-name` is a compatibility
 alias; `state-id` wins). The versioned payload holds page, page size, sort, order, hidden

@@ -674,17 +674,28 @@ void test('the ci profile is bounded and declares what it does not cover', async
   assert.ok(budgets.regressionThreshold > 0 && budgets.regressionThreshold < 1);
   assert.ok(budgets.maxRunSpread > 1, 'a run needs a limit on how far the machine may move');
   assert.ok(budgets.maxSpeedDrift > 1);
-  // Absolute limits stay scarce and stay explained. The one that exists is a count of
-  // round trips rather than a duration, which is why it needs neither the machine
-  // scaling nor the noise slack an absolute timing would. ADR-0082.
+  // Absolute limits stay scarce and stay explained. Two are counts, which need neither
+  // the machine scaling nor the noise slack an absolute timing would ([ADR-0082]). Two
+  // are one frame, which is a requirement rather than a fence around a median: the
+  // windowed render measures a few milliseconds and the unwindowed one takes 468.9 ms,
+  // so a machine several times slower still passes and the thing the limit was written
+  // for still fails. ADR-0107.
   assert.deepEqual(
     budgets.product,
     {
       'delivery/artifact-size': { chainDepth: 3 },
       'editor/edit-burst': { validations: 1 },
+      'collection/table-window-10000': { render: 16 },
+      'collection/table-window-scroll-10000': { duration: 16 },
     },
-    'a product budget is a decision, and both taken ones are counts rather than durations',
+    'a product budget is a decision, and every one taken has to be argued in budgets.json',
   );
+  // A budget on an id nothing declares gates nothing and reads as covered.
+  const declared = new Set(WORKLOADS.map((workload) => workload.id));
+  for (const [id, metrics] of Object.entries(budgets.product ?? {})) {
+    assert.ok(declared.has(id), `product budget ${id} names a workload the registry does not declare`);
+    assert.ok(Object.keys(metrics).length > 0, `product budget ${id} gates no metric`);
+  }
   assert.equal(budgets.minDelta?.depth, 1, 'a single added serial hop has to be a regression');
 
   const ci = selectWorkloads('ci', {});

@@ -88,20 +88,28 @@
   </div>
 </div>
 
-<div data-ui-part="table-scroll" class="overflow-x-auto">
+<div
+  data-ui-part="table-scroll"
+  class="overflow-x-auto"
+  [style]="scrollStyle"
+  [tabindex]="scrollTabIndex"
+>
   <table
     data-ui-part="table"
     class="w-full border-collapse text-start text-sm {{ tableClass }}"
+    [style]="tableStyle"
     [aria-busy]="loading"
+    [aria-rowcount]="rowCountAria"
   >
     <caption *if="caption" class="sr-only">{{ caption }}</caption>
     <thead data-ui-part="table-head">
-      <tr>
+      <tr [aria-rowindex]="headerRowAria">
         <th
           *if="selectable"
           scope="col"
           data-ui-part="table-selection-header"
           class="w-10 border-b border-ui-border bg-canvas px-4 py-3 text-start"
+          [style]="selectionHeaderStyle"
         >
           <input
             type="checkbox"
@@ -173,13 +181,26 @@
     </thead>
 
     <tbody data-ui-part="table-body" class="divide-y divide-ui-border">
+      <!-- The scroll extent the unrendered rows would have occupied. Hidden from
+           assistive technology, which reads aria-rowindex instead. -->
       <tr
-        *for="row of visibleRows; key: keyFor(row, $index); index as rowIndex"
+        *if="spaceAbove > 0"
+        data-ui-part="table-space-above"
+        aria-hidden="true"
+        [style]="spacerStyle(spaceAbove)"
+      >
+        <td [colspan]="columnSpan" style="padding: 0; border: 0"></td>
+      </tr>
+
+      <tr
+        *for="row of renderedRows; index as offset; key: keyFor(row, rowIndexAt(offset))"
         data-ui-part="table-row"
+        [data-row-index]="rowIndexAttribute(offset)"
+        [aria-rowindex]="rowAria(offset)"
         [tabindex]="rowTabIndex"
         class="bg-surface transition-colors"
-        (click)="activate(row, rowIndex, $event)"
-        (keydown)="activateFromKeyboard(row, rowIndex, $event)"
+        (click)="activate(row, rowIndexAt(offset), $event)"
+        (keydown)="activateFromKeyboard(row, rowIndexAt(offset), $event)"
       >
         <td
           *if="selectable"
@@ -191,9 +212,9 @@
             data-ui-part="table-select-row"
             class="cursor-pointer accent-accent focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
             [aria-label]="text('selectRow')"
-            [.checked]="isSelected(row, rowIndex)"
-            [?disabled]="!canSelectRow(row, rowIndex)"
-            (click)="toggleRow(row, rowIndex, $event)"
+            [.checked]="isSelected(row, rowIndexAt(offset))"
+            [?disabled]="!canSelectRow(row, rowIndexAt(offset))"
+            (click)="toggleRow(row, rowIndexAt(offset), $event)"
           />
         </td>
         <td
@@ -204,8 +225,17 @@
           [style]="cellStyle(column)"
           class="px-4 py-3 text-ink {{ column.cellClass }}"
         >
-          {{ renderCell(column, row, rowIndex) }}
+          {{ renderCell(column, row, rowIndexAt(offset)) }}
         </td>
+      </tr>
+
+      <tr
+        *if="spaceBelow > 0"
+        data-ui-part="table-space-below"
+        aria-hidden="true"
+        [style]="spacerStyle(spaceBelow)"
+      >
+        <td [colspan]="columnSpan" style="padding: 0; border: 0"></td>
       </tr>
 
       <tr *if="showLoading" data-ui-part="table-loading">

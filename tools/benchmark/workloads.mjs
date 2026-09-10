@@ -244,6 +244,27 @@ const COLLECTION_WORKLOADS = [
   }),
 
   browserWorkload({
+    id: 'collection/table-window-10000',
+    suite: 'collection',
+    title: 'Render 10,000 rows into a scrolling window',
+    module: 'collection.js',
+    export: 'table_window',
+    cost: 'medium',
+    args: { rows: 10_000 },
+    units: { duration: 'ms', render: 'ms', rows: 'count' },
+  }),
+
+  browserWorkload({
+    id: 'collection/table-window-scroll-10000',
+    suite: 'collection',
+    title: 'Scroll a windowed 10,000-row table by one screenful',
+    module: 'collection.js',
+    export: 'table_window_scroll',
+    cost: 'medium',
+    args: { rows: 10_000 },
+  }),
+
+  browserWorkload({
     id: 'collection/table-reorder-10000',
     suite: 'collection',
     title: 'Keyed reverse of a fully rendered 10,000-row table',

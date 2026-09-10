@@ -284,6 +284,86 @@ export const table_full_render = {
 };
 
 /**
+ * The same 10,000 rows with `virtualized` set: a window of them reaches the DOM.
+ *
+ * The comparison this exists for is `table_full_render` above it, which renders
+ * every row and is the number the frame budget in budgets.json fails. Both go
+ * through the element's public interface — set `virtualized`, set `rows` — so the
+ * pair measures the decision rather than two different fixtures.
+ *
+ * The check asserts the DOM is bounded rather than asserting a row count: the
+ * window is derived from a measured row height, so the exact number belongs to the
+ * browser laying it out and only its order of magnitude is the claim.
+ *
+ * @type {import('./support.js').Workload}
+ */
+export const table_window = {
+  measured: true,
+  setup(scope, args) {
+    const table = buildTable(scope.container, { pagination: 'none' });
+    table.setAttribute('virtualized', '');
+    table.setAttribute('viewport-height', '600');
+    return { table, rows: makeRows(Number(args.rows)) };
+  },
+  async run(state) {
+    const started = performance.now();
+    state.table.rows = state.rows;
+    await rendered(state.table);
+    const elapsed = performance.now() - started;
+    const rows = renderedRows(state.table);
+    return {
+      answer: { rows, page: state.table.visibleRows.length },
+      metrics: { render: elapsed, rows },
+    };
+  },
+  check(answer, args) {
+    const rows = Number(args.rows);
+    expect(answer.page, rows, 'rows on the page');
+    if (answer.rows < 1 || answer.rows > rows / 10) {
+      throw new Error(
+        `windowed rows: expected a small window of ${String(rows)}, rendered ${String(answer.rows)}`,
+      );
+    }
+  },
+};
+
+/**
+ * Scroll a windowed 10,000-row table by one screenful.
+ *
+ * The cost a user actually pays: the mount happens once, and every frame after it
+ * is this. `scrollTop` is set and the scroll event dispatched rather than waiting
+ * on a real one, because a synthetic scroll reaches the same handler and a real one
+ * would put the browser's own scheduling inside the median.
+ *
+ * @type {import('./support.js').Workload}
+ */
+export const table_window_scroll = {
+  async setup(scope, args) {
+    const table = buildTable(scope.container, { pagination: 'none' });
+    table.setAttribute('virtualized', '');
+    table.setAttribute('viewport-height', '600');
+    table.rows = makeRows(Number(args.rows));
+    await rendered(table);
+    const scroller = table.querySelector('[data-ui-part="table-scroll"]');
+    if (!(scroller instanceof HTMLElement)) throw new Error('the table rendered no scroller.');
+    return { table, scroller, step: 0 };
+  },
+  async run(state) {
+    state.step += 1;
+    state.scroller.scrollTop = state.step * 600;
+    state.scroller.dispatchEvent(new Event('scroll'));
+    await rendered(state.table);
+    const first = state.table.querySelector('[data-ui-part="table-row"]');
+    return Number(first?.getAttribute('data-row-index') ?? -1);
+  },
+  check(answer) {
+    if (!Number.isInteger(answer) || answer <= 0) {
+      throw new Error(`the window did not move: first rendered row is ${String(answer)}`);
+    }
+  },
+};
+
+/**
  * Reverse a fully rendered keyed list of `rows` rows.
  *
  * `rowKey` defaults to `id`, so this is the keyed path: the table should move rows
