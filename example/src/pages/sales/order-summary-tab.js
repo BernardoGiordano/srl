@@ -1,87 +1,81 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { resource } from '@core/foundation/resource.js';
+import { computed, signal } from '@core/foundation/reactive.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
 import { cur, dt, num, t } from '@core/localization/i18n.js';
 
 import { AppField } from '../../ui/app-field.js';
 import { AppNotice } from '../../ui/app-notice.js';
-import { SALES_SERVICE } from '../../services/sales-service.js';
+import { ORDER_RECORDS } from '../../state/order-records.js';
 
 /** @import { Customer } from '../../services/sales-service.js' */
+/** @import { OrderRecord } from '../../state/order-records.js' */
 
 /**
  * The index tab: who the order is for.
  *
- * It fetches the order itself rather than receiving it from the layout above, because a
- * child route is mounted by the router and there is no props channel between the two.
- * That is the honest cost of route-owned children, and it is small: the layout's own
- * request is what pays for the header, this one pays for the customer block, and neither
- * is repeated when the user moves between tabs.
+ * It watches the same settled order record as the layout above. The router hands a child
+ * no props, so the application-owned record module is the seam: both route levels ask by
+ * id, while one retained resource owns the request, refresh, and final release.
  */
 export class OrderSummaryTab extends SignalElement {
-  /**
-   * An order with no customer record is a rejection, not a value. The screen has one
-   * failure notice — "no customer on this order" — and reaching it through `failed`
-   * rather than through a second signal is what keeps the template's two branches two.
-   */
-  #customer = resource(
-    async (signal) => {
-      const order = await inject(SALES_SERVICE).order(routeParams.value.id ?? '', signal);
-      if (order.customerDetail === null) throw new Error('The order carries no customer record.');
-      return order.customerDetail;
-    },
-    { initial: /** @type {Customer | null} */ (null), lifetime: () => this.lifetime },
-  );
+  /** The shared record view installed after this element is mounted. */
+  #order = signal(/** @type {OrderRecord | null} */ (null));
 
-  pending = this.#customer.pending;
-  failed = this.#customer.failed;
+  pending = computed(() => this.#order.value?.pending.value ?? true);
+
+  /** A missing order and an order with no customer use the same empty panel. */
+  failed = computed(() => {
+    const order = this.#order.value;
+    if (order === null) return false;
+    if (order.failed.value) return true;
+    return !order.pending.value && order.value.value?.customerDetail === null;
+  });
+
+  /** @returns {Customer | null} */
+  get customer() {
+    return this.#order.value?.value.value?.customerDetail ?? null;
+  }
 
   get name() {
-    return this.#customer.value.value?.name ?? '';
+    return this.customer?.name ?? '';
   }
 
   get segmentLabel() {
-    const segment = this.#customer.value.value?.segment;
+    const segment = this.customer?.segment;
     return segment === undefined ? '' : t(`customers.segmentValue.${segment}`);
   }
 
   get since() {
-    const since = this.#customer.value.value?.since;
+    const since = this.customer?.since;
     return since === undefined ? '' : dt(since, { dateStyle: 'medium' });
   }
 
   get revenue() {
-    const customer = this.#customer.value.value;
+    const customer = this.customer;
     return customer === null ? '' : cur(customer.revenue, 'EUR');
   }
 
   get openOrders() {
-    const customer = this.#customer.value.value;
+    const customer = this.customer;
     return customer === null ? '' : num(customer.openOrders);
   }
 
   get location() {
-    const customer = this.#customer.value.value;
+    const customer = this.customer;
     return customer === null ? '' : `${customer.city}, ${customer.country}`;
   }
 
   get owner() {
-    return this.#customer.value.value?.owner ?? '';
+    return this.customer?.owner ?? '';
   }
 
   onMount() {
-    void this.load();
-  }
-
-  /**
-   * Mounted before the route parameter exists — a tab rendered by a layout whose own
-   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
-   * true, which is what the screen should be showing.
-   */
-  load() {
-    return (routeParams.value.id ?? '') === '' ? undefined : this.#customer.reload();
+    this.#order.value = inject(ORDER_RECORDS).watch(
+      () => routeParams.value.id ?? '',
+      this.lifetime,
+    );
   }
 }
 

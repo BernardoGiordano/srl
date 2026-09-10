@@ -69,6 +69,7 @@ the reason is recorded in the module that owns it.
 | How an application talks to its API | `source/lib/core/http/client.js` (the client), `source/lib/auth/session-fetch.js` (the authorized transport) |
 | Locale negotiation, plurals, formatters | `source/lib/core/localization/i18n.js` |
 | Staleness, abort and failure state of one asynchronous read | `source/lib/core/foundation/resource.js` |
+| Identity, refresh and reader lifetime of the example's shared order | `example/src/state/order-records.js` |
 | The collection's own strings | `source/components/internal/text.js` |
 | What "filtered" means | `source/components/data/filter-descriptor.js` |
 | The mounts `/lib/`, `/components/` and the specifiers they serve | `source/package.json` — the library declares them; `cli/package/interface.mjs` reads them for the dev server, the test runner, the benchmark origin and the delivery tooling |

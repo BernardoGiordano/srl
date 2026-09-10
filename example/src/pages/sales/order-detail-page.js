@@ -1,7 +1,6 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
-import { computed, effect, signal } from '@core/foundation/reactive.js';
-import { resource } from '@core/foundation/resource.js';
+import { computed, signal } from '@core/foundation/reactive.js';
 import { inject } from '@core/foundation/inject.js';
 import { RouteOutlet, routeParams } from '@core/navigation/router.js';
 import { cur, dt, t } from '@core/localization/i18n.js';
@@ -12,10 +11,10 @@ import { AppBadge } from '../../ui/app-badge.js';
 import { AppField } from '../../ui/app-field.js';
 import { AppNotice } from '../../ui/app-notice.js';
 import { AppTabs } from '../../ui/app-tabs.js';
-import { SALES_SERVICE } from '../../services/sales-service.js';
+import { ORDER_RECORDS } from '../../state/order-records.js';
 import { ApiError } from '@core/http/client.js';
 
-/** @import { Customer, Order } from '../../services/sales-service.js' */
+/** @import { OrderRecord } from '../../state/order-records.js' */
 /** @import { TabItem } from '../../ui/app-tabs.js' */
 
 /**
@@ -24,16 +23,16 @@ import { ApiError } from '@core/http/client.js';
  * WHAT THE LAYOUT BUYS
  *
  * This component stays mounted while `''`, `lines` and `history` replace each other, so
- * the header is fetched once and switching tabs costs one request for the tab's own
- * data and nothing else. Leaving the section tears the chain down deepest first.
+ * the shared order stays settled and switching tabs costs only a tab-specific request,
+ * where one exists. Leaving the section tears the chain down deepest first.
  *
  * WHY THE ID COMES FROM A SIGNAL
  *
  * `routeParams` is a signal, and navigating from `/sales/orders/OR-1` to
  * `/sales/orders/OR-2` does not change the route — only the parameter — so this element
  * is *reused* rather than remounted. Reading the id in `onMount` would therefore leave
- * the second order showing the first one's data. The reload is driven by an effect over
- * the parameter instead, which is the shape that survives both cases.
+ * the second order showing the first one's data. `OrderRecords.watch()` follows the
+ * parameter and moves both readers to one new keyed resource.
  *
  * THE WRITE PATH
  *
@@ -43,22 +42,14 @@ import { ApiError } from '@core/http/client.js';
  * `example/server/api.mjs` — and a 403 is shown rather than swallowed.
  */
 export class OrderDetailPage extends SignalElement {
-  #order = resource(
-    (signal) => inject(SALES_SERVICE).order(routeParams.value.id ?? '', signal),
-    {
-      initial: /** @type {(Order & { customerDetail: Customer | null }) | null} */ (null),
-      lifetime: () => this.lifetime,
-    },
-  );
+  /** The shared record view installed after this element is mounted. */
+  #order = signal(/** @type {OrderRecord | null} */ (null));
 
-  pending = this.#order.pending;
-  failed = this.#order.failed;
+  pending = computed(() => this.#order.value?.pending.value ?? true);
+  failed = computed(() => this.#order.value?.failed.value ?? false);
   saving = signal(false);
   /** Message key of a failed write, or the empty string. */
   writeErrorKey = signal('');
-
-  /** @type {(() => void) | undefined} */
-  #stopWatching;
 
   get orderId() {
     return routeParams.value.id ?? '';
@@ -70,7 +61,7 @@ export class OrderDetailPage extends SignalElement {
    * previous order's code under a "not found" notice is a worse answer than none.
    */
   get record() {
-    return this.failed.value ? null : this.#order.value.value;
+    return this.failed.value ? null : (this.#order.value?.value.value ?? null);
   }
 
   get code() {
@@ -182,20 +173,9 @@ export class OrderDetailPage extends SignalElement {
   }
 
   onMount() {
-    // An effect rather than a one-shot load: this element is reused when only the
-    // parameter changes, so the parameter is the input to watch.
-    let previous = '';
-    this.#stopWatching = effect(() => {
-      const id = this.orderId;
-      if (id === '' || id === previous) return;
-      previous = id;
-      void this.load();
-    });
-  }
-
-  onDestroy() {
-    this.#stopWatching?.();
-    this.#stopWatching = undefined;
+    // The state module follows parameter changes and releases its keyed record
+    // with this element. The child tab watches through the same module.
+    this.#order.value = inject(ORDER_RECORDS).watch(() => this.orderId, this.lifetime);
   }
 
   retry() {
@@ -203,24 +183,22 @@ export class OrderDetailPage extends SignalElement {
   }
 
   load() {
-    if (this.orderId === '') return undefined;
     this.writeErrorKey.value = '';
-    return this.#order.reload();
+    return this.#order.value?.reload();
   }
 
   advance() {
     const next = this.nextStatus;
-    if (next === '' || this.saving.value) return;
+    const order = this.#order.value;
+    if (next === '' || this.saving.value || order === null) return;
 
     this.saving.value = true;
     this.writeErrorKey.value = '';
 
-    void inject(SALES_SERVICE)
-      .setOrderStatus(this.orderId, next)
-      // The server is the authority on what the order now is, and the order belongs to
-      // the resource: re-reading it is one request, and cheaper than this screen owning
-      // a second copy of the record to patch.
-      .then(() => this.load())
+    // The state module owns the write-then-refresh ordering, so every reader sees
+    // the same settled answer rather than this screen refreshing only its copy.
+    void order
+      .setStatus(next)
       .catch((cause) => {
         this.writeErrorKey.value =
           cause instanceof ApiError && cause.forbidden ? 'orders.writeForbidden' : 'common.saveFailed';

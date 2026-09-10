@@ -230,14 +230,75 @@ describe('operations application', () => {
     const before = requested.length;
 
     // Two components ask for this record on this navigation: the layout for its header
-    // and the index tab for the customer block. The client coalesces the concurrent
-    // pair into one request, so the screen costs one round trip rather than two.
+    // and the index tab for the customer block. The application record module owns one
+    // retained resource for both, so the screen starts one read.
     await goto('/sales/orders/OR-00002');
     await tick();
 
     const asked = requested.slice(before).filter((entry) => entry === 'GET /api/orders/OR-00002');
     assert.ok(present(innerOutlet().querySelector('order-summary-tab')), 'the index tab must mount');
-    assert.equal(asked.length, 1, 'the layout and its tab must share one request');
+    assert.equal(asked.length, 1, 'the layout and its tab must share one record');
+  });
+
+  it('keeps shared order state coherent through writes, ids, tabs, and final release', async () => {
+    await goto('/sales/orders/OR-00001');
+    const layout = /** @type {import('../src/pages/sales/order-detail-page.js').OrderDetailPage} */ (
+      present(main().querySelector('order-detail-page'))
+    );
+    const summary = /** @type {import('../src/pages/sales/order-summary-tab.js').OrderSummaryTab} */ (
+      present(innerOutlet().querySelector('order-summary-tab'))
+    );
+    assert.equal(summary.name, 'Aurora Utilities');
+
+    const beforeId = requested.length;
+    await goto('/sales/orders/OR-00002');
+    assert.equal(main().querySelector('order-detail-page'), layout, 'the reused layout must follow the id');
+    assert.equal(innerOutlet().querySelector('order-summary-tab'), summary, 'the reused tab must follow the id');
+    assert.equal(summary.name, 'Borealis Logistics', 'the tab must leave the previous settled record');
+    assert.equal(
+      requested.slice(beforeId).filter((entry) => entry === 'GET /api/orders/OR-00002').length,
+      1,
+      'both reused readers must start one read for the new id',
+    );
+
+    const beforeTabs = requested.length;
+    await goto('/sales/orders/OR-00002/lines');
+    await goto('/sales/orders/OR-00002');
+    assert.equal(
+      requested.slice(beforeTabs).filter((entry) => entry === 'GET /api/orders/OR-00002').length,
+      0,
+      'the retained layout must keep the record settled while its tab changes',
+    );
+
+    const beforeWrite = requested.length;
+    const advance = /** @type {HTMLButtonElement} */ (
+      present(layout.querySelector('app-card button'), 'the status action must render')
+    );
+    advance.click();
+    await tick();
+    assert.equal(layout.status, 'invoiced', 'the refresh after the write must reach the shared record');
+    assert.equal(
+      requested.slice(beforeWrite).filter((entry) => entry === 'PATCH /api/orders/OR-00002').length,
+      1,
+    );
+    assert.equal(
+      requested.slice(beforeWrite).filter((entry) => entry === 'GET /api/orders/OR-00002').length,
+      1,
+      'the shared record must refresh once after the write',
+    );
+
+    await goto('/sales/orders');
+    const beforeRevisit = requested.length;
+    await goto('/sales/orders/OR-00002');
+    assert.equal(
+      requested.slice(beforeRevisit).filter((entry) => entry === 'GET /api/orders/OR-00002').length,
+      1,
+      'leaving the final reader must make a later visit read fresh state',
+    );
+    const revisited = /** @type {import('../src/pages/sales/order-detail-page.js').OrderDetailPage} */ (
+      present(main().querySelector('order-detail-page'))
+    );
+    assert.equal(revisited.status, 'invoiced');
   });
 
   it('re-renders every mounted component when the locale changes', async () => {

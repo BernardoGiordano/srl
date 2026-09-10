@@ -11,6 +11,7 @@ import { PEOPLE_SERVICE, PeopleService } from './services/people-service.js';
 import { ADMIN_SERVICE, AdminService } from './services/admin-service.js';
 import { LOOKUP_SERVICE, LookupService } from './services/lookup-service.js';
 import { LIVE_FEED, LiveFeed } from './services/live-feed.js';
+import { ORDER_RECORDS, OrderRecords } from './state/order-records.js';
 import { BffCookieTokenStore } from './auth/bff-cookie-store.js';
 import { THEMES } from './theme.js';
 
@@ -74,6 +75,7 @@ await startHostedApplication({
     provide(ADMIN_SERVICE, () => new AdminService(inject(API_CLIENT)));
     provide(LOOKUP_SERVICE, () => new LookupService(inject(API_CLIENT)));
     provide(LIVE_FEED, () => new LiveFeed(inject(API_CLIENT)));
+    provide(ORDER_RECORDS, () => new OrderRecords(inject(SALES_SERVICE)));
   },
 
   /*

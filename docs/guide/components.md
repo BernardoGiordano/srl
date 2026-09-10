@@ -158,3 +158,21 @@ export class OrdersPage extends SignalElement {
 
 It is not a cache and not a store: no keying, no deduplication, no
 stale-while-revalidate. One value, one latest call. ADR-0076.
+
+## Sharing one settled record
+
+Two route levels that must agree after a write use an application state module over
+`resource()`. The order detail layout and summary tab both call:
+
+```js
+const order = inject(ORDER_RECORDS).watch(
+  () => routeParams.value.id ?? '',
+  this.lifetime,
+);
+```
+
+`OrderRecords` owns one resource per id while any reader is mounted. It follows parameter
+changes on reused routes, keeps the record while a tab changes, refreshes every reader after
+`setStatus()`, and deletes the entry on the final release. These are order-domain decisions,
+so the module lives in the application rather than `core`; it has no TTL or stale cache.
+ADR-0106.

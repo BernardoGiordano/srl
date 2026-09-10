@@ -21,31 +21,39 @@
  *     keeping a viewer out;
  *   - one 401 followed by success, so `authorizedFetch`'s refresh-and-retry is exercised
  *     rather than described;
- *   - server-side paging on `/api/orders`, because the orders screen is written against it.
+ *   - server-side paging on `/api/orders`, because the orders screen is written against it;
+ *   - a persisted order-status write, so shared record refresh is exercised end to end.
  */
 
 /** @typedef {{ username: string, name: string, role: string, scopes: string[], csrf: string }} FakeSession */
 
-const ORDERS = Array.from({ length: 45 }, (_unused, index) => ({
-  id: `OR-${String(index + 1).padStart(5, '0')}`,
-  code: `2026-${String(index + 1).padStart(5, '0')}`,
-  customerId: 'CU-0001',
-  customer: index % 2 === 0 ? 'Aurora Utilities' : 'Borealis Logistics',
-  status: index % 3 === 0 ? 'confirmed' : 'shipped',
-  channel: 'direct',
-  placedOn: `2026-0${(index % 9) + 1}-14`,
-  promisedOn: `2026-0${(index % 9) + 1}-28`,
-  currency: 'EUR',
-  total: 1000 + index * 25,
-  owner: 'Ada Rossi',
-  city: 'Milano',
-  comuneId: 'C00001',
-  comune: 'Aurora 1',
-}));
+function initialOrders() {
+  return Array.from({ length: 45 }, (_unused, index) => {
+    const aurora = index % 2 === 0;
+    return {
+      id: `OR-${String(index + 1).padStart(5, '0')}`,
+      code: `2026-${String(index + 1).padStart(5, '0')}`,
+      customerId: aurora ? 'CU-0001' : 'CU-0002',
+      customer: aurora ? 'Aurora Utilities' : 'Borealis Logistics',
+      status: index % 3 === 0 ? 'confirmed' : 'shipped',
+      channel: 'direct',
+      placedOn: `2026-0${(index % 9) + 1}-14`,
+      promisedOn: `2026-0${(index % 9) + 1}-28`,
+      currency: 'EUR',
+      total: 1000 + index * 25,
+      owner: 'Ada Rossi',
+      city: 'Milano',
+      comuneId: 'C00001',
+      comune: 'Aurora 1',
+    };
+  });
+}
+
+let ORDERS = initialOrders();
 
 /**
- * The one mutable resource here, because it is the only one the suite writes to. Reset
- * by `installFakeServer`, so a case that creates a customer cannot leave it for the next.
+ * Customers are reset by `installFakeServer`, so a case that creates or edits one cannot
+ * leave it for the next.
  *
  * @type {Array<Record<string, unknown> & { id: string, name: string, email: string }>}
  */
@@ -149,6 +157,7 @@ export function installFakeServer(options = {}) {
   session = null;
   expireOnce = false;
   requested.length = 0;
+  ORDERS = initialOrders();
   CUSTOMERS = initialCustomers();
   USERS = initialUsers();
 
@@ -302,7 +311,19 @@ function answer(url, method, bodyText) {
   if (orderId !== undefined && method === 'GET') {
     const order = ORDERS.find((candidate) => candidate.id === orderId);
     if (order === undefined) return json({ error: 'not_found' }, 404);
-    return refuse('sales:read') ?? json({ ...order, customerDetail: null });
+    const customer = CUSTOMERS.find((candidate) => candidate.id === order.customerId);
+    return refuse('sales:read') ?? json({ ...order, customerDetail: customer ?? null });
+  }
+
+  if (orderId !== undefined && method === 'PATCH') {
+    const denied = refuse('sales:write');
+    if (denied !== undefined) return denied;
+    const order = ORDERS.find((candidate) => candidate.id === orderId);
+    if (order === undefined) return json({ error: 'not_found' }, 404);
+    const status = readJson(bodyText).status;
+    if (typeof status !== 'string') return json({ error: 'invalid_status' }, 422);
+    order.status = status;
+    return json(order);
   }
 
   const linesId = /^\/api\/orders\/([\w-]+)\/lines$/u.exec(path)?.[1];
