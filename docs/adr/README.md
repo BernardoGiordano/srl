@@ -107,6 +107,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0106](0106-a-watched-order-is-one-retained-record.md) | A watched order is one retained record | accepted | `example/src/state/order-records.js`, `example/src/pages/sales/order-detail-page.js`, `example/src/pages/sales/order-summary-tab.js`, `example/src/main.js`, `example/test/order-records.test.js`, `example/test/app.smoke.test.js` |
 | [ADR-0107](0107-a-window-bounds-what-a-table-renders.md) | A window bounds what a table renders | accepted | `source/components/data/ui-table.js`, `source/components/data/ui-table.html`, `source/components/test/data/table.test.js`, `tools/benchmark/workloads.mjs`, `tools/benchmark/budgets.json`, `docs/position-and-non-goals.md`, `docs/known-gaps.md`, `docs/guide/collection.md` |
 | [ADR-0108](0108-the-bundles-carry-their-own-declarations.md) | The bundles carry their own declarations | accepted | `source/package.json`, `tools/delivery/package-bundle.mjs`, `cli/package/door.mjs`, `cli/package/interface.mjs`, `tools/checks/verify-deps.mjs`, `tools/checks/pack-check.mjs`, `tools/test/package-bundle.test.mjs` |
+| [ADR-0110](0110-the-lit-adapter-answers-in-lit-syntax.md) | The Lit adapter answers in Lit syntax | accepted | `cli/language-server/authoring.mjs`, `cli/language-server/semantics.mjs`, `cli/language-server/service.mjs`, `cli/test/language-server.test.mjs`, `docs/known-gaps.md` |
 
 <!-- /generated:adr-index -->
 

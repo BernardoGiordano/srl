@@ -81,22 +81,28 @@ void test('language service exposes the srl template contract', async (context) 
     service.close(litHostUri);
   });
 
-  await context.test('offers no srl grammar inside handwritten Lit templates', async () => {
+  await context.test('reads handwritten Lit templates in Lit grammar', async () => {
     const litSource = [
       "import { html } from 'lit';",
       'const view = html`<ui-table *for="row of rows" (click)=${pick}></ui-table>`;',
       '',
     ].join('\n');
     service.open(litHostUri, 'javascript', 2, litSource);
-    assert.deepEqual(
-      await service.completion(litHostUri, positionAt(litSource, litSource.indexOf('<ui-table') + 3)),
-      [],
+
+    const tags = await service.completion(litHostUri, positionAt(litSource, litSource.indexOf('<ui-table') + 3));
+    assert.ok(tags.some((item) => item.filterText === 'ui-table'));
+
+    // `*for` and `(click)` are plain attribute names here. Lit has neither directive,
+    // so the offer is Lit's own binding syntax over the same element surface.
+    const bindings = await service.completion(litHostUri, positionAt(litSource, litSource.indexOf('*for') + 1));
+    assert.ok(bindings.some((item) => item.label === '.rows'));
+    assert.ok(bindings.some((item) => item.label === '@click'));
+    assert.equal(
+      bindings.some((item) => ['*for', '*if', '[.rows]', '(click)'].includes(String(item.label))),
+      false,
     );
-    assert.deepEqual(
-      await service.completion(litHostUri, positionAt(litSource, litSource.indexOf('*for'))),
-      [],
-    );
-    assert.deepEqual((await service.semanticTokens(litHostUri)).data, []);
+
+    // A module's outline is its declarations, which the JavaScript service already owns.
     assert.deepEqual(await service.documentSymbols(litHostUri), []);
 
     // Tag identity is the one thing both authored forms share, so navigation still answers.
@@ -106,6 +112,77 @@ void test('language service exposes the srl template contract', async (context) 
     service.close(litHostUri);
   });
 
+  await context.test('describes Lit bindings and leaves substitutions to TypeScript', async () => {
+    const litSource = [
+      "import { html } from 'lit';",
+      'const view = html`<ui-date-range .range=${current} @range-confirm=${apply}></ui-date-range>`;',
+      '',
+    ].join('\n');
+    service.open(litHostUri, 'javascript', 3, litSource);
+
+    const onProperty = positionAt(litSource, litSource.indexOf('.range=') + 2);
+    assert.match((await service.hover(litHostUri, onProperty))?.contents.value ?? '', /UiDateRange\.range/u);
+    assert.match((await service.definition(litHostUri, onProperty))[0]?.uri ?? '', /ui-date-range\.js$/u);
+
+    const onEvent = positionAt(litSource, litSource.indexOf('@range-confirm') + 2);
+    assert.match((await service.hover(litHostUri, onEvent))?.contents.value ?? '', /UiDateRange` event/u);
+
+    // A substitution is the module's own JavaScript. A second completion list over the
+    // one TypeScript already gives there would be worse than none.
+    assert.deepEqual(
+      await service.completion(litHostUri, positionAt(litSource, litSource.indexOf('${current}') + 2)),
+      [],
+    );
+
+    const coloured = decodeTokens(litSource, (await service.semanticTokens(litHostUri)).data);
+    assert.deepEqual(
+      coloured.map((token) => token.text),
+      ['ui-date-range', '.range', '@range-confirm', 'ui-date-range'],
+    );
+    service.close(litHostUri);
+  });
+
+  await context.test('offers the uses quick fix for a tag written in inline Lit markup', async () => {
+    const litSource = [
+      "import { html } from 'lit';",
+      "import { UiCombobox } from '../inputs/ui-combobox.js';",
+      'class UiDynamicFilter {}',
+      'const view = html`<ui-table></ui-table>`;',
+      'await defineComponent({',
+      "  tag: 'ui-dynamic-filter',",
+      '  element: UiDynamicFilter,',
+      '  module: import.meta.url,',
+      '  uses: [UiCombobox],',
+      '});',
+      '',
+    ].join('\n');
+    service.open(litHostUri, 'javascript', 4, litSource);
+
+    const diagnostics = await service.diagnostics(litHostUri);
+    const diagnostic = diagnostics.find((candidate) => /Add `UiTable` to its `uses`/u.test(candidate.message));
+    assert.ok(diagnostic, 'markup built in JavaScript depends on `uses` exactly as a template file does');
+
+    const actions = await service.codeActions(litHostUri, diagnostic.range, [diagnostic]);
+    const edits = actions[0]?.edit.changes[litHostUri] ?? [];
+    assert.ok(edits.some((edit) => edit.newText.includes('import { UiTable }')));
+    assert.ok(edits.some((edit) => edit.newText.includes('UiCombobox, UiTable')));
+    service.close(litHostUri);
+  });
+
+  await context.test('claims no uses entry from a bare customElements.define', async () => {
+    // `uses` is a `defineComponent` list. This module registers its elements directly and
+    // its imports are what make the tags it names exist, so nothing here is missing.
+    const defined = resolve('source/lib/test/navigation/router.test.js');
+    const definedUri = pathToFileURL(defined).href;
+    const definedSource = await readFile(defined, 'utf8');
+    assert.match(definedSource, /html`[^`]*<x-route-outlet>/u, 'the fixture no longer writes inline markup');
+
+    service.open(definedUri, 'javascript', 1, definedSource);
+    const diagnostics = await service.diagnostics(definedUri);
+    assert.deepEqual(diagnostics.filter((candidate) => candidate.code === 'templates/dialect'), []);
+    service.close(definedUri);
+  });
+
   await context.test('follows Lit tag uses through aliases, svg and nesting', async () => {
     const litSource = [
       "import { html as h, svg } from 'lit';",
@@ -113,7 +190,7 @@ void test('language service exposes the srl template contract', async (context) 
       'const row = h`<div>${h`<ui-date-range></ui-date-range>`}</div>`;',
       '',
     ].join('\n');
-    service.open(litHostUri, 'javascript', 3, litSource);
+    service.open(litHostUri, 'javascript', 5, litSource);
     const position = positionAt(litSource, litSource.indexOf('<ui-date-range') + 2);
     const references = await service.references(litHostUri, position, false);
     assert.deepEqual(
@@ -218,4 +295,24 @@ function positionAt(source, offset) {
   const line = before.split('\n').length - 1;
   const newline = before.lastIndexOf('\n');
   return { line, character: before.length - newline - 1 };
+}
+
+/**
+ * Semantic tokens as the text they cover, so a test reads what was coloured rather than
+ * the relative line and character deltas the protocol sends.
+ *
+ * @param {string} source @param {number[]} data
+ */
+function decodeTokens(source, data) {
+  const lines = source.split('\n');
+  const tokens = [];
+  let line = 0;
+  let character = 0;
+  for (let index = 0; index < data.length; index += 5) {
+    const [deltaLine = 0, deltaCharacter = 0, length = 0, type = 0] = data.slice(index, index + 5);
+    line += deltaLine;
+    character = deltaLine === 0 ? character + deltaCharacter : deltaCharacter;
+    tokens.push({ text: (lines[line] ?? '').slice(character, character + length), type });
+  }
+  return tokens;
 }

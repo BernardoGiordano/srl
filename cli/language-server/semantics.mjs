@@ -1,11 +1,16 @@
 /**
- * One interpretation of an srl template for every editor feature.
+ * One interpretation of an authored template for every editor feature.
  *
  * The checker remains the second implementation of the runtime dialect: it emits
  * TypeScript and reports diagnostics. This module owns the editor-facing meaning of
  * incomplete source. It scans once, keeps scopes and exact source ranges together, and
  * asks the checker's compiler for member types. Callers do not search backwards with a
  * feature-specific regular expression. ADR-0092.
+ *
+ * Element nesting, tag spans and attribute spans are HTML, so both authored forms read
+ * them from the same scan. The `dialect` selects what else the scan means: srl records
+ * `{{ }}` and directive expressions, Lit records none because its substitutions are the
+ * module's own JavaScript and TypeScript already types them.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -28,6 +33,7 @@ import { templateExpressionMembers } from '../checks/template-check.mjs';
 /** @typedef {{ name: string, value: string, at: number, nameStart: number, nameEnd: number, valueStart: number, valueEnd: number }} Attribute */
 /** @typedef {{ kind: 'text', value: string, at: number } | ElementNode} TemplateNode */
 /** @typedef {{ kind: 'element', tag: string, attributes: Attribute[], children: TemplateNode[], at: number, nameStart: number, nameEnd: number, openEnd: number, end: number }} ElementNode */
+/** @typedef {'srl' | 'lit'} Dialect */
 /** @typedef {{ name: string, start: number, end: number, opening: boolean }} TagSpan */
 /** @typedef {{ start: number, end: number, attribute: string | undefined, element: ElementNode | undefined, event: string | undefined }} ExpressionSpan */
 /** @typedef {{ alias: string, iterable: string, indexAlias: string | undefined, at: number }} LoopScope */
@@ -82,6 +88,7 @@ export class TemplateSemantics {
    *   model: ProjectModel,
    *   component?: ElementRecord,
    *   documents: Map<string, { text: string, version?: number }>,
+   *   dialect?: Dialect,
    * }} input
    */
   constructor(input) {
@@ -90,7 +97,7 @@ export class TemplateSemantics {
     this.#model = input.model;
     this.#component = input.component;
     this.#documents = input.documents;
-    const scanned = scanTemplate(input.source);
+    const scanned = scanTemplate(input.source, input.dialect ?? 'srl');
     this.roots = scanned.roots;
     this.#elements = scanned.elements;
     this.#tags = scanned.tags;
@@ -181,6 +188,23 @@ export class TemplateSemantics {
     return this.#tags
       .filter((candidate) => candidate.name === name)
       .map(({ start, end }) => ({ start, end }));
+  }
+
+  /** Every parsed tag name, opening and closing, in source order. */
+  tagSpans() {
+    return this.#tags.map((span) => ({ ...span }));
+  }
+
+  /** Every parsed attribute name and the tag carrying it, in source order. */
+  attributeSpans() {
+    return this.#elements.flatMap((element) =>
+      element.attributes.map((attribute) => ({
+        tag: element.tag,
+        name: attribute.name,
+        start: attribute.nameStart,
+        end: attribute.nameEnd,
+      })),
+    );
   }
 
   /** Expression ranges used by semantic highlighting. */
@@ -455,8 +479,7 @@ function javaScriptDocuments(documents) {
 }
 
 /**
- * Every tag the inline Lit templates of one JavaScript module name, at the module's own
- * offsets.
+ * The inline Lit markup of one JavaScript module, at the module's own offsets.
  *
  * A handwritten Lit component writes its markup in tagged templates instead of a sibling
  * `.html` file, so a scan that visits template files alone reports no uses for markup
@@ -467,21 +490,19 @@ function javaScriptDocuments(documents) {
  * The literal chunks of every markup template are copied into a blank of the module's
  * own length, so what the shared scanner reads is markup only and the spans it reports
  * are already offsets into the module. A template nested in a substitution is another
- * tagged template, copied by the same walk; everything else — code, comments, strings,
- * the substitutions themselves — stays blank.
+ * tagged template, copied by the same walk; code, comments and strings stay blank.
+ *
+ * A substitution becomes `$` padding rather than blank. `.rows=${rows}` is one binding
+ * whose value happens to be JavaScript, and blanking it left the scanner reading the
+ * next attribute name as that binding's unquoted value. The padding is the substitution's
+ * own length, so every span stays at its module offset and an offset inside the
+ * substitution reports the binding it belongs to.
  *
  * @param {string} source
- * @returns {Array<{ name: string, start: number, end: number }>}
+ * @returns {string | null} Null when the module writes no markup at all.
  */
-export function litTags(source) {
-  if (!source.includes('`')) return [];
-  const markup = litMarkup(source);
-  if (markup === null) return [];
-  return scanTemplate(markup).tags.map(({ name, start, end }) => ({ name, start, end }));
-}
-
-/** @param {string} source @returns {string | null} The module's Lit markup at its own offsets. */
-function litMarkup(source) {
+export function litSource(source) {
+  if (!source.includes('`')) return null;
   const tree = ts.createSourceFile('module.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const markupTags = markupTagNames(tree);
   const blank = new Array(source.length).fill(' ');
@@ -493,17 +514,26 @@ function litMarkup(source) {
     for (let index = start; index < end; index += 1) blank[index] = source[index];
   };
 
+  /** @param {number} start @param {number} end */
+  const pad = (start, end) => {
+    for (let index = start; index < end; index += 1) blank[index] = '$';
+  };
+
   /** @param {ts.Node} node */
   const visit = (node) => {
     if (ts.isTaggedTemplateExpression(node) && ts.isIdentifier(node.tag) && markupTags.has(node.tag.text)) {
       const literal = node.template;
       if (ts.isNoSubstitutionTemplateLiteral(literal)) keep(literal.getStart(tree) + 1, literal.getEnd() - 1);
       else {
-        // A head or middle chunk ends with the `${` that opens the next substitution.
+        // A head or middle chunk ends with the `${` that opens the next substitution,
+        // which is padded here and overwritten again by any markup nested inside it.
         keep(literal.head.getStart(tree) + 1, literal.head.getEnd() - 2);
+        let opener = literal.head.getEnd() - 2;
         for (const span of literal.templateSpans) {
           const closing = span.literal.kind === ts.SyntaxKind.TemplateTail ? 1 : 2;
+          pad(opener, span.literal.getStart(tree) + 1);
           keep(span.literal.getStart(tree) + 1, span.literal.getEnd() - closing);
+          opener = span.literal.getEnd() - closing;
         }
       }
     }
@@ -535,8 +565,8 @@ function markupTagNames(tree) {
   return names;
 }
 
-/** @param {string} source */
-function scanTemplate(source) {
+/** @param {string} source @param {Dialect} dialect */
+function scanTemplate(source, dialect = 'srl') {
   /** @type {TemplateNode[]} */
   const roots = [];
   /** @type {ElementNode[]} */
@@ -566,7 +596,7 @@ function scanTemplate(source) {
       continue;
     }
 
-    if (source.startsWith('{{', index)) {
+    if (dialect === 'srl' && source.startsWith('{{', index)) {
       const close = source.indexOf('}}', index + 2);
       const end = close === -1 ? source.length : close + 2;
       stack.at(-1)?.children.push({ kind: 'text', value: source.slice(index, end), at: index });
@@ -583,7 +613,7 @@ function scanTemplate(source) {
 
     if (source[index] !== '<') {
       const tag = source.indexOf('<', index);
-      const interpolation = source.indexOf('{{', index);
+      const interpolation = dialect === 'srl' ? source.indexOf('{{', index) : -1;
       const candidates = [tag, interpolation].filter((candidate) => candidate !== -1);
       const stop = candidates.length === 0 ? source.length : Math.min(...candidates);
       stack.at(-1)?.children.push({ kind: 'text', value: source.slice(index, stop), at: index });
@@ -626,7 +656,7 @@ function scanTemplate(source) {
     const nameStart = index + head[0].lastIndexOf(head[1]);
     const close = tagEnd(source, nameStart + head[1].length);
     const openEnd = close === -1 ? source.length : close + 1;
-    const attributes = parseAttributes(source, nameStart + head[1].length, close === -1 ? source.length : close);
+    const attributes = parseAttributes(source, nameStart + head[1].length, close === -1 ? source.length : close, dialect);
     const node = {
       kind: /** @type {const} */ ('element'),
       tag,
@@ -641,7 +671,7 @@ function scanTemplate(source) {
     elements.push(node);
     stack.at(-1)?.children.push(node);
     tags.push({ name: tag, start: node.nameStart, end: node.nameEnd, opening: true });
-    recordAttributeExpressions(expressions, node);
+    if (dialect === 'srl') recordAttributeExpressions(expressions, node);
 
     const inside = source.slice(nameStart + head[1].length, close === -1 ? source.length : close);
     const selfClosing = /\/\s*$/u.test(inside);
@@ -708,8 +738,13 @@ function recordAttributeExpressions(expressions, element) {
   }
 }
 
-/** @param {string} source @param {number} from @param {number} end */
-function parseAttributes(source, from, end) {
+/**
+ * Attribute names are lowercased for srl, whose property bindings are written in kebab
+ * case, and kept verbatim for Lit, where `.optionRenderer` names the property itself.
+ *
+ * @param {string} source @param {number} from @param {number} end @param {Dialect} dialect
+ */
+function parseAttributes(source, from, end, dialect = 'srl') {
   /** @type {Attribute[]} */
   const attributes = [];
   let index = from;
@@ -722,7 +757,7 @@ function parseAttributes(source, from, end) {
       continue;
     }
     const nameStart = index;
-    const name = match[0].toLowerCase();
+    const name = dialect === 'lit' ? match[0] : match[0].toLowerCase();
     index += match[0].length;
     const nameEnd = index;
     while (/\s/u.test(source[index] ?? '')) index += 1;

@@ -27,78 +27,6 @@ import { AuthoredTemplates } from './authoring.mjs';
 /** @typedef {{ name: string, detail: string, kind: number, range: Range, selectionRange: Range, children: LspDocumentSymbol[] }} LspDocumentSymbol */
 /** @typedef {{ name: string, kind: number, detail: string, documentation: string, location: { uri: string, range: Range } }} ClassSymbol */
 
-const COMMON_ATTRIBUTES = [
-  'class',
-  'id',
-  'title',
-  'role',
-  'slot',
-  'hidden',
-  'tabindex',
-  'aria-label',
-  'data-testid',
-];
-
-const COMMON_EVENTS = [
-  'blur',
-  'change',
-  'click',
-  'focus',
-  'input',
-  'keydown',
-  'keyup',
-  'pointerdown',
-  'pointerup',
-  'submit',
-];
-
-const NATIVE_ELEMENT_SURFACES = new Map([
-  [
-    'input',
-    {
-      attributes: [
-        'accept',
-        'autocomplete',
-        'checked',
-        'disabled',
-        'max',
-        'maxlength',
-        'min',
-        'minlength',
-        'multiple',
-        'name',
-        'pattern',
-        'placeholder',
-        'readonly',
-        'required',
-        'step',
-        'type',
-        'value',
-      ],
-      boolean: ['checked', 'disabled', 'multiple', 'readonly', 'required'],
-      properties: ['checked', 'disabled', 'files', 'value', 'valueAsDate', 'valueAsNumber'],
-    },
-  ],
-]);
-
-const DIRECTIVES = [
-  {
-    label: '*if',
-    detail: 'Render this element when the expression is truthy.',
-    insertText: '*if="$1"',
-  },
-  {
-    label: '*else',
-    detail: 'Render this element when the preceding *if is false.',
-    insertText: '*else',
-  },
-  {
-    label: '*for',
-    detail: 'Repeat this element for an iterable, with an optional stable key.',
-    insertText: '*for="${1:item} of ${2:items}; key: ${1:item}.${3:id}"',
-  },
-];
-
 /**
  * One long-lived language service per repository root.
  */
@@ -221,11 +149,21 @@ export class SrlLanguageService {
     );
   }
 
-  /** @param {ProjectModel} model @param {string} path @returns {ElementRecord | undefined} */
+  /**
+   * The component a document belongs to: the one whose template it is, or — for a
+   * JavaScript module — the one it declares, which is where its inline Lit markup, its
+   * `uses` list and its property surface all live.
+   *
+   * @param {ProjectModel} model @param {string} path @returns {ElementRecord | undefined}
+   */
   component(model, path) {
     const claim = model.templates.get(path)?.claimedBy;
     if (claim !== undefined && claim !== null) return model.elements.get(claim);
-    return [...model.elements.values()].find((element) => element.template === path);
+    const elements = [...model.elements.values()];
+    return (
+      elements.find((element) => element.template === path) ??
+      elements.find((element) => element.module === path)
+    );
   }
 
   /**
@@ -249,8 +187,10 @@ export class SrlLanguageService {
       found.push(...project.diagnostics.filter((diagnostic) => diagnostic.file === path));
     }
 
-    if (this.#authoring.form(path) === 'srl') {
-      const component = this.component(model, path);
+    const form = this.#authoring.form(path);
+    const component = this.component(model, path);
+
+    if (form === 'srl') {
       if (component !== undefined) {
         try {
           found.push(
@@ -280,6 +220,20 @@ export class SrlLanguageService {
             column: 1,
           });
         }
+      }
+    }
+
+    if (form === 'lit' && component !== undefined) {
+      const view = this.#view(uri, source, model, component);
+      for (const unavailable of view.unavailableTags(model, component)) {
+        found.push({
+          severity: 'error',
+          code: 'templates/dialect',
+          message: unavailableMessage(path, unavailable),
+          group: model.app.name,
+          file: path,
+          ...oneBased(positionAt(source, unavailable.at)),
+        });
       }
     }
 
@@ -319,7 +273,7 @@ export class SrlLanguageService {
       return projectionCompletions(model.elements.get(context.parentTag ?? ''));
     }
     if (context.kind === 'opening-tag' || context.kind === 'attribute') {
-      return attributeCompletions(context.tag, model.elements.get(context.tag));
+      return view.attributeCompletions(context.tag, model.elements.get(context.tag));
     }
     return [];
   }
@@ -341,7 +295,7 @@ export class SrlLanguageService {
     const context = view.at(offset);
     if (context.kind === 'attribute') {
       const record = model.elements.get(context.tag);
-      const hover = attributeHover(context.name, record);
+      const hover = view.attributeHover(context.name, record);
       if (hover !== null) return { contents: { kind: 'markdown', value: hover } };
     }
 
@@ -385,7 +339,7 @@ export class SrlLanguageService {
     const context = view.at(offset);
     if (context.kind === 'attribute') {
       const record = model.elements.get(context.tag);
-      const name = bindingName(context.name);
+      const name = view.boundProperty(context.name);
       if (record !== undefined && name !== null && record.properties.includes(name)) {
         const property = record.propertyDeclarations.find((candidate) => candidate.name === name);
         if (property !== undefined) return [declarationLocation(property.declaration, name)];
@@ -667,70 +621,6 @@ function tagCompletions(model, component) {
     }));
 }
 
-/** @param {string} tag @param {ElementRecord | undefined} record */
-function attributeCompletions(tag, record) {
-  const native = NATIVE_ELEMENT_SURFACES.get(tag);
-  /** @type {Array<Record<string, unknown>>} */
-  const found = DIRECTIVES.map((directive) => ({
-    ...directive,
-    kind: 14,
-    insertTextFormat: 2,
-  }));
-  const customEvents = new Map(record?.events.map((event) => [event.name, event]) ?? []);
-  for (const event of new Set([...COMMON_EVENTS, ...customEvents.keys()])) {
-    const custom = customEvents.get(event);
-    found.push({
-      label: `(${event})`,
-      kind: 23,
-      detail: custom === undefined ? 'srl event binding' : `${record?.className ?? tag} event`,
-      insertText: `(${event})="$1"`,
-      insertTextFormat: 2,
-    });
-  }
-  for (const name of [
-    ...new Set([
-      ...COMMON_ATTRIBUTES,
-      ...(native?.attributes ?? []),
-      ...(record?.observedAttributes ?? []),
-    ]),
-  ]) {
-    found.push({
-      label: name,
-      kind: 10,
-      detail: record?.observedAttributes?.includes(name) === true ? `${record.className} attribute` : 'HTML attribute',
-      insertText: `${name}="$1"`,
-      insertTextFormat: 2,
-    });
-    found.push({
-      label: `[${name}]`,
-      kind: 10,
-      detail: 'srl attribute binding',
-      insertText: `[${name}]="$1"`,
-      insertTextFormat: 2,
-    });
-    if (native?.boolean.includes(name) === true) {
-      found.push({
-        label: `[?${name}]`,
-        kind: 10,
-        detail: 'srl boolean attribute binding',
-        insertText: `[?${name}]="$1"`,
-        insertTextFormat: 2,
-      });
-    }
-  }
-  for (const property of [...new Set([...(native?.properties ?? []), ...(record?.properties ?? [])])]) {
-    const kebab = kebabCase(property);
-    found.push({
-      label: `[.${kebab}]`,
-      kind: 10,
-      detail: `${record?.className ?? 'custom element'} property: ${property}`,
-      insertText: `[.${kebab}]="$1"`,
-      insertTextFormat: 2,
-    });
-  }
-  return found;
-}
-
 /** Named projection buckets accepted by the parent element.
  * @param {ElementRecord | undefined} record @returns {Array<Record<string, unknown>>}
  */
@@ -794,28 +684,6 @@ function elementMarkdown(record) {
     );
   }
   return lines.join('\n');
-}
-
-/** @param {string} name @param {ElementRecord | undefined} record */
-function attributeHover(name, record) {
-  if (name === '*if') return '**`*if`** — renders this element when its expression is truthy.';
-  if (name === '*else') return '**`*else`** — alternate for the preceding sibling carrying `*if`.';
-  if (name === '*for') return '**`*for`** — iterates `item of items`; accepts `key:` and `index as` clauses.';
-  if (name.startsWith('(') && name.endsWith(')')) return `**\`${name}\`** — typed DOM event binding; \`$event\` is in scope.`;
-  const binding = bindingName(name);
-  if (binding !== null && record?.properties.includes(binding) === true) {
-    return `**\`${name}\`** — \`${record.className}.${binding}\` property binding.`;
-  }
-  if (name.startsWith('[?')) return `**\`${name}\`** — boolean attribute binding.`;
-  if (name.startsWith('[')) return `**\`${name}\`** — attribute binding.`;
-  if (record?.observedAttributes?.includes(name) === true) return `**\`${name}\`** — observed by \`${record.className}\`.`;
-  return null;
-}
-
-/** @param {string} name */
-function bindingName(name) {
-  if (!name.startsWith('[.') || !name.endsWith(']')) return null;
-  return camelCase(name.slice(2, -1));
 }
 
 /** @param {ElementRecord} record @param {Map<string, { text: string }>} documents @returns {Promise<{ uri: string, range: Range }>} */
@@ -1037,6 +905,26 @@ function offsetAt(source, position) {
   return Math.min(source.length, offset + position.character);
 }
 
+/**
+ * Why a tag written in inline Lit markup will not render, in the checker's own words so
+ * that one quick fix answers both authored forms.
+ *
+ * @param {string} path @param {import('./authoring.mjs').UnavailableTag} unavailable
+ */
+function unavailableMessage(path, unavailable) {
+  const { record } = unavailable;
+  return (
+    `${relativePath(path)}: <${unavailable.tag}> is ${record.className} in ` +
+    `${relativePath(record.module)}, which this component does not import. ` +
+    `Add \`${record.className}\` to its \`uses\`.`
+  );
+}
+
+/** @param {Position} position Diagnostics count lines and columns from one. */
+function oneBased(position) {
+  return { line: position.line + 1, column: position.character + 1 };
+}
+
 /** @param {string} source @param {number} offset */
 function positionAt(source, offset) {
   const before = source.slice(0, Math.max(0, offset));
@@ -1150,14 +1038,4 @@ function relativePath(path) {
   const cwd = process.cwd();
   const shown = relative(cwd, path).split(sep).join('/');
   return shown.startsWith('..') ? path : shown;
-}
-
-/** @param {string} value */
-function camelCase(value) {
-  return value.replace(/-([a-z])/gu, (_all, character) => String(character).toUpperCase());
-}
-
-/** @param {string} value */
-function kebabCase(value) {
-  return value.replace(/[A-Z]/gu, (character) => `-${character.toLowerCase()}`);
 }

@@ -28,6 +28,31 @@ tags, in template files and in the `html` templates a handwritten Lit component 
 JavaScript, never tag-shaped text in comments, strings or raw `script` and `style`
 content, and refuses an identity already registered by another element.
 
+## Inline Lit templates
+
+A component may write markup in an `html` or `svg` tagged template instead of a sibling
+`.html` file. The server reads those templates in Lit's own syntax against the same
+element model, so the same questions get the same answers in the writing the form uses
+([ADR-0110](../adr/0110-the-lit-adapter-answers-in-lit-syntax.md)).
+
+| Question | Template file | Inline Lit |
+| --- | --- | --- |
+| Property binding | `[.row-key]="expr"` | `.rowKey=${expr}` |
+| Event binding | `(click)="pick($event)"` | `@click=${pick}` |
+| Boolean attribute | `[?disabled]="busy"` | `?disabled=${busy}` |
+| Conditionals and loops | `*if`, `*for`, `*fragment` | expressions in `${…}` |
+
+Tag completion, binding completion, binding hover, property go-to-definition, semantic
+highlighting of tags and binding prefixes, and the `uses` quick fix all work inside those
+templates. A tag named there needs a `uses` entry exactly as one written in a template
+file does, because `uses` is what registers the element, and the same quick fix adds it.
+
+Inside a `${…}` substitution the server stops. That is the module's own JavaScript, and
+the editor's JavaScript service already completes and types it — a second list over a
+correct one would only get in the way. srl's typed template scope is likewise srl-only:
+loop locals, signal unwrapping and a typed `$event` are template grammar, and a Lit
+template writes those things as ordinary expressions.
+
 JavaScript editing remains the editor's own JavaScript language service. The srl server
 adds the template half and project-model diagnostics; it does not replace JavaScript
 completion, formatting, or refactoring.
