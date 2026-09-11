@@ -107,6 +107,32 @@ const sourceByUrl = new Map();
 const byClass = new WeakMap();
 
 /**
+ * Which classes attached a template, for the development revision path below.
+ *
+ * `byClass` answers "what does this class render", and an edit asks the question
+ * the other way round. It names a URL, and every class that attached that URL has
+ * to be handed the new compile. Classes are held strongly, which costs nothing
+ * anyone else is not already paying — `customElements.define` retains every one of
+ * them for the life of the page.
+ *
+ * @type {Map<string, Set<object>>}
+ */
+const attachedByUrl = new Map();
+
+/**
+ * The published revision of a template, once an edit has replaced the compile the
+ * network produced. Development only, and empty in every other page.
+ *
+ * Kept as well as written into `byUrl`, because a request already in flight when
+ * the edit arrived resolves *after* it. `fetchAndCompile` reads this and publishes
+ * the revision instead of compiling the bytes it was handed, which are both stale
+ * and a second strings array for one URL. ADR-0014.
+ *
+ * @type {Map<string, CompiledTemplate>}
+ */
+const revisedByUrl = new Map();
+
+/**
  * Which group a template belongs to, for the groups that have not started yet.
  *
  * The manifest partitions an artifact's markup by the chunk whose modules name it
@@ -273,7 +299,11 @@ function startTemplateGroup(href) {
  * @returns {Promise<CompiledTemplate>}
  */
 async function fetchAndCompile(href) {
-  return compileTemplate(await sourceOf(href), href);
+  const source = await sourceOf(href);
+  // An edit published while this request was in flight is the newer answer, and
+  // compiling the bytes that arrived would also give one URL a second strings
+  // array — two hosts of the same template rendering different DOM. ADR-0111.
+  return revisedByUrl.get(href) ?? compileTemplate(source, href);
 }
 
 /**
@@ -318,6 +348,16 @@ export async function attachTemplate(ctor, url) {
   const href = new URL(url, document.baseURI).href;
   startTemplateGroup(href);
 
+  // Recorded before the await, so an edit that lands while this template is still
+  // arriving reaches this class too. Both orders agree, because the revision writes
+  // `byClass` here and the `loadTemplate` below resolves to that same revision.
+  let attached = attachedByUrl.get(href);
+  if (attached === undefined) {
+    attached = new Set();
+    attachedByUrl.set(href, attached);
+  }
+  attached.add(ctor);
+
   byClass.set(ctor, await loadTemplate(href));
 }
 
@@ -343,6 +383,87 @@ export function templateFor(ctor) {
     current = Reflect.getPrototypeOf(current);
   }
   return undefined;
+}
+
+/* ── Development revisions ─────────────────────────────────────────────── */
+
+/**
+ * The one thing `renderRevision` needs of a host is a way to be told its markup
+ * changed. `SignalElement` has it, and anything else holding a template of its own
+ * is left alone.
+ *
+ * @typedef {{ renderRevisedTemplate?: () => void }} RevisableHost
+ */
+
+/**
+ * Render an edited `.html` file in a page that is already showing it.
+ *
+ * Development only. An editor saves the file, the development server hands the
+ * bytes to its browser adapter, and the adapter calls this. The components that
+ * render that file render the new markup, and each host keeps the instance it
+ * already was, so its fields, its signals, its subscriptions and its place in the
+ * document all survive an edit to its markup. ADR-0111.
+ *
+ * One compile, committed only once it has succeeded. Markup that does not compile
+ * throws and changes nothing, so a file caught half-written leaves the page
+ * rendering the revision it already had rather than blanking a screen.
+ *
+ * The new strings array is the one deliberate exception to ADR-0014's "never
+ * rebuilt". lit keys its parsed template on that array's identity, so a new array
+ * is precisely how the DOM gets rebuilt from new markup, and this is the only
+ * caller that ever asks for one. A page nobody is editing never reaches here.
+ *
+ * What does not survive is what the old DOM held: focus, scroll position, an open
+ * `<details>`, a half-typed value in an uncontrolled input. The host is the same
+ * object; its children are new nodes.
+ *
+ * @internal
+ * @param {string | URL} url
+ * @param {string} source
+ * @returns {boolean} Whether this page had the template. `false` means nothing
+ *   here ever asked for that URL, so there is nothing to revise and whichever
+ *   component mounts next fetches the edited file in the ordinary way.
+ */
+export function reviseTemplate(url, source) {
+  const href = new URL(url, document.baseURI).href;
+  if (!sourceByUrl.has(href)) return false;
+
+  const compiled = compileTemplate(source, href);
+
+  sourceByUrl.set(href, source);
+  revisedByUrl.set(href, compiled);
+  byUrl.set(href, Promise.resolve(compiled));
+  for (const ctor of attachedByUrl.get(href) ?? []) byClass.set(ctor, compiled);
+
+  renderRevision(compiled);
+  return true;
+}
+
+/**
+ * Ask every live host of a revised template to render it.
+ *
+ * The document is walked rather than a registry of hosts kept. A registry would
+ * cost a set entry on every connect and disconnect in every page, production
+ * included, to serve an edit that only ever happens in development; the walk costs
+ * nothing until an edit arrives. It also finds subclasses for free, because
+ * `templateFor` is the same inheritance walk a render does.
+ *
+ * Hosts outside the document are skipped and need nothing. `SignalElement.render`
+ * reads its attachment on every render, so one that is connected again renders the
+ * revision then. Shadow roots are not walked either, which reaches every host there
+ * is because a component renders into light DOM — see projection.js.
+ *
+ * @param {CompiledTemplate} compiled
+ */
+function renderRevision(compiled) {
+  for (const element of document.querySelectorAll('*')) {
+    if (templateFor(element.constructor) !== compiled) continue;
+    // Called rather than imported, because `@core/elements/signal-element.js`
+    // imports this module. Named on the host rather than inverted into a handler it
+    // registers, because one consumer is not a seam, and because the host is what
+    // knows how to report why it is rendering. ADR-0109.
+    /** @type {RevisableHost} */ (/** @type {unknown} */ (element)).renderRevisedTemplate?.();
+  }
 }
 
 /* ── Interpolation pre-pass ────────────────────────────────────────────── */

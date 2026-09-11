@@ -109,6 +109,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0108](0108-the-bundles-carry-their-own-declarations.md) | The bundles carry their own declarations | accepted | `source/package.json`, `tools/delivery/package-bundle.mjs`, `cli/package/door.mjs`, `cli/package/interface.mjs`, `tools/checks/verify-deps.mjs`, `tools/checks/pack-check.mjs`, `tools/test/package-bundle.test.mjs` |
 | [ADR-0109](0109-an-update-reports-why-it-happened.md) | An update reports why it happened | accepted | `source/lib/core/diagnostics/updates.js`, `source/lib/core/diagnostics/report.js`, `source/lib/core/diagnostics/types.d.ts`, `source/lib/core/elements/signal-element.js`, `source/lib/core/template/template.js`, `source/lib/test/diagnostics/updates.test.js`, `docs/guide/performance.md`, `docs/known-gaps.md`, `docs/reference/source-layout.md` |
 | [ADR-0110](0110-the-lit-adapter-answers-in-lit-syntax.md) | The Lit adapter answers in Lit syntax | accepted | `cli/language-server/authoring.mjs`, `cli/language-server/semantics.mjs`, `cli/language-server/service.mjs`, `cli/test/language-server.test.mjs`, `docs/known-gaps.md` |
+| [ADR-0111](0111-an-edited-template-revises-the-page-rendering-it.md) | An edited template revises the page that is rendering it | accepted | `source/lib/core/template/template.js`, `source/lib/core/elements/signal-element.js`, `source/lib/core/diagnostics/types.d.ts`, `source/lib/test/template/revision.test.js`, `docs/guide/performance.md`, `docs/position-and-non-goals.md`, `docs/reference/source-layout.md` |
 
 <!-- /generated:adr-index -->
 

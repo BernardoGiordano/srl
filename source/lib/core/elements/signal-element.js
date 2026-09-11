@@ -236,6 +236,19 @@ export class SignalElement extends LitElement {
     return compiled(this);
   }
 
+  /**
+   * Render markup that has replaced this element's template.
+   *
+   * Development only, and called by `@core/template/template.js` when an edited
+   * `.html` file compiles. The attachment has already been replaced by then, so
+   * this asks for a render and names the reason it is happening — `render()` reads
+   * the current attachment and finds the new one. ADR-0111.
+   */
+  renderRevisedTemplate() {
+    this.#updateCause = 'template';
+    this.requestUpdate();
+  }
+
   /** Called once, after the first render, with the DOM in place. */
   onMount() {}
 

@@ -414,6 +414,7 @@ Read the causes literally:
 | `signal` | both | the effect behind it re-ran. **Which** signal is not recorded |
 | `properties` | elements | a reactive property was written, or `requestUpdate()` was called. The names follow in brackets |
 | `reconnect` | both | the element re-entered the DOM, or the directive reconnected |
+| `template` | elements | an edit to the element's `.html` file replaced its compiled template ([ADR-0111](../adr/0111-an-edited-template-revises-the-page-rendering-it.md)). Development only |
 | `rerender` | bindings | the scope it reads bumped its version: the host rendered, or its `*for` row got a new item |
 | `rebind` | bindings | the Part now holds a different expression or scope — an `*if` branch that flipped, or a keyed row that moved |
 

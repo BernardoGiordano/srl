@@ -36,7 +36,8 @@ source/lib/                 THE FRAMEWORK, served at /lib/
                             the path that scheduled it knew, nested into one tree
       report.js             that tree as text, which is the only adapter there is
     template/
-      template.js           .html -> lit template, cached by URL
+      template.js           .html -> lit template, cached by URL, and revised in place
+                            when a development edit replaces one (ADR-0111)
       dialect.js            the grammar itself: attribute tables, directive syntax,
                             sink -> security context. Imports nothing, so the runtime
                             and the static checker share one copy
