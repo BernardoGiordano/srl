@@ -355,9 +355,11 @@ export const PENDING = [
   {
     id: 'delivery/edit-to-reload',
     reason:
-      'One-file edit to browser reload needs cli/dev/serve.mjs running with its watcher and a page ' +
-      'listening on /__reload. That is a second origin shape, and mixing it into the measured ' +
-      'origin would change the cache policy every other workload depends on.',
+      'One-file edit to what the developer sees needs cli/dev/serve.mjs running with its update ' +
+      'session and a page listening on /__updates. That is a second origin shape, and mixing it ' +
+      'into the measured origin would change the cache policy every other workload depends on. ' +
+      'There are now two numbers behind the one name: a template edit is a revision rendered into ' +
+      'the hosts already showing it, and every other edit is still a reload.',
   },
 ];
 

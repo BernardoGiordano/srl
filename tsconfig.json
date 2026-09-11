@@ -54,6 +54,11 @@
     "example/**/*.mjs",
     "cli/**/*.mjs",
     "cli/**/*.d.ts",
+    // cli/dev/update-client.js is the one browser module in cli/: the development
+    // server serves it to the page it is watching, so it resolves `@core/` through
+    // the application's import map like the source it revises. Same case as
+    // tools/**/*.js below, one directory over.
+    "cli/**/*.js",
     "tools/**/*.mjs",
     "tools/**/*.d.ts",
     // tools/benchmark/browser holds the workload modules Chrome imports over the

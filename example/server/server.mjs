@@ -1,7 +1,7 @@
 /**
  * The example application's server.
  *
- *   node example/server/server.mjs [--port 8100] [--open] [--api-only]
+ *   node example/server/server.mjs [--port 8100] [--open] [--api-only] [--no-watch]
  *
  * Plain Node, zero dependencies, no database, no `npm install`. It serves the
  * application, the framework and the shared collection on one origin, and answers
@@ -51,13 +51,16 @@ function flag(name, fallback) {
 const PORT = Number(flag('port', '8100'));
 const OPEN = process.argv.includes('--open');
 const API_ONLY = process.argv.includes('--api-only');
+const WATCH = !process.argv.includes('--no-watch');
 
 // Imported here rather than at the top so that --api-only never resolves the
 // module: the point of the flag is a deployment where cli/layout.mjs does not
 // exist. Top-level await, so the server is not listening before it is decided —
 // and so the static half's first project-model build starts before the first
 // request rather than inside it.
-const serveStatic = API_ONLY ? null : (await import('./static.mjs')).staticOrigin(APP_DIR);
+const serveStatic = API_ONLY
+  ? null
+  : (await import('./static.mjs')).staticOrigin(APP_DIR, { watch: WATCH });
 
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
@@ -74,7 +77,7 @@ const server = createServer((request, response) => {
         response.end(JSON.stringify({ error: 'not_found', path: url.pathname }));
         return;
       }
-      await serveStatic(request, response);
+      await serveStatic.handle(request, response);
     } catch (cause) {
       // One place that turns a thrown handler into a response. Without it a bad
       // request body hangs the socket and the browser reports a network error
@@ -108,6 +111,7 @@ server.listen(PORT, () => {
 for (const signal of /** @type {const} */ (['SIGINT', 'SIGTERM'])) {
   process.on(signal, () => {
     stopTicker();
+    void serveStatic?.close();
     server.close(() => process.exit(0));
     // An open event stream is a live connection; without this the process waits
     // for a subscriber that will never disconnect on its own.

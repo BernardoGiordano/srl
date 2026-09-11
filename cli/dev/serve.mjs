@@ -22,9 +22,11 @@
  * the artifact test origin serve through as well. ADR-0075. What is here is the
  * part that is only true of development:
  *
- *   live reload   a full page reload rather than component hot-swapping, on
- *                 purpose: `customElements.define` is permanent, so a component
- *                 class cannot be redefined. Injected into the response and never
+ *   updates       what changed on disk, as the URL the browser knows it by, so an
+ *                 edited `.html` file is re-rendered into the hosts showing it and
+ *                 only the edits that need one cost a reload. `cli/dev/updates.mjs`
+ *                 owns the watching, the batching and the delivery; this file owns
+ *                 the decision to start one. Injected into the response and never
  *                 into the file, so the bytes this server sends and the bytes
  *                 nginx sends are the same in production.
  *   --proxy       forwards a URL prefix to a backend instead of serving it from
@@ -48,13 +50,14 @@
  * than by spawning this file and parsing its stdout.
  */
 
-import { readFile, stat, watch } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { templateAnnouncer } from '../delivery/source-manifest.mjs';
+import { startUpdateSession } from './updates.mjs';
 import { REPO, selectedApp } from '../layout.mjs';
 import { serveOrigin } from '../origin/index.mjs';
 import { MOUNTS as PACKAGE_MOUNTS } from '../package/interface.mjs';
@@ -66,16 +69,6 @@ import { MOUNTS as PACKAGE_MOUNTS } from '../package/interface.mjs';
  *
  * @typedef {{ prefix: string, origin: URL }} Proxy
  */
-
-/** Injected into the application's index.html, and only into that, when watching. */
-const RELOAD_CLIENT = `
-<script>
-  // Development only, injected by cli/dev/serve.mjs. Not present in the file on disk.
-  new EventSource('/__reload').addEventListener('message', (event) => {
-    if (event.data === 'reload') location.reload();
-  });
-</script>
-`;
 
 /* ── Proxying ──────────────────────────────────────────────────────────── */
 
@@ -187,9 +180,12 @@ export async function serveApplication(options) {
   const entryDocument = join(app.dir, 'index.html');
   const manifest = templateAnnouncer(app, log);
 
-  /** Open EventSource connections, one per browser tab. */
-  /** @type {Set<ServerResponse>} */
-  const clients = new Set();
+  /**
+   * The watcher, the batching and the two update URLs, over the same mount table the
+   * origin resolves forward. Null when not watching, which is what a suite wants: a
+   * recursive watch of the repository is the slowest thing this function can start.
+   */
+  const updates = watching ? startUpdateSession({ mounts, log }) : null;
 
   const running = await serveOrigin(
     {
@@ -221,26 +217,13 @@ export async function serveApplication(options) {
        */
       transform: async (file) => {
         if (file === manifest.file) return manifest.representation();
-        if (!watching || file !== entryDocument) return null;
+        if (updates === null || file !== entryDocument) return null;
         const html = await readFile(file, 'utf8');
-        const injected = html.includes('</body>')
-          ? html.replace('</body>', `${RELOAD_CLIENT}</body>`)
-          : html + RELOAD_CLIENT;
-        return { body: Buffer.from(injected, 'utf8') };
+        return { body: Buffer.from(updates.inject(html), 'utf8') };
       },
 
-      route: (request, response, url) => {
-        if (url.pathname === '/__reload') {
-          response.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-store',
-            Connection: 'keep-alive',
-          });
-          response.write(': connected\n\n');
-          clients.add(response);
-          request.on('close', () => clients.delete(response));
-          return true;
-        }
+      route: async (request, response, url) => {
+        if (updates !== null && (await updates.route(request, response, url))) return true;
 
         // Ahead of the method check and the history fallback, both of which are
         // rules about files: a POST to /api/session must reach the backend, and a
@@ -261,64 +244,24 @@ export async function serveApplication(options) {
     },
   );
 
-  if (watching) {
-    await startWatching(mounts, log, clients);
-    // On the same signal as the watcher, and for the same reason: watching means a
-    // human is about to load this page, and the model's first build is ~200 ms of
-    // importing a compiler. A suite that asks for a server without one is asking
-    // for a server, not for a warm cache.
-    manifest.warm();
-  }
+  // On the same signal as the update session, and for the same reason: watching
+  // means a human is about to load this page, and the model's first build is ~200 ms
+  // of importing a compiler. A suite that asks for a server without one is asking
+  // for a server, not for a warm cache.
+  if (updates !== null) manifest.warm();
 
-  return { url: running.url, port: running.port, mounts, close: running.close };
-}
-
-/* ── Live reload ───────────────────────────────────────────────────────── */
-
-/**
- * Watch every mount and reload the page when one of them changes.
- *
- * @param {ReadonlyArray<readonly [string, string]>} mounts
- * @param {(format: string, ...values: string[]) => void} log
- * @param {Set<ServerResponse>} clients
- */
-async function startWatching(mounts, log, clients) {
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  let reloadTimer;
-
-  /** @param {string} what */
-  const scheduleReload = (what) => {
-    // Editors write a file two or three times in a few milliseconds (truncate,
-    // write, rename). Debouncing turns that into one reload instead of three
-    // half-loaded pages.
-    clearTimeout(reloadTimer);
-    reloadTimer = setTimeout(() => {
-      log('  reload  %s', what);
-      for (const client of clients) client.write('data: reload\n\n');
-    }, 40);
+  return {
+    url: running.url,
+    port: running.port,
+    mounts,
+    // The server no longer outlives its watchers. Closing the origin first refuses
+    // new connections, and closing the session ends the open event streams, which
+    // are the connections that would otherwise never close on their own.
+    close: async () => {
+      await running.close();
+      await updates?.close();
+    },
   };
-
-  for (const [, target] of mounts) {
-    try {
-      await stat(target);
-    } catch {
-      continue;
-    }
-
-    void (async () => {
-      try {
-        for await (const event of watch(target, { recursive: true })) {
-          if (event.filename === null) continue;
-          if (event.filename.endsWith('~') || event.filename.startsWith('.')) continue;
-          // vendor/ changes are a `npm run vendor` away, never an edit.
-          if (event.filename.split(sep)[0] === 'vendor') continue;
-          scheduleReload(join(target.slice(REPO.length + 1), event.filename));
-        }
-      } catch (cause) {
-        log('  watch failed for %s: %s', target, String(cause));
-      }
-    })();
-  }
 }
 
 /* ── As a command ──────────────────────────────────────────────────────────

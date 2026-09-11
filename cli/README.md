@@ -86,7 +86,9 @@ below its own root.
 npx --no-install srl new web
 
 # Static server for one application: the library's two mounts, history fallback,
-# watch and live reload. Plain Node, no dependencies of its own.
+# and live updates — an edited .html file is rendered into the components already
+# showing it, a stylesheet is swapped, anything else reloads. Plain Node, no
+# dependencies of its own.
 npx --no-install srl serve --app web --open
 
 # --proxy forwards a prefix to a backend instead of serving it from disk, so an

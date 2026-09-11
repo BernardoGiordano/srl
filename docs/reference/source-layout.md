@@ -207,8 +207,13 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
     verify-http.mjs         a live origin against that same report: bytes and headers
   dev/
     serve.mjs               zero-dependency dev server: one adapter over origin/, plus
-                            the two things only development has — live reload, and
+                            the two things only development has — updates, and
                             `--proxy` for an application whose backend sets the cookie
+    updates.mjs             one update session: a changed file as the URL it is served
+                            at, batched, delivered, and disposed of with the server
+                            (ADR-0112)
+    update-client.js        the browser half — a template revision, a stylesheet swap,
+                            or the reload everything else still costs
   test/                     the suites for everything above, over fixtures/ (whole
                             applications, intact and broken) and support/
 

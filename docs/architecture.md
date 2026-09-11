@@ -75,6 +75,7 @@ the reason is recorded in the module that owns it.
 | The mounts `/lib/`, `/components/` and the specifiers they serve | `source/package.json` — the library declares them; `cli/package/interface.mjs` reads them for the dev server, the test runner, the benchmark origin and the delivery tooling |
 | How a URL becomes a file, and what may answer a request that has none | `cli/origin/index.mjs` — mounts, the traversal refusal, the directory index and the history fallback; the dev server, the benchmark origin, the artifact test origin and the test runner's rewrite are adapters over it |
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
+| What a saved file does to a page that is already open | `cli/dev/updates.mjs` owns the watching, the URL identity and the delivery; `cli/dev/update-client.js` decides whether a change is a template revision, a stylesheet swap or a reload |
 | What a correct srl application is made of | `cli/scaffold/application.mjs` — the nine files `srl new` writes; `tools/fixtures/installed-layout.mjs` owns the declared dependency set its installed adapters use |
 | What static discovery knows about the project | `cli/project-model/` |
 | How public inputs, internal state, inherited declarations, events and projection names become one Element | `cli/project-model/parse.mjs`, resolved by `cli/project-model/index.mjs` |

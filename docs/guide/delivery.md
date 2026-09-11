@@ -3,7 +3,7 @@
 The repository **is** a deployable artefact.
 
 ```bash
-node cli/dev/serve.mjs --open          # zero dependencies, watch + live reload
+node cli/dev/serve.mjs --open          # zero dependencies, watch + live updates
 node cli/dev/serve.mjs --app example   # the default; name another application
 npm run build -- --app example           # verified artifact: the served shape
 npm run css                              # the one build step: production Tailwind
@@ -137,12 +137,29 @@ now started up front; a fiftieth of the bytes, because all of them revalidate.
 `cli/dev/serve.mjs` exists because requiring `npm install` before the app could be
 *run* would make the project look like it has a toolchain it does not have. What a server
 has to provide is correct MIME types, a history fallback so a reload on `/users/3` returns
-`index.html`, two directories mounted on one origin, and watch-and-reload. Only the last
-two are more than a file handler, and the nginx equivalent is two `alias` blocks and a
-`try_files`. It is an adapter over `cli/origin/`, and so is `example/server/static.mjs`,
-which is the one `npm run example:serve` starts: an application with a backend needs its
-API same-origin with the page, so it serves its own files rather than being proxied to
+`index.html`, two directories mounted on one origin, and a way to tell the page what
+changed. Only the last two are more than a file handler, and the nginx equivalent is two
+`alias` blocks and a `try_files`. It is an adapter over `cli/origin/`, and so is
+`example/server/static.mjs`, which is the one `npm run example:serve` starts: an
+application with a backend needs its API same-origin with the page, so it serves its own
+files rather than being proxied to
 ([ADR-0075](../adr/0075-one-application-origin-not-four-servers.md)).
+
+**An edit is delivered, not announced.** Both servers run the same update session
+([ADR-0112](../adr/0112-a-development-update-names-what-changed.md)): the watcher keeps
+the changed file's identity, `cli/dev/updates.mjs` turns it into the URL the browser
+fetched it by, a multi-file save is one message rather than three, and
+`cli/dev/update-client.js` decides what each one means. An edited `.html` file is
+recompiled and rendered into the components already showing it, so the form still has what
+was typed into it and the store does not fetch again
+([ADR-0111](../adr/0111-an-edited-template-revises-the-page-rendering-it.md)). A linked
+stylesheet is swapped in place. Everything else — a module above all, because
+`customElements.define` is permanent — is the reload it always was. A browser that
+reconnects across an edit is told what it missed; one that reconnects to a server that
+restarted is told to reload, because the id it holds is from the process before.
+
+Both URLs are development-only and injected into the response rather than written into
+`index.html`, so the bytes this server sends and the bytes nginx sends stay the same.
 
 `python3 -m http.server` does not serve this repository: an application directory and the
 library have to appear at `/` and `/lib/` on one origin, and mounting two directories is

@@ -27,6 +27,12 @@
  *                 the developer did not touch. `no-store` deleted the browser
  *                 cache outright, which made the second reload cost exactly what
  *                 the first did.
+ *   updates       the same development update session `npm start` runs, over this
+ *                 application's own mounts, so an `.html` edit is re-rendered into
+ *                 the page here too. `cli/dev/updates.mjs`. This half only ever runs
+ *                 in development — `--api-only` never imports this module — and the
+ *                 session is what makes the two servers one behaviour rather than
+ *                 two, which is the same argument the mount table already won.
  *
  * Why this application serves its own files at all, rather than `npm start` doing
  * it: the API, the auth cookie and the event stream must be same-origin with the
@@ -40,25 +46,32 @@
  * serves the files and this half does not run.
  */
 
+import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import { templateAnnouncer } from '../../cli/delivery/source-manifest.mjs';
+import { startUpdateSession } from '../../cli/dev/updates.mjs';
 import { createOrigin } from '../../cli/origin/index.mjs';
 import { MOUNTS } from '../../cli/package/interface.mjs';
 
 /** @import { IncomingMessage, ServerResponse } from 'node:http' */
 
 /**
- * The static handler for one application directory.
+ * The static handler for one application directory, and the call that stops what it
+ * started.
  *
  * A factory rather than a per-request function, because the announcer holds a
  * model build across requests and the first one is worth starting before the
- * server is listening rather than inside the page's second request.
+ * server is listening rather than inside the page's second request. It hands back a
+ * `close` for the same reason the dev server does: an update session holds recursive
+ * watches and open event streams, and a process that ends without releasing them
+ * waits for a subscriber that will never disconnect on its own.
  *
  * @param {string} directory
- * @returns {(request: IncomingMessage, response: ServerResponse) => Promise<void>}
+ * @param {{ watch?: boolean }} [options]
+ * @returns {{ handle: (request: IncomingMessage, response: ServerResponse) => Promise<void>, close: () => Promise<void> }}
  */
-export function staticOrigin(directory) {
+export function staticOrigin(directory, options = {}) {
   // `resolve` and not the argument as given: server.mjs builds it from a URL, so it
   // arrives with a trailing separator, and the project model compares directory
   // prefixes to decide which URL a template file is served at — `<dir>/` + `/` is a
@@ -71,12 +84,30 @@ export function staticOrigin(directory) {
   });
   manifest.warm();
 
+  const mounts = /** @type {Array<[string, string]>} */ ([...MOUNTS, ['/', appDir]]);
+  const entryDocument = join(appDir, 'index.html');
+
+  const updates = (options.watch ?? true)
+    ? startUpdateSession({
+        mounts,
+        log: (format, ...values) => {
+          console.log(`[example]${format}`, ...values);
+        },
+      })
+    : null;
+
   const { handle } = createOrigin({
-    mounts: /** @type {Array<[string, string]>} */ ([...MOUNTS, ['/', appDir]]),
-    fallback: join(appDir, 'index.html'),
+    mounts,
+    fallback: entryDocument,
     headers: () => ({ 'Cache-Control': 'no-cache' }),
-    transform: (file) => (file === manifest.file ? manifest.representation() : null),
+    transform: async (file) => {
+      if (file === manifest.file) return manifest.representation();
+      if (updates === null || file !== entryDocument) return null;
+      return { body: Buffer.from(updates.inject(await readFile(file, 'utf8')), 'utf8') };
+    },
+    route: (request, response, url) =>
+      updates === null ? false : updates.route(request, response, url),
   });
 
-  return handle;
+  return { handle, close: async () => updates?.close() };
 }
