@@ -6,19 +6,23 @@
  * disk and never reaches production, so the bytes this origin sends and the bytes
  * nginx sends are the same.
  *
- * Three answers, in the order they cost the developer:
+ * Four answers, in the order they cost the developer:
  *
  *   .html   a template revision. `reviseTemplate` recompiles the file and renders it
  *           into the hosts already showing it, so their fields, signals and
  *           subscriptions survive the edit (ADR-0111).
  *   .css    the linked stylesheet is fetched again and swapped in place.
+ *   .js     a component revision. `reviseComponentModule` runs the edited module
+ *           again and installs its class body on the class the registry holds, or
+ *           refuses and names what changed (ADR-0113).
  *   else    a reload, which is what this server did for everything until now.
  *
  * A fallback is always a reload rather than nothing. A `.css` file no `<link>` names
  * is reachable through an `@import` or a build step this cannot see, a template URL
- * that 404s has been deleted or renamed, and an application served without an import
- * map cannot be reached through `@core/` at all. In each case the page is stale, and
- * the reload the developer would have got anyway is the honest answer.
+ * that 404s has been deleted or renamed, a `.js` file that declares no component
+ * has importers holding the bindings it exported, and an application served without
+ * an import map cannot be reached through `@core/` at all. In each case the page is
+ * stale, and the reload the developer would have got anyway is the honest answer.
  *
  * `planUpdate` is separate from `applyUpdate` so the decision can be asserted
  * without a browser.
@@ -35,11 +39,16 @@
 /**
  * What this page will do about it.
  *
- * @typedef {{ reload: boolean, templates: string[], stylesheets: string[] }} UpdatePlan
+ * @typedef {{ reload: boolean, templates: string[], stylesheets: string[], modules: string[] }} UpdatePlan
  */
 
+/** @returns {UpdatePlan} */
+function reloading() {
+  return { reload: true, templates: [], stylesheets: [], modules: [] };
+}
+
 /**
- * Sort one update into the three answers.
+ * Sort one update into the four answers.
  *
  * A reload wins outright. Applying half an update and then reloading costs a
  * revision nobody sees, and the reload is the weaker guarantee of the two, so it
@@ -49,18 +58,19 @@
  * @returns {UpdatePlan}
  */
 export function planUpdate(update) {
+  if (update.reload === true) return reloading();
+
   /** @type {UpdatePlan} */
-  const plan = { reload: update.reload === true, templates: [], stylesheets: [] };
-  if (plan.reload) return plan;
+  const plan = { reload: false, templates: [], stylesheets: [], modules: [] };
 
   for (const url of update.changed ?? []) {
     const path = url.split('?')[0] ?? url;
     if (path.endsWith('.html')) plan.templates.push(url);
     else if (path.endsWith('.css')) plan.stylesheets.push(url);
-    else plan.reload = true;
+    else if (path.endsWith('.js')) plan.modules.push(url);
+    else return reloading();
   }
 
-  if (plan.reload) return { reload: true, templates: [], stylesheets: [] };
   return plan;
 }
 
@@ -84,7 +94,10 @@ export async function applyUpdate(update) {
     }
   }
 
+  // Markup before code: a batch that carries both is one edit to one component, and
+  // the render its class revision asks for should already be against the new markup.
   if (plan.templates.length > 0) await reviseTemplates(plan.templates);
+  if (plan.modules.length > 0) await reviseModules(plan.modules);
 }
 
 /**
@@ -125,6 +138,41 @@ async function reviseTemplates(urls) {
       revise(url, await response.text());
     } catch (cause) {
       console.error('[srl] %s did not compile; the page kept the markup it had', url, cause);
+    }
+  }
+}
+
+/**
+ * Run edited component modules again, in the page already running them.
+ *
+ * Every answer but "adopted" is a reload. A module that declares no component has
+ * importers holding the bindings it exported, and nothing can hand them new ones; a
+ * refusal names a change to the component's identity — its fields, its base class,
+ * its reactive properties — that an element already on screen cannot take. Both are
+ * a stale page, and the console line is what says which it was.
+ *
+ * @param {string[]} urls
+ * @returns {Promise<void>}
+ */
+async function reviseModules(urls) {
+  let revise;
+  try {
+    ({ reviseComponentModule: revise } = await import('@core/elements/component.js'));
+  } catch {
+    location.reload();
+    return;
+  }
+
+  for (const url of urls) {
+    let revised = false;
+    try {
+      revised = await revise(url);
+    } catch (cause) {
+      console.info('[srl] %s needs a reload', url, cause);
+    }
+    if (!revised) {
+      location.reload();
+      return;
     }
   }
 }

@@ -28,7 +28,8 @@
  *
  * Policy about *what a change means* is not here. The session says `/src/app-root.html`
  * changed; `update-client.js` decides that an `.html` file is a template revision, a
- * `.css` file is a stylesheet swap and anything else is a reload. ADR-0075 keeps
+ * `.css` file is a stylesheet swap, a `.js` file is a component revision and anything
+ * else is a reload. ADR-0075 keeps
  * development policy in the development adapter, and this is the seam inside it.
  */
 

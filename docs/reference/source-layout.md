@@ -45,7 +45,8 @@ source/lib/                 THE FRAMEWORK, served at /lib/
       expression.js         the binding language evaluator/compiler
       security.js           DOM security contexts, sanitizers, trusted wrappers
     elements/
-      component.js          defineComponent(): tag identity and the template pair
+      component.js          defineComponent(): tag identity, the template pair, and
+                            whether an edited class body can replace one (ADR-0113)
       signal-element.js     base class: light DOM + signal tracking + template render
       mount.js              one dynamic mount: load, definition, races, release
       outlet.js             <x-outlet>, signal-driven component swapping
@@ -212,8 +213,8 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
     updates.mjs             one update session: a changed file as the URL it is served
                             at, batched, delivered, and disposed of with the server
                             (ADR-0112)
-    update-client.js        the browser half — a template revision, a stylesheet swap,
-                            or the reload everything else still costs
+    update-client.js        the browser half — a template revision, a stylesheet swap, a
+                            component revision, or the reload everything else still costs
   test/                     the suites for everything above, over fixtures/ (whole
                             applications, intact and broken) and support/
 

@@ -13,13 +13,16 @@
  *  - `reconnect`  the element re-entered the DOM and rebuilt its tracking.
  *  - `template`   an edit to the element's `.html` file replaced its compiled
  *                 template, so the same host rendered new markup. Development only.
+ *  - `definition` an edit to the element's `.js` file replaced its class body, so
+ *                 the same host rendered from new code. Development only.
  */
 export type ElementUpdateCause =
   | 'mount'
   | 'signal'
   | 'properties'
   | 'reconnect'
-  | 'template';
+  | 'template'
+  | 'definition';
 
 /**
  * Why a compiled binding re-evaluated.

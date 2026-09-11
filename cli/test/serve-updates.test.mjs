@@ -301,32 +301,47 @@ void test('the client turns changed URLs into what the page should do', () => {
     reload: false,
     templates: ['/src/page.html'],
     stylesheets: [],
+    modules: [],
   });
 
   assert.deepEqual(planUpdate({ changed: ['/components/style.css'] }), {
     reload: false,
     templates: [],
     stylesheets: ['/components/style.css'],
+    modules: [],
   });
 
-  // A module edit is still a reload: `customElements.define` is permanent.
+  // A module edit is a revision the browser attempts and may refuse. Whether the
+  // page can take it is a question about the class in it, which only the page can
+  // answer; this side names the file.
   assert.deepEqual(planUpdate({ changed: ['/src/main.js'] }), {
-    reload: true,
+    reload: false,
     templates: [],
     stylesheets: [],
+    modules: ['/src/main.js'],
   });
 
-  // And it decides the whole batch. Revising a template and then reloading the page
-  // spends the revision on a render nobody sees.
-  assert.deepEqual(planUpdate({ changed: ['/src/page.html', '/src/main.js'] }), {
+  // One component, edited on both sides, is one update.
+  assert.deepEqual(planUpdate({ changed: ['/src/page.html', '/src/page.js'] }), {
+    reload: false,
+    templates: ['/src/page.html'],
+    stylesheets: [],
+    modules: ['/src/page.js'],
+  });
+
+  // Anything else is still a reload, and it decides the whole batch: revising a
+  // template and then reloading the page spends the revision on a render nobody sees.
+  assert.deepEqual(planUpdate({ changed: ['/src/page.html', '/app.manifest.json'] }), {
     reload: true,
     templates: [],
     stylesheets: [],
+    modules: [],
   });
 
   assert.deepEqual(planUpdate({ reload: true }), {
     reload: true,
     templates: [],
     stylesheets: [],
+    modules: [],
   });
 });

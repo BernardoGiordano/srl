@@ -46,10 +46,10 @@ export class SignalElement extends LitElement {
    *
    * Only the paths that schedule a render can say. The tracking effect knows a
    * signal woke it, `connectedCallback` knows the element came back, and
-   * `renderRevisedTemplate` knows an edit replaced the markup. Every other route
-   * to `requestUpdate()` is a property write, which is what the default says. Read
-   * and reset by `performUpdate`, and reported to `@core/diagnostics/updates.js`.
-   * ADR-0109.
+   * `renderRevisedTemplate` and `renderRevisedDefinition` know an edit replaced
+   * the markup or the class. Every other route to `requestUpdate()` is a property
+   * write, which is what the default says. Read and reset by `performUpdate`, and
+   * reported to `@core/diagnostics/updates.js`. ADR-0109.
    *
    * @type {ElementUpdateCause}
    */
@@ -246,6 +246,19 @@ export class SignalElement extends LitElement {
    */
   renderRevisedTemplate() {
     this.#updateCause = 'template';
+    this.requestUpdate();
+  }
+
+  /**
+   * Render after this element's class body was replaced.
+   *
+   * Development only, and called by `@core/elements/component.js` when an edited
+   * `.js` file is adopted. The methods and accessors this render will run are
+   * already the new ones; what this adds is the render itself and the reason for
+   * it. ADR-0113.
+   */
+  renderRevisedDefinition() {
+    this.#updateCause = 'definition';
     this.requestUpdate();
   }
 
