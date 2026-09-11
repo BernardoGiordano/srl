@@ -45,6 +45,7 @@ import {
   VOID_ELEMENTS,
 } from '@core/template/dialect.js';
 import { effect } from '@core/foundation/reactive.js';
+import { beginBindingUpdate, labelBinding } from '@core/diagnostics/updates.js';
 import {
   attributeSinkFor,
   propertySinkFor,
@@ -55,6 +56,7 @@ import {
 // template can be translated whether or not anything else pulled i18n in.
 import '@core/localization/i18n.js';
 
+/** @import { BindingUpdateCause } from '@core/diagnostics/types.js' */
 /** @import { CompiledTemplate, Evaluator, Scope, TemplateChunks, TemplateFragment, TemplateLocals } from '@core/template/types.js' */
 
 /**
@@ -315,6 +317,7 @@ export function seedTemplates(sources) {
 export async function attachTemplate(ctor, url) {
   const href = new URL(url, document.baseURI).href;
   startTemplateGroup(href);
+
   byClass.set(ctor, await loadTemplate(href));
 }
 
@@ -392,8 +395,16 @@ class Chunks {
     this.#current += text;
   }
 
-  /** @param {Evaluator} evaluator */
-  hole(evaluator) {
+  /**
+   * @param {Evaluator} evaluator
+   * @param {string} where Where the expression is written, for a diagnostics report.
+   */
+  hole(evaluator, where) {
+    // Every binding passes through here, so this is the one place that knows the
+    // final evaluator a Part will commit — the one after a sink or an
+    // interpolation join wrapped it, which is the identity a report has to name.
+    // ADR-0109.
+    labelBinding(evaluator, where);
     this.#parts.push(this.#current);
     this.#current = '';
     this.#values.push(evaluator);
@@ -457,7 +468,7 @@ class ReactiveBindingDirective extends AsyncDirective {
    * @returns {unknown}
    */
   render(evaluate, scope) {
-    return this.#track(evaluate, scope, false);
+    return this.#track(evaluate, scope, false, this.#causeOf(evaluate, scope));
   }
 
   /**
@@ -469,7 +480,7 @@ class ReactiveBindingDirective extends AsyncDirective {
     if (evaluate === this.#evaluate && scope === this.#scope && scope.version === this.#version) {
       return this.#value;
     }
-    return this.#track(evaluate, scope, false);
+    return this.#track(evaluate, scope, false, this.#causeOf(evaluate, scope));
   }
 
   disconnected() {
@@ -479,17 +490,35 @@ class ReactiveBindingDirective extends AsyncDirective {
 
   reconnected() {
     if (this.#evaluate !== undefined && this.#scope !== undefined) {
-      this.#track(this.#evaluate, this.#scope, true);
+      this.#track(this.#evaluate, this.#scope, true, 'reconnect');
     }
+  }
+
+  /**
+   * Why this evaluation is happening, read off the state the short-circuit above
+   * already compares. A different evaluator or a different scope object means the
+   * Part now holds a different binding — an `*if` branch that flipped, or a row
+   * template that moved — and a bumped version on the same pair means the host
+   * rendered or the row was given a new item.
+   *
+   * @param {Evaluator} evaluate
+   * @param {Scope} scope
+   * @returns {BindingUpdateCause}
+   */
+  #causeOf(evaluate, scope) {
+    if (this.#version === -1) return 'mount';
+    if (evaluate !== this.#evaluate || scope !== this.#scope) return 'rebind';
+    return 'rerender';
   }
 
   /**
    * @param {Evaluator} evaluate
    * @param {Scope} scope
    * @param {boolean} commitInitial
+   * @param {BindingUpdateCause} cause
    * @returns {unknown}
    */
-  #track(evaluate, scope, commitInitial) {
+  #track(evaluate, scope, commitInitial, cause) {
     this.#dispose?.();
     this.#dispose = undefined;
     this.#evaluate = evaluate;
@@ -497,14 +526,25 @@ class ReactiveBindingDirective extends AsyncDirective {
     this.#version = scope.version;
 
     if (!this.isConnected) {
+      // Reported like any other: a report that quietly skipped a class of
+      // evaluation would undercount the binding it skipped.
+      const finish = beginBindingUpdate(evaluate, cause);
+      const previous = this.#value;
       this.#value = evaluate(scope);
+      finish(previous !== this.#value);
       return this.#value;
     }
 
     let initial = true;
     this.#dispose = effect(() => {
+      // Only the first run of this effect has the reason the caller gave. Every
+      // later one is the effect waking on its own, which is the update path an
+      // element-render timer cannot see.
+      const finish = beginBindingUpdate(evaluate, initial ? cause : 'signal');
+      const previous = this.#value;
       this.#value = evaluate(scope);
       if (!initial || commitInitial) this.setValue(this.#value);
+      finish(previous !== this.#value);
       initial = false;
     });
     return this.#value;
@@ -709,7 +749,7 @@ function compileNodes(nodes, context, chunks) {
 function compileText(text, context, chunks) {
   for (const piece of splitPlaceholders(text)) {
     if (typeof piece === 'string') chunks.text(escapeText(piece));
-    else chunks.hole(expressionAt(piece, context, false));
+    else chunks.hole(expressionAt(piece, context, false), interpolationWhere(piece, context));
   }
 }
 
@@ -741,13 +781,19 @@ function compileElement(element, context, chunks, consumed) {
 
   if (structuralFor !== null) {
     element.removeAttribute('*for');
-    chunks.hole(compileFor(element, structuralFor, context));
+    chunks.hole(
+      compileFor(element, structuralFor, context),
+      `${context.where} *for="${structuralFor}"`,
+    );
     return;
   }
 
   if (structuralIf !== null) {
     element.removeAttribute('*if');
-    chunks.hole(compileIf(element, structuralIf, context, consumed));
+    chunks.hole(
+      compileIf(element, structuralIf, context, consumed),
+      `${context.where} *if="${structuralIf}"`,
+    );
     return;
   }
 
@@ -787,7 +833,7 @@ function compileElement(element, context, chunks, consumed) {
   compileAttributes(element, context, chunks);
   for (const fragment of fragments) {
     chunks.text(` .${fragment.property}=`);
-    chunks.hole(fragment.evaluate);
+    chunks.hole(fragment.evaluate, `${context.where} *fragment ${fragment.property}`);
   }
   chunks.text('>');
 
@@ -942,6 +988,7 @@ function compileAttributes(element, context, chunks) {
             locals.$event = domEvent;
             handler({ host: scope.host, locals, version: scope.version });
           },
+        `${context.where} (${event})`,
       );
       continue;
     }
@@ -963,7 +1010,7 @@ function compileAttributes(element, context, chunks) {
     const evaluate = compileInterpolatedAttribute(pieces, context);
     const where = `${context.where} ${name} interpolation`;
     chunks.text(` ${name}="`);
-    chunks.hole(throughSink(evaluate, attributeSinkFor(element.localName, name, where)));
+    chunks.hole(throughSink(evaluate, attributeSinkFor(element.localName, name, where)), where);
     chunks.text('"');
   }
 }
@@ -1000,18 +1047,18 @@ function compileBinding(element, target, source, context, chunks) {
     // Resolving the sink is also what rejects a dangerous property target, and
     // it happens here, while compiling, even if this binding never renders.
     chunks.text(` .${name}=`);
-    chunks.hole(throughSink(evaluate, propertySinkFor(element.localName, name, where)));
+    chunks.hole(throughSink(evaluate, propertySinkFor(element.localName, name, where)), where);
     return;
   }
 
   if (classified.kind === 'boolean') {
     chunks.text(` ?${name}=`);
-    chunks.hole(evaluate);
+    chunks.hole(evaluate, where);
     return;
   }
 
   chunks.text(` ${name}="`);
-  chunks.hole(throughSink(evaluate, attributeSinkFor(element.localName, name, where)));
+  chunks.hole(throughSink(evaluate, attributeSinkFor(element.localName, name, where)), where);
   chunks.text('"');
 }
 
@@ -1212,7 +1259,18 @@ function splitPlaceholders(text) {
 function expressionAt(index, context, allowAssignment) {
   const source = context.expressions[index];
   if (source === undefined) throw new Error(`Lost interpolation ${String(index)} in ${context.where}.`);
-  return compileExpression(source, `${context.where} {{ ${source.trim()} }}`, { allowAssignment });
+  return compileExpression(source, interpolationWhere(index, context), { allowAssignment });
+}
+
+/**
+ * How one `{{ }}` is named in an error and in a diagnostics report.
+ *
+ * @param {number} index
+ * @param {CompileContext} context
+ * @returns {string}
+ */
+function interpolationWhere(index, context) {
+  return `${context.where} {{ ${(context.expressions[index] ?? '').trim()} }}`;
 }
 
 /**

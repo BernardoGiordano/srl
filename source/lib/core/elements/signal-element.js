@@ -1,8 +1,10 @@
 import { LitElement } from 'lit';
 import { effect } from '@core/foundation/reactive.js';
+import { beginElementUpdate, noteElementProperties } from '@core/diagnostics/updates.js';
 import { captureContent, projectContent } from '@core/elements/projection.js';
 import { templateFor } from '@core/template/template.js';
 
+/** @import { ElementUpdateCause } from '@core/diagnostics/types.js' */
 /** @import { ContentBuckets } from '@core/elements/types.js' */
 
 /**
@@ -38,6 +40,20 @@ export class SignalElement extends LitElement {
   #hasRendered = false;
 
   #hasAdoptedFields = false;
+
+  /**
+   * Why the next render is happening.
+   *
+   * Only the paths that schedule a render can say. The tracking effect knows a
+   * signal woke it, `connectedCallback` knows the element came back, and
+   * `renderRevisedTemplate` knows an edit replaced the markup. Every other route
+   * to `requestUpdate()` is a property write, which is what the default says. Read
+   * and reset by `performUpdate`, and reported to `@core/diagnostics/updates.js`.
+   * ADR-0109.
+   *
+   * @type {ElementUpdateCause}
+   */
+  #updateCause = 'properties';
 
   /**
    * Hand every class field back to the reactive accessor it shadowed.
@@ -116,6 +132,7 @@ export class SignalElement extends LitElement {
     // so nothing is listening to signals any more. Without this the element
     // renders once and then silently stops reacting.
     if (this.#hasRendered && this.#disposeTracking === undefined) {
+      this.#updateCause = 'reconnect';
       this.requestUpdate();
     }
 
@@ -156,13 +173,24 @@ export class SignalElement extends LitElement {
 
     this.#disposeTracking?.();
 
+    // Read before the render, reset before it: anything that schedules the *next*
+    // render during this one is describing that one, not this one.
+    const cause = this.#hasRendered ? this.#updateCause : 'mount';
+    this.#updateCause = 'properties';
+
     let isRenderPass = true;
     this.#disposeTracking = effect(() => {
       if (isRenderPass) {
         isRenderPass = false;
-        super.performUpdate();
+        const finish = beginElementUpdate(this, cause);
+        try {
+          super.performUpdate();
+        } finally {
+          finish();
+        }
         return;
       }
+      this.#updateCause = 'signal';
       this.requestUpdate();
     });
   }
@@ -177,6 +205,9 @@ export class SignalElement extends LitElement {
   /** @param {Map<PropertyKey, unknown>} changed */
   updated(changed) {
     super.updated(changed);
+    // Inside the render `performUpdate` opened, and the first point at which Lit
+    // has said which properties moved.
+    noteElementProperties(this, changed.keys());
     if (this.#content !== undefined) projectContent(this, this.#content);
   }
 

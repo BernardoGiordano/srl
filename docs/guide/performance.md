@@ -358,3 +358,72 @@ the reason recorded beside it. Do not re-record one as a side effect of an unrel
 change: a baseline that moved without a reason is how a gate stops meaning anything. Note
 that `--update-baseline` rewrites the whole file, so a deliberate decision to leave other
 metrics untouched has to be applied by hand.
+
+## Explaining one update
+
+A benchmark says a workload got slower. It does not say which component re-rendered or
+which binding ran four hundred times, and in this framework those are separate questions
+from each other: an element renders when a signal its `render()` read changed or when a
+reactive property was written, and a compiled binding patches its own Lit Part when a
+signal *its* expression read changed, with no render anywhere
+([ADR-0018](../adr/0018-binding-scopes-keep-their-identity.md)). A timer around renders
+sees only half of it.
+
+`@core/diagnostics/updates.js` records both, around whatever you want explained:
+
+```js
+import { recordUpdates } from '@core/diagnostics/updates.js';
+import { formatUpdateReport } from '@core/diagnostics/report.js';
+
+const stop = recordUpdates();
+await theInteractionThatFeelsWrong();
+console.log(formatUpdateReport(stop()));
+```
+
+The report has two summaries and a timeline. The summaries rank every tag and every
+binding by the time they spent, breaking ties on how often they ran, which is how a
+binding that costs nothing each time and runs four hundred times still reaches the top.
+The timeline is where the causes are, and it nests: a binding under an element render is
+one the render re-evaluated, and a binding at the top level patched on its own.
+
+```
+srl updates — 42.10 ms, 1 tag, 3 bindings
+
+Elements
+  updates  total ms  tag
+        1      1.84  employees-page
+
+Bindings
+  updates  changed  total ms  binding
+        1        1      1.02  employees-page.html *for="employee of employees; key: employee.id"
+       40        6      0.31  employees-page.html {{ employee.name }}
+        2        1      0.02  employees-page.html {{ pendingCount }}
+
+Timeline (ms from start)
+      0.00  <employees-page> properties [employees], 1.84 ms
+      0.31    employees-page.html *for="employee of employees; key: employee.id" rerender, 1.02 ms, changed
+      1.40    employees-page.html {{ employee.name }} rerender, 0.01 ms
+     31.40  employees-page.html {{ pendingCount }} signal, 0.02 ms, changed
+```
+
+Read the causes literally:
+
+| Cause | On | What it means |
+|---|---|---|
+| `mount` | both | first render, or a binding's first commit into its Part |
+| `signal` | both | the effect behind it re-ran. **Which** signal is not recorded |
+| `properties` | elements | a reactive property was written, or `requestUpdate()` was called. The names follow in brackets |
+| `reconnect` | both | the element re-entered the DOM, or the directive reconnected |
+| `rerender` | bindings | the scope it reads bumped its version: the host rendered, or its `*for` row got a new item |
+| `rebind` | bindings | the Part now holds a different expression or scope — an `*if` branch that flipped, or a keyed row that moved |
+
+`cause: 'signal'` deliberately stops at "the effect re-ran". Nothing in the reactive
+library reports a dependency by name, and a report that guessed at one would be worth less
+than one that admits it cannot
+([ADR-0109](../adr/0109-an-update-reports-why-it-happened.md)).
+
+Two limits worth knowing. Only one recording runs at a time, and a second one throws
+rather than splitting the tree. And a recording retains 5,000 records by default, after
+which the timeline stops growing and `report.dropped` says by how much — the summaries
+stay exact either way, so a long recording still counts correctly even where it cannot
+show the order.

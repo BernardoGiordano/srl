@@ -30,6 +30,11 @@ source/lib/                 THE FRAMEWORK, served at /lib/
       resource.js           one async read, latest call wins, bound to a lifetime
       inject.js             typed DI, root scope
       json.js               confines DOM's `any` from Response.json()
+    diagnostics/            why the page updated. Imports nothing, which is what lets both
+                            update paths report to it (ADR-0109)
+      updates.js            element renders and binding patches, each carrying the cause
+                            the path that scheduled it knew, nested into one tree
+      report.js             that tree as text, which is the only adapter there is
     template/
       template.js           .html -> lit template, cached by URL
       dialect.js            the grammar itself: attribute tables, directive syntax,
