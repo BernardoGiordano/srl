@@ -17,6 +17,8 @@ source/README.md            the package's npm landing page, and source/LICENSE t
 source/dist/                GENERATED, not committed: srl-core and srl-components, each
                             minified and not, emitted by `npm run package` for the
                             consumer who has no import map (ADR-0066)
+  types/                    one declaration per module, which the four `.d.ts` beside
+                            the bundles are barrels over (ADR-0108)
 
 source/lib/                 THE FRAMEWORK, served at /lib/
   importmap.json            generated from the manifest and the vendored bytes
@@ -215,9 +217,10 @@ tools/                      THIS REPOSITORY'S OWN TOOLS, published nowhere: the 
     adr-check.mjs           the decision records, and every citation that reaches one
   delivery/
     vendor.mjs              verify /lib/vendor against the hashes every app declares
-    package-bundle.mjs      source/dist/: the four files a consumer with a bundler
-                            installs, resolved out of the prefixes source is written
-                            against (ADR-0066)
+    package-bundle.mjs      source/dist/: the bundles a consumer with a bundler
+                            installs and the declarations beside them, both resolved
+                            out of the prefixes source is written against
+                            (ADR-0066, ADR-0108)
   benchmark/                the performance gate: workloads, baseline, budgets
   test/                     the Node-side suites for everything above
 

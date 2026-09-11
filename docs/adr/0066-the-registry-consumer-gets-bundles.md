@@ -74,11 +74,12 @@ its own tarball.
 The raw trees are no longer in `exports`. They still ship, and the import-map consumer
 still loads them by path, but a bundler is no longer offered a subpath that throws.
 
-Types are not published for the bundles. The sources carry JSDoc written against the same
-prefixes, so a rolled-up `.d.ts` needs the same resolution problem solved again for the
-type layer; until it is, the bundles are JavaScript and the typed path is the buildless
-one, through the root `tsconfig` paths. Reopening this needs a consumer who wants
-`@srljs/core` typed through a bundler.
+Types were not published for the bundles. The sources carry JSDoc written against the same
+prefixes, so a declaration emitted from one needs the same resolution problem solved again
+for the type layer, and until it was, the bundles were JavaScript and the typed path was
+the buildless one through the root `tsconfig` paths.
+[ADR-0108](0108-the-bundles-carry-their-own-declarations.md) solves it the same way this
+record solves it for JavaScript, and each bundle now ships a declaration beside it.
 
 What the bundles are checked by is `tools/test/package-bundle.test.mjs`, which builds them
 and reads the emitted bytes: the specifiers each file imports, that a minified bundle

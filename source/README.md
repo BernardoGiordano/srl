@@ -57,8 +57,13 @@ Component templates are inlined into the components bundle, so a bundled applica
 no template request. The buildless path fetches each `.html` beside its module instead,
 and both run the same compiler over the same bytes.
 
-Types are not published as `.d.ts`. The sources are annotated in JSDoc against the
-`@core/` prefixes, and this package publishes the table that resolves them:
+Both paths are typed, from one set of JSDoc in the `.js` files the browser runs.
+
+The bundles carry their own declarations: `import { defineComponent } from '@srljs/core'`
+is typed with no configuration, because `exports` names a `.d.ts` beside each bundle.
+
+The buildless path needs the table that resolves `@core/…` for tsc, which this package
+publishes:
 
 ```json
 {
@@ -68,9 +73,7 @@ Types are not published as `.d.ts`. The sources are annotated in JSDoc against t
 ```
 
 Extend it from the root of your repository and `@core/…` resolves for tsc where it resolves
-for the browser, from one declaration rather than a copy. That covers the buildless path.
-The bundles above are still untyped: a rolled-up `.d.ts` needs the same resolution problem
-solved again for the type layer.
+for the browser, from one declaration rather than a copy.
 
 ## A component, end to end
 

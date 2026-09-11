@@ -291,6 +291,11 @@ export function vendorReferences(html, where) {
  * than directories so that this table and `srl.imports` cannot describe different
  * sets of files.
  *
+ * Each bundle is four files: the JavaScript a consumer runs, minified and not, and
+ * the declaration beside each. `exports` names the readable pair by subpath and
+ * reaches the minified one through `./dist/*`, where a resolver substitutes `.d.ts`
+ * for the `.js` it was given. ADR-0108.
+ *
  * @typedef {{
  *   name: string,
  *   subpath: string,
@@ -299,6 +304,8 @@ export function vendorReferences(html, where) {
  *   exclude?: string[],
  *   file: string,
  *   minified: string,
+ *   declaration: string,
+ *   minifiedDeclaration: string,
  *   roots: string[],
  *   excluded: string[],
  *   external: string[],
@@ -330,6 +337,8 @@ export const BUNDLES = Object.entries(
     exclude: entry.exclude,
     file: `dist/${name}.js`,
     minified: `dist/${name}.min.js`,
+    declaration: `dist/${name}.d.ts`,
+    minifiedDeclaration: `dist/${name}.min.d.ts`,
     roots: entry.imports.map((prefix) => requirePrefixDir(name, prefix)),
     excluded: (entry.exclude ?? []).map((dir) => join(PACKAGE, dir)),
     external: parent?.imports ?? [],
@@ -367,11 +376,21 @@ function requirePrefixDir(bundle, prefix) {
  * advertise a subpath that throws on its first import. The bundles are that
  * consumer's entry, and `./dist/*` reaches the minified pair by name.
  *
- * @returns {Record<string, string>}
+ * A bundle's subpath is conditional rather than a bare string so that the same
+ * entry carries its declaration. `types` comes first because conditions are matched
+ * in order and a resolver that took `default` would answer a type question with
+ * JavaScript. ADR-0108.
+ *
+ * @returns {Record<string, string | Record<string, string>>}
  */
 export function packageExports() {
   return {
-    ...Object.fromEntries(BUNDLES.map((bundle) => [bundle.subpath, `./${bundle.file}`])),
+    ...Object.fromEntries(
+      BUNDLES.map((bundle) => [
+        bundle.subpath,
+        { types: `./${bundle.declaration}`, default: `./${bundle.file}` },
+      ]),
+    ),
     './dist/*': './dist/*',
   };
 }

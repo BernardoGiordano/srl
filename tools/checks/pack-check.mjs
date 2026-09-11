@@ -27,6 +27,8 @@
  *      the thing under test. ADR-0073.
  *   2. Runs the toolchain against it through the published `srl` bin: the import-map
  *      check, the template checker, the build.
+ *   3. Typechecks a consumer of the *other* audience — a bundler user with no import
+ *      map — against nothing but the package's `exports`. ADR-0108.
  *
  * What it does not cover: remotes, i18n, the release transport. Those are checked in
  * the checkout, and none of them is where the installed shape differs.
@@ -37,14 +39,14 @@
  */
 
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { error, hasErrors, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { exists } from '../../cli/layout.mjs';
-import { applicationManifest, install, srl } from '../fixtures/installed-layout.mjs';
+import { applicationManifest, install, localBin, srl } from '../fixtures/installed-layout.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
 
@@ -100,6 +102,69 @@ async function create(probe) {
   return [info('pack/scaffold', `\`srl new ${APP}\` wrote the application`, { group: GROUP })];
 }
 
+/** Where the typed consumer lives: its own directory, so its tsconfig is nobody else's. */
+const TYPED = 'typed-consumer';
+
+/**
+ * A TypeScript consumer of the installed package, resolving through `exports` alone.
+ *
+ * Not an srl application. This one is the second audience — somebody with a bundler and
+ * no import map — and the whole question is whether `import { … } from '@srljs/core'`
+ * carries types when the only thing pointing at them is the package's own map. So the
+ * tsconfig extends nothing, declares no `paths`, and names no directory in this
+ * checkout: an alias here would answer the question with the arrangement it is asking
+ * about. ADR-0108.
+ *
+ * The two `@ts-expect-error` lines are the assertion, and they are stronger than a
+ * passing typecheck: tsc fails an unused directive, so a declaration that resolved to
+ * `any` — or did not resolve at all — refuses the run rather than sailing through it.
+ *
+ * @param {string} probe
+ * @returns {Promise<void>}
+ */
+async function writeTypedConsumer(probe) {
+  const dir = join(probe, TYPED);
+  await mkdir(dir, { recursive: true });
+
+  await writeFile(
+    join(dir, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          noEmit: true,
+          strict: true,
+          target: 'es2022',
+          lib: ['es2023', 'dom', 'dom.iterable'],
+          module: 'esnext',
+          moduleResolution: 'bundler',
+          types: [],
+          skipLibCheck: true,
+        },
+        include: ['consumer.ts'],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  await writeFile(
+    join(dir, 'consumer.ts'),
+    [
+      "import { defineComponent, tagOf } from '@srljs/core';",
+      "import { UiTable } from '@srljs/core/components';",
+      '',
+      'export const tag: string = tagOf(UiTable);',
+      '',
+      '// @ts-expect-error `tagOf` takes a component reference, and a number is not one.',
+      'tagOf(42);',
+      '',
+      '// @ts-expect-error a spec with no tag, element or module is not a component.',
+      'void defineComponent({});',
+      '',
+    ].join('\n'),
+  );
+}
+
 /**
  * Drive the probe, and say what each step found.
  *
@@ -141,6 +206,27 @@ async function check(probe) {
       refuse(
         'pack/tool-failed',
         `\`${label}\` failed in an installed layout:\n\n${indent(result.output)}`,
+      ),
+    );
+  }
+
+  /* ── The bundled path carries its types ───────────────────────────────── */
+
+  await writeTypedConsumer(probe);
+  const typed = await localBin(probe, 'tsc', ['-p', join(TYPED, 'tsconfig.json')]);
+  if (typed.code === 0) {
+    found.push(
+      info('pack/typed', 'a TypeScript consumer resolves the bundles and their declarations', {
+        group: GROUP,
+      }),
+    );
+  } else {
+    found.push(
+      refuse(
+        'pack/untyped',
+        `a TypeScript consumer of the installed package did not typecheck. Either \`exports\` ` +
+          `resolves no declaration for a bundle, or the declaration it resolves is not the one ` +
+          `the JavaScript describes:\n\n${indent(typed.output)}`,
       ),
     );
   }

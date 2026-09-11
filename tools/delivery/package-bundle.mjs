@@ -1,5 +1,5 @@
 /**
- * The registry half of the package: four files a consumer with a bundler installs.
+ * The registry half of the package: the files a consumer with a bundler installs.
  *
  *   node tools/delivery/package-bundle.mjs            build source/dist/
  *   node tools/delivery/package-bundle.mjs --check    fail if it is absent or stale
@@ -44,18 +44,35 @@
  * explicit `template` path and seeds the compiler with that file's bytes under
  * the URL the same expression produces at runtime, so the seeded key and the
  * looked-up key are computed identically and cannot drift.
+ *
+ * TYPES, AND WHY THEY ARE A TREE PLUS A BARREL
+ *
+ * The prefixes are a resolution problem for the type layer too: tsc ignores an
+ * import map, and a declaration that still said `@core/…` would fail for a bundler
+ * consumer one import down exactly as the JavaScript did. So the same answer is
+ * applied twice. `emitDeclarations` writes one declaration per module into
+ * `dist/types/`, mirroring the package's own layout, and rewrites every prefix it
+ * emitted into a relative path — which is arithmetic rather than a second
+ * resolution, because the tree mirrors the source and a relative path is the same
+ * in both. Each bundle then gets a barrel over its members' declarations, and that
+ * barrel is what `exports` points a `types` condition at. ADR-0108.
+ *
+ * The declarations are not rolled up into one file. A rollup has to rename every
+ * colliding local type and reproduce tsc's own emit rules to do it, and nothing is
+ * bought: a resolver reads the barrel, and the tree beside it is the same set of
+ * facts a browser consumer already gets from the JSDoc in `lib/`.
  */
 
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 
 import { build as viteBuild } from 'vite';
 import ts from 'typescript';
 
 import { minifyTemplate } from '../../cli/delivery/template-html.mjs';
 import { REPO, exists, walk } from '../../cli/layout.mjs';
-import { barrelSource, moduleDoor } from '../../cli/package/door.mjs';
+import { barrelSource, declarationBarrelSource, moduleDoor } from '../../cli/package/door.mjs';
 import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
 
 /**
@@ -73,6 +90,26 @@ export const DIST = join(PACKAGE, 'dist');
 
 /** Same target as the application build: the browsers the library supports. */
 const TARGET = 'es2022';
+
+/** Where the emitted declarations sit, relative to the bundles that are barrels over them. */
+const TYPES = 'types';
+
+/**
+ * The type checker's copy of the specifier table, published with the package.
+ *
+ * Read rather than restated: the declarations are emitted with the options a
+ * consumer type-checks the source path under, so the two paths cannot describe
+ * different types of the same module.
+ */
+const BASE_TSCONFIG = join(PACKAGE, 'tsconfig.base.json');
+
+/**
+ * The library's own prefixes, longest first, so `@components/` cannot be shadowed by
+ * a shorter prefix that happens to be a prefix of it.
+ */
+const PREFIXES = Object.entries(SPECIFIER_DIRS).sort(
+  ([left], [right]) => right.length - left.length,
+);
 
 /**
  * The runtime dependencies, left external in both bundles.
@@ -117,7 +154,7 @@ async function membersOf(bundle) {
 }
 
 /**
- * The barrel itself, read out of the members rather than written.
+ * What each member offers, read out of the members rather than written.
  *
  * Still derived — the list of members is the walk above, and no name is typed
  * anywhere — but each member is now asked which of its exports are part of the
@@ -125,16 +162,20 @@ async function membersOf(bundle) {
  * promise to a registry consumer. `cli/package/door.mjs` owns the rule and the
  * marker; this reads the files for it. ADR-0077.
  *
+ * Read once and used twice, by the JavaScript barrel and by the declaration barrel:
+ * one answer, so the bundle's runtime surface and its type surface are the same set
+ * of names by construction.
+ *
  * @param {string[]} members
- * @returns {Promise<string>}
+ * @returns {Promise<Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>>}
  */
-async function barrel(members) {
+async function doorsOf(members) {
   /** @type {Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>} */
   const doors = [];
   for (const file of members) {
     doors.push({ file, door: moduleDoor(await readFile(file, 'utf8'), file) });
   }
-  return barrelSource(doors);
+  return doors;
 }
 
 /**
@@ -148,16 +189,11 @@ async function barrel(members) {
  * @returns {import('vite').Plugin}
  */
 function resolvePackageSpecifiers(external, inherited) {
-  /** Longest prefix first, so `@components/` cannot be shadowed by a shorter one. */
-  const prefixes = Object.entries(SPECIFIER_DIRS).sort(
-    ([left], [right]) => right.length - left.length,
-  );
-
   return {
     name: 'srl-package-specifiers',
     enforce: 'pre',
     resolveId(source) {
-      for (const [prefix, dir] of prefixes) {
+      for (const [prefix, dir] of PREFIXES) {
         if (!source.startsWith(prefix)) continue;
         // A prefix the extended bundle owns leaves this one as a single import of
         // that file. Minified pairs with minified: a consumer who loaded
@@ -522,6 +558,352 @@ function bundleExports(text, fileName) {
   return names;
 }
 
+/* ── The type layer ───────────────────────────────────────────────────────── */
+
+/**
+ * The options the declarations are emitted under: the ones this package publishes
+ * for a consumer of the source path, plus emit.
+ *
+ * `tsconfig.base.json` is the authority rather than a table copied here, so the
+ * bundled declarations describe the same modules under the same `lib`, `target` and
+ * `paths` a buildless consumer type-checks them under. Emit is the only override —
+ * that file says `noEmit`, because a consumer never compiles this library and only
+ * this build ever does.
+ *
+ * @param {string} out Where the tree is written.
+ * @returns {ts.CompilerOptions}
+ */
+function declarationOptions(out) {
+  const { config, error } = ts.readConfigFile(BASE_TSCONFIG, (file) => ts.sys.readFile(file));
+  if (error !== undefined) {
+    throw new Error(
+      `${relative(REPO, BASE_TSCONFIG)}: ${ts.flattenDiagnosticMessageText(error.messageText, ' ')}`,
+    );
+  }
+
+  // `fileNames` is ignored: the inputs are the walk below rather than this file's
+  // include globs, which cover the whole package and are the source consumer's
+  // question. What is wanted here is `options`, with `paths` already resolved
+  // against the directory that declares them.
+  const parsed = ts.parseJsonConfigFileContent(config, ts.sys, PACKAGE, undefined, BASE_TSCONFIG);
+  refuseDiagnostics(parsed.errors, relative(REPO, BASE_TSCONFIG));
+
+  return {
+    ...parsed.options,
+    declaration: true,
+    emitDeclarationOnly: true,
+    declarationMap: false,
+    noEmit: false,
+    skipLibCheck: true,
+    rootDir: PACKAGE,
+    outDir: out,
+  };
+}
+
+/**
+ * Every module the declarations cover: the specifier prefixes' own trees, minus the
+ * suites.
+ *
+ * The prefixes rather than the bundles' roots, and without the per-bundle
+ * exclusions, because this is the tree the barrels resolve *through*. A component
+ * excluded from the collection's door still appears in another component's declared
+ * type, and a member of `srl-components` refers to types declared in `lib/`.
+ *
+ * Hand-written `.d.ts` files come along: a module's JSDoc names them, so a tree
+ * without them declares types that resolve nowhere.
+ *
+ * @returns {Promise<string[]>}
+ */
+async function declarationInputs() {
+  /** @type {string[]} */
+  const files = [];
+  for (const dir of Object.values(SPECIFIER_DIRS)) {
+    files.push(...(await walk(dir, /\.(?:js|ts)$/u)));
+  }
+  return [...new Set(files)].filter((file) => !isTestSource(file)).sort();
+}
+
+/**
+ * A package that declares a type, mapped to the dependency that re-exports it.
+ *
+ * TypeScript writes an inferred type as `import('…').Thing`, and the module it names
+ * is the one that *declares* the thing rather than the one the source imported it
+ * from: `nothing` comes into the library from `lit` and is declared in `lit-html`.
+ * A consumer installs what `dependencies` says, so a declaration naming the second
+ * resolves only where a flat `node_modules` happens to hoist it, and fails on the
+ * install layout that does not.
+ *
+ * Sound only where the dependency really does re-export the name, which is the one
+ * thing that cannot be assumed and does not have to be: the suite type-checks the
+ * emitted tree against the declared dependencies alone, so a rewrite to a package
+ * that does not offer the name fails there.
+ */
+const REDECLARED_BY = /** @type {Record<string, string>} */ ({ 'lit-html': 'lit' });
+
+/**
+ * A specifier as the emitted tree has to say it, or null for one already correct.
+ *
+ * Two rewrites, and the first is the reason this file exists. A library prefix
+ * becomes a path relative to the file that names it, which is arithmetic rather than
+ * resolution — sound because the emitted tree mirrors the package's own layout, so
+ * the step from one file to another is the same in both trees. The `.js` extension
+ * is kept as written: a resolver reading a declaration tries `.d.ts` for the `.js` it
+ * was given, and that is what makes a hand-written `types.d.ts` reachable under the
+ * name its importer typed.
+ *
+ * @param {string} specifier
+ * @param {string} from The directory of the file the specifier is written in.
+ * @returns {string | null}
+ */
+function rewrittenSpecifier(specifier, from) {
+  for (const [prefix, dir] of PREFIXES) {
+    if (!specifier.startsWith(prefix)) continue;
+    const path = relative(from, join(dir, specifier.slice(prefix.length))).split(sep).join('/');
+    return path.startsWith('.') ? path : `./${path}`;
+  }
+
+  for (const [declaring, dependency] of Object.entries(REDECLARED_BY)) {
+    if (specifier === declaring) return dependency;
+    if (specifier.startsWith(`${declaring}/`)) return `${dependency}/${specifier.slice(declaring.length + 1)}`;
+  }
+
+  return null;
+}
+
+/**
+ * The string literal a node imports from, wherever a declaration can hold one.
+ *
+ * Three forms rather than the one the source's statements have. Declaration emit
+ * writes an inferred type that came from another module as `import('…').Thing`,
+ * which is a specifier in type position, and a `@type` tag can carry one of its own.
+ *
+ * @param {ts.Node} node
+ * @returns {ts.StringLiteralLike | undefined}
+ */
+function importedFrom(node) {
+  if (
+    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+    node.moduleSpecifier !== undefined &&
+    ts.isStringLiteralLike(node.moduleSpecifier)
+  ) {
+    return node.moduleSpecifier;
+  }
+  if (
+    ts.isImportTypeNode(node) &&
+    ts.isLiteralTypeNode(node.argument) &&
+    ts.isStringLiteralLike(node.argument.literal)
+  ) {
+    return node.argument.literal;
+  }
+  if (
+    ts.isCallExpression(node) &&
+    node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+    node.arguments[0] !== undefined &&
+    ts.isStringLiteralLike(node.arguments[0])
+  ) {
+    return node.arguments[0];
+  }
+  return undefined;
+}
+
+/**
+ * One declaration with the library's prefixes rewritten to paths.
+ *
+ * Spliced into the text rather than reprinted, so the emitted comments — which are
+ * the library's own JSDoc, and half the reason a consumer wants these files — reach
+ * the tarball as they were written.
+ *
+ * Which is also why the JSDoc is walked as syntax rather than searched as text. A
+ * comment that *mentions* `@core/elements/mount.js` in a sentence is prose about the
+ * library and stays that way; a `@type` tag that names an `import('…')` of it is a
+ * specifier, and in a tree where nothing resolves an import map it has to become a
+ * path.
+ *
+ * A source module's `@import` tags survive into the emitted declaration as comments
+ * and are left as written: declaration emit has already turned each one into a real
+ * `import type` statement, and a declaration file's JSDoc is not read for imports.
+ * The suite type-checks the emitted tree with `skipLibCheck` off, so a TypeScript
+ * that began reading them would fail there rather than in a consumer's install.
+ *
+ * @param {string} text
+ * @param {string} fileName Used in the parse only.
+ * @param {string} from The source directory this declaration was emitted from.
+ * @returns {{ text: string, specifiers: Set<string> }} The specifiers are the rewritten ones.
+ */
+function rewriteSpecifiers(text, fileName, from) {
+  const tree = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+
+  /** Keyed by position: a tag is reachable from more than one node above it. */
+  const edits = /** @type {Map<number, { end: number, text: string }>} */ (new Map());
+  /** @type {Set<string>} */
+  const specifiers = new Set();
+
+  /** @param {ts.Node} node */
+  const record = (node) => {
+    const literal = importedFrom(node);
+    if (literal === undefined) return;
+    const rewritten = rewrittenSpecifier(literal.text, from);
+    specifiers.add(rewritten ?? literal.text);
+    if (rewritten !== null) {
+      edits.set(literal.getStart(tree), { end: literal.getEnd(), text: JSON.stringify(rewritten) });
+    }
+  };
+
+  /** A tag's own subtree, which is where a `@type {import('…')}` sits. */
+  /** @param {ts.Node} node */
+  const walkTag = (node) => {
+    record(node);
+    ts.forEachChild(node, walkTag);
+  };
+
+  /** @param {ts.Node} node */
+  const visit = (node) => {
+    record(node);
+    for (const tag of ts.getJSDocTags(node)) walkTag(tag);
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+
+  let rewritten = text;
+  for (const [start, edit] of [...edits].sort(([left], [right]) => right - left)) {
+    rewritten = rewritten.slice(0, start) + edit.text + rewritten.slice(edit.end);
+  }
+  return { text: rewritten, specifiers };
+}
+
+/**
+ * Refuse a declaration that names a package this one does not depend on.
+ *
+ * The same rule `assertSelfContained` applies to the JavaScript, on the layer where
+ * it is easier to break: a type can reach a package the runtime never imports, and
+ * the resulting declaration resolves on a flat `node_modules` and fails on a strict
+ * one. Read out of what was written rather than from the rewrite table, so a
+ * specifier nothing rewrote is caught by the same check.
+ *
+ * @param {string} file
+ * @param {Set<string>} specifiers
+ */
+function assertDeclaredDependencies(file, specifiers) {
+  const declared = new Set(Object.keys(/** @type {Record<string, string>} */ (MANIFEST.dependencies ?? {})));
+  const foreign = [...specifiers]
+    .filter((specifier) => !specifier.startsWith('.'))
+    // `lit/directives/repeat.js` is a subpath: the install that satisfies it is `lit`.
+    .filter((specifier) => {
+      const owner = specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
+      return !declared.has(owner);
+    });
+
+  if (foreign.length > 0) {
+    throw new Error(
+      `${relative(REPO, file)} declares a type from ${foreign.sort().join(', ')}, which this ` +
+        `package does not depend on. A consumer installs what \`dependencies\` names, so the ` +
+        `declaration resolves only where something else happened to hoist it.`,
+    );
+  }
+}
+
+/**
+ * Write one declaration into the tree, with its specifiers resolved.
+ *
+ * @param {string} file Where it lands.
+ * @param {string} out The root of the tree, which is what makes the source directory recoverable.
+ * @param {string} text
+ * @returns {Promise<void>}
+ */
+async function writeDeclaration(file, out, text) {
+  const from = join(PACKAGE, relative(out, dirname(file)));
+  const rewritten = rewriteSpecifiers(text, file, from);
+  assertDeclaredDependencies(file, rewritten.specifiers);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, rewritten.text, 'utf8');
+}
+
+/**
+ * Emit the declaration tree both barrels resolve through.
+ *
+ * One program for the whole package rather than one per bundle: a component's
+ * declared type names a type declared in `lib/`, and two trees would give a consumer
+ * two declarations of it and a mismatch between the framework they imported and the
+ * framework their components were built on.
+ *
+ * @param {string} into
+ * @returns {Promise<string>}
+ */
+async function emitDeclarations(into) {
+  const out = join(into, TYPES);
+  const inputs = await declarationInputs();
+  const program = ts.createProgram(inputs, declarationOptions(out));
+
+  /** @type {Array<[string, string]>} */
+  const emitted = [];
+  const { diagnostics } = program.emit(undefined, (file, text) => emitted.push([file, text]));
+  refuseDiagnostics(diagnostics, 'declaration emit');
+
+  for (const [file, text] of emitted) await writeDeclaration(file, out, text);
+
+  // The hand-written `.d.ts` files are inputs to that program rather than outputs of
+  // it, so tsc emits nothing for them and a tree without them would resolve `./types.js`
+  // to nothing. Copied through the same rewrite, because they name the prefixes too.
+  const handWritten = inputs.filter((file) => file.endsWith('.d.ts'));
+  for (const file of handWritten) {
+    await writeDeclaration(join(out, relative(PACKAGE, file)), out, await readFile(file, 'utf8'));
+  }
+
+  const count = emitted.length + handWritten.length;
+  return `  ok   ${`${TYPES}/`.padEnd(24)} ${String(count).padStart(8)} declaration(s)`;
+}
+
+/**
+ * The declaration a bundle's `types` condition points at, and the one beside its
+ * minified file.
+ *
+ * The minified declaration forwards rather than repeating: minification changes the
+ * bytes a browser runs and nothing a type checker reads, and two barrels over one
+ * tree would be two chances to disagree.
+ *
+ * @param {import('../../cli/package/interface.mjs').PackageBundle} bundle
+ * @param {Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>} doors
+ * @param {string} into
+ * @returns {Promise<string>}
+ */
+async function emitDeclarationBarrel(bundle, doors, into) {
+  const source = declarationBarrelSource(
+    doors.map(({ file, door }) => ({
+      file: `./${TYPES}/${relative(PACKAGE, file).split(sep).join('/')}`,
+      door,
+    })),
+  );
+
+  const name = basename(bundle.declaration);
+  await writeFile(join(into, name), source, 'utf8');
+  await writeFile(
+    join(into, basename(bundle.minifiedDeclaration)),
+    `export * from './${bundle.name}.js';\n`,
+    'utf8',
+  );
+  return `  ok   ${name.padEnd(24)} ${String(source.length).padStart(8)} bytes`;
+}
+
+/**
+ * Refuse a TypeScript step that reported anything.
+ *
+ * @param {readonly ts.Diagnostic[]} diagnostics
+ * @param {string} what
+ */
+function refuseDiagnostics(diagnostics, what) {
+  if (diagnostics.length === 0) return;
+  const detail = diagnostics
+    .map((diagnostic) => {
+      const where =
+        diagnostic.file === undefined ? '' : `${relative(REPO, diagnostic.file.fileName)}: `;
+      return `  ${where}${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`;
+    })
+    .join('\n');
+  throw new Error(`${what} refused the library:\n${detail}`);
+}
+
+/* ── The build ────────────────────────────────────────────────────────────── */
+
 /**
  * Build every bundle the manifest declares.
  *
@@ -539,15 +921,23 @@ export async function buildPackageBundles({ into = DIST } = {}) {
 
   /** @type {string[]} */
   const lines = [];
+  /** @type {Array<[import('../../cli/package/interface.mjs').PackageBundle, Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>]>} */
+  const built = [];
+
   for (const bundle of BUNDLES) {
     const members = await membersOf(bundle);
     if (members.length === 0) throw new Error(`${bundle.name} has no members; the roots are wrong.`);
     // Built once and reused for both minification settings: reading and parsing
     // every member is the cost, and it does not change with the minifier.
-    const entrySource = await barrel(members);
+    const doors = await doorsOf(members);
+    const entrySource = barrelSource(doors);
     lines.push(`  ok   ${bundle.name.padEnd(24)} ${String(members.length).padStart(8)} module(s)`);
     for (const minify of [false, true]) lines.push(await emit(bundle, entrySource, minify, into));
+    built.push([bundle, doors]);
   }
+
+  lines.push(await emitDeclarations(into));
+  for (const [bundle, doors] of built) lines.push(await emitDeclarationBarrel(bundle, doors, into));
 
   // A directory of loose files is what a consumer's tooling sees, so say what is in
   // it there too rather than only here.
@@ -561,20 +951,27 @@ export async function buildPackageBundles({ into = DIST } = {}) {
   return lines;
 }
 
-/** Every emitted file, relative to the package: the pair `exports` names, minified and not. */
+/** Every emitted module, relative to the package: the pair `exports` names, minified and not. */
 export const BUNDLE_FILES = BUNDLES.flatMap((bundle) => [bundle.file, bundle.minified]);
+
+/** The declaration beside each of them, which is what a `types` condition resolves to. */
+export const BUNDLE_DECLARATIONS = BUNDLES.flatMap((bundle) => [
+  bundle.declaration,
+  bundle.minifiedDeclaration,
+]);
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const check = process.argv.includes('--check');
 
   if (check) {
+    const published = [...BUNDLE_FILES, ...BUNDLE_DECLARATIONS];
     const missing = [];
-    for (const file of BUNDLE_FILES) if (!(await exists(join(PACKAGE, file)))) missing.push(file);
+    for (const file of published) if (!(await exists(join(PACKAGE, file)))) missing.push(file);
     if (missing.length > 0) {
       console.error(`Missing: ${missing.join(', ')}. Run \`npm run package\`.`);
       process.exitCode = 1;
     } else {
-      console.log('  ok   all four bundles are present');
+      console.log(`  ok   all ${String(published.length)} published files are present`);
     }
   } else {
     console.log('');

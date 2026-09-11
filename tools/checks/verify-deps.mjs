@@ -306,10 +306,11 @@ export async function verifyDependencies() {
    * An `exports` target as the paths it can resolve to.
    *
    * A target is a string or a conditional object, and both shapes are in use here:
-   * the bundles and the tooling entry points are plain strings, the three
-   * declaration-only subpaths are `{ "types": "./…d.ts" }` so that the type checker
-   * resolves them and Node refuses to. Every branch of a conditional has to exist —
-   * a condition nobody's resolver selects is still a promise this package made.
+   * the tooling entry points are plain strings, the three declaration-only subpaths
+   * are `{ "types": "./…d.ts" }` so that the type checker resolves them and Node
+   * refuses to, and each bundle carries a declaration beside its JavaScript. Every
+   * branch of a conditional has to exist — a condition nobody's resolver selects is
+   * still a promise this package made.
    *
    * @param {string | Record<string, unknown>} target
    * @returns {string[]}
@@ -327,12 +328,17 @@ export async function verifyDependencies() {
     MANIFEST.exports ?? {}
   );
   for (const [subpath, target] of Object.entries(packageExports())) {
-    if (declaredExports[subpath] !== target) {
+    // Compared as written rather than by value: a bundle's target is conditional, and
+    // conditions are matched in the order they appear, so `{ default, types }` and
+    // `{ types, default }` are two different maps and only one of them answers a type
+    // question with a declaration.
+    if (JSON.stringify(declaredExports[subpath]) !== JSON.stringify(target)) {
       refuse(
         'deps/exports-disagree-with-bundles',
         `declares \`srl.bundles\` for "${subpath}" but its \`exports\` says ` +
-          `${JSON.stringify(declaredExports[subpath]) ?? 'nothing'} rather than ${target}. A ` +
-          `consumer installing the package cannot reach a layer the browser resolves.`,
+          `${JSON.stringify(declaredExports[subpath]) ?? 'nothing'} rather than ` +
+          `${JSON.stringify(target)}. A consumer installing the package cannot reach a layer ` +
+          `the browser resolves.`,
         { file: MANIFEST_FILE },
       );
     }

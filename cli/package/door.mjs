@@ -187,10 +187,49 @@ export function barrelSource(members) {
       const from = JSON.stringify(file);
       if (door.internal.length === 0) return `export * from ${from};\n`;
 
-      const kept = new Set(door.internal);
-      const offered = door.names.filter((name) => !kept.has(name));
+      const offered = offeredNames(door);
       if (offered.length === 0) return `import ${from};\n`;
       return `export { ${offered.join(', ')} } from ${from};\n`;
     })
     .join('');
+}
+
+/**
+ * The same barrel for the type layer: one statement per member, over that member's
+ * declaration rather than its module.
+ *
+ * The door is read once and answers both halves, which is the point of putting this
+ * beside `barrelSource`. A bundle whose declarations offered a different set of names
+ * than its JavaScript would be a package that autocompletes one surface and runs
+ * another, and the two lists cannot drift while they come from one `ModuleDoor`.
+ *
+ * A member that keeps everything back is dropped rather than imported for effect. The
+ * statement `barrelSource` keeps is there for a side effect — a `customElements.define`
+ * at the bottom of a module — and a declaration file has none.
+ *
+ * @param {Array<{ file: string, door: ModuleDoor }>} members `file` is the specifier as written.
+ * @returns {string}
+ */
+export function declarationBarrelSource(members) {
+  return members
+    .map(({ file, door }) => {
+      const from = JSON.stringify(file);
+      if (door.internal.length === 0) return `export * from ${from};\n`;
+
+      const offered = offeredNames(door);
+      if (offered.length === 0) return '';
+      return `export { ${offered.join(', ')} } from ${from};\n`;
+    })
+    .join('');
+}
+
+/**
+ * What one module's door offers: its exports, minus the ones it marks.
+ *
+ * @param {ModuleDoor} door
+ * @returns {string[]}
+ */
+function offeredNames(door) {
+  const kept = new Set(door.internal);
+  return door.names.filter((name) => !kept.has(name));
 }

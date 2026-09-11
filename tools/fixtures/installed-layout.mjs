@@ -90,18 +90,19 @@ export function applicationManifest(name) {
 }
 
 /**
- * Run the installed `srl` bin inside `root`, through the local-bin command documented for
- * adopters. Offline mode makes an absent local bin a refusal rather than an implicit
- * download. A non-zero exit is data, not a throw: a caller wants to say which step failed
- * and what it printed. ADR-0098.
+ * Run one of the installed packages' bins inside `root`, through the local-bin command
+ * documented for adopters. Offline mode makes an absent local bin a refusal rather than
+ * an implicit download. A non-zero exit is data, not a throw: a caller wants to say which
+ * step failed and what it printed. ADR-0098.
  *
  * @param {string} root
+ * @param {string} command
  * @param {string[]} args
  * @returns {Promise<{ code: number, output: string }>}
  */
-export async function srl(root, args) {
+export async function localBin(root, command, args) {
   try {
-    const { stdout, stderr } = await run('npx', ['--offline', '--no-install', 'srl', ...args], {
+    const { stdout, stderr } = await run('npx', ['--offline', '--no-install', command, ...args], {
       cwd: root,
     });
     return { code: 0, output: `${stdout}${stderr}` };
@@ -112,6 +113,17 @@ export async function srl(root, args) {
       output: [detail.stdout, detail.stderr].filter((text) => typeof text === 'string').join(''),
     };
   }
+}
+
+/**
+ * The toolchain's own bin, which is what most of a probe is made of.
+ *
+ * @param {string} root
+ * @param {string[]} args
+ * @returns {Promise<{ code: number, output: string }>}
+ */
+export async function srl(root, args) {
+  return localBin(root, 'srl', args);
 }
 
 /**

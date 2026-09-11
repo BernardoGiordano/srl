@@ -293,15 +293,16 @@ only one of them exists in a browser:
 | Consumer | Reaches the library through | What ships |
 |---|---|---|
 | A browser with an import map | `lib/importmap.json`, pasted or fetched | `lib/` and `components/` as source, templates fetched beside their modules |
-| Node, or a bundler | `exports` | `dist/srl-core.js` and `dist/srl-components.js`, minified pairs beside them, templates inlined |
+| Node, or a bundler | `exports` | `dist/srl-core.js` and `dist/srl-components.js`, minified pairs beside them, templates inlined, a `.d.ts` beside each |
 
 `dist/` is generated and not committed, exactly like an application's `app.css`. It has to
 exist before `npm publish`, and `npm run verify` fails naming the command when `exports`
 points at a file that is not there, so a release cannot ship a map that reaches outside its
-own tarball. Why the second shape exists at all, and what it deliberately does not carry
-(TypeScript declarations), is
-[ADR-0066](../adr/0066-the-registry-consumer-gets-bundles.md). What a version bump means is
-[the changelog](../../CHANGELOG.md).
+own tarball. Why the second shape exists at all is
+[ADR-0066](../adr/0066-the-registry-consumer-gets-bundles.md); how it came to carry
+TypeScript declarations, emitted from the same JSDoc the first shape is typed by, is
+[ADR-0108](../adr/0108-the-bundles-carry-their-own-declarations.md). What a version bump
+means is [the changelog](../../CHANGELOG.md).
 
 ### Keeping a name out of the bundle
 

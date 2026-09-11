@@ -16,10 +16,15 @@ import test, { after } from 'node:test';
 
 import ts from 'typescript';
 
-import { walk } from '../../cli/layout.mjs';
+import { REPO, walk } from '../../cli/layout.mjs';
 import { moduleDoor } from '../../cli/package/door.mjs';
 import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
-import { BUNDLE_FILES, DIST, buildPackageBundles } from '../delivery/package-bundle.mjs';
+import {
+  BUNDLE_DECLARATIONS,
+  BUNDLE_FILES,
+  DIST,
+  buildPackageBundles,
+} from '../delivery/package-bundle.mjs';
 
 // Built once for the whole file, into a directory of this suite's own. Once,
 // because the build is the expensive part and every assertion below reads the same
@@ -35,8 +40,69 @@ await buildPackageBundles({ into: OUT });
 
 /** @type {Map<string, string>} */
 const emitted = new Map();
-for (const file of BUNDLE_FILES) {
+for (const file of [...BUNDLE_FILES, ...BUNDLE_DECLARATIONS]) {
   emitted.set(file, await readFile(join(OUT, basename(file)), 'utf8'));
+}
+
+/**
+ * The emitted declarations, as a program.
+ *
+ * Built once, from the barrels a `types` condition points at, under the options a
+ * bundler consumer would use. No library prefix is mapped and no path leads back
+ * into the checkout, so a declaration that still named `@core/` resolves to nothing
+ * here exactly as it would there. Every question below about the published type
+ * surface is asked of this program rather than of the files that produced it, for
+ * the same reason every question about the JavaScript is asked of the emitted bytes.
+ *
+ * The two `dependencies` are the exception, and they are mapped rather than resolved
+ * because of where the bytes are: the suite builds into a temporary directory with
+ * no `node_modules` above it, while a consumer who installed this package has both
+ * of them beside it. Only the names the manifest declares, so a bundle that reached
+ * for a third package fails here.
+ *
+ * `skipLibCheck` is off on purpose. It is on almost everywhere else because a
+ * dependency's declarations are not this repository's problem; here the tree is the
+ * artifact under test, and skipping it would pass a tree whose every file was wrong.
+ */
+const declarations = ts.createProgram(
+  BUNDLE_DECLARATIONS.map((file) => join(OUT, basename(file))),
+  {
+    strict: true,
+    noEmit: true,
+    skipLibCheck: false,
+    types: [],
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    lib: ['lib.es2023.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
+    paths: Object.fromEntries(
+      Object.keys(/** @type {Record<string, string>} */ (MANIFEST.dependencies ?? {})).flatMap(
+        (name) => [
+          [name, [join(REPO, 'node_modules', name)]],
+          [`${name}/*`, [join(REPO, 'node_modules', name, '*')]],
+        ],
+      ),
+    ),
+  },
+);
+
+/**
+ * The names one emitted declaration offers, asked of the checker rather than read
+ * out of the text: a barrel is `export *` statements, and what those forward is a
+ * question only resolution answers.
+ *
+ * @param {string} file
+ * @returns {string[]}
+ */
+function declaredExports(file) {
+  const source = declarations.getSourceFile(join(OUT, basename(file)));
+  assert.ok(source !== undefined, `${file} is not in the declaration program`);
+  const module = declarations.getTypeChecker().getSymbolAtLocation(source);
+  assert.ok(module !== undefined, `${file} is not a module`);
+  return declarations
+    .getTypeChecker()
+    .getExportsOfModule(module)
+    .map((symbol) => symbol.name);
 }
 
 /**
@@ -314,4 +380,78 @@ void test('the collection carries its markup rather than leaving it to a request
     declared.length >= 10,
     `expected the collection's templates inlined, found ${String(declared.length)}`,
   );
+});
+
+void test('every bundle carries a declaration, for the minified file as well', () => {
+  assert.deepEqual(BUNDLE_DECLARATIONS.slice().sort(), [
+    'dist/srl-components.d.ts',
+    'dist/srl-components.min.d.ts',
+    'dist/srl-core.d.ts',
+    'dist/srl-core.min.d.ts',
+  ]);
+  for (const file of BUNDLE_DECLARATIONS) {
+    assert.ok(textOf(file).trim().length > 0, `${file} is empty`);
+  }
+});
+
+void test('the published declarations resolve with no import map and no aliases', () => {
+  const refused = ts.getPreEmitDiagnostics(declarations).map((diagnostic) => {
+    const where =
+      diagnostic.file === undefined ? '' : `${basename(diagnostic.file.fileName)}: `;
+    return `${where}${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`;
+  });
+  assert.deepEqual(
+    refused,
+    [],
+    'a declaration that still names a prefix, or a tree missing a file it imports, is a ' +
+      'package that type-checks here and fails on the consumer that installs it',
+  );
+
+  // Without this the test passes on a tree of empty files: every diagnostic list would
+  // be empty and nothing would have been resolved at all.
+  for (const bundle of BUNDLES) {
+    assert.ok(
+      declaredExports(bundle.declaration).length >= 20,
+      `${bundle.declaration} offers almost nothing; the barrel resolved to nothing`,
+    );
+  }
+});
+
+void test('a declaration offers every name its bundle exports and none it marks internal', async () => {
+  /** @type {string[]} */
+  const kept = [];
+  for (const bundle of BUNDLES) {
+    for (const root of bundle.roots) {
+      for (const file of await walk(root, /\.js$/u)) {
+        if (file.split(sep).includes('test') || file.endsWith('.test.js')) continue;
+        if (bundle.excluded.some((dir) => file.startsWith(dir + sep))) continue;
+        kept.push(...moduleDoor(await readFile(file, 'utf8'), file).internal);
+      }
+    }
+  }
+
+  for (const bundle of BUNDLES) {
+    const offered = new Set(declaredExports(bundle.declaration));
+
+    // A superset rather than the same list: a JSDoc `@typedef` is a name the type
+    // layer offers and the runtime has nowhere to put, and a consumer wanting to
+    // annotate a variable needs it. The other direction is the failure — a value a
+    // consumer can import and cannot type.
+    for (const name of surfaceOf(bundle.file, textOf(bundle.file)).exported) {
+      assert.ok(offered.has(name), `${bundle.declaration} does not declare ${name}`);
+    }
+    for (const name of kept) {
+      assert.ok(!offered.has(name), `${bundle.declaration} declares ${name}, marked \`@internal\``);
+    }
+  }
+});
+
+void test('the minified declaration is the readable one, not a second opinion', () => {
+  for (const bundle of BUNDLES) {
+    assert.deepEqual(
+      declaredExports(bundle.minifiedDeclaration).sort(),
+      declaredExports(bundle.declaration).sort(),
+      `${bundle.minifiedDeclaration} and ${bundle.declaration} describe different surfaces`,
+    );
+  }
 });

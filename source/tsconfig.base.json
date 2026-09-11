@@ -41,13 +41,17 @@
 
     // And read the library's JSDoc where the library actually is.
     //
-    // This package publishes no `.d.ts`: the types are JSDoc in the `.js` files the
-    // browser runs, which is what makes one set of bytes both the runtime and the
-    // contract. tsc will not look inside a `.js` file under `node_modules` unless
-    // told to — `maxNodeModuleJsDepth` defaults to 0 — so without this line every
-    // `@core/` import in a consumer's application is `any`, `srl check templates`
-    // reports each one as TS7016, and a typed buildless library is typed only in its
-    // own repository.
+    // On this path the types are JSDoc in the `.js` files the browser runs, which is
+    // what makes one set of bytes both the runtime and the contract. tsc will not
+    // look inside a `.js` file under `node_modules` unless told to —
+    // `maxNodeModuleJsDepth` defaults to 0 — so without this line every `@core/`
+    // import in a consumer's application is `any`, `srl check templates` reports each
+    // one as TS7016, and a typed buildless library is typed only in its own
+    // repository.
+    //
+    // The bundled path does not come through here at all. It resolves `@srljs/core`
+    // through `exports`, which names a `.d.ts` emitted from this same JSDoc, so a
+    // consumer with a bundler needs none of this file. ADR-0108.
     //
     // Depth 1 is the package's own modules and not their dependencies' internals.
     // The cost is that other installed packages' top-level JavaScript enters the
