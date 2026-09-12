@@ -1710,7 +1710,7 @@ function cspForImportMap(inlineHash) {
     `default-src 'self'; script-src 'self' '${inlineHash}'; ` +
     `style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; ` +
     `object-src 'none'; base-uri 'none'; frame-ancestors 'none'; ` +
-    `trusted-types lit-html ui-test ui-test-template; require-trusted-types-for 'script'`
+    `trusted-types lit-html ui-test ui-test-template srl-worker; require-trusted-types-for 'script'`
   );
 }
 

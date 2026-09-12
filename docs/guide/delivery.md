@@ -231,6 +231,16 @@ await startApplication({ /* … */ });
 await registerServiceWorker();
 ```
 
+Registration is a Trusted Types sink, and the CSP the build emits already names the
+`srl-worker` policy the call creates. An origin serving an artifact under a
+hand-written CSP has to name it as well — `trusted-types lit-html ui-test
+ui-test-template srl-worker` — or the registration throws, and `registerServiceWorker()`
+reports that the way it reports every failure, with `null`.
+
+Activation retires the caches this application named — `srl:<app>:<digest>` — and leaves
+every other name on the origin alone: a second application deployed beside it, a Remote
+caching its own bytes, a cache a page opened itself.
+
 The worker deliberately does not `skipWaiting`: a tab running last week's modules must not
 have this week's worker answering its requests. So the other half of a deploy is knowing one
 happened, which is what `build.json` is for and what `@core/application/release.js` reads.

@@ -29,6 +29,11 @@
  * which leaves API calls, the event stream and every Remote on the network where
  * they were.
  *
+ * The same ownership decides what activation may delete. An origin can hold caches
+ * this Application never wrote — a second Application deployed beside it, a Remote,
+ * a cache a page opened itself — so the worker retires the names under its own
+ * `srl:<app>:` prefix and leaves every other name where it found it.
+ *
  * Pure: facts in, source out. A precache list is asserted without running Vite over
  * a real application, which is what `entry-hints.mjs` established for the document
  * half of the same question. ADR-0088.
@@ -150,6 +155,7 @@ export function serviceWorkerSource(facts) {
 'use strict';
 
 const CACHE = ${JSON.stringify(`srl:${facts.app}:${version}`)};
+const OWNED = ${JSON.stringify(`srl:${facts.app}:`)};
 const DOCUMENT = ${JSON.stringify(DOCUMENT)};
 const PRECACHE = ${JSON.stringify(precache, null, 2)};
 const REVALIDATE = new Set(${JSON.stringify(REVALIDATE)});
@@ -160,6 +166,16 @@ self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
 });
 
+// Which of an origin's caches this worker may delete. One Application, and an
+// Application owns the names it wrote: \`srl:<app>:<digest>\`. Everything else on
+// the origin belongs to somebody else — another Application deployed here, a
+// Remote under its own publication base, a cache a page opened itself — and a
+// worker that deleted every name it did not recognise would be throwing away data
+// it never wrote. Retiring the predecessor is the whole job.
+function retired(names) {
+  return names.filter((name) => name !== CACHE && name.startsWith(OWNED));
+}
+
 // No skipWaiting. A tab running last week's modules must not have this week's
 // worker answer its requests: the two disagree about which hash names what, and
 // the swap belongs to a moment the application chooses. See
@@ -168,7 +184,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((names) => Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name))))
+      .then((names) => Promise.all(retired(names).map((name) => caches.delete(name))))
       .then(() => self.clients.claim()),
   );
 });

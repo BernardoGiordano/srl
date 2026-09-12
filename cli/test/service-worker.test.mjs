@@ -1,13 +1,20 @@
 /**
- * What the generated worker precaches, and what it refuses to touch.
+ * What the generated worker precaches, what it refuses to touch, and what it deletes.
  *
  * Every case is a literal report rather than a built application, for the reason
  * `entry-hints.test.mjs` states: the rule is a function of one report and nothing
  * else, so asserting it needs no Vite, no browser and no artifact on disk.
+ *
+ * Deletion is the exception, and `activated()` is why. Which caches survive an
+ * activation is not a property of the source text — it is what the handler does when
+ * an origin hands it a list of names — so that one rule is asserted by running the
+ * generated handler against a `CacheStorage` stand-in rather than by matching a
+ * regular expression against the file.
  */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createContext, runInContext } from 'node:vm';
 
 import { entryClosure } from '../delivery/artifact-report.mjs';
 import { WORKER, precacheList, serviceWorkerSource } from '../delivery/service-worker.mjs';
@@ -175,6 +182,105 @@ void test('it does not skip waiting, so a running tab keeps the worker it starte
   // not make one, and that comment is the thing a later reader needs most.
   assert.ok(!/skipWaiting\s*\(/u.test(serviceWorkerSource(facts())));
 });
+
+void test('activation retires this Application\'s own old cache', async () => {
+  const source = serviceWorkerSource(facts());
+  const current = cacheNameOf(source);
+  const previous = 'srl:example:0123456789abcdef';
+
+  const { surviving, deleted } = await activated(source, [previous, current]);
+
+  assert.deepEqual(deleted, [previous]);
+  assert.deepEqual(surviving, [current], 'the cache the worker just installed was deleted');
+});
+
+void test('activation leaves every cache this Application does not own', async () => {
+  // An origin is shared. A second Application deployed beside this one, a Remote
+  // that caches its own bytes, and a cache a page opened itself all sit in the same
+  // `CacheStorage`, and none of them is this worker's to delete. ADR-0016, ADR-0026.
+  const source = serviceWorkerSource(facts());
+  const current = cacheNameOf(source);
+  const foreign = ['srl:another-app:0123456789abcdef', 'remote-billing:v1', 'user-owned-cache'];
+
+  const { surviving, deleted } = await activated(source, [...foreign, current]);
+
+  assert.deepEqual(deleted, []);
+  assert.deepEqual(surviving, [...foreign, current]);
+});
+
+void test('an Application whose name only starts the same keeps its caches', async () => {
+  const source = serviceWorkerSource({ ...facts(), app: 'example' });
+  const neighbour = 'srl:example-admin:0123456789abcdef';
+
+  const { deleted } = await activated(source, [neighbour, cacheNameOf(source)]);
+
+  assert.deepEqual(deleted, [], 'the owned prefix matched a longer application name');
+});
+
+void test('activation claims the tabs it controls once the retirement is done', async () => {
+  const source = serviceWorkerSource(facts());
+
+  const { claimed } = await activated(source, ['srl:example:0123456789abcdef', cacheNameOf(source)]);
+
+  assert.ok(claimed, 'a controlled tab would keep talking to the network until the next load');
+});
+
+/**
+ * The generated worker, activated against a seeded origin.
+ *
+ * Enough of a worker global to load the script and fire one lifecycle event: the
+ * handlers it registers, a `CacheStorage` holding `seeded`, and a `clients.claim()`
+ * that records it was called. The event's `waitUntil` collects the work, which is
+ * how an activation is awaited anywhere — the browser keeps the worker alive until
+ * that promise settles, and so does this.
+ *
+ * @param {string} source
+ * @param {readonly string[]} seeded
+ * @returns {Promise<{ surviving: string[], deleted: string[], claimed: boolean }>}
+ */
+async function activated(source, seeded) {
+  const surviving = [...seeded];
+  /** @type {string[]} */
+  const deleted = [];
+  let claimed = false;
+
+  /** @type {Map<string, (event: { waitUntil: (work: Promise<unknown>) => void }) => void>} */
+  const handlers = new Map();
+  const context = createContext({
+    self: {
+      addEventListener: (/** @type {string} */ type, /** @type {any} */ handler) =>
+        handlers.set(type, handler),
+      clients: {
+        claim: () => {
+          claimed = true;
+          return Promise.resolve();
+        },
+      },
+      location: { origin: 'https://example.test' },
+    },
+    caches: {
+      keys: () => Promise.resolve([...surviving]),
+      delete: (/** @type {string} */ name) => {
+        const at = surviving.indexOf(name);
+        if (at === -1) return Promise.resolve(false);
+        surviving.splice(at, 1);
+        deleted.push(name);
+        return Promise.resolve(true);
+      },
+    },
+  });
+  runInContext(source, context);
+
+  const activate = handlers.get('activate');
+  assert.ok(activate !== undefined, 'the generated worker registers an activate handler');
+
+  /** @type {Promise<unknown>[]} */
+  const pending = [];
+  activate({ waitUntil: (work) => void pending.push(work) });
+  await Promise.all(pending);
+
+  return { surviving, deleted, claimed };
+}
 
 /** @param {string} source */
 function cacheNameOf(source) {

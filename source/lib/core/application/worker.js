@@ -25,6 +25,44 @@
  */
 
 /**
+ * @typedef {{ createScriptURL(value: string): unknown }} WorkerPolicy
+ * @typedef {{ createPolicy(name: string, rules: { createScriptURL(value: string): string }): WorkerPolicy }} WorkerPolicyFactory
+ */
+
+/** @type {WorkerPolicy | null | undefined} */
+let policy;
+
+/**
+ * The registration URL as a value Trusted Types will accept.
+ *
+ * `register()` is a script-URL sink, and every artifact this toolchain builds ships
+ * `require-trusted-types-for 'script'` — so a bare string throws under the CSP the
+ * build writes, and the worker silently never installs. The policy is named
+ * `srl-worker` there, it is created on the first registration rather than at import
+ * (a page that never registers asks a CSP for nothing), and it accepts same-origin
+ * URLs only, which is all a service worker script can be.
+ *
+ * @param {string} url
+ * @returns {unknown} the URL, trusted where the page requires it
+ */
+function scriptUrl(url) {
+  const factory = /** @type {{ trustedTypes?: WorkerPolicyFactory }} */ (
+    /** @type {unknown} */ (globalThis)
+  ).trustedTypes;
+  if (factory === undefined) return url;
+  policy ??= factory.createPolicy('srl-worker', {
+    createScriptURL: (value) => {
+      const resolved = new URL(value, location.href);
+      if (resolved.origin !== location.origin) {
+        throw new Error(`registerServiceWorker: ${value} is not on this origin.`);
+      }
+      return resolved.href;
+    },
+  });
+  return policy.createScriptURL(url);
+}
+
+/**
  * @typedef {object} ServiceWorkerOptions
  * @property {string} [url] Where the worker is served from. `/sw.js` is what the build emits and what its scope requires.
  * @property {boolean} [when] Register only when this is true. An application gates on its own condition — a manifest flag, an origin, a user setting — rather than this module guessing at one.
@@ -49,7 +87,7 @@ export async function registerServiceWorker(options = {}) {
   // an artifact is verified in a browser before it is deployed anywhere.
   if (!isSecureContext || !('serviceWorker' in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register(url);
+    return await navigator.serviceWorker.register(/** @type {string} */ (scriptUrl(url)));
   } catch {
     return null;
   }

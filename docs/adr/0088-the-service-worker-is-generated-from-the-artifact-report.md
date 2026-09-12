@@ -65,6 +65,18 @@ it ([ADR-0016](0016-a-remote-reaches-the-shell-only-through-its-host-context.md)
 [ADR-0026](0026-remote-grants-are-least-privilege-not-a-sandbox.md)). The immutable rule is anchored at
 `/assets/` precisely so a Remote's own assets do not match it.
 
+**Activation retires the caches this Application named, and leaves the rest of the origin
+alone.** A cache name is `srl:<app>:<digest>`, so the prefix says who wrote it, and the
+activate handler deletes the names under its own prefix rather than every name that is not
+the current one. An origin is shared: a second Application can be deployed beside this one,
+a Remote can cache its own bytes, and a page can open a cache the framework knows nothing
+about. Deleting those is the same mistake as caching a Remote's bytes, in the other
+direction — data this artifact did not write is not this worker's to destroy
+([ADR-0016](0016-a-remote-reaches-the-shell-only-through-its-host-context.md),
+[ADR-0026](0026-remote-grants-are-least-privilege-not-a-sandbox.md)). The rule lives in the
+handler that acts on it, and `cli/test/service-worker.test.mjs` asserts it by running the
+generated handler against a seeded `CacheStorage` rather than by matching the source text.
+
 **The worker does not `skipWaiting`.** A tab running last week's modules must not have this
 week's worker answering its requests: the two disagree about which hash names what. The swap
 is a moment the application chooses, which is what
@@ -82,6 +94,16 @@ rules, which are true of chunks and not of it, and requires it by name instead.
 application not deployed as an artifact has no `/sw.js`, a development origin deliberately
 has none, and a library that registered one anyway would be caching a dev server's bytes
 under a policy it invented.
+
+**The registration goes through a Trusted Types policy the build's CSP names.**
+`ServiceWorkerContainer.register()` is a script-URL sink, and every artifact ships
+`require-trusted-types-for 'script'`, so a bare string throws — and because
+`registerServiceWorker()` answers every failure with `null`, the worker would never install
+and nothing would say why. `cspForImportMap` therefore names `srl-worker` beside the three
+template policies, and `@core/application/worker.js` creates it on the first registration:
+same-origin URLs only, and nothing created at import time by a page that never registers. A
+deployment that writes its own CSP has to name that policy too, which
+`docs/guide/delivery.md` states.
 
 ## Consequences
 

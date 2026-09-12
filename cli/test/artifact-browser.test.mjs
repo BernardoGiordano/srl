@@ -313,3 +313,137 @@ void test('split-lazy announces nothing, so a visitor fetches only what they ope
     await rm(temporary, { recursive: true, force: true });
   }
 });
+
+
+void test('an activation retires the shell’s own old cache and leaves the origin’s others alone', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'example-artifact-worker-'));
+  /** @type {Awaited<ReturnType<typeof startArtifactOrigin>> | undefined} */
+  let origin;
+  /** @type {import('puppeteer-core').Browser | undefined} */
+  let browser;
+  try {
+    const app = (await apps()).find((candidate) => candidate.name === 'example');
+    assert.ok(app !== undefined);
+    const release = { commit: '0'.repeat(40), sourceDateEpoch: 0 };
+    const remotes = await Promise.all(
+      ['billing', 'analytics'].map((name) =>
+        buildRemoteArtifact({ app, name, outDir: join(temporary, name), release }),
+      ),
+    );
+    const shell = await buildArtifact({
+      app,
+      outDir: join(temporary, 'shell'),
+      release,
+      remotes,
+    });
+    const publicDir = join(String(shell.root), String(shell.public));
+
+    origin = await startArtifactOrigin({
+      appDir: app.dir,
+      artifactDir: publicDir,
+      entry: String(shell.entry),
+      csp: /** @type {{ csp: string }} */ (shell.security).csp,
+      unavailable: null,
+      tampered: null,
+      session: { username: 'artifact-test', password: 'admin' },
+      mounts: remotes.map((report) => ({
+        base: String(report.base),
+        dir: join(String(report.root), String(report.public)),
+      })),
+    });
+    browser = await launchChrome(origin.url);
+    const page = await browser.newPage();
+    try {
+      await page.goto(`${origin.url}/`, { waitUntil: 'load', timeout: 30_000 });
+      await page.waitForFunction(
+        () => /** @type {{ __artifactReady?: boolean }} */ (globalThis).__artifactReady === true,
+        { timeout: 15_000 },
+      );
+
+      // The name the emitted worker will claim, read from the file the build wrote.
+      // `previous` is the same application one release ago: same prefix, a digest of
+      // a precache list that no longer exists.
+      const current = /const CACHE = "([^"]+)"/u.exec(await readFile(join(publicDir, 'sw.js'), 'utf8'))?.[1];
+      assert.ok(current !== undefined, 'the emitted worker names its cache');
+      const previous = `${current.slice(0, current.lastIndexOf(':') + 1)}0123456789abcdef`;
+      assert.notEqual(previous, current);
+
+      // What else an origin holds. Another Application deployed here, a Remote that
+      // caches its own bytes, and a cache the page opened itself — none of them
+      // written by this artifact, so none of them this worker's to delete.
+      const foreign = ['srl:another-app:0123456789abcdef', 'remote-billing:v1', 'user-owned-cache'];
+      await page.evaluate(async (names) => {
+        for (const name of names) {
+          const cache = await caches.open(name);
+          await cache.put('/__seeded', new Response(name));
+        }
+      }, [previous, ...foreign]);
+
+      // `register()` is a Trusted Types sink and the artifact ships
+      // `require-trusted-types-for 'script'`, so the registration a page makes is the
+      // registration `registerServiceWorker()` makes: through the `srl-worker` policy
+      // the build's CSP names. The library's own call is bundled into a chunk and
+      // unreachable by URL from here, so the policy is opened in the page — what this
+      // asserts is that the emitted CSP permits it, which is what silently stopped a
+      // registration before the name was there.
+      assert.match(
+        /** @type {{ csp: string }} */ (shell.security).csp,
+        /trusted-types [^;]*\bsrl-worker\b/u,
+      );
+
+      // No worker controls this origin yet, so this registration installs and
+      // activates without waiting for a predecessor to be released. Waiting on
+      // `activated` rather than on `ready` is what makes the assertion about
+      // deletion: the state moves only once the activate handler's work settles.
+      await page.evaluate(() => {
+        const factory = /** @type {{ trustedTypes?: { createPolicy(name: string, rules: { createScriptURL(value: string): string }): { createScriptURL(value: string): unknown } } }} */ (
+          /** @type {unknown} */ (globalThis)
+        ).trustedTypes;
+        const url = factory?.createPolicy('srl-worker', { createScriptURL: (value) => value }).createScriptURL('/sw.js') ?? '/sw.js';
+        return navigator.serviceWorker.register(/** @type {string} */ (url));
+      });
+      await page.waitForFunction(
+        async () =>
+          (await navigator.serviceWorker.getRegistration())?.active?.state === 'activated',
+        { timeout: 30_000 },
+      );
+
+      const surviving = await page.evaluate(() => caches.keys());
+      assert.ok(surviving.includes(current), 'the worker deleted the cache it just installed');
+      assert.ok(!surviving.includes(previous), 'the previous release was left behind');
+      assert.deepEqual(
+        foreign.filter((name) => !surviving.includes(name)),
+        [],
+        'the activation deleted caches this artifact never wrote',
+      );
+
+      // Names surviving is not the claim — the bytes are. A cache the worker kept but
+      // emptied would pass every assertion above.
+      const intact = await page.evaluate(
+        async (names) =>
+          Promise.all(
+            names.map(async (name) => {
+              const response = await (await caches.open(name)).match('/__seeded');
+              return response === undefined ? null : await response.text();
+            }),
+          ),
+        foreign,
+      );
+      assert.deepEqual(intact, foreign);
+
+      // And the install half of the same lifecycle: the offline shell is in the cache
+      // the activation kept.
+      const precached = await page.evaluate(
+        async (name) => (await (await caches.open(name)).match('/index.html')) !== undefined,
+        current,
+      );
+      assert.ok(precached, 'the current cache holds no document, so the install did not run');
+    } finally {
+      await page.close();
+    }
+  } finally {
+    await browser?.close();
+    await origin?.close();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
