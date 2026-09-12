@@ -63,6 +63,11 @@ const UNCHECKED = Symbol('unchecked');
  * ask twice. What an application writes is a function from a value to a code.
  * ADR-0103.
  *
+ * The owner's end is terminal. The field stops being pending, drops whatever the
+ * validator answers afterwards, and holds no answer for the value it was asking
+ * about — a validator that ignores its abort signal cannot report on a screen that
+ * has gone, and cannot leave a submit awaiting `whenSettled()` forever. ADR-0114.
+ *
  * A check never runs for the value the field was *built* with, or for one a
  * `reset` installed. Those came from the server, and a form opened on a saved
  * customer would otherwise report that customer's own address as taken.
@@ -172,6 +177,14 @@ export class FormField {
   /** The check in flight, or none. Anything else that resolves is superseded. */
   /** @type {AbortController | undefined} */
   #request;
+
+  /**
+   * Drops the owner listener of the check that is waiting or in flight. One per
+   * scheduled check, cleared on every path that ends one.
+   *
+   * @type {(() => void) | undefined}
+   */
+  #release;
 
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   #timer;
@@ -372,42 +385,65 @@ export class FormField {
       return;
     }
 
+    // Nothing is listening any more: not asking is the same answer as asking and
+    // dropping the response, one request cheaper. The value stays unchecked, so a
+    // field whose owner comes back asks rather than carrying an answer it never got.
+    const lifetime = this.#ownerLifetime();
+    if (lifetime?.aborted === true) {
+      this.asyncError.value = '';
+      return;
+    }
+
+    const request = new AbortController();
+    this.#request = request;
+
+    if (lifetime !== undefined) {
+      // Bound to the owner from the keystroke rather than from the request, so an
+      // owner that ends during the debounce window ends the check in it.
+      const abandonWithOwner = () => {
+        request.abort(lifetime.reason);
+        if (this.#request === request) this.#abandonCheck();
+      };
+
+      // Two removals, for the two ways a check ends. `signal: request.signal` covers
+      // a supersession whose validator never settles; `#release` covers one that
+      // settles, which never aborts and would otherwise leave a listener per
+      // keystroke on a lifetime that outlives all of them. ADR-0076.
+      lifetime.addEventListener('abort', abandonWithOwner, { once: true, signal: request.signal });
+      this.#release = () => lifetime.removeEventListener('abort', abandonWithOwner);
+    }
+
     batch(() => {
       this.asyncError.value = '';
       this.#checking.value = true;
     });
     this.#timer = setTimeout(() => {
       this.#timer = undefined;
-      void this.#runCheck(value);
+      void this.#runCheck(value, request);
     }, this.#debounce);
+  }
+
+  /**
+   * The owner's lifetime right now.
+   *
+   * Read per check rather than held, because an element's lifetime is a new
+   * signal after every re-attach: a field handed `() => this.lifetime` that kept
+   * the first one would refuse to check anything after a move.
+   *
+   * @returns {AbortSignal | undefined}
+   */
+  #ownerLifetime() {
+    return typeof this.#lifetime === 'function' ? this.#lifetime() : this.#lifetime;
   }
 
   /**
    * Ask every asynchronous validator in order, first failure wins.
    *
    * @param {T} value
+   * @param {AbortController} request
    * @returns {Promise<void>}
    */
-  async #runCheck(value) {
-    const lifetime = typeof this.#lifetime === 'function' ? this.#lifetime() : this.#lifetime;
-
-    // Nothing is listening any more: not asking is the same answer as asking and
-    // dropping the response, one request cheaper.
-    if (lifetime?.aborted === true) {
-      this.#settle(value, '');
-      return;
-    }
-
-    const request = new AbortController();
-    this.#request = request;
-    const abortWithOwner = () => request.abort(lifetime?.reason);
-
-    // Two removals, for the two ways a check ends. `signal: request.signal` covers
-    // a supersession whose validator never settles; the `finally` covers one that
-    // settles, which never aborts and would otherwise leave a listener per
-    // keystroke on a lifetime that outlives all of them. ADR-0076.
-    lifetime?.addEventListener('abort', abortWithOwner, { once: true, signal: request.signal });
-
+  async #runCheck(value, request) {
     try {
       let code = '';
       for (const validate of this.#asyncValidators) {
@@ -421,8 +457,11 @@ export class FormField {
       // decides, the same way `resource` refuses to turn a rejection into a value.
       if (this.#request === request) this.#settle(value, '');
     } finally {
-      lifetime?.removeEventListener('abort', abortWithOwner);
-      if (this.#request === request) this.#request = undefined;
+      if (this.#request === request) {
+        this.#release?.();
+        this.#release = undefined;
+        this.#request = undefined;
+      }
     }
   }
 
@@ -438,15 +477,31 @@ export class FormField {
     });
   }
 
-  /** Drop the timer and abort the request, without deciding what replaces them. */
+  /** Drop the timer, the listener and the request, without deciding what replaces them. */
   #cancelCheck() {
     if (this.#timer !== undefined) {
       clearTimeout(this.#timer);
       this.#timer = undefined;
     }
+    this.#release?.();
+    this.#release = undefined;
     this.#request?.abort();
     this.#request = undefined;
     this.#checking.value = false;
+  }
+
+  /**
+   * The owner's lifetime ended. Drop the check and hold no answer for its value.
+   *
+   * Aborting only *asks* a validator to stop, and a validator that ignores the
+   * signal is the case this closes. The request stops being the current one, so a
+   * late answer is dropped rather than published under an owner that has gone, and
+   * `pending` goes false, so a submit awaiting `whenSettled()` is not left waiting
+   * on a promise nothing will settle. ADR-0114.
+   */
+  #abandonCheck() {
+    this.#cancelCheck();
+    this.#checked = UNCHECKED;
   }
 
   /* ── The FormNode contract ──────────────────────────────────────────────

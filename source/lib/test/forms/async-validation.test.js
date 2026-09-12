@@ -1,3 +1,4 @@
+import { fieldArray } from '@core/forms/array.js';
 import { field } from '@core/forms/field.js';
 import { group } from '@core/forms/group.js';
 import { email, required } from '@core/forms/validators.js';
@@ -261,5 +262,130 @@ describe('a form with an asynchronous rule under it', () => {
     const customer = form();
     await customer.whenSettled();
     assert.notOk(customer.pending.value);
+  });
+
+  it('stops waiting on a row that was removed mid-check', async () => {
+    const answer = deferred();
+    const contact = () =>
+      group({
+        address: field('', [required()], { debounce: 0, async: [() => answer.promise] }),
+      });
+    const customer = group({ contacts: fieldArray(contact) });
+
+    customer.fields.contacts.push().fields.address.setValue('free@example.com');
+    await tick();
+    assert.ok(customer.pending.value);
+    assert.notOk(customer.markSubmitted());
+
+    customer.fields.contacts.removeAt(0);
+    await customer.whenSettled();
+    assert.notOk(customer.pending.value, 'a row nobody holds cannot hold the submit up');
+    assert.ok(customer.markSubmitted());
+
+    // The answer arrives for a row that is gone, and reaches nothing that is left.
+    answer.settle('taken');
+    await tick();
+    assert.ok(customer.markSubmitted());
+  });
+});
+
+describe('an owner that ends while a check is out', () => {
+  it('settles the field rather than waiting on a validator that ignores the abort', async () => {
+    const controller = new AbortController();
+    const answer = deferred();
+    const address = field('', [required()], {
+      debounce: 0,
+      lifetime: controller.signal,
+      async: [() => answer.promise],
+    });
+
+    address.setValue('a');
+    await tick();
+    assert.ok(address.pending.value);
+
+    controller.abort();
+    assert.notOk(address.pending.value, 'nothing is owed an answer once the owner is gone');
+
+    // The validator never settles, and a submit that awaited this would never run.
+    const waited = await Promise.race([
+      address.whenSettled().then(() => 'settled'),
+      tick().then(() => 'waiting'),
+    ]);
+    assert.equal(waited, 'settled', 'a waiting caller is released rather than left on a dead check');
+
+    answer.settle('taken');
+    await tick();
+    assert.equal(address.error.value, '', 'a late answer is about a screen that has gone');
+  });
+
+  it('ends a check still waiting out its debounce', async () => {
+    const controller = new AbortController();
+    let asked = 0;
+    const address = field('', [required()], {
+      debounce: 20,
+      lifetime: controller.signal,
+      async: [
+        () => {
+          asked += 1;
+          return Promise.resolve('taken');
+        },
+      ],
+    });
+
+    address.setValue('a');
+    assert.ok(address.pending.value, 'pending from the keystroke, before the request');
+
+    controller.abort();
+    assert.notOk(address.pending.value);
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(asked, 0, 'the quiet window belonged to the owner too');
+  });
+
+  it('holds no answer for the value it was asking about', async () => {
+    let owner = new AbortController();
+    const first = deferred();
+    let asked = 0;
+    const address = field('', [required()], {
+      debounce: 0,
+      lifetime: () => owner.signal,
+      async: [
+        () => {
+          asked += 1;
+          return asked === 1 ? first.promise : Promise.resolve('');
+        },
+      ],
+    });
+
+    address.setValue('a');
+    await tick();
+    owner.abort();
+    assert.equal(asked, 1);
+
+    // Re-attached: a new lifetime, and a value nobody ever got an answer for.
+    owner = new AbortController();
+    address.setValue('a');
+    await address.whenSettled();
+
+    assert.equal(asked, 2, 'an abandoned check leaves the value unchecked, not answered for');
+  });
+
+  it('leaves no listener on the lifetime it was bound to', async () => {
+    const { controller, listeners } = instrumentedAbort();
+    const answer = deferred();
+    const address = field('', [required()], {
+      debounce: 0,
+      lifetime: controller.signal,
+      async: [() => answer.promise],
+    });
+
+    address.setValue('a');
+    await tick();
+    assert.equal(listeners.size, 1, 'a check in flight is bound to its owner');
+
+    controller.abort();
+    assert.equal(listeners.size, 0);
+
+    answer.settle('');
   });
 });

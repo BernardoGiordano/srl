@@ -319,7 +319,11 @@ are worth knowing because they are decisions rather than mechanics:
   with or one a `reset` installed, and a rejection reports nothing rather than inventing an
   error. `pending` is a third state and it is not valid, so a submit awaits
   `form.whenSettled()` before asking `markSubmitted()`
-  ([ADR-0103](../adr/0103-a-field-owns-its-asynchronous-check.md)).
+  ([ADR-0103](../adr/0103-a-field-owns-its-asynchronous-check.md)). An owner that ends ends
+  the check with it: the field stops being pending, holds no answer for the value it was
+  asking about, and drops whatever a validator that ignored the abort says afterwards, so a
+  submit awaiting `whenSettled()` cannot be left waiting on a screen that has gone
+  ([ADR-0114](../adr/0114-an-owner-ending-is-terminal-for-a-check.md)).
 - **A disabled field stops being answerable for, and keeps its value.** Its validators do
   not run, it reports `valid` and it shows nothing — a rule the user cannot reach and
   cannot fix must not be what refuses a submit. Angular also drops the value out of the
