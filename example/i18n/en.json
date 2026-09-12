@@ -323,6 +323,12 @@
     "ago": "Age",
     "actor": "By",
     "empty": "No movements recorded.",
+    "selected": {
+      "one": "{count} movement selected",
+      "other": "{count} movements selected"
+    },
+    "selectedNet": "Net {net}",
+    "clearSelection": "Clear selection",
     "kind": {
       "receipt": "Receipt",
       "issue": "Issue",

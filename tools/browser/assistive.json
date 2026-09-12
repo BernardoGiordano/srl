@@ -1,0 +1,16 @@
+{
+  "$comment": [
+    "Manual screen-reader passes over the same journey, recorded by the person who ran",
+    "them. Nothing generates this file and nothing can: a driver reports what the DOM",
+    "says, and what a screen reader actually announces is a different question that only",
+    "a person with one running can answer.",
+    "",
+    "It is deliberately separate from journeys.json so that an automated run can never",
+    "look like assistive-technology coverage. An empty checks list publishes 'none",
+    "recorded', which is the honest state until somebody runs one and writes it down.",
+    "",
+    "Add an entry with: reader, browser, platform, checkedAt (ISO date), the journey step",
+    "ids it covered, an outcome of passed | passed-with-notes | failed, and notes."
+  ],
+  "checks": []
+}

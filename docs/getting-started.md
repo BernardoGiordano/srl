@@ -20,6 +20,7 @@ is checked to be a plain static folder.
 npm run check                 # typecheck + templates + lint + tool tests + vendor + package + verify + docs + browser tests
 APP=example npm test          # the library, the collection and that application's suite
 npm run benchmark:ci          # the performance gate, against the checked-in baseline
+npm run test:journey          # one accessible journey on Blink, Gecko and WebKit
 ```
 
 Everything `check` runs, individually:
@@ -29,12 +30,13 @@ Everything `check` runs, individually:
 | `npm run typecheck` | A JSDoc type error anywhere, including tools |
 | `npm run templates:check` | A binding that does not typecheck against its component class |
 | `npm run lint` | Type-aware ESLint |
-| `npm run test:tools` | The Node-side suites: project model, checkers, benchmark integrity, frozen interfaces, docs |
+| `npm run test:tools` | The Node-side suites: project model, checkers, benchmark integrity, frozen interfaces, docs, and one accessible journey on three engines |
 | `npm run test:editors` | Editor launcher path resolution |
 | `npm run vendor` | A vendored byte that does not match its recorded hash |
 | `npm run package` | A published bundle that will not build, or still names a specifier only an import map resolves |
 | `npm run verify` | Layering, dependencies, import maps, template ownership, translations, storage access |
 | `npm run docs:check` | A generated reference table that no longer matches the project model |
+| `npm run docs:browsers` | The published browser support matrix, against the recorded journey run |
 | `npm test` | The browser suites, in real Chrome, for the library, the collection and one application |
 
 ## Run this after changing X
@@ -49,5 +51,6 @@ Everything `check` runs, individually:
 | Anything under `source/`, before publishing | `npm run package` then `npm run verify` (the `exports` map names files it emits) |
 | Anything in the render, router, table or startup path | `npm run benchmark:ci` |
 | Tailwind input or a component's example classes | `npm run css`, then re-read the delivery numbers in [the performance envelope](guide/performance.md) |
+| A journey step, an engine, or anything the journey touches | `npm run journey:record`, then `npm run docs:browsers:write` |
 | Documentation prose | nothing; generated tables: `npm run docs:write` |
 | `cli/language-server/` or `editors/` | `npm run test:tools && npm run test:editors`; package each editor before release |

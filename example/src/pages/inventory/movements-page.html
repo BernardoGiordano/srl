@@ -21,15 +21,48 @@
       (action)="load()"
     ></app-notice>
 
+    <!--
+      The reconciliation aid the selection exists for: a net quantity over the
+      chosen rows, which is the one arithmetic a stock log is read for and the
+      one a windowed table must still get right when most rows are not in the
+      DOM. The count is announced, because ticking a checkbox changes a number
+      several rows away.
+    -->
+    <p
+      *if="selectionCount > 0"
+      class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-ui-border bg-canvas px-3 py-2 text-[13px]"
+      aria-live="polite"
+    >
+      <span class="font-semibold text-ink">{{ t('movements.selected', { count: selectionCount }) }}</span>
+      <span class="tabular-nums text-muted">{{ t('movements.selectedNet', { net: selectedNet }) }}</span>
+      <button
+        type="button"
+        class="ms-auto cursor-pointer rounded-md px-2.5 py-1 text-muted transition-colors hover:text-ink"
+        (click)="clearSelection()"
+      >
+        {{ t('movements.clearSelection') }}
+      </button>
+    </p>
+
+    <!--
+      A window rather than pages. The list grows from the top while the user
+      watches it, and a page number that means a different row every few seconds
+      is worse than no page number: the rows a window holds are the rows the
+      scroll position asks for, so an arriving movement moves the list rather
+      than the reader. ADR-0107, ADR-0116.
+    -->
     <ui-table
       state-id="inventory-movements"
-      pagination="client"
-      page-size="15"
-      page-sizes="15,30,60"
+      pagination="none"
+      virtualized
+      viewport-height="480"
+      selectable
       column-chooser
       [.rows]="rows"
       [.loading]="loading"
       [.row-key]="rowKey"
+      [.selected-keys]="selectedKeys"
+      (selection-change)="captureSelection($event)"
       caption="{{ t('nav.inventoryMovements') }}"
       empty-label="{{ t('movements.empty') }}"
     >

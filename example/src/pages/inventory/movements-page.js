@@ -1,6 +1,7 @@
 import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { resource } from '@core/foundation/resource.js';
+import { computed, signal } from '@core/foundation/reactive.js';
 import { inject } from '@core/foundation/inject.js';
 import { dt, num, t } from '@core/localization/i18n.js';
 import { UiTable } from '@components/data/ui-table.js';
@@ -28,6 +29,10 @@ import { LIVE_FEED } from '../../services/live-feed.js';
  * same objects on the server, so there is nothing to normalise. That is worth arranging
  * deliberately: a live feed whose payload differs from the resource it updates makes
  * every consumer write the adapter.
+ *
+ * The table is windowed rather than paged, because a page number over a list that grows
+ * from the top names a different row every few seconds. The selection is a set of keys
+ * for the same reason: a movement arriving above a chosen row must not unchoose it.
  */
 export class MovementsPage extends SignalElement {
   #fetched = resource(
@@ -41,9 +46,15 @@ export class MovementsPage extends SignalElement {
   /**
    * The fetched page with the streamed movements in front of it, de-duplicated by id: a
    * reload after some events have arrived would otherwise show both copies.
+   *
+   * Computed rather than assembled in the getter, so the array keeps its identity between
+   * renders. A window reads a new array as a different list and puts the scroll position
+   * back at the top — so a getter that rebuilt it would send the reader to row one every
+   * time a checkbox moved.
+   *
+   * @type {import('@core/foundation/types.js').ReadonlySignal<Array<Movement | StockEvent>>}
    */
-  get rows() {
-    /** @type {Array<Movement | StockEvent>} */
+  #rows = computed(() => {
     const merged = [...inject(LIVE_FEED).movements.value, ...this.#fetched.value.value];
     /** @type {Set<string>} */
     const seen = new Set();
@@ -52,6 +63,47 @@ export class MovementsPage extends SignalElement {
       seen.add(movement.id);
       return true;
     });
+  });
+
+  get rows() {
+    return this.#rows.value;
+  }
+
+  /**
+   * The chosen rows, by key.
+   *
+   * Keys rather than rows, so a movement arriving on the stream cannot unselect
+   * anything: the window re-renders around a key that is still in the list. ADR-0105.
+   */
+  selectedKeys = signal(/** @type {readonly unknown[]} */ ([]));
+
+  get selectionCount() {
+    return this.selectedKeys.value.length;
+  }
+
+  /**
+   * The net quantity over the selection, issues counted negative — the same sign the
+   * quantity column renders.
+   */
+  get selectedNet() {
+    const chosen = new Set(this.selectedKeys.value.map(String));
+    let net = 0;
+    for (const movement of this.rows) {
+      if (!chosen.has(movement.id)) continue;
+      net += movement.kind === 'issue' ? -movement.quantity : movement.quantity;
+    }
+    return num(net, { signDisplay: 'always' });
+  }
+
+  /** @param {Event} event */
+  captureSelection(event) {
+    this.selectedKeys.value = /** @type {CustomEvent<{ keys: readonly unknown[] }>} */ (
+      event
+    ).detail.keys;
+  }
+
+  clearSelection() {
+    this.selectedKeys.value = [];
   }
 
   get connected() {

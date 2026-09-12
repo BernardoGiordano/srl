@@ -8,6 +8,7 @@ on:
 # One job, one command. `npm run check` is the contract the repository states in
 # CONTRIBUTING.md, so CI runs exactly that and nothing it does not: a pipeline that
 # checks more than the documented command is a pipeline contributors cannot reproduce.
+# The steps before it install; none of them check anything.
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -29,5 +30,13 @@ jobs:
       # one: the image ships a stable build and the harness reads CHROME_PATH.
       - name: Locate Chrome
         run: echo "CHROME_PATH=$(which google-chrome)" >> "$GITHUB_ENV"
+
+      # The journey suite is the one thing here that needs browsers the image does not
+      # ship: it runs on three engines, and two of them have no system package worth
+      # pinning a support claim to. Playwright's own builds are downloaded instead, at the
+      # exact versions its pinned release names, so the matrix the run publishes says which
+      # build passed rather than whichever one the image happened to carry that week.
+      - name: Install the journey's browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - run: npm run check

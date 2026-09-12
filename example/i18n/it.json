@@ -299,6 +299,12 @@
     "ago": "Da quanto",
     "actor": "Da",
     "empty": "Nessun movimento registrato.",
+    "selected": {
+      "one": "{count} movimento selezionato",
+      "other": "{count} movimenti selezionati"
+    },
+    "selectedNet": "Netto {net}",
+    "clearSelection": "Annulla selezione",
     "kind": {
       "receipt": "Carico",
       "issue": "Scarico",

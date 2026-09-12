@@ -1,0 +1,243 @@
+{
+  "recordedAt": "2026-09-12",
+  "app": "example",
+  "csp": "default-src 'self'; script-src 'self' 'sha256-unYyEYlx3H+wQ5W5h4v5zC0VfOaa/xfdRl3ygWzVIMI='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; trusted-types lit-html ui-test ui-test-template srl-worker; require-trusted-types-for 'script'",
+  "machine": {
+    "platform": "Darwin",
+    "release": "25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M3",
+    "node": "v22.14.0"
+  },
+  "driver": {
+    "name": "playwright",
+    "version": "1.63.0"
+  },
+  "engines": [
+    {
+      "id": "chromium",
+      "title": "Chromium",
+      "engine": "Blink",
+      "version": "153.0.8010.12",
+      "nextControl": "Tab",
+      "outcome": "passed",
+      "durationMs": 1064,
+      "steps": [
+        {
+          "id": "windowed-rows",
+          "title": "A table window renders a fraction of the rows it announces",
+          "observed": {
+            "rowCount": 121,
+            "rendered": 19,
+            "scrollHeight": 5445,
+            "viewport": 480
+          }
+        },
+        {
+          "id": "keyboard-selection",
+          "title": "A row is chosen with Space and the count is announced",
+          "observed": {
+            "checked": 1,
+            "announced": [
+              "1 movement selected Net +5 Clear selection"
+            ]
+          }
+        },
+        {
+          "id": "window-keeps-focus",
+          "title": "Moving focus moves the window and the selection survives",
+          "observed": {
+            "nextControlKey": "Tab",
+            "firstIndexWhenMoved": 10,
+            "scrollTop": 547,
+            "focusedRow": 20,
+            "renderedWhenChosen": 19,
+            "checkedWhenChosen": 1,
+            "announcedSelection": 2
+          }
+        },
+        {
+          "id": "async-validation",
+          "title": "An asynchronous refusal reaches the control that earned it",
+          "observed": {
+            "settledWhileTyping": false,
+            "invalid": true,
+            "describedBy": "cf-email-error",
+            "error": "Another customer already uses this."
+          }
+        },
+        {
+          "id": "combobox-keyboard",
+          "title": "A combobox option is reached and chosen with keys alone",
+          "observed": {
+            "options": 4,
+            "activeOption": "Mid-market",
+            "chosen": [],
+            "value": "Mid-market"
+          }
+        },
+        {
+          "id": "dialog-focus-return",
+          "title": "A modal is answered with a key and returns focus",
+          "observed": {
+            "role": "alertdialog",
+            "label": "Unsaved changes",
+            "answeredControl": "Keep editing",
+            "route": "/sales/customers/CU-0001",
+            "focusAfter": "input#ui-combobox-12-input"
+          }
+        }
+      ]
+    },
+    {
+      "id": "firefox",
+      "title": "Firefox",
+      "engine": "Gecko",
+      "version": "155.0",
+      "nextControl": "Tab",
+      "outcome": "passed",
+      "durationMs": 1317,
+      "steps": [
+        {
+          "id": "windowed-rows",
+          "title": "A table window renders a fraction of the rows it announces",
+          "observed": {
+            "rowCount": 121,
+            "rendered": 19,
+            "scrollHeight": 5445,
+            "viewport": 480
+          }
+        },
+        {
+          "id": "keyboard-selection",
+          "title": "A row is chosen with Space and the count is announced",
+          "observed": {
+            "checked": 1,
+            "announced": [
+              "1 movement selected Net +5 Clear selection"
+            ]
+          }
+        },
+        {
+          "id": "window-keeps-focus",
+          "title": "Moving focus moves the window and the selection survives",
+          "observed": {
+            "nextControlKey": "Tab",
+            "firstIndexWhenMoved": 10,
+            "scrollTop": 548,
+            "focusedRow": 20,
+            "renderedWhenChosen": 19,
+            "checkedWhenChosen": 1,
+            "announcedSelection": 2
+          }
+        },
+        {
+          "id": "async-validation",
+          "title": "An asynchronous refusal reaches the control that earned it",
+          "observed": {
+            "settledWhileTyping": false,
+            "invalid": true,
+            "describedBy": "cf-email-error",
+            "error": "Another customer already uses this."
+          }
+        },
+        {
+          "id": "combobox-keyboard",
+          "title": "A combobox option is reached and chosen with keys alone",
+          "observed": {
+            "options": 4,
+            "activeOption": "Mid-market",
+            "chosen": [],
+            "value": "Mid-market"
+          }
+        },
+        {
+          "id": "dialog-focus-return",
+          "title": "A modal is answered with a key and returns focus",
+          "observed": {
+            "role": "alertdialog",
+            "label": "Unsaved changes",
+            "answeredControl": "Keep editing",
+            "route": "/sales/customers/CU-0001",
+            "focusAfter": "input#ui-combobox-12-input"
+          }
+        }
+      ]
+    },
+    {
+      "id": "webkit",
+      "title": "WebKit",
+      "engine": "WebKit",
+      "version": "26.6",
+      "nextControl": "Alt+Tab",
+      "outcome": "passed",
+      "durationMs": 1121,
+      "steps": [
+        {
+          "id": "windowed-rows",
+          "title": "A table window renders a fraction of the rows it announces",
+          "observed": {
+            "rowCount": 121,
+            "rendered": 19,
+            "scrollHeight": 5423,
+            "viewport": 480
+          }
+        },
+        {
+          "id": "keyboard-selection",
+          "title": "A row is chosen with Space and the count is announced",
+          "observed": {
+            "checked": 1,
+            "announced": [
+              "1 movimento selezionato Netto +5 Annulla selezione"
+            ]
+          }
+        },
+        {
+          "id": "window-keeps-focus",
+          "title": "Moving focus moves the window and the selection survives",
+          "observed": {
+            "nextControlKey": "Alt+Tab",
+            "firstIndexWhenMoved": 9,
+            "scrollTop": 538,
+            "focusedRow": 20,
+            "renderedWhenChosen": 19,
+            "checkedWhenChosen": 1,
+            "announcedSelection": 2
+          }
+        },
+        {
+          "id": "async-validation",
+          "title": "An asynchronous refusal reaches the control that earned it",
+          "observed": {
+            "settledWhileTyping": false,
+            "invalid": true,
+            "describedBy": "cf-email-error",
+            "error": "Un altro cliente lo utilizza già."
+          }
+        },
+        {
+          "id": "combobox-keyboard",
+          "title": "A combobox option is reached and chosen with keys alone",
+          "observed": {
+            "options": 4,
+            "activeOption": "Media impresa",
+            "chosen": [],
+            "value": "Media impresa"
+          }
+        },
+        {
+          "id": "dialog-focus-return",
+          "title": "A modal is answered with a key and returns focus",
+          "observed": {
+            "role": "alertdialog",
+            "label": "Modifiche non salvate",
+            "answeredControl": "Continua a modificare",
+            "route": "/sales/customers/CU-0001",
+            "focusAfter": "input#ui-combobox-12-input"
+          }
+        }
+      ]
+    }
+  ]
+}

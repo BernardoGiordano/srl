@@ -28,6 +28,10 @@ rediscover:
   while elements are still mounted** — a mounted element re-resolves its own strings,
   so restoring the resolver first makes an unrelated case fail in the teardown of
   this one.
+- **Cross-engine work belongs in the journey, not here.** These rules are for the
+  Chrome suites. One composed journey runs on three engines against the built artifact,
+  and it is written once in `cli/test/support/journey/` — see
+  [supported browsers](browser-support.md) for what it proves and what it does not.
 - **A framework suite may not read an application's files.** `source/lib/test/`
   ships its own fixtures under `test/fixtures/`, because the runner mounts whichever
   application is under test at `/`.

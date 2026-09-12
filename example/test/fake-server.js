@@ -22,7 +22,9 @@
  *   - one 401 followed by success, so `authorizedFetch`'s refresh-and-retry is exercised
  *     rather than described;
  *   - server-side paging on `/api/orders`, because the orders screen is written against it;
- *   - a persisted order-status write, so shared record refresh is exercised end to end.
+ *   - a persisted order-status write, so shared record refresh is exercised end to end;
+ *   - 120 stock movements, so the movements screen's window has more rows than it
+ *     renders and the journey suite can scroll one.
  */
 
 /** @typedef {{ username: string, name: string, role: string, scopes: string[], csrf: string }} FakeSession */
@@ -50,6 +52,27 @@ function initialOrders() {
 }
 
 let ORDERS = initialOrders();
+
+/**
+ * Stock movements, deterministic and long enough that a window leaves most of them out
+ * of the DOM. The screen asks for 120 and renders about a dozen at a time, so a suite
+ * that only ever saw the first page would never touch the arithmetic that maps a scroll
+ * position to a row index.
+ */
+function initialMovements() {
+  const kinds = ['receipt', 'issue', 'transfer', 'adjustment'];
+  return Array.from({ length: 120 }, (_unused, index) => ({
+    id: `MV-${String(index + 1).padStart(5, '0')}`,
+    kind: /** @type {string} */ (kinds[index % kinds.length]),
+    sku: `SKU-${String((index % 12) + 1).padStart(5, '0')}`,
+    warehouse: index % 2 === 0 ? 'Milano' : 'Bologna',
+    quantity: ((index % 9) + 1) * 5,
+    at: `2026-09-${String((index % 28) + 1).padStart(2, '0')}T08:${String(index % 60).padStart(2, '0')}:00.000Z`,
+    actor: index % 3 === 0 ? 'Ada Rossi' : 'Beniamino Conti',
+  }));
+}
+
+const MOVEMENTS = initialMovements();
 
 /**
  * Customers are reset by `installFakeServer`, so a case that creates or edits one cannot
@@ -358,6 +381,14 @@ function answer(url, method, bodyText) {
   if (path === '/api/audit') return refuse('audit:read') ?? json({ rows: [], total: 0 });
   if (path === '/api/employees') return refuse('people:read') ?? json({ rows: [], total: 0 });
   if (path === '/api/products') return refuse('inventory:read') ?? json({ rows: [], total: 0, offset: 0 });
+
+  if (path === '/api/movements') {
+    const denied = refuse('inventory:read');
+    if (denied !== undefined) return denied;
+    const limit = Number(url.searchParams.get('limit') ?? MOVEMENTS.length);
+    const rows = MOVEMENTS.slice(0, Number.isFinite(limit) && limit > 0 ? limit : MOVEMENTS.length);
+    return json({ rows, total: MOVEMENTS.length });
+  }
 
   /*
    * Customers, including the write path.

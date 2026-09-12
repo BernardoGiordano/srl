@@ -29,6 +29,7 @@ owns all of it.
 | [Performance](guide/performance.md) | The measured envelope, how to read a number, the budgets |
 | [Delivery](guide/delivery.md) | The dev server, vendored dependencies, production, deployment traps |
 | [Writing a test](guide/testing.md) | The rules the suites already learned |
+| [Supported browsers](guide/browser-support.md) | The engines one accessible journey actually ran on, and what it leaves uncovered |
 
 ## Reference
 

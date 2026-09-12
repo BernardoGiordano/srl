@@ -152,7 +152,7 @@ The README is the interface. The manual is `docs/`, and the reasoning is `docs/a
 | [Getting started](docs/getting-started.md) | Run, check, test, and what to run after changing X |
 | [Architecture map](docs/architecture.md) | Glossary, the dependency rule, the seams and what proves each |
 | [Invariants](docs/invariants.md) | What a change may not break, and the check that enforces it |
-| [Guide](docs/guide/) | Startup, components, templates, routing, i18n, preferences, auth, the collection, performance, delivery, testing |
+| [Guide](docs/guide/) | Startup, components, templates, routing, i18n, preferences, auth, the collection, performance, delivery, testing, supported browsers |
 | [Editor support](docs/guide/editor-support.md) | VS Code, WebStorm and generic LSP setup; diagnostics, completion, navigation and refactoring |
 | [Reference](docs/reference/) | The generated project index, the source layout, the Angular map |
 | [Decision records](docs/adr/) | One decision per file, cited from source by number |
@@ -166,6 +166,7 @@ read:
 npm run docs:check      # a generated table drifted from the source
 npm run docs:write      # regenerate it
 npm run docs:adr        # a malformed record, or a citation resolving to nothing
+npm run docs:browsers   # the support matrix drifted from the recorded journey run
 ```
 
 Where each kind of knowledge belongs is [the documentation
