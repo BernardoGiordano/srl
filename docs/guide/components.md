@@ -97,6 +97,20 @@ base constructor returns. TypeScript users never see it, because
 compile step this project does not have. `SignalElement` deletes each shadowing field
 and writes it back through the accessor on connect.
 
+**A class field over a *method* is refused rather than repaired.** Same [[Define]] rule,
+different member:
+
+```js
+render = 'state';                   // ← hides render(), and nothing can hand it back
+```
+
+There is no accessor underneath to write the value through, so the element refuses on
+connect and names the field, the method it covers and the two ways out — write it as a
+method, or rename the field. `npm run verify` reports the same thing from the source, at
+the line that declared it, and so does the editor while the file is open. A field whose
+value *is* callable — `render = () => html\`...\`` — is a working override and is left
+alone. [ADR-0115](../adr/0115-a-field-may-not-hide-a-method.md).
+
 **A component's template surface shares a namespace with `HTMLElement`.** `id`,
 `title`, `hidden`, `lang` and `children` are taken. tsc reports the collision, so it is
 a compile-time annoyance rather than a runtime bug.

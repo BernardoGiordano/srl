@@ -8,6 +8,18 @@ import { templateFor } from '@core/template/template.js';
 /** @import { ContentBuckets } from '@core/elements/types.js' */
 
 /**
+ * Classes whose instance fields have been checked against the members they could
+ * hide.
+ *
+ * Fields are declared by the class body, so one passing instance answers for every
+ * instance of that class. A class is added only after it passes, so a broken one
+ * reports itself every time rather than once.
+ *
+ * @type {WeakSet<Function>}
+ */
+const membersChecked = new WeakSet();
+
+/**
  * The base class every component extends: Angular's
  * `ChangeDetectionStrategy.OnPush` plus signals, in about eighty lines.
  *
@@ -93,6 +105,49 @@ export class SignalElement extends LitElement {
   }
 
   /**
+   * Refuse a field that hides a method this element is going to call.
+   *
+   * `render = 'state'` is legal JavaScript and silently fatal. A class field is
+   * installed with [[Define]], so it creates an own data property that covers
+   * `SignalElement.prototype.render` rather than overriding it, and the first
+   * update calls a string. What Lit raises then names a member the author never
+   * wrote, at a line far from the one that caused it.
+   *
+   * Every field, rather than a list of lifecycle names: hiding a callable member
+   * behind a value breaks whichever member it is, and a list would go stale the
+   * first time a base class grew a method. A field that *is* callable is left
+   * alone, so `render = () => ...` keeps working. So does a field over a declared
+   * reactive property — that is an accessor pair, not a method, and
+   * `#adoptShadowedFields` has already repaired it above.
+   *
+   * A live instance is the only place a field exists. `defineComponent` cannot
+   * build one, because a class extending HTMLElement is not constructible until
+   * `customElements.define` has run on it, and reading the class source instead
+   * would refuse valid components on a regular expression's word. The static model
+   * in cli/project-model/ answers the same question earlier, from the source, and
+   * names the line. ADR-0115.
+   */
+  #assertNoHiddenMembers() {
+    const element = this.constructor;
+    if (membersChecked.has(element)) return;
+
+    for (const name of Reflect.ownKeys(this)) {
+      const own = Object.getOwnPropertyDescriptor(this, name);
+      if (own === undefined || !('value' in own) || typeof own.value === 'function') continue;
+      const owner = hiddenMethodOwner(this, name);
+      if (owner === undefined) continue;
+      throw new Error(
+        `<${this.tagName.toLowerCase()}> declares \`${String(name)}\` as a field. A class ` +
+          `field is an own property, so it hides the \`${String(name)}()\` method inherited ` +
+          `from ${owner} rather than overriding it, and the next call reaches ` +
+          `${describeValue(own.value)} instead. Write it as a method, or rename the field.`,
+      );
+    }
+
+    membersChecked.add(element);
+  }
+
+  /**
    * Light DOM. Returning `this` means lit-html patches our own children rather
    * than a shadow root's, which is what lets Tailwind's document-level
    * stylesheet reach them.
@@ -121,6 +176,9 @@ export class SignalElement extends LitElement {
   connectedCallback() {
     // Before anything reads a declared property, including the first render.
     this.#adoptShadowedFields();
+
+    // And before anything calls a member a field could be covering.
+    this.#assertNoHiddenMembers();
 
     // Must happen before the first render. lit-html clears its container, and
     // the authored children are gone by the time any Lit hook could see them.
@@ -284,4 +342,46 @@ function reassignThroughAccessor(target, name) {
   const value = target[name];
   delete target[name];
   target[name] = value;
+}
+
+/**
+ * The class whose prototype holds a callable `name`, or undefined when nothing on
+ * the chain does.
+ *
+ * The first prototype carrying the name decides, because that is the one a call
+ * would have reached. An accessor there is not a callable member: a declared
+ * reactive property is an accessor pair, and a field over one is the shape
+ * `#adoptShadowedFields` exists to repair.
+ *
+ * @param {object} instance
+ * @param {PropertyKey} name
+ * @returns {string | undefined}
+ */
+function hiddenMethodOwner(instance, name) {
+  let prototype = Reflect.getPrototypeOf(instance);
+  while (prototype !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, name);
+    if (descriptor !== undefined) {
+      if (typeof descriptor.value !== 'function') return undefined;
+      const owner = /** @type {{ constructor?: { name?: string } }} */ (prototype).constructor;
+      const named = owner?.name;
+      return named === undefined || named === '' ? 'a base class' : named;
+    }
+    prototype = Reflect.getPrototypeOf(prototype);
+  }
+  return undefined;
+}
+
+/**
+ * What a field holds, as the error message says it: `a string`, `null`.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function describeValue(value) {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (Array.isArray(value)) return 'an array';
+  const kind = typeof value;
+  return kind === 'object' ? 'an object' : `a ${kind}`;
 }

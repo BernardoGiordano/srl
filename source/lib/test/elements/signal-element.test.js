@@ -64,6 +64,87 @@ class FineGrainedElement extends SignalElement {
 }
 customElements.define('fine-grained-element', FineGrainedElement);
 
+/* ── Fields that cover a method ──────────────────────────────────────────────
+ *
+ * `render = 'state'` is an own data property that hides `SignalElement.prototype.render`
+ * instead of overriding it, and the first update calls a string. ADR-0115.
+ *
+ * `npm run typecheck` rejects this shape too, which is why the fixtures below carry
+ * `@ts-expect-error`. It rejects it only where it has the base class's types: a project
+ * that does not run tsc over its JavaScript has nothing but these two checks.
+ */
+
+class HiddenRenderElement extends SignalElement {
+  // Deliberately invalid, and tsc says so too — see the note in the suite below.
+  // @ts-expect-error a field may not cover a method
+  render = 'state';
+}
+customElements.define('hidden-render-element', HiddenRenderElement);
+
+class HiddenHookElement extends SignalElement {
+  // `onMount` is SignalElement's, not Lit's: the rule is every callable member, not a
+  // list of lifecycle names.
+  // @ts-expect-error a field may not cover a method
+  onMount = true;
+
+  render() {
+    return html`<span class="hook"></span>`;
+  }
+}
+customElements.define('hidden-hook-element', HiddenHookElement);
+
+/**
+ * The whole update cycle, covered one name at a time.
+ *
+ * `render` and `updated` are SignalElement's, `performUpdate` is its override of Lit's,
+ * and `willUpdate` and `requestUpdate` are reached only through ReactiveElement. The walk
+ * has to climb past three prototypes to find the last two.
+ */
+const HIDDEN_CYCLE = ['render', 'updated', 'willUpdate', 'performUpdate', 'requestUpdate'];
+
+class HiddenUpdatedElement extends SignalElement {
+  // @ts-expect-error a field may not cover a method
+  updated = 'state';
+}
+customElements.define('hidden-updated-element', HiddenUpdatedElement);
+
+class HiddenWillUpdateElement extends SignalElement {
+  // @ts-expect-error a field may not cover a method
+  willUpdate = 'state';
+}
+customElements.define('hidden-willupdate-element', HiddenWillUpdateElement);
+
+class HiddenPerformUpdateElement extends SignalElement {
+  // @ts-expect-error a field may not cover a method
+  performUpdate = 'state';
+}
+customElements.define('hidden-performupdate-element', HiddenPerformUpdateElement);
+
+class HiddenRequestUpdateElement extends SignalElement {
+  // @ts-expect-error a field may not cover a method
+  requestUpdate = 'state';
+}
+customElements.define('hidden-requestupdate-element', HiddenRequestUpdateElement);
+
+class CallableFieldElement extends SignalElement {
+  // Covers `render()` with something callable, which is a working component.
+  render = () => html`<span class="callable">from a field</span>`;
+}
+customElements.define('callable-field-element', CallableFieldElement);
+
+class ShadowedPropertyElement extends SignalElement {
+  static properties = { limit: { type: Number } };
+
+  // The supported shape: a field over a reactive accessor, which `#adoptShadowedFields`
+  // hands back rather than refusing.
+  limit = 7;
+
+  render() {
+    return html`<span class="limit">${this.limit}</span>`;
+  }
+}
+customElements.define('shadowed-property-element', ShadowedPropertyElement);
+
 describe('SignalElement', () => {
   beforeEach(() => {
     count.value = 0;
@@ -198,5 +279,73 @@ describe('SignalElement', () => {
 
     element.remove();
     assert.ok(lifetime.aborted, 'lifetime must abort so listeners clean themselves up');
+  });
+
+  /**
+   * `connectedCallback` is called here rather than reached by inserting the element,
+   * because the browser invokes a custom-element reaction inside its own try/catch and
+   * reports what it throws to `window` instead of to the caller. The call is the one the
+   * document would make, on an instance built the way the document builds one, at the
+   * point in the callback the guard runs.
+   */
+  it('refuses a field that covers an inherited method', () => {
+    const element = /** @type {HiddenRenderElement} */ (
+      document.createElement('hidden-render-element')
+    );
+
+    assert.throws(
+      () => element.connectedCallback(),
+      '<hidden-render-element> declares `render` as a field',
+    );
+  });
+
+  it('names the method, where the value came from and both ways out', () => {
+    const element = /** @type {HiddenHookElement} */ (
+      document.createElement('hidden-hook-element')
+    );
+
+    assert.throws(() => element.connectedCallback(), 'hides the `onMount()` method');
+    assert.throws(() => element.connectedCallback(), 'inherited from SignalElement');
+    assert.throws(() => element.connectedCallback(), 'reaches a boolean instead');
+    assert.throws(() => element.connectedCallback(), 'Write it as a method, or rename');
+  });
+
+  it('refuses a field over any member of the update cycle', () => {
+    for (const name of HIDDEN_CYCLE) {
+      const element = /** @type {SignalElement} */ (
+        document.createElement(`hidden-${name.toLowerCase()}-element`)
+      );
+
+      assert.throws(() => element.connectedCallback(), `declares \`${name}\` as a field`);
+    }
+  });
+
+  it('refuses every instance of a broken class, not only the first', () => {
+    // The per-class cache records a class after it passes. A class that fails is never
+    // recorded, so the second element cannot slip through to the cryptic error.
+    const one = /** @type {HiddenRenderElement} */ (
+      document.createElement('hidden-render-element')
+    );
+    const two = /** @type {HiddenRenderElement} */ (
+      document.createElement('hidden-render-element')
+    );
+
+    assert.throws(() => one.connectedCallback());
+    assert.throws(() => two.connectedCallback());
+  });
+
+  it('accepts a field whose value is callable', async () => {
+    const element = mount('<callable-field-element></callable-field-element>');
+    await settled(element);
+
+    assert.equal(element.querySelector('.callable')?.textContent, 'from a field');
+  });
+
+  it('accepts a field over a declared reactive property', async () => {
+    const element = mount('<shadowed-property-element></shadowed-property-element>');
+    await settled(element);
+
+    // An accessor is not a callable member, and the initial value still reaches it.
+    assert.equal(element.querySelector('.limit')?.textContent, '7');
   });
 });

@@ -148,11 +148,15 @@ export interface TemplateGlobal {
  * implementation to satisfy a tool that reads it.
  */
 export interface ProjectDiagnostic {
-  kind: 'dynamic' | 'duplicate-tag' | 'unresolved-uses' | 'unreadable';
+  kind: 'dynamic' | 'duplicate-tag' | 'unresolved-uses' | 'unreadable' | 'shadowed-lifecycle';
   severity: 'error' | 'note';
   /** Absolute path of the file the diagnostic is about. */
   file: string;
   message: string;
+  /** 1-based, when the finding is about one declaration rather than the file. */
+  line?: number;
+  /** 1-based. Present only alongside `line`. */
+  column?: number;
 }
 
 /** One reference to `localStorage` or `sessionStorage`, as an expression rather than text. */
@@ -248,5 +252,12 @@ export interface ProjectIndex {
   }>;
   globals: Array<{ name: string; module: string; exportName: string }>;
   templates: Array<{ path: string; url: string | null; claimedBy: string | null }>;
-  diagnostics: Array<{ kind: string; severity: string; file: string; message: string }>;
+  diagnostics: Array<{
+    kind: string;
+    severity: string;
+    file: string;
+    line: number | null;
+    column: number | null;
+    message: string;
+  }>;
 }

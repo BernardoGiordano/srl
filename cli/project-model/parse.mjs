@@ -3,8 +3,9 @@
  *
  * Element identity starts at top level: classes, imports, `defineComponent({ ... })`,
  * `customElements.define('x-y', Class)` and `registerTemplateGlobals({ ... })`. Element
- * meaning also includes static property fields/getters and events dispatched by instance
- * methods. This module turns one file into those authored facts and nothing else — no
+ * meaning also includes static property fields/getters, events dispatched by instance
+ * methods, and the instance methods and fields a class declares under its own name.
+ * This module turns one file into those authored facts and nothing else — no
  * template ownership, no cross-module inheritance resolution, no diagnostics about the
  * project as a whole. Those need every file, so they live in index.mjs.
  *
@@ -54,8 +55,16 @@ import { readText } from '../layout.mjs';
  *   column: number,
  * }} RawEvent
  * @typedef {{
+ *   name: string,
+ *   callable: boolean | null,
+ *   line: number,
+ *   column: number,
+ * }} RawField
+ * @typedef {{
  *   superclass: string | null,
  *   inheritanceKnown: boolean,
+ *   methods: string[],
+ *   fields: RawField[],
  *   properties: RawProperty[],
  *   propertiesKnown: boolean,
  *   observedAttributes: string[],
@@ -350,6 +359,11 @@ function readGlobals(node, parsed) {
  * computed options object, a name from a constant. Null is not the same as empty: no tool
  * may conclude an attribute is dead from a surface it could not read.
  *
+ * The instance members are read too, and for one question only: whether a field covers a
+ * method of the same name. A field is installed with [[Define]], so it hides the method
+ * rather than overriding it, and the call that reaches the field's value fails far from
+ * the line that declared it. index.mjs resolves that across inheritance. ADR-0115.
+ *
  * @param {ts.ClassDeclaration} declaration
  * @param {ts.SourceFile} tree
  * @returns {RawElementSurface}
@@ -363,6 +377,10 @@ function elementSurface(declaration, tree) {
   let attributesDeclared = false;
   let attributesIncludeSuper = false;
   let attributesKnown = true;
+  /** @type {string[]} */
+  const methods = [];
+  /** @type {RawField[]} */
+  const fields = [];
 
   const extension = declaration.heritageClauses
     ?.find((clause) => clause.token === ts.SyntaxKind.ExtendsKeyword)
@@ -371,7 +389,10 @@ function elementSurface(declaration, tree) {
   const inheritanceKnown = extension === undefined || superclass !== null;
 
   for (const member of declaration.members) {
-    if (!hasModifier(member, ts.SyntaxKind.StaticKeyword)) continue;
+    if (!hasModifier(member, ts.SyntaxKind.StaticKeyword)) {
+      readInstanceMember(member, tree, methods, fields);
+      continue;
+    }
     const declared = member.name === undefined ? undefined : propertyName(member.name);
     const value = staticValue(member);
 
@@ -426,6 +447,8 @@ function elementSurface(declaration, tree) {
   return {
     superclass,
     inheritanceKnown,
+    methods,
+    fields,
     properties,
     propertiesKnown,
     observedAttributes,
@@ -435,6 +458,74 @@ function elementSurface(declaration, tree) {
     events: foundEvents.events,
     eventsKnown: foundEvents.known,
   };
+}
+
+/**
+ * One instance member, as either a method name or a field.
+ *
+ * Methods and fields only. A `get`/`set` pair is neither: it is not callable, so nothing
+ * calls it, and a field over one is the reactive-property shape the runtime repairs.
+ * Private and computed names are skipped — neither can be resolved across modules, and a
+ * name no tool can spell is one no tool should report a collision for.
+ *
+ * @param {ts.ClassElement} member
+ * @param {ts.SourceFile} tree
+ * @param {string[]} methods
+ * @param {RawField[]} fields
+ */
+function readInstanceMember(member, tree, methods, fields) {
+  const name = member.name === undefined ? undefined : propertyName(member.name);
+  if (name === undefined) return;
+
+  if (ts.isMethodDeclaration(member)) {
+    methods.push(name);
+    return;
+  }
+  if (!ts.isPropertyDeclaration(member)) return;
+  fields.push({
+    name,
+    callable: fieldCallability(member.initializer),
+    ...sourcePosition(tree, member.name),
+  });
+}
+
+/**
+ * Whether a field's value is a function: true, false, or null when no static read can
+ * say.
+ *
+ * Null is the answer for an identifier, a call or anything else whose value is decided
+ * elsewhere, and it stays null. A field initialised from a constant that happens to hold a
+ * function is a working component, and reporting it as broken would teach authors to
+ * ignore the diagnostic.
+ *
+ * @param {ts.Expression | undefined} initializer
+ * @returns {boolean | null}
+ */
+function fieldCallability(initializer) {
+  // `render;` installs `undefined`, which hides a method exactly as a string does.
+  if (initializer === undefined) return false;
+  if (
+    ts.isArrowFunction(initializer) ||
+    ts.isFunctionExpression(initializer) ||
+    ts.isClassExpression(initializer)
+  ) {
+    return true;
+  }
+  if (
+    ts.isStringLiteralLike(initializer) ||
+    ts.isNumericLiteral(initializer) ||
+    ts.isObjectLiteralExpression(initializer) ||
+    ts.isArrayLiteralExpression(initializer) ||
+    ts.isTemplateExpression(initializer) ||
+    ts.isNewExpression(initializer) ||
+    initializer.kind === ts.SyntaxKind.TrueKeyword ||
+    initializer.kind === ts.SyntaxKind.FalseKeyword ||
+    initializer.kind === ts.SyntaxKind.NullKeyword ||
+    (ts.isIdentifier(initializer) && initializer.text === 'undefined')
+  ) {
+    return false;
+  }
+  return null;
 }
 
 /**

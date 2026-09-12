@@ -145,6 +145,44 @@ void test('a declaration static analysis cannot read is an error, not a silent s
   assert.ok(fromTests.every((diagnostic) => diagnostic.severity === 'note'));
 });
 
+void test('a field that hides a method is an error, at the line that declared it', async () => {
+  const model = await fixtureProject(APP_A);
+  const hidden = model.diagnostics.filter(
+    (diagnostic) => diagnostic.kind === 'shadowed-lifecycle',
+  );
+
+  const errors = hidden.filter((diagnostic) => diagnostic.severity === 'error');
+  assert.deepEqual(
+    errors.map((diagnostic) => diagnostic.message.split(' ')[0]),
+    ['HiddenAuthored', 'HiddenRender'],
+    hidden.map((one) => one.message).join('\n'),
+  );
+  assert.match(String(errors[0]?.message), /hides the `refresh\(\)` method/u);
+  assert.equal(errors[0]?.line, 12);
+  assert.equal(errors[0]?.column, 3);
+
+  // `render` comes from LitElement, which the walk stops at rather than parses. A root the
+  // model cannot read still contributes callable members.
+  assert.match(String(errors[1]?.message), /hides the `render\(\)` method/u);
+
+  // A value static analysis cannot follow may be a function. Reporting it as broken is how
+  // a diagnostic teaches authors to ignore it.
+  const notes = hidden.filter((diagnostic) => diagnostic.severity === 'note');
+  assert.equal(notes.length, 1);
+  assert.match(String(notes[0]?.message), /HiddenUnknown.*cannot follow/su);
+});
+
+void test('a callable field and an unrelated field are not collisions', async () => {
+  const model = await fixtureProject(APP_A);
+  const about = model.diagnostics.filter((diagnostic) =>
+    diagnostic.message.startsWith('VisibleMembers'),
+  );
+
+  // `refresh = () => ...` is a working override, and `label` shares its name with nothing.
+  assert.deepEqual(about, []);
+  assert.ok(model.elements.has('fx-visible-members'));
+});
+
 void test('two applications get two models, from their own import maps', async () => {
   const a = await fixtureProject(APP_A);
   const b = await fixtureProject(APP_B);

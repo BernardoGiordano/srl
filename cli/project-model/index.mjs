@@ -53,6 +53,7 @@ import { parseModule } from './parse.mjs';
  *   attributesKnown: boolean,
  *   events: Map<string, import('./types.js').ElementEvent>,
  *   eventsKnown: boolean,
+ *   methods: Set<string>,
  * }} ResolvedSurface */
 /** @typedef {{
  *   tagName?: string,
@@ -181,7 +182,12 @@ export async function readProject(app, options = {}) {
     }
   }
 
-  resolveElementSurfaces(elements, parsedModules);
+  for (const finding of resolveElementSurfaces(elements, parsedModules)) {
+    diagnostics.push({
+      ...finding,
+      severity: isTestSource(finding.file, roots) ? 'note' : finding.severity,
+    });
+  }
 
   // `uses` resolves the way the browser resolves it: through the import that brought the
   // class in, or the declaring module for a local class. Second pass, because an entry
@@ -255,18 +261,70 @@ const ELEMENT_ROOTS = new Set([
   'SVGElement',
 ]);
 
+/** The reaction callbacks the browser calls on any custom element. */
+const PLATFORM_METHODS = [
+  'adoptedCallback',
+  'attributeChangedCallback',
+  'connectedCallback',
+  'disconnectedCallback',
+];
+
+/** Lit's update cycle, which `ReactiveElement` and everything under it carries. */
+const REACTIVE_METHODS = [
+  ...PLATFORM_METHODS,
+  'addController',
+  'createRenderRoot',
+  'firstUpdated',
+  'getUpdateComplete',
+  'performUpdate',
+  'removeController',
+  'requestUpdate',
+  'scheduleUpdate',
+  'shouldUpdate',
+  'update',
+  'updated',
+  'willUpdate',
+];
+
+/**
+ * The methods an element inherits from a root the walk stops at.
+ *
+ * Not a list of names the framework dislikes: it is the one place where a class this model
+ * does not parse still contributes callable members, and a field covering one of them is
+ * as fatal as a field covering `render`. Both interfaces are published and stable, so the
+ * entries do not drift the way a rule of thumb would. A method an element declares itself
+ * is read from its source, never from here.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const ROOT_METHODS = new Map();
+ROOT_METHODS.set('Element', new Set(PLATFORM_METHODS));
+ROOT_METHODS.set('HTMLElement', new Set(PLATFORM_METHODS));
+ROOT_METHODS.set('SVGElement', new Set(PLATFORM_METHODS));
+ROOT_METHODS.set('ReactiveElement', new Set(REACTIVE_METHODS));
+// `render` is LitElement's: ReactiveElement has an update cycle and no markup.
+ROOT_METHODS.set('LitElement', new Set([...REACTIVE_METHODS, 'render']));
+
 /**
  * Resolve authored class facts into each registered Element. Lit inherits reactive
  * declarations even when a subclass supplies its own `properties`, and subclass entries
  * replace same-named parent entries. Callers receive that answer, not syntax fragments
  * they have to merge again.
  *
+ * Inherited methods are resolved the same way, for the one question in `fieldsHiding`
+ * below: which callable members a field could cover.
+ *
  * @param {Map<string, ElementRecord>} elements
  * @param {Map<string, Awaited<ReturnType<typeof parseModule>>>} parsedModules
+ * @returns {ProjectDiagnostic[]}
  */
 function resolveElementSurfaces(elements, parsedModules) {
   /** @type {Map<string, ResolvedSurface>} */
   const cache = new Map();
+  /** @type {ProjectDiagnostic[]} */
+  const findings = [];
+  /** Classes already reported on: one shared base class serves many tags. @type {Set<string>} */
+  const reported = new Set();
 
   /** @param {string} module @param {string} className @param {Set<string>} [stack] @returns {ResolvedSurface} */
   const resolveClass = (module, className, stack = new Set()) => {
@@ -287,6 +345,14 @@ function resolveElementSurfaces(elements, parsedModules) {
       const parentModule = imported ?? module;
       const parentName = parsed.importNames.get(authored.superclass) ?? authored.superclass;
       parent = resolveClass(parentModule, parentName, branch);
+    } else if (authored.superclass !== null) {
+      parent = { ...emptySurface(), methods: ROOT_METHODS.get(authored.superclass) ?? new Set() };
+    }
+
+    const methods = new Set([...parent.methods, ...authored.methods]);
+    if (!reported.has(key)) {
+      reported.add(key);
+      findings.push(...fieldsHiding(authored.fields, methods, module, className));
     }
 
     const properties = new Map(parent.properties);
@@ -337,6 +403,7 @@ function resolveElementSurfaces(elements, parsedModules) {
         : parent.attributesKnown,
       events,
       eventsKnown: parent.eventsKnown && authored.eventsKnown,
+      methods,
     };
     cache.set(key, resolved);
     return resolved;
@@ -369,6 +436,64 @@ function resolveElementSurfaces(elements, parsedModules) {
     );
     record.eventsKnown = surface.eventsKnown;
   }
+
+  return findings.sort((left, right) => `${left.file}${left.message}`.localeCompare(`${right.file}${right.message}`));
+}
+
+/**
+ * The fields of one class that cover a method of the same name.
+ *
+ * A field is installed with [[Define]], so it creates an own property that hides the
+ * method instead of overriding it. Nothing complains: the definition is accepted, the
+ * element registers, and the first call reaches a string. This is the diagnostic the
+ * runtime raises on the first instance, moved to the line that declared the field.
+ * ADR-0115.
+ *
+ * A field whose value no static read can resolve is a note, never an error. The value may
+ * well be a function, and calling a working component broken is how a diagnostic teaches
+ * authors to ignore it.
+ *
+ * @param {import('./parse.mjs').RawField[]} fields
+ * @param {Set<string>} methods
+ * @param {string} module
+ * @param {string} className
+ * @returns {ProjectDiagnostic[]}
+ */
+function fieldsHiding(fields, methods, module, className) {
+  /** @type {ProjectDiagnostic[]} */
+  const found = [];
+  for (const field of fields) {
+    if (field.callable === true || !methods.has(field.name)) continue;
+    /** @type {Pick<ProjectDiagnostic, 'kind' | 'file' | 'line' | 'column'>} */
+    const where = {
+      kind: 'shadowed-lifecycle',
+      file: module,
+      line: field.line,
+      column: field.column,
+    };
+    if (field.callable === null) {
+      found.push({
+        ...where,
+        severity: 'note',
+        message:
+          `${className} declares \`${field.name}\` as a field, and it inherits a ` +
+          `\`${field.name}()\` method of that name. A field is an own property, so it hides ` +
+          'the method rather than overriding it unless its value is a function, and this ' +
+          'value is decided somewhere static analysis cannot follow.',
+      });
+      continue;
+    }
+    found.push({
+      ...where,
+      severity: 'error',
+      message:
+        `${className} declares \`${field.name}\` as a field, which hides the ` +
+        `\`${field.name}()\` method it inherits rather than overriding it. A class field is ` +
+        'installed as an own property, so every call reaches the field\'s value instead of ' +
+        `the method. Write \`${field.name}()\` as a method, or rename the field.`,
+    });
+  }
+  return found;
 }
 
 /** @returns {ResolvedSurface} */
@@ -380,6 +505,7 @@ function emptySurface() {
     attributesKnown: true,
     events: new Map(),
     eventsKnown: true,
+    methods: new Set(),
   };
 }
 
@@ -655,6 +781,8 @@ export function projectIndex(model) {
         kind: diagnostic.kind,
         severity: diagnostic.severity,
         file: repoPath(diagnostic.file),
+        line: diagnostic.line ?? null,
+        column: diagnostic.column ?? null,
         message: diagnostic.message.split(REPO + sep).join(''),
       }))
       .sort((left, right) => `${left.file}${left.message}`.localeCompare(`${right.file}${right.message}`)),

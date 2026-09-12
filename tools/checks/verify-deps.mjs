@@ -820,7 +820,18 @@ export async function verifyDependencies() {
     const model = await readProject(app);
 
     for (const problem of projectErrors(model)) {
-      refuse('deps/unreadable-declaration', problem.message, { group, file: problem.file });
+      // A field covering a method is readable and wrong, which is a different finding from
+      // a declaration no static tool could read at all.
+      const code =
+        problem.kind === 'shadowed-lifecycle'
+          ? 'deps/shadowed-member'
+          : 'deps/unreadable-declaration';
+      refuse(code, problem.message, {
+        group,
+        file: problem.file,
+        line: problem.line ?? null,
+        column: problem.column ?? null,
+      });
     }
 
     const withTemplates = [...model.elements.values()].filter((record) => record.template !== null);

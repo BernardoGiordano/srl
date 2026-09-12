@@ -935,8 +935,8 @@ function positionAt(source, offset) {
 
 /** @param {Diagnostic | import('../project-model/types.js').ProjectDiagnostic} diagnostic @param {string} source */
 function lspDiagnostic(diagnostic, source) {
-  const line = 'line' in diagnostic && diagnostic.line !== null ? Math.max(0, diagnostic.line - 1) : 0;
-  const character = 'column' in diagnostic && diagnostic.column !== null ? Math.max(0, diagnostic.column - 1) : 0;
+  const line = typeof diagnostic.line === 'number' ? Math.max(0, diagnostic.line - 1) : 0;
+  const character = typeof diagnostic.column === 'number' ? Math.max(0, diagnostic.column - 1) : 0;
   const lineText = source.split('\n')[line] ?? '';
   let end = character;
   while (end < lineText.length && /[^\s"'<>={}]/u.test(lineText[end] ?? '')) end += 1;
