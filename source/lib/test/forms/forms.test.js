@@ -257,6 +257,16 @@ describe('form group', () => {
     assert.equal(form.firstServerError, '', 'focusing a control the user cannot type in looks like nothing happening');
   });
 
+  it('patches only the members the form declares', () => {
+    // A payload is often a response body. `constructor` in it resolved off the
+    // prototype and threw asking `Object` to fill. ADR-0118.
+    const form = build();
+    /** @type {unknown} */
+    const payload = JSON.parse('{ "constructor": "x", "toString": "y", "city": "Torino" }');
+    form.patch(/** @type {{ city: string }} */ (payload));
+    assert.equal(form.values.city, 'Torino');
+  });
+
   it('patches without moving the baseline, and resets with it', () => {
     const form = build();
 

@@ -145,12 +145,16 @@ export function admitManifest(value, source) {
  * @returns {Readonly<Record<string, readonly string[]>>}
  */
 function admitTemplateGroups(value, where, policy) {
-  if (value === undefined) return Object.freeze({});
+  // No prototype, because the keys are the document's. `JSON.parse` makes
+  // `__proto__` an own key, and writing it into a plain object would replace the
+  // record's prototype instead of adding a group. ADR-0118.
+  /** @type {unknown} */
+  const empty = Object.create(null);
+  const groups = /** @type {Record<string, readonly string[]>} */ (empty);
+  if (value === undefined) return Object.freeze(groups);
   const record = asRecord(value, where);
   const seen = new Set();
 
-  /** @type {Record<string, readonly string[]>} */
-  const groups = {};
   for (const [name, entries] of Object.entries(record)) {
     if (!Array.isArray(entries)) throw new Error(`${where}.${name} must be an array.`);
     groups[name] = Object.freeze(

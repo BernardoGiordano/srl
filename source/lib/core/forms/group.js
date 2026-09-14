@@ -300,7 +300,9 @@ export class FormGroup {
    */
   patch(values) {
     for (const [name, value] of Object.entries(values)) {
-      if (value !== undefined) this.fields[name]?.fill(value);
+      // Own members only, as in `leafAt`. A payload naming `constructor` would
+      // otherwise resolve off `Object.prototype` and throw. ADR-0118.
+      if (value !== undefined && Object.hasOwn(this.fields, name)) this.fields[name]?.fill(value);
     }
   }
 

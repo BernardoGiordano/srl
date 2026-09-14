@@ -95,11 +95,14 @@ export class ApiError extends Error {
    * @returns {Readonly<Record<string, string>>}
    */
   get fields() {
-    if (this.status !== 422 || typeof this.body !== 'object' || this.body === null) return {};
+    // No prototype, because the keys are the server's. A code named `__proto__` is
+    // kept, and `fields.constructor` is undefined rather than a function. ADR-0118.
+    /** @type {unknown} */
+    const empty = Object.create(null);
+    const fields = /** @type {Record<string, string>} */ (empty);
+    if (this.status !== 422 || typeof this.body !== 'object' || this.body === null) return fields;
     const raw = /** @type {{ fields?: unknown }} */ (this.body).fields;
-    if (typeof raw !== 'object' || raw === null) return {};
-    /** @type {Record<string, string>} */
-    const fields = {};
+    if (typeof raw !== 'object' || raw === null) return fields;
     for (const [key, value] of Object.entries(raw)) if (typeof value === 'string') fields[key] = value;
     return fields;
   }

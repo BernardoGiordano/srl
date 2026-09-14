@@ -61,7 +61,7 @@ export const locale = signal('en');
 
 /** Merged message table for the active locale. Read by `t`. */
 /** @type {import('@core/foundation/types.js').Signal<MessageTable>} */
-const messages = signal(/** @type {MessageTable} */ ({}));
+const messages = signal(emptyTable());
 
 /**
  * Read-only view of that table, for code that must react to translations
@@ -354,8 +354,7 @@ async function mergeFor(tag) {
 
   // Reduced in reverse so the *first* entries of the chain win: the requested
   // locale beats its base language, which beats the default locale.
-  /** @type {MessageTable} */
-  const merged = {};
+  const merged = emptyTable();
   for (const table of tables.reverse()) Object.assign(merged, table);
   return merged;
 }
@@ -392,8 +391,7 @@ async function load(pattern, tag) {
   const cached = fetched.get(url);
   if (cached !== undefined) return cached;
 
-  /** @type {MessageTable} */
-  let table = {};
+  let table = emptyTable();
   try {
     const response = await fetch(config.bundleFiles?.[url] ?? url);
     if (response.ok) {
@@ -422,8 +420,7 @@ async function load(pattern, tag) {
  * @returns {MessageTable}
  */
 function flatten(value) {
-  /** @type {MessageTable} */
-  const flat = {};
+  const flat = emptyTable();
 
   /**
    * @param {unknown} node
@@ -442,6 +439,22 @@ function flatten(value) {
 
   walk(value, '');
   return flat;
+}
+
+/**
+ * An empty message table with no prototype.
+ *
+ * A table's keys come from fetched bundles and the key `t` looks up may come from
+ * data, so neither may reach `Object.prototype`. On a plain object `t('constructor')`
+ * finds a function, and a bundle's `__proto__` entry goes to the setter instead of
+ * the table. ADR-0118.
+ *
+ * @returns {MessageTable}
+ */
+function emptyTable() {
+  /** @type {unknown} */
+  const table = Object.create(null);
+  return /** @type {MessageTable} */ (table);
 }
 
 /* ── Negotiation ───────────────────────────────────────────────────────── */

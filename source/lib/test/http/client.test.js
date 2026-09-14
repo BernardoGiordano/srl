@@ -265,6 +265,18 @@ describe('ApiClient', () => {
       assert.equal(error.fields.rows, undefined);
     });
 
+    it('keeps the codes in a record with no prototype', async () => {
+      // The keys are the server's. `__proto__` is a code like any other, and a name
+      // the server did not send is absent even where Object.prototype has it. ADR-0118.
+      const body = /** @type {unknown} */ (
+        JSON.parse('{ "error": "validation_failed", "fields": { "__proto__": "invalid" } }')
+      );
+      const sent = transport(() => json(body, 422));
+      const error = await apiError(new ApiClient('/api', { fetch: sent.fetch }).post('/movements', {}));
+      assert.sameArray(Object.keys(error.fields), ['__proto__']);
+      assert.notOk('constructor' in error.fields, 'a name the server did not send');
+    });
+
     it('has no fields on a failure that is not a 422', async () => {
       const sent = transport(() => json({ error: 'boom', fields: { amount: 'required' } }, 500));
       const error = await apiError(new ApiClient('/api', { fetch: sent.fetch }).post('/movements', {}));

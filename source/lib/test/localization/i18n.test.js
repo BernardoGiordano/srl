@@ -111,6 +111,14 @@ describe('i18n', () => {
     assert.equal(t('nothing.here.at.all'), 'nothing.here.at.all');
   });
 
+  it('answers a name Object.prototype carries as a missing key', () => {
+    // A table with a prototype found a function for `constructor` and an object for
+    // `__proto__`, and a parameterised call threw inside `interpolate`. ADR-0118.
+    assert.equal(t('constructor'), 'constructor');
+    assert.equal(t('__proto__'), '__proto__');
+    assert.equal(t('toString', { id: '9' }), 'toString');
+  });
+
   it('changes every reader when the locale changes', async () => {
     assert.equal(t('users.title'), 'Users');
     await setLocale('it');

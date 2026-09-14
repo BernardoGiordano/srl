@@ -153,6 +153,18 @@ describe('manifest admission', () => {
       );
     });
 
+    it('keeps a group named __proto__ as a group rather than as a prototype', () => {
+      // `JSON.parse` makes `__proto__` an own key. Written into a plain object it
+      // replaced the record's prototype, and the group left both the record and the
+      // union without a refusal. ADR-0118.
+      const admitted = admit({
+        templateGroups: JSON.parse('{ "__proto__": ["/assets/templates/a.html"] }'),
+      });
+      assert.ok(Object.getPrototypeOf(admitted.templateGroups) === null);
+      assert.sameArray(Object.keys(admitted.templateGroups), ['__proto__']);
+      assert.sameArray([...admitted.templateFiles], ['/assets/templates/a.html']);
+    });
+
     it('refuses a document that names its templates both ways', () => {
       // A generator that could not decide. One document cannot say both which chunk
       // needs what and that everything is needed at once, and the runtime would have
