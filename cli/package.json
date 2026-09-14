@@ -80,6 +80,7 @@
     "package",
     "scaffold",
     "project-model",
+    "message-catalog",
     "language-server",
     "delivery",
     "checks",
