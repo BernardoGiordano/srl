@@ -24,8 +24,8 @@ import { fileURLToPath } from 'node:url';
 /**
  * Subcommand -> the module that is the program, relative to `cli/`.
  *
- * Flat rather than grouped, with `check` the one exception: the two checks are a
- * pair a repository runs together in CI and neither is a verb on its own.
+ * Flat rather than grouped, with `check` the one exception: the three checks are a
+ * set a repository runs together in CI and none is a verb on its own.
  *
  * Absent on purpose: the vendor refresh and the bundle build. Those act on the
  * library's own committed bytes, are meaningful only inside the srl repository, and
@@ -47,6 +47,7 @@ const COMMANDS = {
   retention: '../delivery/retention.mjs',
   'check templates': '../checks/template-check.mjs',
   'check importmap': '../checks/importmap-check.mjs',
+  'check messages': '../checks/message-check.mjs',
   'language-server': '../language-server/server.mjs',
 };
 
@@ -80,8 +81,16 @@ Checks
   check templates [--json]  type-check every template against the same JSDoc
                             types as the JavaScript. Needs a tsconfig.json at
                             the repository root
+  check messages [--app <name>] [--json] [--write]
+                            every message the source names against the bundles
+                            the application ships: a reference no key answers, a
+                            placeholder a call does not fill, a key present in a
+                            translation and absent from the default locale.
+                            --write adds the unanswered keys to the bundle that
+                            should hold them, each holding its key as its
+                            message, and leaves every existing line alone
 
-  --json on either prints every finding as one document — severity, code,
+  --json on any of them prints every finding as one document — severity, code,
   message, file, line, column — instead of a terminal report. Same findings,
   same exit code; a check returns them as values and this is the second way of
   printing them

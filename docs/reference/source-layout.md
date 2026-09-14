@@ -169,6 +169,10 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
                             mounts, specifier prefixes, and the generated import-map
                             fragment applications paste (`npm run importmap`)
   project-model/            one AST pass over an application, shared by every tool
+  message-catalog/          what a message is: the bundles an application registers, the
+                            keys each declares, the keys its source names and what a
+                            reference resolves to. The verifier, `srl check messages` and
+                            the editor are adapters over it (ADR-0117)
   language-server/          LSP over the project model and in-memory template checker;
                             VS Code and WebStorm are thin launchers for this one process
   diagnostics/              what a check found, as values: one Diagnostic type and the
@@ -186,6 +190,9 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
     importmap-check.mjs     an application's inline import map against the library it
                             installed. The one check a consumer runs, because the
                             failures it catches are blank pages, not build errors
+    message-check.mjs       every message the source names against the bundles the
+                            application ships, and `--write` to add the ones nothing
+                            answers
   delivery/
     build.mjs               the production artifact: chunked, minified, hash-named, one
                             sha384 pinned per chunk, and a report describing all of it

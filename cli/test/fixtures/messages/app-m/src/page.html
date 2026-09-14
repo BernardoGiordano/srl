@@ -1,0 +1,7 @@
+<section>
+  <h1>{{ t('orders.title') }}</h1>
+  <p>{{ t('orders.greting', { name: user.name }) }}</p>
+  <p title="{{ t('cart.items', { count: rows.length }) }}">{{ t('orders.status.open') }}</p>
+  <button (click)="pick(t('orders.status.closed'))" [aria-label]="t('orders.title')"></button>
+  <span *if="rows.length > 0">{{ t('orders.status.' + view) }}</span>
+</section>

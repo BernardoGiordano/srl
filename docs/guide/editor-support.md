@@ -3,13 +3,19 @@
 srl uses one Language Server Protocol implementation for every editor. It runs from the
 project's own `@srljs/cli`, reads the same project model as the build, imports the same
 template dialect as the browser, and sends unsaved HTML and JavaScript buffers through the
-same template checker as `srl check templates`. An editor therefore has no second account
-of what a component, binding, or valid expression is.
+same template checker as `srl check templates`, and resolves message keys through the same
+catalog as `srl check messages`. An editor therefore has no second account of what a
+component, binding, valid expression or message is.
 
 The server provides:
 
 - diagnostics for template expressions, directives, unknown elements, missing `uses`
   entries, custom-element properties and observed attributes;
+- diagnostics for message keys, in templates and in JavaScript: a key no bundle the file
+  can reach declares is underlined where the literal is, with the nearest existing key
+  named, and a placeholder the call does not pass is reported on the same line. The keys
+  come from the buffer and the bundles from disk, so a misspelling shows before a reload
+  ([ADR-0117](../adr/0117-a-message-reference-is-resolved-against-one-catalog.md));
 - completion for custom elements, bindings, directives, DOM events, component members,
   template globals, loop locals, and `$event`;
 - hover and go-to-definition for custom elements, their properties, component members,

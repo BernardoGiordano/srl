@@ -14,6 +14,7 @@ enforced; the enforcement is named.
 | Editors do not carry a second template grammar or component model | `cli/language-server/` adapts the checker and project model; ADR-0090 |
 | Trusted Types and context-sensitive sanitisation stay enforced | `core/template/security.js`, the sink tests, `require-trusted-types-for 'script'` in the deployment's CSP |
 | Locale switching is reactive and reload-free | `t()` reads a signal; asserted across two independently-owned components |
+| Every message the source asks for exists in a bundle it can reach | `npm run verify` and `srl check messages`, over the references `cli/message-catalog/` reads from the same parse the model uses |
 | The remote host interface never exposes a credential | No method returns a token; `host.auth.fetch` is the only way out |
 | Remote contexts are mount-scoped and revocable | Every `mount(host)` gets a fresh frozen context; leaving the route revokes it |
 | Light DOM and Tailwind compatibility are intentional | No shadow roots; projection moves real child elements |

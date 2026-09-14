@@ -24,6 +24,7 @@ npm install --save-dev --save-exact @srljs/core@0.8.0 @srljs/cli@0.8.0 \
 npx --no-install srl new web
 npx --no-install srl check importmap
 npx --no-install srl check templates
+npx --no-install srl check messages
 printf "node_modules/\ndist/\n" > .gitignore
 git add .
 git commit -m "Create web application"
@@ -108,7 +109,16 @@ npx --no-install srl check importmap
 # without compiling anything. Needs a tsconfig.json at the repository root.
 npx --no-install srl check templates
 
-# Either check with --json prints its findings as one document instead of a
+# Every message the source names against the bundles the application registers:
+# a key no bundle answers, which renders as itself in every language, and a
+# placeholder a call does not pass, which ships with a brace in the sentence.
+# A key present in a translation and absent from the default locale fails too.
+# --write adds the unanswered keys to the bundle that should hold them, each
+# holding its key as its message, and leaves every existing line alone.
+npx --no-install srl check messages
+npx --no-install srl check messages --write
+
+# Any check with --json prints its findings as one document instead of a
 # terminal report: a severity, a stable code, a message and the file, line and
 # column, per finding. A check returns them as values and this is the second
 # adapter over that — same findings, same exit code.

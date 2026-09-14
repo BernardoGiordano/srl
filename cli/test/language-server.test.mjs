@@ -213,8 +213,26 @@ void test('language service exposes the srl template contract', async (context) 
     assert.ok(edits.some((edit) => edit.newText.includes('UiDialog')));
   });
 
+  await context.test('reports a message key no bundle declares, from the buffer', async () => {
+    const source = original.replace("t('people.empty')", "t('people.emtpy')");
+    assert.notEqual(source, original, 'the fixture template names that key');
+    service.change(uri, 7, source);
+
+    const diagnostics = await service.diagnostics(uri);
+    const unknown = diagnostics.find((candidate) => candidate.code === 'messages/unknown-key');
+    assert.ok(unknown?.message.includes('people.emtpy'));
+    assert.ok(unknown?.message.includes('Did you mean "people.empty"?'));
+
+    const line = source.split('\n')[unknown?.range.start.line ?? 0] ?? '';
+    assert.equal(
+      line.slice(unknown?.range.start.character ?? 0).startsWith('people.emtpy'),
+      true,
+      'placed at the literal, not at the call',
+    );
+  });
+
   await context.test('returns semantic tokens, document links, outline, and workspace symbols', async () => {
-    service.change(uri, 7, original);
+    service.change(uri, 8, original);
     assert.ok((await service.semanticTokens(uri)).data.length > 0);
     assert.ok((await service.documentLinks(uri)).length > 0);
     assert.ok((await service.documentSymbols(uri)).length > 0);

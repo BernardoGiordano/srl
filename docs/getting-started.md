@@ -34,7 +34,7 @@ Everything `check` runs, individually:
 | `npm run test:editors` | Editor launcher path resolution |
 | `npm run vendor` | A vendored byte that does not match its recorded hash |
 | `npm run package` | A published bundle that will not build, or still names a specifier only an import map resolves |
-| `npm run verify` | Layering, dependencies, import maps, template ownership, translations, storage access |
+| `npm run verify` | Layering, dependencies, import maps, template ownership, message keys, storage access |
 | `npm run docs:check` | A generated reference table that no longer matches the project model |
 | `npm run docs:browsers` | The published browser support matrix, against the recorded journey run |
 | `npm test` | The browser suites, in real Chrome, for the library, the collection and one application |
@@ -47,6 +47,7 @@ Everything `check` runs, individually:
 | A `.html` template, a component's public members, or the attribute one observes | `npm run templates:check` |
 | A `defineComponent` declaration, a tag, or a module path | `npm run verify && npm run docs:check` |
 | An import map, a manifest, or a remote's bytes | `npm run verify` (integrity, CSP hash, grants) |
+| A message key, a locale bundle, or a `t()` call | `npm run messages:check`, and `npm run messages:write` to add the keys nothing answers |
 | A vendored dependency | `npm run vendor` then `npm run verify` |
 | Anything under `source/`, before publishing | `npm run package` then `npm run verify` (the `exports` map names files it emits) |
 | Anything in the render, router, table or startup path | `npm run benchmark:ci` |

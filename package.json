@@ -32,6 +32,8 @@
     "package:check": "node tools/delivery/package-bundle.mjs --check",
     "templates:check": "node cli/checks/template-check.mjs",
     "importmap:check": "node cli/checks/importmap-check.mjs",
+    "messages:check": "node cli/checks/message-check.mjs",
+    "messages:write": "node cli/checks/message-check.mjs --write",
     "pack:check": "node tools/checks/pack-check.mjs",
     "typecheck": "node_modules/tsgo/bin/tsc --noEmit",
     "typecheck:watch": "node_modules/tsgo/bin/tsc --noEmit --watch",

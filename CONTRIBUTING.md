@@ -26,7 +26,7 @@ versions the browser is served.
 | `npm run test:tools` | A broken tool: the project model, the checks, the delivery pipeline |
 | `npm run vendor` | A vendored file whose bytes no longer match its integrity hash |
 | `npm run package` | A published bundle that will not build, or that still names `@core/` — a specifier only an import map resolves |
-| `npm run verify` | A dependency-rule violation, and four descriptions of the interface disagreeing |
+| `npm run verify` | A dependency-rule violation, four descriptions of the interface disagreeing, and a message key the source names that no bundle declares |
 | `npm run docs:check` | A generated reference table that drifted from the project model |
 | `npm run docs:adr` | A malformed record, or a citation that resolves to nothing |
 | `npm test` | A browser suite, in real Chrome, against the real DOM |

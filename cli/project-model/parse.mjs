@@ -75,6 +75,14 @@ import { readText } from '../layout.mjs';
  *   eventsKnown: boolean,
  * }} RawElementSurface
  * @typedef {{
+ *   key: string | null,
+ *   prefix: string | null,
+ *   params: string[] | null,
+ *   count: boolean,
+ *   line: number,
+ *   column: number,
+ * }} RawMessageReference
+ * @typedef {{
  *   path: string,
  *   imports: Map<string, string>,
  *   importNames: Map<string, string>,
@@ -84,9 +92,29 @@ import { readText } from '../layout.mjs';
  *   definitions: RawDefinition[],
  *   globals: Map<string, string>,
  *   storage: Array<{ name: string, line: number }>,
+ *   messages: RawMessageReference[],
+ *   literals: Set<string>,
  *   dynamic: Array<{ severity: 'error' | 'note', message: string }>,
  * }} ParsedModule
  */
+
+/**
+ * `standardText` is the shared collection's namespaced lookup: it builds
+ * `ui.<namespace>.<name>` and resolves it through the same table, so a collection key is
+ * authored in an application's bundle like any other. Matched on the resolved import
+ * rather than on the name, because the name is ordinary.
+ */
+const COLLECTION_TEXT = 'components/internal/text.js';
+
+/** The library's message function, wherever it was imported from. */
+const I18N = 'core/localization/i18n.js';
+
+/**
+ * A key written as a string, or the start of one: `orders.title`, `audit.action.`. Used
+ * for the weaker question — is this key named anywhere — and never for deciding that one
+ * exists.
+ */
+const DOTTED = /^[A-Za-z_$][\w$-]*(?:\.[\w$-]+)*\.[\w$-]*$/u;
 
 /** Browser storage a module may not reach for on its own. See `storage` above. */
 const WEB_STORAGE = new Set(['localStorage', 'sessionStorage']);
@@ -120,6 +148,22 @@ export async function parseModule(file, prefixes) {
   return parsed;
 }
 
+/**
+ * Parse text that is not what the file holds: an editor's unsaved buffer.
+ *
+ * Not cached, because the cache is keyed on what the file says and this text is what it
+ * will say. The editor asks per keystroke and pays one parse for it, which is the same
+ * bargain the template checker makes for an overlay. ADR-0092.
+ *
+ * @param {string} file Absolute path, which the parse uses to resolve relative imports.
+ * @param {string} source
+ * @param {Record<string, string>} prefixes Import-map prefix -> absolute directory.
+ * @returns {ParsedModule}
+ */
+export function parseSource(file, source, prefixes) {
+  return read(resolve(file), source, prefixes);
+}
+
 /** Forget every parse. For a test that rewrites a fixture within one mtime tick. */
 export function clearParseCache() {
   cache.clear();
@@ -145,6 +189,8 @@ function read(path, source, prefixes) {
     definitions: [],
     globals: new Map(),
     storage: [],
+    messages: [],
+    literals: new Set(),
     dynamic: [],
   };
 
@@ -185,7 +231,18 @@ function read(path, source, prefixes) {
       if (callName === 'defineComponent') readDefineComponent(node, parsed, tree);
       else if (callName === 'customElements.define') readCustomElementsDefine(node, parsed, tree);
       else if (callName === 'registerTemplateGlobals') readGlobals(node, parsed);
+      else readMessageReference(node, parsed, tree);
     }
+    // A dotted string anywhere in the module: `labelKey: 'dashboard.panel.live'` names a
+    // message as surely as `t()` does, and the call that resolves it is handed a variable.
+    // A template head is the same fact about a family — `` `audit.action.${entry.action}` ``
+    // names every key under it. Enough to answer "does any source name this key"; never
+    // enough to conclude one exists, which is what the reference sites above are for.
+    if (ts.isStringLiteralLike(node) && DOTTED.test(node.text)) parsed.literals.add(node.text);
+    if (ts.isTemplateExpression(node) && DOTTED.test(node.head.text)) {
+      parsed.literals.add(node.head.text);
+    }
+
     // An identifier and not a text match, because every module that explains why it does
     // *not* reach for localStorage writes the word in a comment, and `globalThis.localStorage`
     // has to count while `'localStorage'` inside a message must not.
@@ -341,6 +398,154 @@ function readGlobals(node, parsed) {
       if (name !== undefined) parsed.globals.set(name, property.initializer.text);
     }
   }
+}
+
+/**
+ * A call that names a message, as written.
+ *
+ * Three callees are the message function: `t` imported from the library, `t` that the
+ * module declares itself — which is how a remote forwards to `host.i18n.t()` — and the
+ * host contract's own `host.i18n.t`. A `t` imported from somewhere else is somebody
+ * else's function and is left alone.
+ *
+ * A computed key is kept rather than dropped, with whatever static prefix it starts
+ * from: `t('billing.view.' + name)` claims `billing.view.*`, which is what keeps those
+ * catalog entries from reading as unused and what a report can name. A conditional is
+ * two references, because both branches are written down and either may be misspelled.
+ *
+ * @param {ts.CallExpression} node
+ * @param {ParsedModule} parsed
+ * @param {ts.SourceFile} tree
+ */
+function readMessageReference(node, parsed, tree) {
+  const callee = calledName(node.expression);
+  const local = ts.isIdentifier(node.expression) ? node.expression.text : undefined;
+  const imported = local === undefined ? undefined : parsed.imports.get(local);
+  const module = imported?.replaceAll('\\', '/');
+
+  const collection =
+    parsed.importNames.get(local ?? '') === 'standardText' &&
+    module?.endsWith(COLLECTION_TEXT) === true;
+  const message =
+    (local === 't' && (module === undefined || module.endsWith(I18N))) ||
+    callee?.endsWith('i18n.t') === true;
+
+  if (!collection && !message) return;
+
+  const [first, second] = node.arguments;
+  if (first === undefined) return;
+
+  if (collection) {
+    parsed.messages.push({
+      ...collectionKey(first, second),
+      params: [],
+      count: false,
+      ...sourcePosition(tree, first),
+    });
+    return;
+  }
+
+  const options = messageParams(second);
+  for (const argument of keyArguments(first)) {
+    parsed.messages.push({ ...staticKey(argument), ...options, ...sourcePosition(tree, argument) });
+  }
+}
+
+/**
+ * The expressions that may each be the key: one, or both branches of a conditional.
+ *
+ * @param {ts.Expression} node
+ * @returns {ts.Expression[]}
+ */
+function keyArguments(node) {
+  if (!ts.isConditionalExpression(node)) return [node];
+  return [...keyArguments(node.whenTrue), ...keyArguments(node.whenFalse)];
+}
+
+/**
+ * `standardText('table', name)` asks for `ui.table.<name>`. A computed namespace is
+ * possible and claims the whole `ui.` space; neither call site in the collection writes
+ * one, and a rule that holds only for today's call sites is not a rule.
+ *
+ * @param {ts.Expression} namespace
+ * @param {ts.Expression | undefined} name
+ * @returns {{ key: string | null, prefix: string | null }}
+ */
+function collectionKey(namespace, name) {
+  const space = ts.isStringLiteralLike(namespace) ? namespace.text : null;
+  if (space === null) return { key: null, prefix: 'ui.' };
+  if (name !== undefined && ts.isStringLiteralLike(name)) {
+    return { key: `ui.${space}.${name.text}`, prefix: null };
+  }
+  return { key: null, prefix: `ui.${space}.` };
+}
+
+/**
+ * The key a first argument names: the whole of it when it is written out, the part before
+ * the first computed piece otherwise.
+ *
+ * @param {ts.Expression} node
+ * @returns {{ key: string | null, prefix: string | null }}
+ */
+function staticKey(node) {
+  if (ts.isStringLiteralLike(node) && !ts.isTemplateExpression(node)) {
+    return { key: node.text, prefix: null };
+  }
+
+  if (ts.isTemplateExpression(node)) {
+    return { key: null, prefix: node.head.text === '' ? null : node.head.text };
+  }
+
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const pieces = [];
+    /** @type {ts.Expression} */
+    let branch = node;
+    while (ts.isBinaryExpression(branch) && branch.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      pieces.unshift(branch.right);
+      branch = branch.left;
+    }
+    pieces.unshift(branch);
+
+    let prefix = '';
+    for (const piece of pieces) {
+      if (!ts.isStringLiteralLike(piece) || ts.isTemplateExpression(piece)) break;
+      prefix += piece.text;
+    }
+    if (pieces.every((piece) => ts.isStringLiteralLike(piece) && !ts.isTemplateExpression(piece))) {
+      return { key: prefix, prefix: null };
+    }
+    return { key: null, prefix: prefix === '' ? null : prefix };
+  }
+
+  return { key: null, prefix: null };
+}
+
+/**
+ * The parameters a call passes, when it passes an object literal. `null` is "written, and
+ * not readable from here" — a spread or a variable — and no placeholder conclusion may be
+ * drawn from it.
+ *
+ * @param {ts.Expression | undefined} node
+ * @returns {{ params: string[] | null, count: boolean }}
+ */
+function messageParams(node) {
+  if (node === undefined) return { params: [], count: false };
+  if (!ts.isObjectLiteralExpression(node)) return { params: null, count: false };
+
+  /** @type {string[]} */
+  const params = [];
+  let readable = true;
+  for (const property of node.properties) {
+    if (ts.isShorthandPropertyAssignment(property)) {
+      params.push(property.name.text);
+      continue;
+    }
+    const name = ts.isPropertyAssignment(property) ? propertyName(property.name) : undefined;
+    if (name === undefined) readable = false;
+    else params.push(name);
+  }
+
+  return { params: readable ? params : null, count: params.includes('count') };
 }
 
 /**

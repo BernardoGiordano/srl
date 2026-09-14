@@ -183,6 +183,26 @@ export interface ModuleRecord {
   /** Class name -> whether it is exported. */
   classes: Map<string, boolean>;
   /**
+   * Every message this module names, in source order: `t('orders.title')`,
+   * `t('cart.items', { count })`, `t('billing.view.' + name)`,
+   * `standardText('table', 'empty')`.
+   *
+   * A reference site and nothing more. `key` is the whole key when it is written out;
+   * otherwise `prefix` is the part before the first computed piece, and the reference
+   * claims every catalog key under it. `params` is null when the options argument cannot
+   * be read, which forbids any conclusion about placeholders.
+   */
+  messages: MessageReference[];
+  /**
+   * Every dotted string the module writes, and every dotted head of a template literal:
+   * `labelKey: 'dashboard.panel.live'`, `` `audit.action.${entry.action}` ``.
+   *
+   * A key named outside a call, which is how a screen keeps its copy in a table and
+   * resolves it later. Enough to say a catalog entry is still spoken for; never enough to
+   * say a message exists.
+   */
+  literals: Set<string>;
+  /**
    * Every place this module reaches for browser storage itself.
    *
    * Recorded because one module owns synchronous UI-preference storage, and a second
@@ -209,6 +229,21 @@ export interface ProjectModel {
   /** Every template file this application can reach, keyed by absolute path. */
   templates: Map<string, TemplateRecord>;
   diagnostics: ProjectDiagnostic[];
+}
+
+/** One `t()` or `standardText()` call, as the parse read it. */
+export interface MessageReference {
+  /** The whole key, or null when the call computes part of it. */
+  key: string | null;
+  /** The static start of a computed key, or null when there is none. */
+  prefix: string | null;
+  /** Parameter names passed as an object literal; null when the argument is unreadable. */
+  params: string[] | null;
+  /** Whether `count` is among them, which is what selects a plural variant. */
+  count: boolean;
+  /** 1-based, at the key argument. */
+  line: number;
+  column: number;
 }
 
 /** The JSON projection: sorted, repository-relative, no absolute path anywhere. */

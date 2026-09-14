@@ -33,14 +33,17 @@
  *     route and nothing anywhere else.
  *  8. A template no component definition claims. Always a leftover from a rename,
  *     and invisible: the old markup keeps being served and renders nowhere.
- *  9. A message key present in a translation but absent from the default locale.
- *     Always a typo or a leftover, and invisible because the key still renders in
- *     the locale that has it and nowhere else.
- * 10. A missing default-locale bundle. Every other locale falls back to it, so
- *     without it a partial translation shows raw keys.
+ *  9. A message the source asks for and no bundle declares. It renders as its own
+ *     key, in every language. The rule is cli/message-catalog/'s and so are 10 and
+ *     11 — this sweep runs it and reports what it found, because a repository-wide
+ *     gate is where a raw key in the page should stop a merge. ADR-0117.
+ * 10. A message key present in a translation but absent from the default locale, or
+ *     a missing default-locale bundle. The first still renders in the one locale
+ *     that has it; the second makes every partial translation show raw keys.
  * 11. A remote with no navigation label. `ui-nav` builds its remote links from the
  *     manifest and asks for `nav.<name>`, so a mounted remote whose name has no
- *     message key puts a raw key in the header of every locale.
+ *     message key puts a raw key in the header of every locale. No source names
+ *     that key, which is why it is checked here and not with the others.
  * 12. A manifest the runtime would refuse: a cross-origin or unpinned remote, a
  *     cross-origin auth destination, two remotes claiming one mount, a locale
  *     bundle outside this origin. The document is admitted here by
@@ -89,10 +92,11 @@
 
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 
 import { error, info, outputFormat, report, warning } from '../../cli/diagnostics/index.mjs';
 import { REPO, apps, exists, readText, walk } from '../../cli/layout.mjs';
+import { messageFindings, readMessages } from '../../cli/message-catalog/index.mjs';
 import {
   COMPONENTS,
   BUNDLES,
@@ -1001,106 +1005,44 @@ export async function verifyDependencies() {
       );
     }
 
-    /* ── 9/10. Message bundles ───────────────────────────────────────────── */
-
-    const defaultLocale = String(manifest.i18n.defaultLocale);
-    /** @type {string[]} */
-    const supportedLocales = manifest.i18n.supportedLocales.map(String);
-
-    // Every i18n directory this application ships: its own, plus one per remote.
-    const bundleDirs = [
-      ...new Set(
-        (await walk(app.dir, /\.json$/u)).filter((f) => basename(dirname(f)) === 'i18n').map(dirname),
-      ),
-    ].sort();
-
-    for (const dir of bundleDirs) {
-      const label = show(dir);
-      const defaultPath = join(dir, `${defaultLocale}.json`);
-
-      if (!(await exists(defaultPath))) {
-        refuse(
-          'deps/no-default-locale',
-          `has no ${defaultLocale}.json. Every locale falls back to the default one key by key, so ` +
-            `without it a partial translation renders raw keys.`,
-          { group, file: dir },
-        );
-        continue;
-      }
-
-      /** @type {Set<string>} */
-      const baseKeys = new Set();
-      collectKeys(JSON.parse(await readFile(defaultPath, 'utf8')), '', baseKeys);
-
-      for (const locale of supportedLocales) {
-        if (locale === defaultLocale) continue;
-        const path = join(dir, `${locale}.json`);
-        if (!(await exists(path))) {
-          note(
-            'deps/locale-absent',
-            `${label}/${locale}.json absent, falls back to ${defaultLocale}`,
-            { group },
-          );
-          continue;
-        }
-
-        /** @type {Set<string>} */
-        const keys = new Set();
-        collectKeys(JSON.parse(await readFile(path, 'utf8')), '', keys);
-
-        // A key here but not in the default locale is a typo or a leftover, and it is
-        // invisible: it renders correctly in this one language and as a raw key in
-        // every other.
-        const orphans = [...keys].filter(
-          (key) => !baseKeys.has(key) && !isPluralVariant(key, baseKeys),
-        );
-        if (orphans.length > 0) {
-          refuse(
-            'deps/orphan-message-key',
-            `has ${String(orphans.length)} key(s) absent from ${defaultLocale}.json:\n` +
-              `      ${orphans.join('\n      ')}\n` +
-              `    Either a typo, or a message renamed in the default locale only.`,
-            { group, file: path },
-          );
-        }
-
-        const missing = [...baseKeys].filter((key) => !keys.has(key));
-        pass(
-          'deps/locale',
-          `${`${label}/${locale}.json`.padEnd(38)} ${String(keys.size).padStart(3)} key(s), ` +
-            `${String(missing.length).padStart(3)} untranslated`,
-          { group },
-        );
-      }
-    }
-
-    /* ── 11. Every remote has a navigation label ─────────────────────────── */
+    /* ── 9/10/11. Messages ───────────────────────────────────────────────── */
 
     /**
-     * `ui-nav` derives its remote links from the manifest and asks for
-     * `nav.<remote name>`, which is what removes the shell edit from mounting a
-     * remote. The cost of that is a new silent failure: a remote whose name has no
-     * message key renders the raw key `nav.whatever` in the header, in every locale,
-     * and nothing else reports it.
+     * Locale files used to be compared with each other here, which finds a key renamed in
+     * one language and cannot find the failure that reaches a user: a reference no key
+     * answers. `t('orders.titel')` satisfied every rule in this file and rendered
+     * `orders.titel` in the page, in every language.
+     *
+     * cli/message-catalog/ owns what a key is, which bundle answers for a file and what a
+     * reference resolves to — the same module `srl check messages` runs in an installed
+     * application and the editor runs on the file being typed. Its findings keep their own
+     * `messages/` codes, because the rule belongs to that module and a filter or a
+     * suppression should name it where it lives. ADR-0117.
      */
-    const shellDefaultBundle = join(app.dir, 'i18n', `${defaultLocale}.json`);
+    const messages = await readMessages(app, model);
+    found.push(...messageFindings(messages));
 
-    if (await exists(shellDefaultBundle)) {
-      /** @type {Set<string>} */
-      const shellKeys = new Set();
-      collectKeys(JSON.parse(await readFile(shellDefaultBundle, 'utf8')), '', shellKeys);
+    /**
+     * What a catalog cannot know: `ui-nav` derives its remote links from the manifest and
+     * asks for `nav.<remote name>`, which is what removes the shell edit from mounting a
+     * remote. The cost of that is a silent failure — a remote whose name has no message key
+     * renders the raw key `nav.whatever` in the header, in every locale — and no source
+     * names the key, so nothing else reports it.
+     */
+    const shell = messages.bundles.find((bundle) => bundle.scope === null);
+    const shellKeys = shell?.locales.get(shell.defaultLocale)?.keys;
 
+    if (shell !== undefined && shellKeys !== undefined) {
       for (const remote of manifest.remotes) {
         const key = `nav.${String(remote.name)}`;
-        if (!shellKeys.has(key)) {
-          refuse(
-            'deps/remote-without-nav-label',
-            `remote "${String(remote.name)}" is mounted at ${String(remote.mount)} but ` +
-              `i18n/${defaultLocale}.json has no "${key}". ui-nav builds its remote links from the ` +
-              `manifest, so the header would show the raw key.`,
-            { group, file: shellDefaultBundle },
-          );
-        }
+        if (shellKeys.has(key)) continue;
+        refuse(
+          'deps/remote-without-nav-label',
+          `remote "${String(remote.name)}" is mounted at ${String(remote.mount)} but ` +
+            `${show(shell.defaultPath)} has no "${key}". ui-nav builds its remote links from ` +
+            `the manifest, so the header would show the raw key.`,
+          { group, file: shell.defaultPath },
+        );
       }
       pass(
         'deps/nav-labels',
@@ -1493,39 +1435,6 @@ function parseJsonc(text) {
   return JSON.parse(out.replace(/,(\s*[}\]])/gu, '$1'));
 }
 
-/**
- * Flatten nested message JSON exactly as the runtime does, so the two agree on
- * what a key is. Keys beginning with `$` are comments and never reach the table.
- *
- * @param {unknown} value
- * @param {string} prefix
- * @param {Set<string>} into
- */
-function collectKeys(value, prefix, into) {
-  if (typeof value !== 'object' || value === null) return;
-  for (const [key, child] of Object.entries(value)) {
-    if (key.startsWith('$')) continue;
-    const path = prefix === '' ? key : `${prefix}.${key}`;
-    if (typeof child === 'string' || typeof child === 'number') into.add(path);
-    else collectKeys(child, path, into);
-  }
-}
-
-/**
- * Plural categories are per language: Arabic declares `zero`/`two`/`few`/`many`
- * for a key English only needs `one`/`other` for. Those are not orphans.
- *
- * @param {string} key
- * @param {Set<string>} baseKeys
- * @returns {boolean}
- */
-function isPluralVariant(key, baseKeys) {
-  const match = /^(.*)\.(zero|one|two|few|many|other)$/u.exec(key);
-  if (match?.[1] === undefined) return false;
-  const stem = match[1];
-  return [...baseKeys].some((base) => base === stem || base.startsWith(`${stem}.`));
-}
-
 /* ── As a command ──────────────────────────────────────────────────────────
  *
  * Guarded, like every other check here, so importing this module stays free of
@@ -1539,6 +1448,6 @@ function isPluralVariant(key, baseKeys) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   process.exitCode = report(await verifyDependencies(), {
     format: outputFormat(),
-    summary: 'All dependency, layering, template and translation checks passed.',
+    summary: 'All dependency, layering, template and message checks passed.',
   });
 }

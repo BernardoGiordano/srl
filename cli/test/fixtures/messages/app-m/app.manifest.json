@@ -1,0 +1,16 @@
+{
+  "name": "app-m",
+  "i18n": {
+    "defaultLocale": "en",
+    "supportedLocales": ["en", "it"],
+    "bundles": ["/i18n/{locale}.json"]
+  },
+  "remotes": [
+    {
+      "name": "reports",
+      "url": "/remotes/reports/remote-entry.js",
+      "mount": "/reports",
+      "locales": ["/remotes/reports/i18n/{locale}.json"]
+    }
+  ]
+}

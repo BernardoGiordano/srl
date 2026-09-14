@@ -1,0 +1,19 @@
+{
+  "orders": {
+    "title": "Ordini",
+    "greeting": "Ciao {name}, ne hai {waiting} in attesa",
+    "status": {
+      "open": "Aperto",
+      "closed": "Chiuso"
+    },
+    "renamed": "Rinominato"
+  },
+
+  "cart": {
+    "items": {
+      "one": "{count} articolo",
+      "other": "{count} articoli",
+      "many": "{count} articoli"
+    }
+  }
+}

@@ -15,11 +15,13 @@ import ts from 'typescript';
 
 import { checkTemplateSource, parseTemplate } from '../checks/template-check.mjs';
 import { apps } from '../layout.mjs';
+import { readMessages, referenceFindings, sourceReferences } from '../message-catalog/index.mjs';
 import { readProject } from '../project-model/index.mjs';
 import { AuthoredTemplates } from './authoring.mjs';
 
 /** @import { Diagnostic } from '../diagnostics/types.js' */
 /** @import { ElementRecord, ProjectModel } from '../project-model/types.js' */
+/** @import { MessageModel } from '../message-catalog/types.js' */
 
 /** @typedef {{ kind: 'text', value: string, at: number } | { kind: 'element', tag: string, attributes: Array<{ name: string, value: string, at: number }>, children: TemplateNode[], at: number }} TemplateNode */
 /** @typedef {{ line: number, character: number }} Position */
@@ -35,6 +37,13 @@ export class SrlLanguageService {
   documents = new Map();
   /** @type {ProjectModel[]} */
   models = [];
+  /**
+   * One per application, in the same order as `models`. The catalogs are the files as
+   * saved: a bundle is not what is being edited in a buffer.
+   *
+   * @type {MessageModel[]}
+   */
+  messages = [];
   /** Which authoring form each document is in, and what may be asked of it. ADR-0092. */
   #authoring = new AuthoredTemplates({ documents: this.documents });
 
@@ -42,8 +51,15 @@ export class SrlLanguageService {
   async reload() {
     const discovered = await apps();
     const models = [];
-    for (const app of discovered) models.push(await readProject(app));
+    /** @type {MessageModel[]} */
+    const messages = [];
+    for (const app of discovered) {
+      const model = await readProject(app);
+      models.push(model);
+      messages.push(await readMessages(app, model));
+    }
     this.models = models;
+    this.messages = messages;
   }
 
   /** @param {string} uri @param {string} languageId @param {number} version @param {string} text */
@@ -185,6 +201,13 @@ export class SrlLanguageService {
 
     for (const project of this.models) {
       found.push(...project.diagnostics.filter((diagnostic) => diagnostic.file === path));
+    }
+
+    // The keys this buffer names, resolved against the bundles as saved. A misspelled key
+    // is a raw key in the page, and the editor is where it is cheapest to see.
+    const catalog = this.messages.find((message) => message.app.dir === model.app.dir);
+    if (catalog !== undefined) {
+      found.push(...referenceFindings(catalog, await sourceReferences(model, path, source)));
     }
 
     const form = this.#authoring.form(path);

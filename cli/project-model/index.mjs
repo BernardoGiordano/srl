@@ -21,9 +21,15 @@
  *
  * WHAT IT DELIBERATELY DOES NOT MODEL
  *
- * Routes, injection tokens, remote grants and message keys. Custom-element and template
- * identity is the fact three consumers already needed; the rest would be a model with one
- * consumer, which is a data structure looking for a reason.
+ * Routes, injection tokens and remote grants. Custom-element and template identity is the
+ * fact three consumers already needed; the rest would be a model with one consumer, which
+ * is a data structure looking for a reason.
+ *
+ * Message references are carried, and message *meaning* is not: a module record says
+ * which keys its source names and where, because the parse that finds an element
+ * definition is already reading those call sites. What a key resolves to, which bundle
+ * owns it and whether it exists belong to cli/message-catalog/, which reads this model
+ * rather than parsing the project a second time.
  */
 
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
@@ -112,6 +118,8 @@ export async function readProject(app, options = {}) {
       sideEffectImports: parsed.sideEffectImports,
       classes: parsed.classes,
       storage: parsed.storage,
+      messages: parsed.messages,
+      literals: parsed.literals,
     });
 
     for (const entry of parsed.dynamic) {

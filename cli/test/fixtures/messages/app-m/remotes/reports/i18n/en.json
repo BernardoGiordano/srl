@@ -1,0 +1,9 @@
+{
+  "reports": {
+    "title": "Reports",
+    "view": {
+      "daily": "Daily",
+      "weekly": "Weekly"
+    }
+  }
+}

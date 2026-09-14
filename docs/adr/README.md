@@ -115,6 +115,7 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0114](0114-an-owner-ending-is-terminal-for-a-check.md) | An owner's end is terminal for a field's check | accepted | `source/lib/core/forms/field.js`, `source/lib/test/forms/async-validation.test.js` |
 | [ADR-0115](0115-a-field-may-not-hide-a-method.md) | A field may not hide a method | accepted | `source/lib/core/elements/signal-element.js`, `cli/project-model/parse.mjs`, `cli/project-model/index.mjs`, `cli/project-model/types.d.ts`, `tools/checks/verify-deps.mjs`, `source/lib/test/elements/signal-element.test.js`, `cli/test/project-model.test.mjs`, `cli/test/fixtures/project-model/app-a/src/hidden-member.js` |
 | [ADR-0116](0116-a-browser-claim-names-the-build-that-ran.md) | A browser claim names the build that ran | accepted | `cli/test/support/journey/engines.mjs`, `cli/test/support/journey/observer.mjs`, `cli/test/support/journey/journey.mjs`, `cli/test/support/journey/stage.mjs`, `cli/test/browser-journey.test.mjs`, `tools/browser/record.mjs`, `tools/checks/browser-check.mjs`, `docs/guide/browser-support.md`, `example/src/pages/inventory/movements-page.js`, `.github/workflows/ci.yml` |
+| [ADR-0117](0117-a-message-reference-is-resolved-against-one-catalog.md) | A message reference is resolved against one catalog | accepted | `cli/message-catalog/`, `cli/checks/message-check.mjs`, `cli/project-model/parse.mjs`, `tools/checks/verify-deps.mjs`, `cli/language-server/service.mjs` |
 
 <!-- /generated:adr-index -->
 

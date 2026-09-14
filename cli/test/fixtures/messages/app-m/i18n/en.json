@@ -1,0 +1,31 @@
+{
+  "$comment": "The fixture's default locale, and therefore its key inventory.",
+
+  "orders": {
+    "title": "Orders",
+    "greeting": "Hello {name}, you have {waiting} waiting",
+    "status": {
+      "open": "Open",
+      "closed": "Closed"
+    }
+  },
+
+  "cart": {
+    "items": {
+      "one": "{count} item",
+      "other": "{count} items"
+    }
+  },
+
+  "panels": {
+    "live": "Live"
+  },
+
+  "ui": {
+    "table": {
+      "empty": "Nothing here yet"
+    }
+  },
+
+  "abandoned": "No source names this message"
+}

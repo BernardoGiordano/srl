@@ -79,6 +79,7 @@ the reason is recorded in the module that owns it.
 | What a correct srl application is made of | `cli/scaffold/application.mjs` — the nine files `srl new` writes; `tools/fixtures/installed-layout.mjs` owns the declared dependency set its installed adapters use |
 | What static discovery knows about the project | `cli/project-model/` |
 | How public inputs, internal state, inherited declarations, events and projection names become one Element | `cli/project-model/parse.mjs`, resolved by `cli/project-model/index.mjs` |
+| What a message is, which bundle answers for a file, and whether a reference resolves | `cli/message-catalog/` — the verifier, `cli/checks/message-check.mjs` and the editor are adapters over it |
 | How an editor consumes the project model and template checker | `cli/language-server/`; editor launchers live under `editors/` |
 | What one editor session owns, and when it starts, stops or restarts | `editors/vscode/session.cjs`; the watchers it needs are registered by `cli/language-server/server.mjs` |
 | How an incomplete editor template becomes context, scope, typed members and edit ranges | `cli/language-server/semantics.mjs` |
