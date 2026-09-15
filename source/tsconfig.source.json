@@ -1,0 +1,21 @@
+{
+  // THE SAME TABLE, RESOLVED INTO THE SOURCE.
+  //
+  // tsconfig.base.json maps each prefix into `dist/types/`, the declarations
+  // `npm run package` emits from `lib/` and `components/`. This repository edits
+  // those modules, so it resolves the prefixes into them and changes nothing else.
+  // The root tsconfig.json extends this file, and the declaration emit reads it
+  // because the emit compiles the source. It is not published.
+  //
+  // tools/checks/verify-deps.mjs fails when this table and the import map disagree,
+  // or when this file sets anything besides `paths`. ADR-0119.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@core/*": ["./lib/core/*"],
+      "@auth/*": ["./lib/auth/*"],
+      "@host/*": ["./lib/host/*"],
+      "@components/*": ["./components/*"]
+    }
+  }
+}

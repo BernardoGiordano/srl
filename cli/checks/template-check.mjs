@@ -1539,11 +1539,11 @@ export function checkTemplateSource(input) {
  *
  * In a checkout the two coincide — the library is in the repository, and checking its
  * templates here is checking them where they are written. Installed from the registry
- * they do not: those templates belong to a package, they were checked in its own
- * repository before it was published, and tsc will not read the JSDoc of a `.js` file
- * under `node_modules` at all (`maxNodeModuleJsDepth` is 0 by default). Checking them
- * would report every module of the library as implicitly `any` — dozens of errors
- * about code the consumer did not write and cannot fix.
+ * they do not. Those templates belong to a package and were checked in its own
+ * repository before it was published, and a consumer's program types that package
+ * through its emitted declarations rather than the modules the templates bind to.
+ * Reporting on them would put errors in front of a consumer about code they did not
+ * write and cannot fix. ADR-0119.
  *
  * @param {Component} component
  * @returns {boolean}

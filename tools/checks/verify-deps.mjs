@@ -100,6 +100,7 @@ import { messageFindings, readMessages } from '../../cli/message-catalog/index.m
 import {
   COMPONENTS,
   BUNDLES,
+  DECLARATION_TREE,
   IMPORT_MAP_FILE,
   LIB,
   MANIFEST,
@@ -372,59 +373,117 @@ export async function verifyDependencies() {
 
   /**
    * tsconfig paths are the type checker's copy of the same table, and they live in
-   * the package — source/tsconfig.base.json — for the same reason the import-map
-   * fragment does: a consumer extends one file instead of copying four mappings that
-   * are then free to drift. ADR-0068. They stay a literal there because tsc reads
-   * that file and not this one, so what this can do is refuse to let the copy differ.
+   * the package for the same reason the import-map fragment does: a consumer extends
+   * one file instead of copying four mappings that are then free to drift. ADR-0068.
+   * They stay literals because tsc reads those files and not this one, so what this
+   * can do is refuse to let a copy differ.
+   *
+   * There are two tables, and they differ in one way. source/tsconfig.base.json is
+   * published and maps each prefix into the declarations built from the directory the
+   * import map serves. source/tsconfig.source.json maps it into that directory, for
+   * this repository, which edits the modules the declarations are built from.
+   * ADR-0119.
    *
    * Package-relative, not repository-relative. Path targets in an extended config
    * resolve against the file that declares them, which is inside the package wherever
    * it was installed — the whole point of publishing it.
    */
   const baseTsconfigFile = join(PACKAGE, 'tsconfig.base.json');
-  if (!(await exists(baseTsconfigFile))) {
-    refuse(
-      'deps/no-base-tsconfig',
-      `does not exist. It is the type checker's half of the published interface, and without it a ` +
-        `consumer has nothing to extend and this repository's own tsconfig.json resolves no ` +
-        `library prefix at all.`,
-      { file: baseTsconfigFile },
-    );
-  }
+  const sourceTsconfigFile = join(PACKAGE, 'tsconfig.source.json');
 
-  const baseTsconfig = /** @type {{ compilerOptions?: { paths?: Record<string, string[]> } }} */ (
-    parseJsonc(await readText(baseTsconfigFile))
-  );
-  const tsPaths = baseTsconfig.compilerOptions?.paths ?? {};
-  for (const [prefix, dir] of Object.entries(SPECIFIER_DIRS)) {
-    const pattern = `${prefix}*`;
-    const expected = `./${relative(PACKAGE, dir).split(sep).join('/')}/*`;
-    const declared = tsPaths[pattern]?.[0];
-    if (declared !== expected) {
+  /**
+   * Refuse every prefix a table maps anywhere but `expected(dir)`, and every pattern
+   * it maps that no import map provides.
+   *
+   * @param {string} file
+   * @param {(dir: string) => string} expected The package-relative target for a prefix's directory.
+   * @param {string} consequence What a different target would type-check against.
+   * @returns {Promise<{ extends?: string, compilerOptions?: Record<string, unknown> } | null>}
+   */
+  const checkPathTable = async (file, expected, consequence) => {
+    if (!(await exists(file))) {
       refuse(
-        'deps/tspath-disagrees',
-        `maps "${pattern}" to ${declared ?? 'nothing'}, and the library's import map resolves it ` +
-          `to ${expected}. The type checker would validate one set of files and the browser would ` +
-          `load another.`,
-        { file: baseTsconfigFile },
+        'deps/no-base-tsconfig',
+        `does not exist. The type checker's half of the published interface is this file and its ` +
+          `sibling, and without both a consumer has nothing to extend or this repository's own ` +
+          `tsconfig.json resolves no library prefix at all.`,
+        { file },
       );
+      return null;
     }
-  }
-  for (const pattern of Object.keys(tsPaths)) {
-    const prefix = pattern.replace(/\*$/u, '');
-    if (SPECIFIER_DIRS[prefix] === undefined) {
+
+    const tsconfig = /** @type {{ extends?: string, compilerOptions?: Record<string, unknown> }} */ (
+      parseJsonc(await readText(file))
+    );
+    const tsPaths = /** @type {Record<string, string[]>} */ (tsconfig.compilerOptions?.paths ?? {});
+    for (const [prefix, dir] of Object.entries(SPECIFIER_DIRS)) {
+      const pattern = `${prefix}*`;
+      const target = expected(relative(PACKAGE, dir).split(sep).join('/'));
+      const declared = tsPaths[pattern]?.[0];
+      if (declared !== target) {
+        refuse(
+          'deps/tspath-disagrees',
+          `maps "${pattern}" to ${declared ?? 'nothing'} rather than ${target}. ${consequence}`,
+          { file },
+        );
+      }
+    }
+    for (const pattern of Object.keys(tsPaths)) {
+      const prefix = pattern.replace(/\*$/u, '');
+      if (SPECIFIER_DIRS[prefix] === undefined) {
+        refuse(
+          'deps/tspath-unmapped',
+          `declares the path "${pattern}", which no import map provides. It type-checks here and ` +
+            `404s in the browser.`,
+          { file },
+        );
+      }
+    }
+    return tsconfig;
+  };
+
+  await checkPathTable(
+    baseTsconfigFile,
+    (dir) => `./${DECLARATION_TREE}/${dir}/*`,
+    `The import map serves the prefix from the directory those declarations are built from, so ` +
+      `any other target type-checks a consumer against modules the browser does not load.`,
+  );
+  const sourceTsconfig = await checkPathTable(
+    sourceTsconfigFile,
+    (dir) => `./${dir}/*`,
+    `That is where the library's import map resolves the prefix, so any other target ` +
+      `type-checks this repository against files the browser does not load.`,
+  );
+
+  /**
+   * The source table differs from the published one in `paths` and nothing else, so
+   * every other option this repository type-checks under is one a consumer gets.
+   */
+  if (sourceTsconfig !== null) {
+    const extra = [
+      ...Object.keys(sourceTsconfig).filter((key) => key !== 'extends' && key !== 'compilerOptions'),
+      ...Object.keys(sourceTsconfig.compilerOptions ?? {}).filter((key) => key !== 'paths'),
+    ];
+    if (sourceTsconfig.extends !== './tsconfig.base.json') {
       refuse(
-        'deps/tspath-unmapped',
-        `declares the path "${pattern}", which no import map provides. It type-checks here and ` +
-          `404s in the browser.`,
-        { file: baseTsconfigFile },
+        'deps/source-tsconfig-extends',
+        `extends ${sourceTsconfig.extends ?? 'nothing'} rather than "./tsconfig.base.json". It ` +
+          `exists to resolve the published base's prefixes into the source, so it starts from ` +
+          `that base.`,
+        { file: sourceTsconfigFile },
+      );
+    } else if (extra.length > 0) {
+      refuse(
+        'deps/source-tsconfig-options',
+        `sets ${extra.map((key) => `\`${key}\``).join(', ')} as well as \`paths\`. Anything else ` +
+          `set here is an option this repository type-checks under and a consumer does not.`,
+        { file: sourceTsconfigFile },
       );
     }
   }
 
   /**
-   * And this repository extends it rather than keeping its own copy, so the
-   * arrangement it type-checks under is the arrangement a consumer gets.
+   * And this repository extends the source table rather than keeping its own copy.
    *
    * `paths` does not merge: a block here would replace the inherited one wholesale
    * and be free to drift, which is exactly what moving the table into the package
@@ -434,23 +493,27 @@ export async function verifyDependencies() {
     /** @type {{ extends?: string, compilerOptions?: { paths?: Record<string, string[]> } }} */ (
       parseJsonc(await readText(ROOT_TSCONFIG))
     );
-  const wantedExtends = '@srljs/core/tsconfig.base.json';
+  const wantedExtends = './source/tsconfig.source.json';
   if (rootTsconfig.extends !== wantedExtends) {
     refuse(
       'deps/root-tsconfig-extends',
       `extends ${rootTsconfig.extends ?? 'nothing'} rather than "${wantedExtends}". This ` +
-        `repository is supposed to type-check through the same file it publishes.`,
+        `repository type-checks through the base it publishes, with the prefixes resolved into ` +
+        `the source it edits.`,
       { file: ROOT_TSCONFIG },
     );
   } else if (rootTsconfig.compilerOptions?.paths !== undefined) {
     refuse(
       'deps/root-tsconfig-paths',
       `declares its own \`paths\`, which replaces the inherited block rather than adding to it. ` +
-        `Delete it: the mappings come from ${show(baseTsconfigFile)}.`,
+        `Delete it: the mappings come from ${show(sourceTsconfigFile)}.`,
       { file: ROOT_TSCONFIG },
     );
   } else {
-    pass('deps/tspaths', 'tsconfig paths resolve where the import map does, from the package');
+    pass(
+      'deps/tspaths',
+      'tsconfig paths resolve where the import map does, into the declarations when published and the source here',
+    );
   }
 
   /* ── Per application ───────────────────────────────────────────────────── */

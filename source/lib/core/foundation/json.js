@@ -6,7 +6,7 @@
  * typescript-eslint's `no-unsafe-*` rules flag each one.
  *
  * A JSDoc cast does not fix the lint side of that, which is worth knowing before
- * committing to this architecture. `/** @type {Foo} *\/ (await r.json())`
+ * committing to this architecture. A type cast comment around `await r.json()`
  * satisfies tsc, but the JSDoc cast leaves no assertion node in the ESLint AST,
  * so the rule still sees `any` being assigned. Fighting that with per-site
  * disables would put a dozen suppressions across the codebase.

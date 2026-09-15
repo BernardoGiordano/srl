@@ -218,9 +218,11 @@ free to drift from the import map:
 ```
 
 That is what makes `@core/` resolve for tsc, and what `srl check templates` reads. The
-library ships no `.d.ts`: its types are JSDoc in the same `.js` files the browser runs, and
-the base config is what lets tsc read them where they are installed. A second application
-means one more `include` entry, which is the only edit this file needs per application.
+library's types are JSDoc in the same `.js` files the browser runs, and the package ships a
+declaration for each module, emitted from that JSDoc. The base config resolves every prefix
+to those declarations, so tsc never follows the library's JavaScript through `node_modules`
+and a `strict` program reports nothing from inside the package. A second application means
+one more `include` entry, which is the only edit this file needs per application.
 
 ## What the build expects of you
 

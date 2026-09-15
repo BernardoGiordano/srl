@@ -19,15 +19,18 @@
   // declares them, which is this one, so the four below point into this package
   // wherever it was installed. Nothing here needs editing per consumer.
   //
-  // `srl check templates` reads the extending config: the templates are checked
-  // against the same options and the same JSDoc types as the JavaScript around them,
-  // which is the whole reason a dialect can be statically checked without a compiler.
+  // `srl check templates` reads the extending config, so a template is checked
+  // against the same options and the same library types as the JavaScript around it.
+  // That is the whole reason a dialect can be statically checked without a compiler.
   //
   // tools/checks/verify-deps.mjs fails when these paths and the import map the
-  // library publishes disagree.
+  // library publishes disagree. tools/checks/pack-check.mjs installs the package and
+  // fails when a strict program extending this file reports any diagnostic, the
+  // package's own included, or reads the library's JavaScript where a declaration
+  // belongs.
   "compilerOptions": {
     // Type checking only. Nothing in an srl project is ever compiled: the browser
-    // runs the same .js files tsc reads, and the types live in JSDoc comments plus
+    // runs the same .js files tsc checks, and the types live in JSDoc comments plus
     // .d.ts files that are erased at zero cost because nothing imports them at
     // runtime. A consumer who does bundle still does not emit through this config.
     "noEmit": true,
@@ -39,28 +42,34 @@
     "allowJs": true,
     "checkJs": true,
 
-    // And read the library's JSDoc where the library actually is.
+    // The library's types reach a consumer as declarations.
     //
-    // On this path the types are JSDoc in the `.js` files the browser runs, which is
-    // what makes one set of bytes both the runtime and the contract. tsc will not
-    // look inside a `.js` file under `node_modules` unless told to —
-    // `maxNodeModuleJsDepth` defaults to 0 — so without this line every `@core/`
-    // import in a consumer's application is `any`, `srl check templates` reports each
-    // one as TS7016, and a typed buildless library is typed only in its own
-    // repository.
+    // They are written as JSDoc in the `.js` files the browser runs. `npm run package`
+    // emits one `.d.ts` per module from that JSDoc into `dist/types/`, under these
+    // options, and the paths below resolve every prefix into that tree. A consumer's
+    // program reads the declarations of the modules the browser loads, and none of
+    // the modules themselves.
+    //
+    // Resolving into `lib/` instead fails a strict consumer. tsc follows `.js` files
+    // under `node_modules` only `maxNodeModuleJsDepth` imports deep, and reports
+    // TS7016 inside this package for every module one import past that. The library's
+    // modules import each other several levels deep, so the depth that clears those
+    // errors depends on what the consumer imports, and raising it lets every other
+    // installed package's JavaScript in too, where the consumer's `strict` checks it.
+    // Declarations do not count against the depth. ADR-0119.
     //
     // The bundled path does not come through here at all. It resolves `@srljs/core`
-    // through `exports`, which names a `.d.ts` emitted from this same JSDoc, so a
-    // consumer with a bundler needs none of this file. ADR-0108.
+    // through `exports`, which names barrels over the same tree, so a consumer with a
+    // bundler needs none of this file. ADR-0108.
     //
-    // Depth 1 is the package's own modules and not their dependencies' internals.
-    // The cost is that other installed packages' top-level JavaScript enters the
-    // program too; the alternative is no types at all for the thing being extended.
+    // Depth 1 is for the subpaths `exports` names as JavaScript, the test harness
+    // among them. tsc reads those files for their JSDoc, and their own `@core/`
+    // imports land on declarations, so it never needs to go further.
     "maxNodeModuleJsDepth": 1,
 
     // What the library's own source is written against. A consumer is free to
     // override any of them; the effect of a lower `lib` is spurious errors from
-    // library JSDoc rather than a runtime difference, because none of this is
+    // library declarations rather than a runtime difference, because none of this is
     // emitted.
     "target": "es2022",
     "lib": ["es2023", "dom", "dom.iterable"],
@@ -76,11 +85,16 @@
     //
     // No `baseUrl`: TypeScript 7.0 removed it (error TS5102), and path targets are
     // resolved relative to the declaring file, which is what these already assume.
+    //
+    // The library's own repository resolves the same prefixes into `lib/` and
+    // `components/`, through tsconfig.source.json. It edits the modules this tree is
+    // built from, and a table pointing at the build output would check it against
+    // whatever the last `npm run package` left behind.
     "paths": {
-      "@core/*": ["./lib/core/*"],
-      "@auth/*": ["./lib/auth/*"],
-      "@host/*": ["./lib/host/*"],
-      "@components/*": ["./components/*"]
+      "@core/*": ["./dist/types/lib/core/*"],
+      "@auth/*": ["./dist/types/lib/auth/*"],
+      "@host/*": ["./dist/types/lib/host/*"],
+      "@components/*": ["./dist/types/components/*"]
     }
   }
 }

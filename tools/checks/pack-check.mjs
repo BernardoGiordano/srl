@@ -29,6 +29,10 @@
  *      check, the template checker, the build.
  *   3. Typechecks a consumer of the *other* audience — a bundler user with no import
  *      map — against nothing but the package's `exports`. ADR-0108.
+ *   4. Typechecks a strict consumer of the import-map audience as one whole program,
+ *      importing every library module through the published tsconfig base. It allows
+ *      no diagnostic anywhere, the package's own included, and no library JavaScript in
+ *      the program where a declaration belongs. ADR-0119.
  *
  * What it does not cover: remotes, i18n, the release transport. Those are checked in
  * the checkout, and none of them is where the installed shape differs.
@@ -41,11 +45,11 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 
 import { error, hasErrors, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
-import { exists } from '../../cli/layout.mjs';
+import { exists, walk } from '../../cli/layout.mjs';
 import { applicationManifest, install, localBin, srl } from '../fixtures/installed-layout.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
@@ -165,6 +169,95 @@ async function writeTypedConsumer(probe) {
   );
 }
 
+/** Where the strict consumer lives, for the same reason the typed one has a directory. */
+const STRICT = 'strict-consumer';
+
+/** The one JavaScript subpath the strict consumer imports, and the reason the base keeps depth 1. */
+const HARNESS = './testing/harness.js';
+
+/**
+ * A strict consumer of the import-map audience, typechecked as one whole program.
+ *
+ * `srl new` writes a tsconfig with `strict` off, which is not what an application runs.
+ * This one extends the same published base with `strict` on, `skipLibCheck` off and
+ * `@types/node` loaded. Whatever the program reads from this package is then checked
+ * under the consumer's options, and the typecheck passes only with no diagnostics at all.
+ *
+ * Its module re-exports every module under every prefix the installed manifest declares,
+ * by the specifier an application writes, plus the test harness by its subpath. A module
+ * the scaffold happens not to import is covered all the same, so a missing declaration or
+ * a type that fails under `strict` refuses the run. ADR-0119.
+ *
+ * Importing every module directly also puts each one a single import from the consumer,
+ * where `maxNodeModuleJsDepth` never elides anything. A clean typecheck therefore cannot
+ * tell a declaration from a module tsc read as JavaScript, so the caller lists the
+ * program's files too, and `javascript` names the library files it may find there.
+ *
+ * The two `@ts-expect-error` lines prove the imports are typed rather than `any`, for the
+ * reason given on the typed consumer above.
+ *
+ * @param {string} probe
+ * @returns {Promise<{ modules: number, javascript: string[] }>} How many library modules
+ *   the consumer imports, and the package files behind the JavaScript subpaths among them.
+ */
+async function writeStrictConsumer(probe) {
+  const dir = join(probe, STRICT);
+  await mkdir(dir, { recursive: true });
+
+  const installed = join(probe, 'node_modules', '@srljs', 'core');
+  const manifest =
+    /** @type {{ exports?: Record<string, unknown>, srl?: { imports?: Record<string, string> } }} */ (
+      JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'))
+    );
+
+  /** @type {string[]} */
+  const specifiers = [];
+  for (const [prefix, tree] of Object.entries(manifest.srl?.imports ?? {})) {
+    const root = join(installed, tree);
+    for (const file of await walk(root, /\.js$/u)) {
+      specifiers.push(`${prefix}${relative(root, file).split(sep).join('/')}`);
+    }
+  }
+  specifiers.sort();
+
+  await writeFile(
+    join(dir, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        extends: '@srljs/core/tsconfig.base.json',
+        compilerOptions: { strict: true, noUncheckedIndexedAccess: true, types: ['node'] },
+        include: ['consumer.js'],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  await writeFile(
+    join(dir, 'consumer.js'),
+    [
+      ...specifiers.map((specifier, index) => `export * as module${String(index)} from '${specifier}';`),
+      `export * as harness from '@srljs/core/${HARNESS.slice(2)}';`,
+      '',
+      "import { defineComponent } from '@core/elements/component.js';",
+      `import { settled } from '@srljs/core/${HARNESS.slice(2)}';`,
+      '',
+      '// @ts-expect-error a spec with no tag, element or module is not a component.',
+      'void defineComponent({});',
+      '',
+      '// @ts-expect-error `settled` waits on an element, and a number is not one.',
+      'void settled(42);',
+      '',
+    ].join('\n'),
+  );
+
+  const harness = manifest.exports?.[HARNESS];
+  return {
+    modules: specifiers.length,
+    javascript: typeof harness === 'string' ? [`@srljs/core/${harness.replace(/^\.\//u, '')}`] : [],
+  };
+}
+
 /**
  * Drive the probe, and say what each step found.
  *
@@ -227,6 +320,57 @@ async function check(probe) {
         `a TypeScript consumer of the installed package did not typecheck. Either \`exports\` ` +
           `resolves no declaration for a bundle, or the declaration it resolves is not the one ` +
           `the JavaScript describes:\n\n${indent(typed.output)}`,
+      ),
+    );
+  }
+
+  /* ── The buildless path carries its types, under strict ───────────────── */
+
+  const consumer = await writeStrictConsumer(probe);
+  const project = join(STRICT, 'tsconfig.json');
+  const strict = await localBin(probe, 'tsc', ['-p', project]);
+  const listed = await localBin(probe, 'tsc', ['-p', project, '--listFilesOnly']);
+  const javascript = listed.output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((file) => file.includes('/node_modules/@srljs/core/') && file.endsWith('.js'))
+    .filter((file) => !consumer.javascript.some((allowed) => file.endsWith(`/node_modules/${allowed}`)));
+
+  if (consumer.modules === 0) {
+    found.push(
+      refuse(
+        'pack/strict-empty',
+        `the installed manifest's \`srl.imports\` led to no module, so the strict consumer ` +
+          `imported nothing and its typecheck proves nothing.`,
+      ),
+    );
+  } else if (strict.code !== 0 || listed.code !== 0) {
+    found.push(
+      refuse(
+        'pack/strict-failed',
+        `a strict program extending the published tsconfig base did not typecheck. Either a ` +
+          `module has no declaration under dist/types/, or a type the library publishes fails ` +
+          `under a consumer's options:\n\n${indent(`${strict.output}${listed.code === 0 ? '' : listed.output}`)}`,
+      ),
+    );
+  } else if (javascript.length > 0) {
+    found.push(
+      refuse(
+        'pack/strict-read-javascript',
+        `the strict consumer's program read ${String(javascript.length)} of the library's ` +
+          `JavaScript module(s) where a declaration belongs. A consumer that imports less than ` +
+          `everything then gets TS7016 inside the package for whatever lies past ` +
+          `\`maxNodeModuleJsDepth\`. The published tsconfig base has to resolve every prefix ` +
+          `into dist/types/:\n\n${indent(javascript.join('\n'))}`,
+      ),
+    );
+  } else {
+    found.push(
+      info(
+        'pack/strict',
+        `a strict consumer of all ${String(consumer.modules)} library module(s) typechecks with ` +
+          `no diagnostics, reading declarations only`,
+        { group: GROUP },
       ),
     );
   }
