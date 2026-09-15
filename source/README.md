@@ -72,8 +72,8 @@ publishes:
 }
 ```
 
-Extend it from the root of your repository and `@core/…` resolves for tsc where it resolves
-for the browser, from one declaration rather than a copy.
+Extend it from the root of your repository and `@core/…` resolves for tsc to the
+declarations of the modules the browser loads, from one table rather than a copy.
 
 ## A component, end to end
 

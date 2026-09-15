@@ -57,8 +57,9 @@ process.on('exit', () => {
 /**
  * A repository holding `scale` copies of the selected application. Built once per run.
  *
- * `node_modules` is a symlink, so `@srljs/core/tsconfig.base.json` and the path mappings
- * resolve as they do in a consumer's checkout.
+ * `node_modules` is a symlink, so `@srljs/core` is this checkout's source. The tsconfig
+ * extends source/tsconfig.source.json by path, so the prefixes resolve into that source
+ * rather than into a declaration tree that exists only after `npm run package`.
  *
  * @param {NodeWorkloadContext} context
  * @param {number} scale
@@ -89,7 +90,7 @@ async function build(context, scale) {
     join(root, 'tsconfig.json'),
     `${JSON.stringify(
       {
-        extends: '@srljs/core/tsconfig.base.json',
+        extends: join(context.repo, 'source', 'tsconfig.source.json'),
         compilerOptions: {
           strict: true,
           noUncheckedIndexedAccess: true,

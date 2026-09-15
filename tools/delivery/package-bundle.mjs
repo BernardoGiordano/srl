@@ -73,7 +73,13 @@ import ts from 'typescript';
 import { minifyTemplate } from '../../cli/delivery/template-html.mjs';
 import { REPO, exists, walk } from '../../cli/layout.mjs';
 import { barrelSource, declarationBarrelSource, moduleDoor } from '../../cli/package/door.mjs';
-import { BUNDLES, MANIFEST, PACKAGE, SPECIFIER_DIRS } from '../../cli/package/interface.mjs';
+import {
+  BUNDLES,
+  DECLARATION_TREE,
+  MANIFEST,
+  PACKAGE,
+  SPECIFIER_DIRS,
+} from '../../cli/package/interface.mjs';
 
 /**
  * Where the four files land by default. Generated, so `dist/` is ignored and never
@@ -92,16 +98,17 @@ export const DIST = join(PACKAGE, 'dist');
 const TARGET = 'es2022';
 
 /** Where the emitted declarations sit, relative to the bundles that are barrels over them. */
-const TYPES = 'types';
+const TYPES = relative(DIST, join(PACKAGE, DECLARATION_TREE));
 
 /**
- * The type checker's copy of the specifier table, published with the package.
+ * The options this repository type-checks the library's source under: the published
+ * base, with the prefixes resolved into the source rather than into the tree this
+ * build writes.
  *
- * Read rather than restated: the declarations are emitted with the options a
- * consumer type-checks the source path under, so the two paths cannot describe
- * different types of the same module.
+ * Read rather than restated, so the declarations are emitted under the same `lib`,
+ * `target` and module settings a consumer extending the base checks them under.
  */
-const BASE_TSCONFIG = join(PACKAGE, 'tsconfig.base.json');
+const SOURCE_TSCONFIG = join(PACKAGE, 'tsconfig.source.json');
 
 /**
  * The library's own prefixes, longest first, so `@components/` cannot be shadowed by
@@ -561,23 +568,22 @@ function bundleExports(text, fileName) {
 /* ── The type layer ───────────────────────────────────────────────────────── */
 
 /**
- * The options the declarations are emitted under: the ones this package publishes
- * for a consumer of the source path, plus emit.
+ * The options the declarations are emitted under: the source's, plus emit.
  *
- * `tsconfig.base.json` is the authority rather than a table copied here, so the
- * bundled declarations describe the same modules under the same `lib`, `target` and
- * `paths` a buildless consumer type-checks them under. Emit is the only override —
- * that file says `noEmit`, because a consumer never compiles this library and only
- * this build ever does.
+ * `tsconfig.source.json` is the authority rather than a table copied here. It extends
+ * the base a consumer extends and changes only `paths`, which have to name the source
+ * because the source is what this program compiles. Emit is the only override — the
+ * base says `noEmit`, because a consumer never compiles this library and only this
+ * build ever does.
  *
  * @param {string} out Where the tree is written.
  * @returns {ts.CompilerOptions}
  */
 function declarationOptions(out) {
-  const { config, error } = ts.readConfigFile(BASE_TSCONFIG, (file) => ts.sys.readFile(file));
+  const { config, error } = ts.readConfigFile(SOURCE_TSCONFIG, (file) => ts.sys.readFile(file));
   if (error !== undefined) {
     throw new Error(
-      `${relative(REPO, BASE_TSCONFIG)}: ${ts.flattenDiagnosticMessageText(error.messageText, ' ')}`,
+      `${relative(REPO, SOURCE_TSCONFIG)}: ${ts.flattenDiagnosticMessageText(error.messageText, ' ')}`,
     );
   }
 
@@ -585,8 +591,8 @@ function declarationOptions(out) {
   // include globs, which cover the whole package and are the source consumer's
   // question. What is wanted here is `options`, with `paths` already resolved
   // against the directory that declares them.
-  const parsed = ts.parseJsonConfigFileContent(config, ts.sys, PACKAGE, undefined, BASE_TSCONFIG);
-  refuseDiagnostics(parsed.errors, relative(REPO, BASE_TSCONFIG));
+  const parsed = ts.parseJsonConfigFileContent(config, ts.sys, PACKAGE, undefined, SOURCE_TSCONFIG);
+  refuseDiagnostics(parsed.errors, relative(REPO, SOURCE_TSCONFIG));
 
   return {
     ...parsed.options,

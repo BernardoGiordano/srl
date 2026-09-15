@@ -2,14 +2,16 @@
   // The library's own half — `noEmit`, `allowJs`, `checkJs`, the module and target
   // settings, and the four path mappings that are the type checker's copy of the
   // import map — comes from the package rather than being restated here. This
-  // repository extends the same file a consumer does, so the arrangement it tests is
-  // the arrangement it ships. ADR-0068.
+  // repository extends the base a consumer does, through source/tsconfig.source.json,
+  // which changes one thing. The prefixes resolve into the source this repository
+  // edits rather than into the declarations `npm run package` builds from it, so every
+  // other option it type-checks under is the one a consumer gets. ADR-0068, ADR-0120.
   //
   // Type checking only. `noEmit` is not a convenience, it is the whole point:
   // nothing in this project is ever compiled. The browser runs the same .js files
   // that tsc reads, and types live in JSDoc comments plus real .d.ts files that are
   // erased at zero cost because they are never imported at runtime.
-  "extends": "@srljs/core/tsconfig.base.json",
+  "extends": "./source/tsconfig.source.json",
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,

@@ -37,7 +37,7 @@
     "pack:check": "node tools/checks/pack-check.mjs",
     "typecheck": "node_modules/tsgo/bin/tsc --noEmit",
     "typecheck:watch": "node_modules/tsgo/bin/tsc --noEmit --watch",
-    "typecheck:compat": "tsc --noEmit",
+    "typecheck:compat": "node_modules/typescript/bin/tsc --noEmit",
     "lint": "eslint .",
     "test": "web-test-runner",
     "test:tools": "node --test tools/test/*.test.mjs cli/test/*.test.mjs",
