@@ -70,7 +70,7 @@ this copy rather than bundling another version, so a project on srl 0.7 is check
 0.7 grammar and a later project can move independently.
 
 ```bash
-npm install --save-dev @srljs/core@0.8.0 @srljs/cli@0.8.0
+npm install --save-dev @srljs/core@0.9.0 @srljs/cli@0.9.0
 ```
 
 Node.js 22 or newer must be available. This is already the engine required by
@@ -85,7 +85,7 @@ cd editors/vscode
 npm install
 npm test
 npm run package
-code --install-extension srl-0.8.0.vsix
+code --install-extension srl-0.9.0.vsix
 ```
 
 The extension starts one server per workspace folder, so a multi-root workspace may hold

@@ -18,7 +18,7 @@ import each other several levels deep, so a consumer with `strict` on got TS7016
 inside `node_modules/@srljs/core`. `session.js` could not type `@core/foundation/json.js`,
 `runtime.js` could not type `mount.js` or `template.js`, and `harness.js` could not type
 `settled.js`, which also made every harness call `any` to type-aware lint. An application
-on 0.8.0 filtered `node_modules` out of its typecheck script to get a clean run.
+on 0.9.0 filtered `node_modules` out of its typecheck script to get a clean run.
 
 Raising the depth was measured against that application and rejected. At 2, seven errors
 remained inside the library. At 3, TypeScript 6 cleared the library's TS7016 errors, but
