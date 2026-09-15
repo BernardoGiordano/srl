@@ -6,26 +6,18 @@ import { effect } from '@core/foundation/reactive.js';
 /** @import { ReadonlySignal } from '@core/foundation/types.js' */
 
 /**
- * `<x-outlet>` swaps its child component whenever a signal changes. Angular's
- * `NgComponentOutlet`, driven by a signal instead of a template binding.
+ * `<x-outlet>` swaps its child component when a signal changes, like Angular's
+ * `NgComponentOutlet` driven by a signal.
  *
  *     const view = signal({ load: () => import('./chart-panel.js').then((m) => m.ChartPanel) });
  *     outlet.target = view;
  *     view.value = { tag: TablePanel, props: { rows } };
  *
- * A target names its component as a class, a definition or a tag. The class is
- * the one worth preferring: it is the same value the component's definition
- * registered, so a renamed tag cannot leave a stale string here.
+ * Prefer naming the component by class, so a renamed tag can't leave a stale string.
+ * Loading, races and replacement follow `@core/elements/mount.js`. The outlet reads
+ * the signal inside an effect and reports a failed swap as an `outlet-error` event.
  *
- * An adapter over `@core/elements/mount.js`: an `OutletTarget` is a `MountRequest` with a
- * signal in front of it, and the loading, definition, race and replacement rules
- * are that module's. What is the outlet's own is the reactive part — reading the
- * signal inside an effect, and reporting a failed swap as a DOM event, because a
- * lazily loaded panel whose chunk 404s is a routine production event and the
- * application needs somewhere to hang an error state.
- *
- * A plain `HTMLElement`, not a `SignalElement`. It owns its children imperatively
- * and would only fight lit-html for control of the same DOM.
+ * It extends `HTMLElement` because it manages its children directly.
  */
 export class ComponentOutlet extends HTMLElement {
   /** @type {(() => void) | undefined} */
@@ -57,13 +49,11 @@ export class ComponentOutlet extends HTMLElement {
   }
 
   /**
-   * An outlet that was moved rather than removed has to start tracking again.
+   * Resume tracking after a move.
    *
-   * Moving a node is a removal followed by an insertion, so a projecting parent
-   * relocating this element into its `<x-content>` marker — the ordinary case for
-   * an outlet written inside a card's slot — tears the effect down on the way out.
-   * The property binding that set `target` does not run a second time, so without
-   * this the outlet would sit in the document holding a signal it no longer reads.
+   * A move is a removal and an insertion, so disconnecting tore down the effect. A
+   * projecting parent moves an outlet into its `<x-content>` marker this way, and
+   * the `target` binding doesn't run again.
    */
   connectedCallback() {
     if (this.#source !== undefined && this.#disposeTracking === undefined) this.#track();
@@ -72,7 +62,7 @@ export class ComponentOutlet extends HTMLElement {
   disconnectedCallback() {
     this.#disposeTracking?.();
     this.#disposeTracking = undefined;
-    // Nothing further may mount into an outlet the document no longer holds.
+    // Nothing may mount into a detached outlet.
     this.#sequence.cancel();
   }
 
@@ -83,19 +73,13 @@ export class ComponentOutlet extends HTMLElement {
 
     this.#disposeTracking?.();
     this.#disposeTracking = effect(() => {
-      // `source.value` is read synchronously, in the effect body, before #swap
-      // suspends on its first await. That ordering is what registers the
-      // dependency. Writing `effect(async () => { ... await ...; source.value })`
-      // would read it after the first suspension, outside the tracking context,
-      // and the outlet would never update again.
+      // Read `source.value` before #swap's first await, or the effect won't track it.
       const next = source.value;
 
-      // `Promise.catch` types its callback parameter as `any`. Annotating it
-      // `unknown` keeps that `any` from leaking into the event detail.
+      // `Promise.catch` types its parameter as `any`, and `unknown` keeps that out of
+      // the event detail.
       this.#swap(next).catch(/** @param {unknown} cause */ (cause) => {
-        // A failed swap must not become an unhandled rejection. Bubbling and
-        // composed, so one handler on the shell can catch every outlet's
-        // failures.
+        // A bubbling, composed event lets one shell handler cover every outlet.
         this.dispatchEvent(
           new CustomEvent('outlet-error', {
             bubbles: true,
@@ -113,9 +97,8 @@ export class ComponentOutlet extends HTMLElement {
    * @returns {Promise<void>}
    */
   async #swap(target) {
-    // Re-tracking after a move re-reads the same target. The element it produced
-    // is still here, so remounting would throw away a panel's state to arrive at
-    // the DOM already on screen.
+    // Re-tracking after a move sees the same target. Keep the mounted element and
+    // its state.
     if (target === this.#placed && this.#mounted?.parentNode === this) return;
 
     const attempt = this.#sequence.begin();
@@ -143,13 +126,9 @@ export class ComponentOutlet extends HTMLElement {
 }
 
 /**
- * A definition like any component's, so a template that says `<x-outlet>` has to
- * list `ComponentOutlet` in its `uses` — which is also the import that makes this
- * module evaluate. The outlet used to be reached by a bare `import '@core/elements/outlet.js'`
- * beside a template that mentioned the tag, and nothing connected the two.
- *
- * `template: false`: this element owns its children imperatively and would only
- * fight lit-html for control of the same DOM.
+ * A template that uses `<x-outlet>` lists `ComponentOutlet` in `uses`, which also
+ * imports this module. `template: false`, because the element manages its own
+ * children.
  */
 await defineComponent({
   tag: 'x-outlet',

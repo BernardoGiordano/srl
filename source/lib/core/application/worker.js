@@ -1,27 +1,14 @@
 /**
- * Registering the service worker the build generated.
+ * Registers the service worker the build generated. ADR-0088.
  *
- * The worker itself is not here and cannot be: it is a projection of one artifact's
- * file list, written by `@srljs/cli`'s `service-worker.mjs` from the report that
- * artifact carries. What the library owns is the other side of that seam — the one
- * call that installs it, and the four conditions under which not installing it is
- * the right answer.
+ * `@srljs/cli`'s `service-worker.mjs` writes the worker from the artifact report. This
+ * module owns only the registration call.
  *
- * It is a call rather than a startup step for the same reason `configureTheme` is a
- * hook: an application that is not deployed as an artifact has no `/sw.js` to
- * register, a development origin deliberately has none, and a library that
- * registered one anyway would be caching a dev server's bytes behind a policy it
- * invented. So the ordering the runtime owns stays seven steps, and this is a
- * decision an application makes.
+ * Registration is an application call instead of a startup step, because applications
+ * not deployed as artifacts, and development origins, have no `/sw.js`.
  *
- * WHEN TO CALL IT
- *
- * After startup, not during. Registration costs a request and an install, and both
- * belong after the first view is on screen rather than in front of it — the whole
- * value of the generated worker is on the *second* load. `startApplication` resolving
- * is the natural moment.
- *
- * ADR-0088.
+ * Call it after `startApplication` resolves. The worker helps the second load, so its
+ * request and install shouldn't delay the first view.
  */
 
 /**
@@ -33,14 +20,12 @@
 let policy;
 
 /**
- * The registration URL as a value Trusted Types will accept.
+ * The registration URL as a Trusted Types script URL.
  *
- * `register()` is a script-URL sink, and every artifact this toolchain builds ships
- * `require-trusted-types-for 'script'` — so a bare string throws under the CSP the
- * build writes, and the worker silently never installs. The policy is named
- * `srl-worker` there, it is created on the first registration rather than at import
- * (a page that never registers asks a CSP for nothing), and it accepts same-origin
- * URLs only, which is all a service worker script can be.
+ * `register()` is a script-URL sink, and every built artifact ships
+ * `require-trusted-types-for 'script'`, so a plain string would throw. The build's CSP
+ * names the `srl-worker` policy. It is created on first registration and accepts only
+ * same-origin URLs.
  *
  * @param {string} url
  * @returns {unknown} the URL, trusted where the page requires it
@@ -65,17 +50,14 @@ function scriptUrl(url) {
 /**
  * @typedef {object} ServiceWorkerOptions
  * @property {string} [url] Where the worker is served from. `/sw.js` is what the build emits and what its scope requires.
- * @property {boolean} [when] Register only when this is true. An application gates on its own condition — a manifest flag, an origin, a user setting — rather than this module guessing at one.
+ * @property {boolean} [when] Register only when true. The application decides the condition, such as a manifest flag, an origin or a user setting.
  */
 
 /**
- * Install the generated worker, or say why it was not installed.
+ * Install the generated worker, or resolve null when it can't be installed.
  *
- * Resolves rather than rejects on every failure it can name. A service worker is an
- * optimisation over an application that already works without one: a browser that
- * does not support it, a page served over plain HTTP, an origin with no `/sw.js` and
- * a registration the user's settings refuse are all "no worker today", and none of
- * them is a reason to fail a boot that has otherwise succeeded.
+ * It never rejects. A worker is an optimization, so a missing API, an insecure page, a
+ * missing `/sw.js` or a refused registration all just mean no worker today.
  *
  * @param {ServiceWorkerOptions} [options]
  * @returns {Promise<ServiceWorkerRegistration | null>} the registration, or null when there is none
@@ -83,8 +65,7 @@ function scriptUrl(url) {
 export async function registerServiceWorker(options = {}) {
   const { url = '/sw.js', when = true } = options;
   if (!when) return null;
-  // Secure context rather than a protocol test: `localhost` is one, and it is where
-  // an artifact is verified in a browser before it is deployed anywhere.
+  // `isSecureContext` includes `localhost`, where artifacts are checked before deploy.
   if (!isSecureContext || !('serviceWorker' in navigator)) return null;
   try {
     return await navigator.serviceWorker.register(/** @type {string} */ (scriptUrl(url)));

@@ -1,28 +1,22 @@
 /**
- * The one synchronous persistence boundary for non-auth UI preferences.
+ * The synchronous storage boundary for non-auth UI preferences. ADR-0015.
  *
- * UI state is tiny and must be available before first render, so `localStorage`
- * fits better than IndexedDB. Storage stays injectable — a memory store, an
- * encrypted wrapper, a synchronously hydrated backend cache — and each owner/id
- * pair gets its own versioned key to avoid whole-map races.
+ * Preferences are small and must be ready before the first render, so they use
+ * `localStorage`. The store is injectable, and each owner and id pair gets its own
+ * versioned key. Table columns, filters, sidebar state, theme and locale all go through
+ * here. Nothing else in the library or the collection calls `localStorage`, and
+ * `tools/checks/verify-deps.mjs` enforces that. Auth state stays outside.
  *
- * Every non-auth preference crosses here: table columns, filter values, sidebar
- * collapse, the theme, the locale. Nothing else in the library or the shared
- * collection calls `localStorage`, and `tools/checks/verify-deps.mjs` fails the
- * build when something does. Auth state is deliberately outside. ADR-0015.
+ * Every caller shares one failure policy.
  *
- * ONE FAILURE POLICY, FOR EVERY CALLER, so none of them writes its own fallback:
+ * - A read that can't produce current state returns `undefined`. That covers missing or
+ *   throwing storage, no value, bad JSON, a non-envelope, and a schema version with no
+ *   `migrate` or with a `migrate` that throws.
+ * - A write that can't store returns `false`. That covers missing or throwing storage, a
+ *   full quota and state that isn't JSON-serializable.
  *
- *  - A read that cannot produce current state returns `undefined`: storage
- *    missing or throwing, no value, malformed JSON, a value that is not an
- *    envelope, a schema version with no `migrate`, or a `migrate` that throws or
- *    declines. Rendering must never depend on storage having worked.
- *  - A write that cannot store returns `false`: storage missing or throwing, quota
- *    exceeded, or state that is not JSON-serialisable.
- *
- * Nothing throws for a storage reason. It throws only for a programming error in
- * the caller's key — an empty owner, id or prefix, or a schema version that is not
- * a positive integer — which is wrong in every environment.
+ * Nothing throws for storage reasons. Only caller mistakes throw, such as an empty
+ * owner, id or prefix, or a schema version that isn't a positive integer.
  */
 
 /**
@@ -30,9 +24,8 @@
  *   PreferencesConfig } from '@core/preferences/types.js'
  */
 
-// The prefix keeps the name this module had, because it is written into every
-// key already in a user's browser. Renaming it would read as "no preferences
-// saved" on the first load after an upgrade.
+// Existing keys in users' browsers use this prefix, so renaming it would lose saved
+// preferences.
 const DEFAULT_PREFIX = 'ui.component-state';
 
 /** @type {KeyValueStorage | undefined} */
@@ -40,7 +33,8 @@ let configuredStorage;
 let prefix = DEFAULT_PREFIX;
 
 /**
- * Change storage backend or key prefix. Calling with no args restores defaults.
+ * Change the storage backend or key prefix. Call it with no argument to restore the
+ * defaults.
  *
  * @param {PreferencesConfig} [config]
  */
@@ -50,8 +44,8 @@ export function configurePreferences(config = {}) {
 }
 
 /**
- * Load one owner's stored preference. Invalid JSON, invalid envelopes, and
- * unavailable storage behave like missing state; rendering never fails.
+ * Load one owner's stored preference. Bad JSON, bad envelopes and unavailable storage
+ * count as missing, so rendering never fails.
  *
  * @template T
  * @param {string} owner
@@ -83,8 +77,8 @@ export function loadPreference(owner, id, options = {}) {
 }
 
 /**
- * Persist one owner's preference. Returns false when storage is blocked,
- * full, absent, or state is not JSON-serializable.
+ * Persist one owner's preference. Returns false when storage is blocked, full or
+ * absent, or when the state isn't JSON-serializable.
  *
  * @param {string} owner
  * @param {string} id
@@ -126,19 +120,12 @@ export function removePreference(owner, id) {
 }
 
 /**
- * Load one preference, adopting a value an earlier build wrote under a raw key.
+ * Load one preference, adopting a value an older build wrote under a raw key.
  *
- * Theme and locale predate this module and each owned a bare `localStorage` slot.
- * Routing them through the same envelope as every other preference would have
- * silently reset both on the first load after upgrading, so the old value is read
- * once, validated by the caller, written as an envelope, and the old key removed.
- * The legacy key is removed whether or not its value was accepted: this is a
- * migration, not a permanent second lookup, and a value nothing accepts is a value
- * that will never be read again.
- *
- * `accept` belongs to the caller because only it knows what a valid stored value
- * is — a theme that is still registered, a locale still in the supported list — and
- * a migration that adopts a value the caller would reject is worse than none.
+ * Theme and locale once used bare `localStorage` keys. The old value is read once,
+ * checked by `accept` and saved as an envelope, and the old key is removed whether or
+ * not the value was accepted. Only the caller knows what a valid value is, such as a
+ * theme that is still registered.
  *
  * @template T
  * @param {string} owner
@@ -180,13 +167,10 @@ export function migrateLegacyKey(owner, id, legacyKey, options) {
 }
 
 /**
- * A storage adapter that keeps values for as long as the page lives.
+ * A storage adapter that keeps values for the life of the page.
  *
- * The second real implementation of `KeyValueStorage`, which is what makes the
- * injectable store a seam rather than a hypothetical one. A suite configures it so
- * cases cannot inherit each other's preferences or leave any behind in the browser,
- * and an application embedded where storage is blocked by policy can configure it
- * to get working preferences that simply do not outlive the tab.
+ * Tests use it so cases don't share preferences or leave any in the browser. An
+ * application embedded where storage is blocked can use it too.
  *
  * @returns {KeyValueStorage}
  */

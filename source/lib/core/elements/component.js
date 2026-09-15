@@ -1,7 +1,6 @@
 /**
- * Custom-element identity: what a component is called, which markup it renders,
- * and which other components its markup is allowed to name. One record per
- * component, stated once:
+ * Component identity: a component's tag, its class, its template and the
+ * components its template may name.
  *
  *     await defineComponent({
  *       tag: 'users-page',
@@ -10,24 +9,15 @@
  *       uses: [UiCard],
  *     });
  *
- * The template is not named: it is the sibling `.html` of the module. Nothing
- * else in an application names the tag either — a route, an outlet target, a
- * remote entry and the startup root all take the *class*, and `tagOf` reads its
- * tag back out of this registry.
+ * The template is the module's sibling `.html`. Routes, outlets, remote entries
+ * and the startup root all take the class, and `tagOf` reads the tag back.
  *
- * `uses` is the dependency written as a value rather than as a side-effect
- * import. A `.html` file cannot import, so markup saying `<ui-card>` depends on
- * `ui-card.js` having evaluated; naming the class is a real ESM import, so module
- * evaluation order guarantees the child is defined first — a module body runs
- * after every module it imports, top-level `await` included. It is also the fact
- * the template checker reads, so an unlisted tag is a build error naming the
- * class to add rather than a blank element at runtime.
+ * `uses` lists child components as imported classes. The import guarantees each
+ * child is defined first, and the template checker reads the list, so an unlisted
+ * tag is a build error.
  *
- * Because a tag's class is permanent, this module is also where a development
- * JavaScript edit is decided. `reviseComponentModule` runs an edited module again
- * and installs its class body on the class the registry already holds, or refuses
- * and names what changed. Identity is what a revision may not move, and identity
- * lives here. ADR-0113.
+ * `reviseComponentModule` applies a development edit to a class the registry
+ * already holds. ADR-0113.
  */
 
 import { attachTemplate } from '@core/template/template.js';
@@ -39,41 +29,27 @@ import { attachStylesheet } from '@core/elements/stylesheet.js';
 const byClass = new WeakMap();
 
 /**
- * Which components a module declared, for the development replacement path below.
- *
- * `byClass` answers "what is this class called", and a JavaScript edit asks the
- * question the other way round: it names a module URL and needs the components
- * declared in it. One entry per component, held strongly, which costs nothing
- * anyone else is not already paying — `customElements.define` retains every class
- * for the life of the page.
+ * Components declared by each module URL, for development revisions.
  *
  * @type {Map<string, Set<ComponentDefinition>>}
  */
 const byModule = new Map();
 
 /**
- * Brand for `ComponentDefinition`. A definition and a module namespace object are
- * both "an object with properties" to `typeof`, and `resolveTag` has to tell a
- * definition it created from whatever a `load` function happened to resolve to.
+ * Definitions this module created, so `resolveTag` can tell one from a module
+ * namespace object.
  *
  * @type {WeakSet<ComponentDefinition>}
  */
 const definitions = new WeakSet();
 
 /**
- * Declare a component: its tag, its class, its template, and the components its
- * template may name.
+ * Declare a component. A component module ends by awaiting this call.
  *
- * Awaited, and a component module ends with it, so a module is not "loaded" until
- * its element is defined and can render. Every dynamic mount relies on that:
- * `@core/elements/mount.js` treats a tag still undefined after its `load` resolved
- * as an error rather than waiting for one that is never coming.
- *
- * The order inside is the point. The template is fetched and compiled first,
- * because `customElements.define` upgrades elements already in the document and
- * Lit renders on connection, so defining first would flash empty markup. `uses`
- * is validated before that, so a missing dependency fails before an element
- * exists rather than as an unknown tag in the middle of a render.
+ * The template and stylesheet load before `customElements.define`, because
+ * defining upgrades existing elements and an early render would show empty
+ * markup. `uses` is validated before that, so a missing dependency fails before
+ * any element exists.
  *
  * @param {ComponentSpec} spec
  * @returns {Promise<ComponentDefinition>}
@@ -83,20 +59,16 @@ export async function defineComponent(spec) {
   assertTag(tag);
   assertModule(tag, spec.module);
 
-  // A module re-imported by `reviseComponentModule` carries a revision query, and
-  // that query is the whole of how a redeclaration is told from a collision. The
-  // normalised URL is what everything else uses, so a revised module's template
-  // stays the one URL the page already fetched.
+  // A revision query marks a re-import from `reviseComponentModule`. Everything
+  // else uses the URL without it.
   const module = withoutRevision(spec.module);
 
   const existing = customElements.get(tag);
   if (existing !== undefined) {
     const already = byClass.get(element);
-    // Re-declaring the same class with the same tag is a no-op, which keeps a
-    // module served under two URLs from taking the page down. A *different*
-    // class claiming a taken tag is the identity collision this module exists to
-    // make impossible to have silently — unless the edited module declared it,
-    // in which case it is a revision of the component that already exists.
+    // The same class under the same tag is a no-op, so a module served from two
+    // URLs still works. A different class is a collision unless a revision
+    // declared it.
     if (existing === element && already !== undefined) return already;
     if (module !== spec.module) return adoptRevision(tag, existing, spec, module);
     if (existing === element) {
@@ -118,7 +90,7 @@ export async function defineComponent(spec) {
   const styled = stylesDeclared(tag, spec, templateUrl);
   const stylesheetUrl = spec.styles === true ? stylesheetUrlFor(module) : undefined;
 
-  // Together, and both before `define`: a first render needs its markup and its rules.
+  // Both before `define`, because the first render needs its markup and its rules.
   await Promise.all([
     templateUrl === undefined
       ? undefined
@@ -155,12 +127,9 @@ export function definitionOf(element) {
 }
 
 /**
- * The tag a reference names. A class, its definition and a plain tag string are
- * all accepted, so a route table, an outlet target and a remote entry can hold
- * whichever of the three they already have in scope.
+ * The tag a reference names. Accepts a class, a definition or a tag string.
  *
- * A class with no definition throws rather than returning undefined: a class is
- * only in scope because its module was imported, so its module either called
+ * A class without a definition throws, because its module either called
  * `defineComponent` or has a bug.
  *
  * @param {ComponentRef} ref
@@ -184,11 +153,9 @@ export function tagOf(ref) {
 /**
  * The tag in an arbitrary value, or undefined when it names no component.
  *
- * The tolerant half of `tagOf`, for the one caller that cannot know what it is
- * holding: `@core/elements/mount.js` inspects whatever a `load` function resolved to, and
- * a module namespace object — `() => import('./users-page.js')` — legitimately
- * names nothing. A class is still strict, because a class that reached a mount
- * request without a definition is a mistake with an exact cause.
+ * `@core/elements/mount.js` calls this on whatever a `load` function resolved to.
+ * A module namespace object names nothing and returns undefined. A class without
+ * a definition still throws.
  *
  * @param {unknown} value
  * @returns {string | undefined}
@@ -205,69 +172,53 @@ export function resolveTag(value) {
 /**
  * The query that marks a module re-imported after an edit.
  *
- * The browser's module map keys an entry by URL, so a changed file is only
- * evaluated again under a URL it has not been evaluated under. The query goes on
- * the edited module and nowhere else: its own imports still name the URLs the rest
- * of the page holds, so a revision duplicates one module rather than a graph, and
- * dependency identity stays what ADR-0017 says it is.
+ * The module map keys entries by URL, so an edited file only runs again under a
+ * new URL. Only the edited module gets the query, so its imports keep their
+ * identity (ADR-0017).
  */
 const REVISION = 'srl-revision';
 
 let revisionSerial = 0;
 
 /**
- * Definitions adopted by the revision in progress, keyed by the module being
- * revised. Written by `adoptRevision` while the re-imported module body is
- * running, drained by `reviseComponentModule` once the import resolves.
+ * Definitions adopted by the revision in progress, keyed by module. Filled by
+ * `adoptRevision` while the module body runs, and read by `reviseComponentModule`
+ * once the import resolves.
  *
  * @type {Map<string, Set<ComponentDefinition>>}
  */
 const adopting = new Map();
 
 /**
- * A private name written anywhere in a class body.
+ * A private name anywhere in a class body.
  *
- * `this.#total`, `#total = 0` and `#total()` all match; `'#main'` in a selector
- * and `` `#${id}` `` in a template literal do not, because a private name never
- * follows a quote. Over-matching is safe and under-matching is not: the answer to
- * a private name is a reload, and a reload is always correct.
+ * Matches `this.#total`, `#total = 0` and `#total()`. Skips `'#main'` and
+ * `` `#${id}` ``, because a private name never follows a quote. A false match only
+ * costs a reload.
  */
 const PRIVATE_NAME = /(?:^|[\s;{}(])#[A-Za-z_$][\w$]*|\.\s*#[A-Za-z_$][\w$]*/mu;
 
 /**
- * The one thing `renderRevisedHosts` needs of a host is a way to be told its class
- * changed. `SignalElement` has it.
+ * A host that can be told its class changed. `SignalElement` implements it.
  *
  * @typedef {{ renderRevisedDefinition?: () => void }} RevisableHost
  */
 
 /**
- * Run an edited component module in the page that is already running it.
+ * Apply an edited component module to the running page. Development only.
  *
- * Development only. An editor saves a `.js` file, the development server names the
- * URL it is served at, and its browser adapter calls this. The module is evaluated
- * again, and every component it declares either adopts its new class body or
- * refuses and says why — a refusal is a thrown error, and the adapter answers one
- * with the reload it would have done anyway. ADR-0113.
+ * The module runs again, and each component it declares either adopts the new
+ * class body or throws with the reason. The caller reloads on a throw. ADR-0113.
  *
- * The tag keeps the class it was registered with, because `customElements.define`
- * is permanent and a route, an outlet target and a remote entry all hold that
- * class. What moves is the class *body*: the methods, the accessors and the statics
- * the edit rewrote are installed on the registered class, so a host already on
- * screen and an element created a minute later run the same code.
- *
- * What cannot move is anything the constructor installs. Field initialisers run
- * once per instance, from the constructor of the class the registry holds, and
- * nothing can make them run again on an element that already exists. Private names
- * are worse than that: a re-evaluated class body mints new ones, so a method
- * adopted from it would read a field no live instance carries. Both are refused
- * rather than half-applied — see `assertReplaceable` for the whole list.
+ * The tag keeps its registered class. Methods, accessors and statics move onto
+ * that class, so existing and future elements run the same code. Fields and
+ * private names can't move, and `assertReplaceable` refuses edits that change
+ * them.
  *
  * @internal
  * @param {string | URL} url
  * @returns {Promise<boolean>} Whether this page replaced the module. `false` means
- *   no component was declared in it, so there is nothing here to replace and the
- *   caller should reload.
+ *   the module declares no component here, and the caller should reload.
  */
 export async function reviseComponentModule(url) {
   const href = withoutRevision(new URL(url, document.baseURI).href);
@@ -318,21 +269,16 @@ function adoptRevision(tag, registered, spec, module) {
   adoptClassBody(registered, spec.element);
   adopting.get(module)?.add(previous);
 
-  // The definition is unchanged, and deliberately the same object: the tag, the
-  // class, the template and the dependencies are exactly what a revision may not
-  // move, so a caller holding the old definition still holds a true one.
+  // The same definition object, because a revision may not change anything it records.
   return previous;
 }
 
 /**
- * Refuse an edit a live page cannot adopt, naming what changed.
+ * Throw when a live page can't adopt an edit, naming what changed.
  *
- * Every rule here is a fact about an instance that already exists. A field, public
- * or private, is written by a constructor that cannot be run again on it; a
- * reactive property is an accessor pair and an observed-attribute list the registry
- * snapshotted at `define` time; a base class, a template and a `uses` entry are
- * identity rather than behaviour. What is left is the prototype and the statics,
- * and those are what `adoptClassBody` moves.
+ * Fields and private names are installed per instance, and reactive properties
+ * are fixed at `define` time. The base class, template and `uses` are identity.
+ * Only the prototype and the statics can move.
  *
  * @param {ComponentDefinition} previous
  * @param {ComponentSpec} spec
@@ -382,10 +328,8 @@ function assertReplaceable(previous, spec, module) {
 /**
  * Whether two classes declare the same reactive properties.
  *
- * Lit reads `static properties` once, at `finalize`, and turns each entry into an
- * accessor on the prototype and an entry in the observed-attribute list the
- * registry snapshotted. Neither can be redone for a class already registered, so a
- * changed declaration is a reload.
+ * Lit turns `static properties` into prototype accessors and observed attributes
+ * once, at `finalize`, so a change needs a reload.
  *
  * @param {CustomElementConstructor} registered
  * @param {CustomElementConstructor} fresh
@@ -413,19 +357,13 @@ function describeProperties(element) {
 /**
  * Whether two classes install the same instance fields.
  *
- * Answered by building one element from each rather than by reading source, which
- * is the only way to see what an initialiser actually produces. Both are
- * constructed as the registered tag — `Reflect.construct` with the registered class
- * as `new.target` is what makes the fresh class constructible at all, since a class
- * the registry does not hold throws on `super()` — and neither is ever inserted
- * into the document.
+ * Builds one element from each class, since only construction shows what the
+ * initializers produce. `Reflect.construct` with the registered class as
+ * `new.target` makes the unregistered class constructible. Neither element is
+ * inserted.
  *
- * Names first: a field the edit added would be `undefined` on every element that
- * already exists, and on every element created afterwards too, because the
- * constructor that installs it is not the one the registry holds. Then primitive
- * values, because a changed initialiser is an edit whose effect a live page can
- * never show. Anything else — a signal, a resource, an object — is left alone: its
- * identity differs between any two instances, so it says nothing about the edit.
+ * Field names must match, and so must primitive values. Objects, signals and
+ * functions differ between any two instances, so they are skipped.
  *
  * @param {CustomElementConstructor} registered
  * @param {CustomElementConstructor} fresh
@@ -440,8 +378,7 @@ function sameFields(registered, fresh) {
     before = new registered();
     after = Reflect.construct(fresh, [], registered);
   } catch {
-    // A constructor that will not run outside the document cannot be compared, and
-    // an unreadable answer is a reload.
+    // A constructor that fails outside the document can't be compared, so reload.
     return false;
   }
 
@@ -460,17 +397,11 @@ function sameFields(registered, fresh) {
 }
 
 /**
- * Move an edited class body onto the class the registry holds.
+ * Copy an edited class body onto the registered class.
  *
- * Own members only, on both sides: what a base class contributes is reached through
- * the prototype chain and was never this class's to replace. A member the edit
- * deleted is deleted here, so a method that is gone is gone rather than lingering
- * from the definition before it.
- *
- * Declared reactive properties are skipped in both directions. Their prototype
- * entries are the accessor pairs Lit generated at `finalize`, each reading a
- * storage key of its own, and replacing one with the fresh class's would leave
- * every live host's value behind it.
+ * Only own members move, and a member the edit deleted is deleted here too.
+ * Reactive property accessors are skipped, because each one reads a storage key
+ * Lit generated for the registered class.
  *
  * @param {CustomElementConstructor} registered
  * @param {CustomElementConstructor} fresh
@@ -483,8 +414,7 @@ function adoptClassBody(registered, fresh) {
   /** @param {PropertyKey} key */
   const owned = (key) => key !== 'constructor' && reactive?.has(key) !== true;
 
-  // `CustomElementConstructor` declares its prototype as `any`, so the class is
-  // narrowed and the prototype read off that rather than cast at every use below.
+  // `CustomElementConstructor` types `prototype` as `any`, so narrow it once here.
   const target = /** @type {{ prototype: object }} */ (/** @type {unknown} */ (registered))
     .prototype;
   const source = /** @type {{ prototype: object }} */ (/** @type {unknown} */ (fresh)).prototype;
@@ -497,10 +427,8 @@ function adoptClassBody(registered, fresh) {
     if (descriptor !== undefined) Object.defineProperty(target, key, descriptor);
   }
 
-  // Statics are copied and never deleted: a class carries `prototype`, `length` and
-  // `name` of its own, and the registered one also carries the bookkeeping Lit
-  // wrote at `finalize`. The edited class has neither, so what it does have is
-  // exactly what its author wrote.
+  // Statics are copied and never deleted. Every class owns `prototype`, `length`
+  // and `name`, and the registered class also holds Lit's `finalize` bookkeeping.
   for (const key of Reflect.ownKeys(fresh)) {
     if (key === 'prototype' || key === 'length' || key === 'name') continue;
     const descriptor = Object.getOwnPropertyDescriptor(fresh, key);
@@ -509,13 +437,10 @@ function adoptClassBody(registered, fresh) {
 }
 
 /**
- * Ask every live host of a replaced class to render.
+ * Ask every live host of a revised class to render.
  *
- * The document is walked rather than a registry of hosts kept, for the reason
- * template.js gives: a registry costs an entry on every connect and disconnect in
- * every page, production included, to serve an event that only happens in
- * development. `instanceof` rather than the tag, so a component subclassed to tweak
- * behaviour renders too — it inherits the prototype that just changed.
+ * Walks the document instead of tracking hosts, so production pays nothing.
+ * `instanceof` also matches subclasses.
  *
  * @param {ComponentDefinition} definition
  */
@@ -542,8 +467,8 @@ function declaredIn(module) {
 }
 
 /**
- * A module URL with the revision query removed, and the same string when it has
- * none — so the ordinary path allocates nothing and compares by identity.
+ * A module URL without the revision query. Returns the same string when there is
+ * none, so the common path allocates nothing.
  *
  * @param {string} moduleUrl
  * @returns {string}
@@ -568,14 +493,10 @@ function isDefinition(value) {
 }
 
 /**
- * The sibling `.html` of the declaring module, or the path a spec named instead.
+ * The module's sibling `.html`, or the path a spec named instead.
  *
- * Derived rather than declared so that renaming `users-page.js` cannot leave a
- * `templateUrl` pointing at the old name. `template` stays available for the
- * component whose markup is not a sibling — a test fixture, or two components
- * sharing one layout — and is resolved against the module either way, so a
- * component keeps working wherever it is served from, including out of a
- * micro-frontend on another origin.
+ * Deriving the URL means a renamed module can't point at a stale template. Both
+ * forms resolve against the module, so a component works from any origin.
  *
  * @param {string} moduleUrl
  * @param {string | undefined} template
@@ -588,8 +509,7 @@ function templateUrlFor(moduleUrl, template) {
 }
 
 /**
- * The sibling `.css` of the declaring module. Never named, for the reason the template
- * is not: a rename carries it along.
+ * The module's sibling `.css`.
  *
  * @param {string} moduleUrl
  * @returns {string}
@@ -601,10 +521,10 @@ function stylesheetUrlFor(moduleUrl) {
 }
 
 /**
- * Whether a spec declares a stylesheet, refusing one this Element cannot have.
+ * Whether a spec declares a stylesheet. Throws when the Element can't have one.
  *
- * A stylesheet reaches the markup its Element's template stamps, so an Element that
- * renders in JavaScript has nothing for its rules to reach. ADR-0119.
+ * A stylesheet reaches the markup its template renders, so an Element with
+ * `template: false` has nothing to style. ADR-0119.
  *
  * @param {string} tag
  * @param {ComponentSpec} spec
@@ -658,9 +578,8 @@ function requireDefinition(ref, tag) {
  * @param {string} tag
  */
 function assertTag(tag) {
-  // The parser's own rule, stated where the mistake is made. `customElements.define`
-  // throws a SyntaxError naming neither the class nor the module, and a tag typo is
-  // exactly the kind of thing that reaches production in a rarely visited view.
+  // The parser's own rule. `customElements.define` would throw a SyntaxError that
+  // names neither the class nor the module.
   if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]*)+$/u.test(tag)) {
     throw new Error(
       `${JSON.stringify(tag)} is not a valid custom element name. It must start with a ` +

@@ -1,30 +1,24 @@
 /**
- * Document-level default styling for the framework's own marker elements.
+ * Default styles for the framework's marker elements, `<x-content>` and
+ * `<x-route-outlet>`.
  *
- * Two of them — `<x-content>` and `<x-route-outlet>` — must be `display: contents`
- * so they vanish from layout, and both must lose the moment an application puts a
- * display or spacing utility on them. Getting the second half right is the reason
- * this module exists.
+ * Both need `display: contents`, and a utility an application puts on them must
+ * still win. An unlayered rule beats every layered one, so the defaults live in a
+ * cascade layer of their own. ADR-0119.
  *
- * The defaults go in a cascade layer of their own, which is what an application's
- * utility class needs to outrank them — specificity alone does not do it, because
- * an unlayered rule beats every layered one whatever its specificity. ADR-0119.
- *
- * The layer has to sort before Tailwind's, and layer order is the order in which
- * layer names are first seen in document order. Hence prepended to `<head>` rather
- * than appended: whatever Tailwind has already injected — or injects later, as the
- * browser JIT build does — is then downstream of this name and wins.
+ * Layers sort in the order their names first appear. The style element is prepended
+ * to `<head>`, so Tailwind's layers come later and win, whether Tailwind injects
+ * them before or after this module runs.
  */
 
 const LAYER = 'ui-element-defaults';
 const STYLE_ATTR = 'data-ui-element-defaults';
 
 /**
- * Register a low-priority default rule for one of the framework's marker tags.
+ * Register a low-priority default rule for a marker tag.
  *
- * Idempotent per tag, so a module re-evaluated under a second import map adds
- * nothing. Every caller shares one `<style>`, which is what keeps the layer
- * declared exactly once and at the front.
+ * Idempotent per tag. All callers share one `<style>`, which keeps the layer
+ * declared once, at the front.
  *
  * @param {string} tag
  * @param {string} declarations CSS declarations, without the surrounding braces.
@@ -35,7 +29,7 @@ export function defineElementDefault(tag, declarations) {
 
   if (existing === null) {
     style.setAttribute(STYLE_ATTR, '');
-    // Prepended, not appended: see the note above on layer ordering.
+    // Prepended, so this layer sorts before Tailwind's.
     document.head.prepend(style);
   }
 

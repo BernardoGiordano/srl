@@ -1,43 +1,25 @@
 /**
- * The validators every form repeats, and nothing beyond them.
+ * Validators most forms need.
  *
- * A validator is a plain function from a value to an error *code*, or the empty
- * string when the value is acceptable. Codes rather than sentences, for the same
- * reason the rest of this library refuses to hold prose: a message frozen at
- * module evaluation cannot follow a language change, and a validator that
- * imported `t()` would decide an application's wording from inside the framework.
- * `ui-field` resolves the code; see `source/components/inputs/ui-field.js`.
+ * A validator maps a value to an error code, or to the empty string when the value is
+ * acceptable. Codes keep wording out of the framework and follow language changes.
+ * `ui-field` turns a code into text, and the codes are the collection's standard text
+ * keys under `ui.field.*`.
  *
- * What is here is what more than one screen would otherwise rewrite. What is
- * deliberately not here is every rule an application has — a customer's segment
- * must be one of four, an order cannot ship before it is confirmed — because
- * those are domain rules, and a domain rule written as a framework validator is
- * a framework that has opinions about the domain. Write them as functions in the
- * screen or the service; they compose with these because the type is the whole
- * contract.
+ * Domain rules, such as the segments a customer may belong to, belong in the
+ * application as plain functions of the same type.
  *
- * The codes are the collection's standard text keys under `ui.field.*`, so an
- * application that adds none of its own still gets sentences.
- *
- * CONTAINER RULES
- *
- * The last four take a group's value or an array's rows rather than one field's
- * value, and they are the same type: a validator over whatever the node holds.
- * Their code belongs to the container, which is what `ui-form-error` displays.
- *
- * What is deliberately not here is anything asynchronous. Every such rule needs a
- * service, an endpoint and a payload this library knows nothing about, so an
- * application writes the function and hands it to `field(…, { async: […] })`.
+ * The container validators (`ordered`, `sameAs`, `minRows`, `maxRows`, `uniqueBy`)
+ * take a group's value or an array's rows, and their code belongs to the container.
+ * Asynchronous rules need an application's service, so applications write those and
+ * pass them as `field(…, { async: […] })`.
  *
  * @import { Validator } from '@core/forms/types.js'
  */
 
 /**
- * Present, and not only whitespace. The one validator nearly every field has.
- *
- * An empty array counts as absent, which is what makes it work unchanged on a
- * multi-select: "choose at least one" and "type something" are the same question
- * asked of two shapes.
+ * Requires a value that isn't only whitespace. An empty array counts as absent, so it
+ * works for multi-selects too.
  *
  * @returns {Validator<unknown>}
  */
@@ -54,8 +36,8 @@ export function minLength(length) {
 }
 
 /**
- * Counted on the raw value rather than the trimmed one, because it guards a
- * column width and the database counts the spaces too.
+ * Counts the raw value, because it guards a column width and the database counts
+ * spaces too.
  *
  * @param {number} length
  * @returns {Validator<string>}
@@ -65,16 +47,14 @@ export function maxLength(length) {
 }
 
 /**
- * An empty value passes: emptiness is `required`'s question, and a field that
- * answered both would report "malformed" for a field nobody has filled in.
+ * An empty value passes, since emptiness is `required`'s job.
  *
  * @param {RegExp} expression
  * @param {string} [code]
  * @returns {Validator<string>}
  */
 export function pattern(expression, code = 'malformed') {
-  // A stateful regex — /g or /y — advances `lastIndex` between calls, so the same
-  // value would pass and fail alternately. Tested per call rather than documented.
+  // Reset `lastIndex`, or a `/g` or `/y` regex alternates between pass and fail.
   return (value) => {
     if (isEmpty(value)) return '';
     expression.lastIndex = 0;
@@ -83,9 +63,8 @@ export function pattern(expression, code = 'malformed') {
 }
 
 /**
- * Deliberately permissive. The address is either deliverable or it is not, and
- * the only component that knows which is the server that sends the mail; a
- * stricter expression here rejects real addresses to no purpose.
+ * The pattern is permissive on purpose. Only the mail server knows whether an address
+ * works, and a stricter pattern rejects real ones.
  *
  * @returns {Validator<string>}
  */
@@ -102,8 +81,7 @@ export function oneOf(allowed) {
 }
 
 /**
- * Numeric bounds over a *string*, because that is what a control holds — see the
- * note on `field()` about why the conversion does not happen earlier.
+ * A numeric lower bound over a string, because controls hold strings.
  *
  * @param {number} limit
  * @returns {Validator<string>}
@@ -129,11 +107,9 @@ export function max(limit) {
 }
 
 /**
- * A `YYYY-MM-DD` day, no later than `latest` — which defaults to today, so the
- * common case is `notAfter()` and reads as "not in the future".
- *
- * The default is evaluated per call rather than captured, or a tab left open
- * overnight validates against yesterday.
+ * A `YYYY-MM-DD` day no later than `latest`, which defaults to today, so `notAfter()`
+ * reads as "not in the future". The default is computed per call, so a tab left open
+ * overnight uses the new day.
  *
  * @param {string} [latest] `YYYY-MM-DD`.
  * @returns {Validator<string>}
@@ -142,9 +118,7 @@ export function notAfter(latest) {
   return (value) => {
     if (isEmpty(value)) return '';
     if (!/^\d{4}-\d{2}-\d{2}$/u.test(value) || Number.isNaN(Date.parse(value))) return 'malformed';
-    // String comparison, which is why the format matters: ISO days sort
-    // lexicographically, and `Date.parse` would drag a timezone into a question
-    // that has none.
+    // ISO days sort as strings, and `Date.parse` would bring in a timezone.
     return value <= (latest ?? today()) ? '' : 'future';
   };
 }
@@ -164,12 +138,11 @@ export function notBefore(earliest) {
 }
 
 /**
- * Two of a group's members in order, as `YYYY-MM-DD` days or as any two strings
- * that sort the way they read. The rule a date range is written with.
+ * Two group members in order, as `YYYY-MM-DD` days or other strings that sort as they
+ * read. Use it for date ranges.
  *
- * Equal passes: a period that starts and ends on the same day is one day long,
- * not an error. Either side empty passes too, because emptiness is `required`'s
- * question and a half-filled range is not yet out of order.
+ * Equal values pass, since a one-day period is valid. An empty side passes too, since
+ * emptiness is `required`'s job.
  *
  * @param {string} earlier Member name.
  * @param {string} later Member name.
@@ -187,11 +160,8 @@ export function ordered(earlier, later, code = 'outOfOrder') {
 }
 
 /**
- * Two of a group's members holding the same value. A confirmed password, a
- * re-typed address.
- *
- * Either side empty passes, so the field that must be filled in says `required`
- * rather than the group saying they differ.
+ * Two group members holding the same value, such as a confirmed password. An empty
+ * side passes, so the empty field reports `required` instead.
  *
  * @param {string} source Member name.
  * @param {string} copy Member name.
@@ -208,7 +178,7 @@ export function sameAs(source, copy, code = 'mismatched') {
 }
 
 /**
- * At least this many rows. `minRows(1)` is the one nearly every field array has.
+ * At least this many rows. `minRows(1)` is the common case.
  *
  * @param {number} count
  * @returns {Validator<readonly unknown[]>}
@@ -228,14 +198,11 @@ export function maxRows(count) {
 }
 
 /**
- * No two rows share this member's value.
+ * No two rows share this member's value. Empty values are ignored, so two new rows
+ * aren't duplicates.
  *
- * Empty values are ignored: two rows the user has just added are not duplicates
- * of each other, and the field that must be filled in says so itself.
- *
- * The answer belongs to the array, so it names no row. A message under *the* row
- * that repeats is `applyErrors({ 'contacts.1.email': 'duplicated' })` — the same
- * address a 422 carries, and it clears when that control is edited.
+ * The code belongs to the array and names no row. To mark the repeating row itself,
+ * use `applyErrors({ 'contacts.1.email': 'duplicated' })`.
  *
  * @param {string} name Member name within a row.
  * @param {string} [code]
@@ -258,13 +225,13 @@ export function uniqueBy(name, code = 'duplicated') {
 /** @returns {string} Today as `YYYY-MM-DD`, the format a `<input type="date">` holds. */
 export function today() {
   const now = new Date();
-  // Local, not `toISOString()`: at 01:00 in Milan the UTC date is still yesterday,
-  // and a "not in the future" rule that rejects today is the bug that follows.
+  // The local date, because `toISOString()` returns yesterday's date shortly after
+  // midnight in time zones east of UTC.
   return `${String(now.getFullYear()).padStart(4, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 /**
- * Absent, for every shape a control's value takes.
+ * Whether a control's value is absent, for every shape it can take.
  *
  * @param {unknown} value
  * @returns {boolean}

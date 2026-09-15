@@ -1,7 +1,7 @@
 import { batch, signal, untracked } from '@core/foundation/reactive.js';
 
 /**
- * One asynchronous read whose latest call wins.
+ * One asynchronous read whose latest call wins. ADR-0076.
  *
  *     #orders = resource(
  *       (signal) => inject(SALES_SERVICE).searchOrders(this.#query, signal),
@@ -10,35 +10,20 @@ import { batch, signal, untracked } from '@core/foundation/reactive.js';
  *
  *     rows = computed(() => this.#orders.value.value.rows);
  *
- * WHAT IT OWNS
+ * - `reload()` aborts the request in flight and drops any response for an aborted
+ *   request, so the slowest response can't win.
+ * - `pending` is true until a request settles and while one is in flight. It starts
+ *   true, because a component paints before `onMount`.
+ * - `failed` reports that the last unsuperseded request rejected. It clears when the
+ *   next request starts, so a retry button is one call.
+ * - The request aborts with its owner's lifetime, and every path removes the owner
+ *   listener.
  *
- *  - **Supersession.** `reload()` aborts the request in flight, and a response that
- *    arrives for an aborted one is dropped rather than written. Without that the
- *    slowest response wins and the screen shows a page nobody asked for.
- *  - **The two flags a screen binds.** `pending` is "nothing has settled yet, or a
- *    request is in flight"; `failed` is "the last request that was not superseded
- *    rejected", cleared when the next one starts, which is what makes a retry
- *    button one call. `pending` starts true because a component's first paint
- *    happens before its `onMount`.
- *  - **The lifetime.** The request aborts when the owner's does, so `onDestroy` has
- *    nothing to write, and every terminal path drops the owner listener so a
- *    long-lived screen keeps none per reload. ADR-0076.
+ * The loader runs untracked. A resource doesn't re-run when a signal the loader read
+ * changes, and calling `reload()` inside an `effect` adds no dependencies to it.
  *
- * WHAT IT DOES NOT
- *
- * It does not re-run itself when a signal the loader read changes: a table emits one
- * `query-change` for a page, size, sort and filter change at once, and an
- * auto-tracking resource would fire four. The loader runs untracked, which is what
- * makes `reload()` safe to call from inside an `effect` — a detail screen reloads
- * from one over `routeParams`, and every signal the loader touched would otherwise
- * become a dependency of that effect.
- *
- * It does not expose the rejection. A screen that needs the server's error code
- * catches inside its own loader and returns a value carrying it, which keeps
- * `ApiError` out of an interface every other screen would have to narrow.
- *
- * It does not cache, key or dedupe by request: this is the primitive under a store,
- * not one.
+ * Rejections aren't exposed. A screen that needs an error code catches inside its loader
+ * and returns a value carrying it. The resource doesn't cache, key or dedupe.
  */
 
 /** @import { ReadonlySignal } from '@core/foundation/types.js' */
@@ -46,21 +31,18 @@ import { batch, signal, untracked } from '@core/foundation/reactive.js';
 /**
  * @template T
  * @typedef {object} Resource
- * @property {ReadonlySignal<T>} value The last settled value, or `initial` until one settles. A superseded or failed request leaves it alone.
- * @property {ReadonlySignal<boolean>} pending Whether a request is in flight, or none has settled yet. True until the first one does.
+ * @property {ReadonlySignal<T>} value The last settled value, or `initial` until one settles. Superseded and failed requests leave it unchanged.
+ * @property {ReadonlySignal<boolean>} pending Whether a request is in flight, or none has settled yet.
  * @property {ReadonlySignal<boolean>} failed Whether the last request that was neither superseded nor aborted rejected.
- * @property {() => Promise<T | undefined>} reload Start a request, aborting any in flight. Resolves with the value, or `undefined` when the request was superseded, aborted or rejected.
+ * @property {() => Promise<T | undefined>} reload Start a request, aborting any in flight. Resolves with the value, or `undefined` when superseded, aborted or rejected.
  */
 
 /**
- * The lifetime an in-flight request is bound to.
+ * The lifetime a request is bound to.
  *
- * A function rather than only an `AbortSignal`, because an element's lifetime is a
- * *new* `AbortSignal` after every re-attach: `SignalElement` aborts and drops its
- * controller on disconnect, so a resource built in a field initialiser that had
- * captured `this.lifetime` would hold an already-aborted signal for the rest of the
- * element's life, and every reload after a DOM move would abort before it was sent.
- * Write `() => this.lifetime` and the resource reads the current one per request.
+ * Pass `() => this.lifetime` in a component. `SignalElement` replaces its lifetime
+ * signal after a disconnect, so a captured signal would already be aborted once the
+ * element moves.
  *
  * @typedef {AbortSignal | (() => AbortSignal)} ResourceLifetime
  */
@@ -68,7 +50,7 @@ import { batch, signal, untracked } from '@core/foundation/reactive.js';
 /**
  * @template T
  * @typedef {object} ResourceOptions
- * @property {T} initial What `value` holds before the first request settles. Required: a screen binds `value` from its first render, and an interface whose value is `T | undefined` makes every template carry the empty case twice.
+ * @property {T} initial What `value` holds before the first request settles. Required, so templates never handle `undefined`.
  * @property {ResourceLifetime} [lifetime] Aborts the in-flight request when it aborts. `() => this.lifetime` in a component.
  */
 
@@ -94,8 +76,7 @@ export function resource(load, options) {
     const lifetime =
       typeof options.lifetime === 'function' ? options.lifetime() : options.lifetime;
 
-    // Nothing is listening any more: not sending is the same answer as sending
-    // and dropping the response, one request cheaper.
+    // The owner is gone, so skip the request.
     if (lifetime?.aborted === true) return undefined;
 
     current?.abort();
@@ -104,10 +85,8 @@ export function resource(load, options) {
 
     const abortWithOwner = () => request.abort(lifetime?.reason);
 
-    // Two removals, because a request ends in two ways. `signal: request.signal`
-    // covers a supersession whose loader never settles; the `finally` covers a
-    // request that settles, which never aborts and would otherwise leave one
-    // listener per reload on a lifetime that outlives all of them.
+    // `signal: request.signal` removes the listener when the request is superseded, and
+    // `finally` removes it when the request settles.
     lifetime?.addEventListener('abort', abortWithOwner, {
       once: true,
       signal: request.signal,
@@ -121,8 +100,7 @@ export function resource(load, options) {
     try {
       const next = await untracked(() => load(request.signal));
 
-      // Superseded, or the owner went away. The request that replaced this one
-      // owns `pending` now, so this one writes nothing at all.
+      // Superseded or abandoned. The newer request owns `pending`, so write nothing.
       if (request.signal.aborted) return undefined;
 
       batch(() => {

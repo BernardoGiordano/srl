@@ -1,47 +1,33 @@
 /**
- * Whole-manifest admission: the one place runtime configuration becomes policy.
+ * Manifest admission, where runtime configuration becomes policy. ADR-0010.
  *
- * `app.manifest.json` is fetched on every load and decides where executable code
- * is imported from, where credentials are sent, which path each remote owns and
- * which files the locale and template caches are seeded from. The cross-field
- * decisions are made once, here, before anything downstream is constructed, and
- * everything after this module reads admitted values — normalized,
- * collision-checked and frozen — rather than the parsed document. ADR-0010.
+ * `app.manifest.json` decides where code is imported from, where credentials go,
+ * which path each remote owns and which files seed the locale and template caches.
+ * This module checks the whole document at once, before anything downstream is
+ * built. Everything after it reads the admitted value, which is normalized, checked
+ * for collisions and frozen.
  *
- * The module imports nothing, like `template/dialect.js` and for the same reason:
- * `tools/checks/verify-deps.mjs` loads it in Node and admits every checked-in
- * manifest against the same rules the browser applies at startup. The two adapters
- * differ only in where the page's import-map pins come from, which is why those
- * arrive as an argument instead of being read from `document` here.
+ * The module imports nothing, so `tools/checks/verify-deps.mjs` can load it in Node
+ * and admit every checked-in manifest under the browser's rules. The page's import
+ * map pins arrive as an argument, because the two callers read them from different
+ * places. Fetching the document belongs to `remotes/mfe.js`.
  *
- * What belongs here: URL shape and trust, cross-field collisions, and the
- * normalized shape downstream modules may assume. What does not: fetching the
- * document and reading the page's import map (`remotes/mfe.js`), and anything
- * that acts on an admitted manifest.
- *
- * ## The trust rule
- *
- * Every URL in the manifest is a same-origin root-relative path, and admission
- * rejects anything else rather than repairing it. ADR-0010. Cross-origin
- * authentication is therefore not expressible as a manifest string: it is a
- * capability of a deployment, not a value a fetched JSON file can introduce.
+ * Every URL in the manifest must be a same-origin, root-relative path. Admission
+ * rejects anything else and never repairs it.
  */
 
 /** @import { I18nConfig } from '@core/localization/types.js' */
 /** @import { AppManifest, ManifestSource, RemoteDescriptor, RemoteGrants, RemoteRequirements } from '@core/remotes/types.js' */
 
 /**
- * The digest form the manifest and the page's import map must agree on. One
- * algorithm rather than a set: two spellings of the same pin is a comparison
- * nobody would write correctly a second time.
+ * The only digest form the manifest and the import map may use. One algorithm keeps
+ * the comparison simple.
  */
 const SHA384 = /^sha384-[A-Za-z0-9+/]{64}$/u;
 
 /**
- * A locale tag, restricted to the subset that is safe to substitute into a URL
- * pattern. `bundles` interpolates the negotiated locale into a path, so a tag
- * carrying `/`, `..` or a percent-escape would let the locale list choose a file
- * outside the bundle directory that the pattern appears to name.
+ * A locale tag limited to characters that are safe inside a URL pattern. A tag with
+ * `/`, `..` or a percent escape could point a bundle pattern outside its directory.
  */
 const LOCALE = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u;
 
@@ -49,9 +35,8 @@ const LOCALE = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u;
 const LOCALE_PLACEHOLDER = '{locale}';
 
 /**
- * Admission state for one document: where it came from, what its paths resolve
- * against, and the page's integrity pins, read at most once and only if a remote
- * needs them.
+ * Admission state for one document: its URL, the base its paths resolve against, and
+ * the page's integrity pins, read lazily and only when a remote needs them.
  *
  * @typedef {{
  *   url: string,
@@ -62,13 +47,10 @@ const LOCALE_PLACEHOLDER = '{locale}';
  */
 
 /**
- * Validate, normalize and freeze one manifest document, or throw naming the file
- * and the field.
+ * Validate, normalize and freeze one manifest, or throw naming the file and field.
  *
- * Every value is rebuilt rather than cast over: the document is fetched at
- * runtime, and a cast would turn a typo in a deploy pipeline into
- * `undefined is not a function` deep inside a route resolution instead of one
- * message at startup.
+ * Every value is rebuilt instead of cast, so a typo in a deploy pipeline fails with
+ * one message at startup.
  *
  * @param {unknown} value the parsed document
  * @param {ManifestSource} source where it came from and what the page pins
@@ -117,27 +99,19 @@ export function admitManifest(value, source) {
         ? undefined
         : admitPath(templateBundle, `${url}: templateBundle`, policy),
     templateGroups,
-    // The flat union stays available and stays derived. A caller that wants "every
-    // template this artifact holds" should not have to know how the document was
-    // partitioned, and a second copy in the document is the thing this replaced.
+    // The flat list stays derived, so a caller that wants every template doesn't need
+    // to know how the document was grouped.
     templateFiles: grouped.length > 0 ? Object.freeze(grouped) : listed,
   });
 }
 
 /**
- * The chunk-to-template join, admitted one entry at a time.
+ * Admit the chunk-to-template groups. ADR-0081.
  *
- * Keys are opaque here on purpose: `entry` and `chunk:<path>` are the build's names
- * for its own output, and a policy that validated their spelling would be a second
- * place the two have to agree. What this does check is every value, because every
- * value becomes a `fetch` — same-origin under the same rule as every other URL in the
- * document, for the same reason `admitTemplateFiles` gives.
- *
- * Duplicates are refused across the whole record rather than within a group. A
- * template is named by exactly one module, which lives in exactly one chunk, so the
- * same URL in two groups is a join that went wrong — and it would be paid twice, once
- * per group that starts. A frozen empty record when the key is absent, so the consumer
- * reads it without a guard. ADR-0081.
+ * Keys such as `entry` and `chunk:<path>` are the build's own names and aren't
+ * checked. Every value becomes a `fetch`, so each one goes through the same-origin
+ * rule. A URL may appear in only one group, since a template belongs to one chunk. An
+ * absent key yields a frozen empty record.
  *
  * @param {unknown} value
  * @param {string} where
@@ -145,9 +119,9 @@ export function admitManifest(value, source) {
  * @returns {Readonly<Record<string, readonly string[]>>}
  */
 function admitTemplateGroups(value, where, policy) {
-  // No prototype, because the keys are the document's. `JSON.parse` makes
-  // `__proto__` an own key, and writing it into a plain object would replace the
-  // record's prototype instead of adding a group. ADR-0118.
+  // No prototype, because the keys come from the document. `JSON.parse` makes
+  // `__proto__` an own key, and writing it to a plain object would replace the
+  // prototype.
   /** @type {unknown} */
   const empty = Object.create(null);
   const groups = /** @type {Record<string, readonly string[]>} */ (empty);
@@ -170,19 +144,11 @@ function admitTemplateGroups(value, where, policy) {
 }
 
 /**
- * The list of template URLs an artifact emitted, admitted one entry at a time.
+ * Admit a flat list of template URLs.
  *
- * A frozen empty array when the key is absent rather than `undefined`, because the
- * only consumer iterates it: an optional list that is sometimes a list and
- * sometimes nothing is a check at every call site for a document that simply says
- * "no templates to announce".
- *
- * Same-origin under the same rule as every other URL here. The runtime turns these
- * into `fetch` calls, and the page applies `connect-src 'self'`, so a cross-origin
- * entry would fail as a blocked request behind an optimisation nobody is watching
- * — one message at startup is the better failure. Duplicates are refused because a
- * list of content-addressed files that names one twice is a generator bug, and it
- * is cheaper to say so than to let it be silently harmless.
+ * An absent key yields a frozen empty array, so the consumer iterates without a
+ * guard. Entries must be same-origin, because a cross-origin fetch would fail under
+ * `connect-src 'self'`. Duplicates are refused as a generator bug.
  *
  * @param {unknown} value
  * @param {string} where
@@ -203,14 +169,11 @@ function admitTemplateFiles(value, where, policy) {
 }
 
 /**
- * The trust rule, applied to one field.
+ * Apply the trust rule to one URL field and return its normalized path.
  *
- * Normalization is part of admission rather than a courtesy: `/api/../auth` and
- * `/auth` are the same destination, and a downstream comparison that sees only
- * one spelling of it is the bug this returns a single form to prevent. A
- * backslash is rejected before parsing because the URL parser treats it as a
- * separator, which makes `/\evil.example/x` a cross-origin URL that reads like a
- * path.
+ * Normalizing matters, because `/api/../auth` and `/auth` are the same destination. A
+ * backslash is refused before parsing, because the URL parser treats it as a
+ * separator and `/\evil.example/x` would become another origin.
  *
  * @param {unknown} value
  * @param {string} where
@@ -346,10 +309,9 @@ function admitShared(value, where) {
 }
 
 /**
- * Require the manifest pin to match the page's static import-map pin. The
- * browser applies that integrity metadata to dynamic imports and every pinned
- * relative sub-import; comparing here prevents a mutable manifest from choosing
- * a new executable URL or digest at runtime.
+ * Require the manifest's digest to match the page's static import map pin. The
+ * browser enforces that pin on dynamic imports, so a mutable manifest can't choose new
+ * code at runtime.
  *
  * @param {string} url
  * @param {string} integrity
@@ -368,13 +330,11 @@ function assertPinned(url, integrity, where, policy) {
 }
 
 /**
- * A mount is a path prefix the remote owns, turned into a `${mount}/*` route.
+ * Admit the path prefix a remote owns, which becomes a `${mount}/*` route.
  *
- * The syntax the router gives meaning to is excluded rather than escaped: `*`
- * and `:` would make a remote's mount into a wildcard or a parameter segment,
- * and a query string is not part of a path prefix at all. A trailing slash is
- * normalized away so `/billing` and `/billing/` cannot be declared as two
- * different remotes that own one subtree.
+ * `*`, `:` and `?` are refused, because they would change what the route matches. A
+ * trailing slash is removed, so `/billing` and `/billing/` can't be declared as two
+ * remotes.
  *
  * @param {unknown} value
  * @param {string} where
@@ -406,15 +366,11 @@ function admitMount(value, where, policy) {
 }
 
 /**
- * The invariants no single entry can see.
+ * Check the invariants no single entry can see.
  *
- * Names collide silently: the name is the import cache key, the label
- * `ui-nav` asks for, and how a remote is identified in every message. Mounts
- * collide dangerously: routes are matched first-declared-first, so a duplicate
- * or a mount that contains another makes the order of the file — not the policy
- * written in it — decide which `requires` guard runs and which `grants` bound the
- * host context. Both are configuration mistakes that behave like features until
- * someone reorders the array.
+ * A duplicate name makes one remote unreachable, because the name is the import cache
+ * key and the nav label. Overlapping mounts are worse. Routes match in declaration
+ * order, so the file's order would decide which guard runs and which grants apply.
  *
  * @param {readonly RemoteDescriptor[]} remotes
  * @param {Policy} policy
@@ -479,10 +435,8 @@ function admitRequirements(value, where) {
   }
   const permissions = requireStringArray(requires.permissions, `${where}: requires.permissions`);
 
-  // Requiring a permission without requiring a session is not a coherent state:
-  // scopes only exist on a session. Rather than silently repairing it, say so,
-  // because the manifest is the security policy and a policy that means something
-  // other than what it says is the failure mode worth preventing.
+  // Permissions only exist on a session, so requiring one without a session can never
+  // be satisfied. Refuse it instead of repairing it.
   if (permissions.length > 0 && session === false) {
     throw new Error(
       `${where}: requires.permissions is non-empty but requires.session is false. ` +
@@ -496,9 +450,8 @@ function admitRequirements(value, where) {
 }
 
 /**
- * The manifest is where least privilege for a remote is written down, so it is
- * validated as strictly as the rest of it. A grant that is a typo must fail at
- * startup, not become a silently wider or narrower capability later.
+ * Admit a remote's grants. A typo must fail at startup instead of silently becoming a
+ * wider or narrower capability.
  *
  * @param {unknown} value
  * @param {string} where
@@ -518,18 +471,15 @@ function admitGrants(value, where) {
           `token minted for its audience, neither of which the shell can confer.`,
       );
     }
-    // Trailing slash enforced so that a grant for /api/analytics/ cannot also
-    // match /api/analytics-admin/. Prefix matching without it is a classic
-    // authorization bypass, and it reads as correct.
+    // The trailing slash keeps `/api/analytics/` from also matching
+    // `/api/analytics-admin/`.
     if (!prefix.endsWith('/')) {
       throw new Error(
         `${where}: grants.api entry "${prefix}" must end with "/". Without it the prefix also ` +
           `matches sibling paths that merely start with the same characters.`,
       );
     }
-    // Normalized, because the grant is compared against a request's resolved
-    // pathname: a grant written as `/api/analytics/../` would otherwise be
-    // compared as text and never match the `/api/` it actually confers.
+    // Normalize, because a grant is compared to a request's resolved pathname.
     return new URL(prefix, 'https://grants.invalid').pathname;
   });
 
@@ -545,10 +495,8 @@ function admitGrants(value, where) {
 function admitAuth(value, policy) {
   const auth = asRecord(value, `${policy.url} auth`);
 
-  // One key, and it is a location rather than a protocol. An application's
-  // authentication configuration — which store it constructs, what its endpoints
-  // are called, what its token response looks like — is its own, and admitting it
-  // here would put a backend contract in the library. ADR-0021.
+  // One key, and it's a location. Which store an application uses and what its
+  // endpoints are called is application configuration. ADR-0021.
   return Object.freeze({
     apiBaseUrl: admitPath(auth.apiBaseUrl, `${policy.url}: auth.apiBaseUrl`, policy),
   });
@@ -600,20 +548,15 @@ function admitI18n(value, policy) {
 }
 
 /**
- * The emitted file each declared bundle URL is actually served from.
+ * Admit the file each resolved bundle URL is served from.
  *
- * A pattern cannot carry a content hash: `{locale}` is the only thing it varies, and
- * two locales of the same bundle have different bytes. So a build that hash-names its
- * locale bundles — the thing that lets them be served `immutable` rather than
- * revalidated on every load — has to say, per resolved URL, which file answers for it.
- * The runtime keeps resolving the pattern it was configured with; this is the single
- * indirection between that URL and the one on the wire. Absent, every bundle is
- * fetched at the URL it declares, which is what a development server serves.
+ * A pattern can't carry a content hash, since `{locale}` is its only variable. A build
+ * that hash-names bundles lists the emitted file for each resolved URL. The runtime
+ * still resolves the pattern and uses this map for the final fetch. Without the map,
+ * each bundle is fetched at its declared URL.
  *
- * Keys are checked against the patterns and locales admitted above rather than taken
- * as free strings. A mapping for a URL this manifest never resolves is a file nobody
- * fetches, and it is locally valid in exactly the way ADR-0010 exists to catch: only
- * the whole document knows which URLs the pair (bundles, supportedLocales) produces.
+ * Keys must be URLs the patterns and supported locales actually produce, and only the
+ * whole document knows that set. ADR-0010.
  *
  * @param {unknown} value
  * @param {string} where
@@ -664,9 +607,7 @@ function admitBundlePatterns(value, where, supportedLocales, policy) {
           `same messages for every language.`,
       );
     }
-    // The pattern is admitted through every locale it will actually be used
-    // with, rather than as a string containing a placeholder: what is fetched is
-    // the substituted URL, and that is the one that has to be same-origin.
+    // Admit each locale's substituted URL, because that URL is what gets fetched.
     for (const locale of supportedLocales) {
       const resolved = pattern.split(LOCALE_PLACEHOLDER).join(locale);
       admitPath(resolved, `${entryWhere} for locale "${locale}"`, policy);
@@ -693,9 +634,8 @@ function admitLocale(value, where) {
 }
 
 /**
- * Index the page's integrity pins by the same normalized path admission produces
- * for a manifest URL, so the two are compared as destinations rather than as
- * strings. Read lazily: a page with no remotes needs no import map to boot.
+ * Index the page's pins by normalized path, so they compare to manifest URLs as
+ * destinations. Read lazily, since a page without remotes needs no import map.
  *
  * @param {ManifestSource} source
  * @returns {() => Map<string, string>}
@@ -721,8 +661,7 @@ function readPins(source) {
       const target = new URL(key, source.base);
       if (target.origin === origin) index.set(target.pathname + target.search, digest);
     } catch {
-      // A key that is not a URL cannot pin a manifest URL. The import map's own
-      // validity is the page's problem, not this module's.
+      // A key that isn't a URL can't pin a manifest URL.
     }
   }
   return index;

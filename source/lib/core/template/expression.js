@@ -1,25 +1,19 @@
 /**
- * The expression language used inside `.html` templates: a tokenizer, a
- * precedence-climbing parser and a closure compiler.
+ * The template expression language: a tokenizer, a precedence-climbing parser and a
+ * closure compiler.
  *
- * Not `new Function`, for two independent reasons. It would require
- * `script-src 'unsafe-eval'`, the CSP relaxation most likely to be refused by a
- * security review; and it could not read `this.#users` anyway, so a template
- * could never see the private state components hold. Templates bind to *public*
- * members, which the type checker can also see.
+ * It avoids `new Function`, which would need `script-src 'unsafe-eval'` and still
+ * couldn't read private fields. Templates bind to public members, which the type
+ * checker can see too.
  *
- * Supported: member access, optional chaining, computed access, calls,
- * arithmetic, comparison, negation, ternary, `??`/`&&`/`||`, array and object
- * literals, and assignment inside event bindings. Deliberately absent: function
- * and arrow declarations, `new`, `typeof`, bitwise operators, increment, comma
- * sequences, template literals. A template needing any of them is doing work that
- * belongs in the component.
+ * The language supports member access, optional chaining, computed access, calls,
+ * arithmetic, comparison, negation, ternaries, `??`, `&&`, `||`, array and object
+ * literals, and assignment in event bindings. Functions, `new`, `typeof`, bitwise
+ * operators, increments, comma sequences and template literals are left out on
+ * purpose, because that logic belongs in the component.
  *
- * Every resolution step unwraps a `Signal`, which is also what registers the
- * dependency with the tracking effect in signal-element.js. The escape hatch is
- * `&`: `[.target]="&panel"` passes the signal itself, which is what `<x-outlet>`
- * wants — it subscribes directly and swaps its child without re-rendering the
- * parent.
+ * Every resolution step unwraps a `Signal`, which also registers the dependency. `&`
+ * passes the signal itself, as in `[.target]="&panel"` for `<x-outlet>`.
  */
 
 import { Signal } from '@core/foundation/reactive.js';
@@ -36,13 +30,10 @@ export { parseExpression } from '@core/template/expression-parser.js';
 const globalsByName = new Map();
 
 /**
- * Publish values that every template can reference by bare name, in the way
- * Angular exposes pipes. `@core/localization/i18n.js` registers the translation and
- * formatting helpers through here.
+ * Publish values every template can reference by bare name, the way Angular exposes
+ * pipes. `@core/localization/i18n.js` registers its helpers here.
  *
- * Registered under a `Map` rather than an object so a template identifier can
- * never reach `Object.prototype` members: `{{ constructor }}` and
- * `{{ hasOwnProperty }}` resolve to nothing instead of to a function.
+ * Globals live in a `Map`, so `{{ constructor }}` can't reach `Object.prototype`.
  *
  * @param {Readonly<Record<string, unknown>>} values
  */
@@ -55,10 +46,8 @@ export function registerTemplateGlobals(values) {
 /**
  * Parse an expression once and return a closure that evaluates it.
  *
- * Called at template-compile time, never per render. The returned closure does
- * no parsing, no string work and no allocation beyond what the expression itself
- * requires, which is what makes a fetched template's steady-state cost the same
- * as an inline `html` tagged literal.
+ * This runs at template compile time. The closure does no parsing and no string
+ * work, so a fetched template costs the same per render as an inline `html` literal.
  *
  * @param {string} source
  * @param {string} where Template URL and attribute, quoted in error messages.
@@ -99,8 +88,8 @@ function compile(node, where, unwrap) {
           if (optional) return undefined;
           throw evaluationError(where, `Cannot read "${name}" of ${String(target)}`);
         }
-        // No member check: `name` is a literal the parser already refused if it
-        // were reserved. Only the computed key below can still be one.
+        // No check here, because the parser already refused reserved names. Only a
+        // computed key can still be one.
         return read(/** @type {Record<string, unknown>} */ (target)[name]);
       };
     }
@@ -159,9 +148,8 @@ function compile(node, where, unwrap) {
       return compileAssignment(node, where);
 
     case 'raw':
-      // The only place `unwrap` is turned off, and it applies to the operand's
-      // outermost resolution only: `&a.b` keeps the signal at `b` while still
-      // unwrapping `a` on the way there.
+      // `&` stops unwrapping only at the outermost step, so `&a.b` still unwraps `a`
+      // and keeps the signal at `b`.
       return compile(node.operand, where, false);
   }
 }
@@ -177,9 +165,8 @@ function compileCall(node, where, read) {
   const { callee } = node;
 
   /**
-   * A method must be called with its object as the receiver, or `this` inside
-   * `users.reload()` is undefined and the method's own private fields throw.
-   * That is why the callee is not simply compiled as a value.
+   * Resolve the callee together with its receiver, so `users.reload()` runs with
+   * `this` bound and its private fields work.
    *
    * @type {(scope: Scope) => { fn: unknown, receiver: unknown, label: string }}
    */
@@ -233,12 +220,10 @@ function compileBinary(node, where) {
   const left = compile(node.left, where, true);
   const right = compile(node.right, where, true);
 
-  // `==` and `!=` become their strict forms here, and the template checker emits
-  // the same substitution, so a comparison cannot mean one thing to tsc and
-  // another at runtime.
+  // `==` and `!=` become strict here, and the template checker emits the same
+  // substitution.
   switch (strictOperator(node.operator)) {
-    // Short-circuiting operators must not evaluate the right side eagerly:
-    // `user && user.name` is the whole reason they appear in templates.
+    // Short-circuit operators must not evaluate the right side eagerly.
     case '&&':
       return (scope) => (left(scope) ? right(scope) : left(scope));
     case '||':
@@ -291,9 +276,8 @@ function compileAssignment(node, where) {
     return (scope) => {
       const next = value(scope);
       const current = lookup(scope);
-      // Assigning to a signal sets it rather than replacing it. Without this,
-      // `(input)="query = $event.target.value"` would overwrite the signal
-      // object on the component and silently detach every subscriber.
+      // Assigning to a signal sets its value. Replacing the signal object would
+      // detach every subscriber.
       if (current.value instanceof Signal) {
         current.value.value = next;
       } else if (isRecord(current.receiver)) {
@@ -321,9 +305,7 @@ function compileAssignment(node, where) {
     if (!isRecord(receiver)) throw evaluationError(where, 'Cannot assign to a non-object');
 
     const name = key(scope);
-    // The write side of the same policy the read path applies through `member`.
-    // Only a computed key can still be reserved here; a written one was refused
-    // while parsing.
+    // The write side of the member policy. Only a computed key can still be reserved.
     refuseForbiddenMember(name);
     const existing = receiver[name];
     if (existing instanceof Signal) existing.value = next;
@@ -335,19 +317,13 @@ function compileAssignment(node, where) {
 /* ── Scope resolution ──────────────────────────────────────────────────── */
 
 /**
- * Name lookup, in order: template locals (`$event`, `*for` variables), then the
- * component instance, then registered globals.
+ * Name lookup, in order: template locals, the component instance, then globals.
  *
- * An unresolvable name yields `undefined`, as Angular's does. What reports it is
- * `npm run templates:check`, which types every expression against the component
- * class before the page ever runs — a renamed property is a build failure there
- * rather than a blank spot on the page.
+ * An unknown name yields `undefined`, as in Angular. `npm run templates:check` types
+ * every expression against the component and reports it.
  *
- * Everything the *name alone* decides is decided here, once, while the
- * expression compiles: `$host` is not a lookup at all, and a denied name is not
- * a lookup either but an error, now raised while the template compiles rather
- * than on the render that first reaches it. What is left in the returned
- * closure is the three-step walk, and nothing else.
+ * `$host` and refused names are handled at compile time, so the returned closure
+ * only walks the three scopes.
  *
  * @param {string} name
  * @param {string} where
@@ -357,31 +333,21 @@ function compileNameRead(name, where) {
   if (name === '$host') return (scope) => scope.host;
   refuseUnresolvableName(name, where);
 
-  // `in` rather than `hasOwn`, because row locals are prototype-chained: a
-  // nested `*for` sees the outer loop's variables through the chain instead of
-  // holding a copy of them. The chain is rooted in `Object.create(null)`
-  // (template.js's EMPTY_LOCALS), so walking it cannot reach `Object.prototype`
-  // and `{{ toString }}` still resolves to nothing. `undefined` and `null` in
-  // locals still shadow a component member of the same name, which a truthiness
-  // check would not.
-  //
-  // `in` for the host too, because a component's members are mostly getters and
-  // methods on its prototype chain. The refusal above is what keeps that from
-  // also exposing `Object.prototype`.
+  // `in`, because locals are prototype-chained and component members are mostly
+  // prototype getters and methods. The locals chain ends in `null`, and the refusal
+  // above blocks `Object.prototype` names, so `{{ toString }}` resolves to nothing.
+  // A local set to `undefined` or `null` still shadows a member with the same name.
   return (scope) => {
     if (name in scope.locals) return scope.locals[name];
     if (name in scope.host) return scope.host[name];
-    // A name the component does not have resolves to nothing. The template
-    // checker is what refuses it, statically, against the component's own types.
+    // An unknown name falls through to the globals.
     return globalsByName.get(name);
   };
 }
 
 /**
- * The same resolution, keeping the receiver a call needs for its `this` and an
- * assignment needs to write through. Separate from `compileNameRead` so that
- * reading an identifier — by far the most common thing a template does — does
- * not allocate a record it would immediately discard.
+ * The same lookup, also returning the receiver a call or an assignment needs. Kept
+ * separate, so plain reads don't allocate a record.
  *
  * @param {string} name
  * @param {string} where
@@ -409,13 +375,8 @@ function refuseUnresolvableName(name, where) {
 }
 
 /**
- * The runtime half of the member policy: names the parser could not see.
- *
- * A name written in the source is refused while parsing, so by the time an
- * expression is compiled the only unchecked key left is a computed one, whose
- * value is not known until the event fires. `row[column] = value` with a
- * `column` of `__proto__` is the case this exists for — and the reason the
- * static member and call paths do not call this at all.
+ * Refuse a reserved name that is only known at runtime, such as `row[column] = value`
+ * with `column` set to `__proto__`. The parser refuses names written in the source.
  *
  * @param {string} name
  */
@@ -425,9 +386,8 @@ function refuseForbiddenMember(name) {
 }
 
 /**
- * Names an identifier may never resolve to. Every own property of
- * `Object.prototype`, because the host lookup uses `in` and would otherwise
- * resolve `{{ toString }}` or `{{ valueOf }}` to an inherited function.
+ * Names an identifier may never resolve. The set includes every own property of
+ * `Object.prototype`, because the host lookup uses `in`.
  */
 const UNRESOLVABLE_NAMES = new Set([
   ...Object.getOwnPropertyNames(Object.prototype),
@@ -453,9 +413,7 @@ function identity(value) {
 }
 
 /**
- * `+` has to serve both string concatenation (`'/users/' + user.id`) and
- * arithmetic, and JavaScript's own rules for the mixed case are the ones
- * template authors already expect.
+ * `+` concatenates when either side is a string and adds otherwise, as in JavaScript.
  *
  * @param {unknown} left
  * @param {unknown} right
@@ -485,10 +443,8 @@ function compare(left, right) {
 /**
  * Stringify for `+` concatenation.
  *
- * An object reaching here means a template concatenated something it should have
- * read a property of. Rendering `[object Object]` onto the page is a diagnostic
- * nobody can act on, so development names the value and production renders
- * nothing. `Date` is the one object with a useful default string.
+ * An object here means the template forgot a property access, and `[object Object]`
+ * helps nobody, so an object renders as an empty string. `Date` is the exception.
  *
  * @param {unknown} value
  * @returns {string}
@@ -503,8 +459,8 @@ function stringify(value) {
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
     return String(value);
   }
-  // A function or a symbol. Neither has a rendering, and both mean the template
-  // forgot a call or a property, which is what the template check reports.
+  // A function or a symbol means a missing call or property, which the template
+  // check reports.
   return '';
 }
 

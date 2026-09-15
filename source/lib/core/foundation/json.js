@@ -1,27 +1,18 @@
 /**
  * Typed JSON reading.
  *
- * `Response.json()` and `Request.json()` are declared `Promise<any>` by the DOM
- * lib, and that `any` spreads: every call site silently loses type safety, and
- * typescript-eslint's `no-unsafe-*` rules flag each one.
+ * `Response.json()` and `Request.json()` return `Promise<any>`, which spreads through
+ * every caller and trips typescript-eslint's `no-unsafe-*` rules. A JSDoc cast satisfies
+ * tsc but leaves no assertion node for ESLint to see.
  *
- * A JSDoc cast does not fix the lint side of that, which is worth knowing before
- * committing to this architecture. A type cast comment around `await r.json()`
- * satisfies tsc, but the JSDoc cast leaves no assertion node in the ESLint AST,
- * so the rule still sees `any` being assigned. Fighting that with per-site
- * disables would put a dozen suppressions across the codebase.
- *
- * Instead the parameter here is typed structurally as `{ json(): Promise<unknown> }`.
- * `Response` and `Request` both satisfy it, and inside this function the awaited
- * value is `unknown` rather than `any`, so narrowing it is an ordinary assertion
- * that no rule objects to. One function, no suppressions, and every caller gets a
- * real type.
+ * This function types its parameter as `{ json(): Promise<unknown> }`, so the value is
+ * `unknown` inside and the cast to `T` is an ordinary assertion.
  *
  *     const session = await readJson(response);   // typed by the call site
  *
- * `readJson` asserts a shape rather than checking it. Where the payload crosses a
- * trust boundary and must actually be validated, read it as `unknown` and narrow
- * by hand: see `assertManifest` and `assertRemoteModule` in @core/remotes/mfe.js.
+ * `readJson` asserts a shape without checking it. For data that crosses a trust
+ * boundary, read `unknown` and validate it by hand, as `admitManifest` in
+ * `@core/remotes/manifest-policy.js` does.
  */
 
 /**

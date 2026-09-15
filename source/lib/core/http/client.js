@@ -1,49 +1,36 @@
 import { token } from '@core/foundation/inject.js';
 
 /**
- * The outbound JSON path every application on this library shares.
+ * The outbound JSON client every application on this library shares. ADR-0013.
  *
- * Both applications wrote this themselves before it was pulled up here, and the
- * two copies had already drifted. ADR-0013.
+ * It adds four things to `fetch`:
  *
- * WHAT IT IS OVER `fetch`
+ * - a base URL, so pointing at another API is a manifest edit
+ * - query building that drops `undefined` and repeats array values
+ * - one error type with the status and the server's error code, so a screen can tell
+ *   403 from 500 and put a 422 under the right input
+ * - one request for concurrent identical GETs (see `SharedRead`)
  *
- *  - the base URL, so a deployment pointed at another API is a manifest edit and
- *    not a search for string concatenation;
- *  - query building that drops `undefined` and expands an array into repeated
- *    parameters, so no service assembles a query string by hand;
- *  - one error type carrying the status and the server's own error code, so a
- *    screen can tell "you may not" (403) from "it broke" (500) and can put a 422
- *    under the input that caused it, without parsing a message;
- *  - one request for concurrent identical GETs, because a layout route and the tab
- *    inside it ask for the same record at the same time. See `SharedRead`.
+ * The transport is a parameter, because the authorized path lives in `@auth/session.js`
+ * and `core/` may not import `auth/`. `@auth/session-fetch.js` binds it to the session,
+ * and tests, public APIs and remotes pass their own.
  *
- * WHY THE TRANSPORT IS A PARAMETER
- *
- * The authorized path lives in `@auth/session.js` and `core/` may not import
- * `auth/`, so the client takes the function it sends through. ADR-0013.
- * `@auth/session-fetch.js` is the adapter that binds it to the session; a test, a
- * public API with no session at all, or a remote handed `host.auth.fetch` supplies
- * its own and needs nothing from auth.
- *
- * `AuthSession.json()` is the shorter path and the right one for an application
- * with nothing to distinguish. This reads the response itself because screens
- * branch on the code in the body, and that body is gone by the time a thrown
- * `Error` reaches the caller.
+ * `AuthSession.json()` is shorter when a screen doesn't branch on error codes. This
+ * client reads the body itself, because the code lives in the body.
  */
 
 /** @type {import('@core/foundation/types.js').InjectionToken<ApiClient>} */
 export const API_CLIENT = token('ApiClient');
 
 /**
- * What the client sends through: `AuthSession.fetch`, `host.auth.fetch`, a test
- * double, or `globalThis.fetch` for an API that needs no credential.
+ * What the client sends through: `AuthSession.fetch`, `host.auth.fetch`, a test double
+ * or `globalThis.fetch`.
  *
  * @typedef {(url: string, init?: RequestInit) => Promise<Response>} HttpTransport
  */
 
 /**
- * A query value. Arrays become repeated parameters; `undefined` is omitted.
+ * A query value. Arrays become repeated parameters, and `undefined` is omitted.
  *
  * @typedef {string | number | boolean | undefined | readonly string[]} QueryValue
  */
@@ -78,25 +65,23 @@ export class ApiError extends Error {
     this.body = body;
   }
 
-  /** Authenticated, but not entitled. The screens show this rather than retrying. */
+  /** True when the user is authenticated but not entitled. Screens show a message instead of retrying. */
   get forbidden() {
     return this.status === 403;
   }
 
   /**
-   * Per-field error codes from a 422, as `{ email: 'taken' }`, or an empty object for
-   * every other failure.
+   * Per-field error codes from a 422, such as `{ email: 'taken' }`, or an empty object
+   * for other failures.
    *
-   * The server owns rules no client can check — uniqueness, cross-record sums — so a
-   * write can fail on a specific field after the form said it was valid. Returning the
-   * codes rather than one sentence is what lets the screen put the message under the
-   * input that caused it instead of in a banner at the top.
+   * The server enforces rules the client can't, such as uniqueness, so a write can fail
+   * on one field after the form looked valid. Codes let the screen show the message
+   * under that input.
    *
    * @returns {Readonly<Record<string, string>>}
    */
   get fields() {
-    // No prototype, because the keys are the server's. A code named `__proto__` is
-    // kept, and `fields.constructor` is undefined rather than a function. ADR-0118.
+    // No prototype, because the keys come from the server.
     /** @type {unknown} */
     const empty = Object.create(null);
     const fields = /** @type {Record<string, string>} */ (empty);
@@ -109,9 +94,8 @@ export class ApiError extends Error {
 }
 
 /**
- * `{ "error": "code" }` is the shape both servers here answer with, and the
- * fallback names the status rather than inventing agreement: a 500 from a proxy
- * that never reached the API has no code, and `http_500` says so.
+ * Reads `{ "error": "code" }`, the shape both servers here send. Anything else becomes
+ * `http_<status>`, such as a 500 from a proxy that never reached the API.
  *
  * @type {ErrorCode}
  */
@@ -127,7 +111,7 @@ export class ApiClient {
   #fetch;
   #errorCode;
 
-  /** Reads in flight, by URL. Emptied as each one settles; see `SharedRead`. */
+  /** Reads in flight, keyed by URL. Each entry is removed when it settles. */
   /** @type {Map<string, SharedRead>} */
   #reads = new Map();
 
@@ -142,8 +126,8 @@ export class ApiClient {
   }
 
   /**
-   * A read, joining one already in flight for the same URL rather than sending a
-   * second. `signal` still cancels this caller alone.
+   * A GET that joins a read already in flight for the same URL. `signal` still cancels
+   * only this caller.
    *
    * @template T
    * @param {string} path
@@ -154,8 +138,7 @@ export class ApiClient {
   get(path, query, signal) {
     const url = this.#url(path, query);
 
-    // Already gone. `fetch` rejects an aborted signal without sending, and joining
-    // would make this caller's answer wait on requests it no longer wants.
+    // An already aborted signal rejects without joining, as `fetch` would.
     if (signal?.aborted === true) return this.#sendUrl(url, { signal }, path);
 
     const joined = this.#reads.get(url);
@@ -190,9 +173,8 @@ export class ApiClient {
   }
 
   /**
-   * PUT, for a write whose address is the thing being written rather than an
-   * identifier the server invents — one account's balance for one month, sent
-   * twice, has to be one balance.
+   * PUT, for a write addressed by what it writes, such as one account's balance for one
+   * month. Sending it twice still leaves one balance.
    *
    * @template T
    * @param {string} path
@@ -213,8 +195,8 @@ export class ApiClient {
   }
 
   /**
-   * The event-stream URL. Not fetched through this client — `EventSource` opens
-   * the connection itself — but built here so the base URL is written down once.
+   * The event-stream URL. `EventSource` opens the connection itself, and building the
+   * URL here keeps the base URL in one place.
    *
    * @param {string} path
    * @param {Query} [query]
@@ -236,9 +218,8 @@ export class ApiClient {
   }
 
   /**
-   * The send itself, over a URL that has already been built: `get` needs that URL
-   * as the key it shares a read under, and building it twice would be building it
-   * differently one day.
+   * Send to an already built URL. `get` builds the URL once and also uses it as the
+   * sharing key.
    *
    * @template T
    * @param {string} url
@@ -265,8 +246,8 @@ export class ApiClient {
     const url = new URL(`${this.#baseUrl}${path}`, location.origin);
     for (const [key, value] of Object.entries(query ?? {})) {
       if (value === undefined) continue;
-      // Appended one at a time, so an array becomes `?status=a&status=b` — the form the
-      // server's `anyOf` reads, and the only form that survives a value containing a comma.
+      // Append each value, so an array becomes `?status=a&status=b`, which survives
+      // values that contain commas.
       for (const entry of queryValues(value)) url.searchParams.append(key, entry);
     }
     return url.href;
@@ -283,34 +264,20 @@ export class ApiClient {
  */
 
 /**
- * One GET in flight, and everybody waiting on it.
+ * One GET in flight and every caller waiting on it.
  *
- * WHY THIS EXISTS
+ * A layout and the tab inside it often fetch the same record on the same navigation,
+ * because the router hands a child no data. Sharing the request saves a round trip
+ * without a new interface.
  *
- * A layout route fetches the record for its header and the tab rendered inside it
- * fetches the same record for its body, on the same navigation, because the router
- * hands a child no data and the injector has one root scope. Two identical GETs
- * left the browser for every detail screen. Coalescing them is one round trip
- * saved with no interface for a screen to learn.
+ * It isn't a cache. The entry lives from send to settle, so a later read sends a new
+ * request. Caching belongs in an application store. ADR-0076, ADR-0013.
  *
- * WHAT IT IS NOT
- *
- * Not a cache. The entry lives from the send to the settle and no longer, so a
- * second read that starts after the first finished is a second request and reads
- * whatever the server says now. Keying, staleness and revalidation are a store's
- * decisions, and a store is application code. ADR-0076, ADR-0013.
- *
- * WHAT IT OWNS
- *
- *  - **One request, many callers.** Each gets its own copy of the body, so sharing
- *    is invisible: two screens that both mutate what they were handed cannot see
- *    each other's edits, exactly as when each had its own response to parse.
- *  - **Cancellation per caller.** One caller's `signal` rejects that caller and
- *    nothing else. The request is aborted when the *last* one leaves, because a
- *    response nobody is waiting for is one worth not receiving.
- *  - **Its listeners.** Every terminal path drops the abort listener it put on a
- *    caller's signal, which for a long-lived screen is the same rule
- *    `resource()` follows for the same reason.
+ * - Each caller gets its own copy of the body, so callers can't see each other's
+ *   mutations.
+ * - A caller's `signal` rejects only that caller. The request aborts when the last
+ *   caller leaves.
+ * - Every path that settles a caller removes its abort listener.
  */
 class SharedRead {
   /** @type {Set<Waiting>} */
@@ -349,14 +316,12 @@ class SharedRead {
       const leave = () => {
         this.#waiting.delete(waiting);
         if (this.#waiting.size === 0) {
-          // Dropped before the abort, or a `get` for this URL in the window between
-          // the two would join a read that is already on its way to rejecting.
+          // Drop the entry before aborting, so a `get` in between starts a fresh
+          // request instead of joining a failing one.
           this.#release();
           this.#request.abort(signal.reason);
         }
-        // What `fetch` would have rejected this caller with, had it been the only
-        // one. Relayed rather than wrapped: a caller that aborts with its own reason
-        // reads that reason back, and `AbortSignal.reason` is typed `any`.
+        // Reject with the signal's own reason, as `fetch` would.
         // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
         reject(signal.reason);
       };
@@ -379,11 +344,8 @@ class SharedRead {
   }
 
   /**
-   * Settle everybody still waiting, in the order they arrived.
-   *
-   * The first of them owns the parsed body: it is the caller whose request this is,
-   * and cloning for it would charge the common case — one caller, nothing shared —
-   * for a copy nobody can observe.
+   * Settle everyone still waiting, in arrival order. The first caller gets the parsed
+   * body itself, so the common single-caller case skips the clone.
    *
    * @param {(waiting: Waiting, own: boolean) => void} settle
    */
@@ -397,7 +359,7 @@ class SharedRead {
     this.#waiting.clear();
   }
 
-  /** Once. A second call would delete a newer read stored under the same URL. */
+  /** Remove the entry once. A second call would delete a newer read under the same URL. */
   #release() {
     if (this.#dropped) return;
     this.#dropped = true;
@@ -406,9 +368,8 @@ class SharedRead {
 }
 
 /**
- * A body is serialised here rather than at each verb so that `undefined` — the
- * absent body of a DELETE — never becomes the four bytes `null` with a
- * Content-Type claiming they are JSON.
+ * Serialize a JSON body. An `undefined` body, as on a DELETE, sends nothing instead of
+ * `null` with a JSON content type.
  *
  * @param {unknown} body
  * @returns {RequestInit}
@@ -423,17 +384,13 @@ function jsonBody(body) {
  * @returns {string[]}
  */
 function queryValues(value) {
-  // `typeof === 'object'` rather than `Array.isArray`: the array is the only object in the
-  // union, so this narrows to `readonly string[]` where `isArray` narrows to `any[]` and
-  // spreads that `any` into every caller.
+  // `typeof === 'object'` narrows to `readonly string[]`, where `Array.isArray` would
+  // narrow to `any[]`.
   return typeof value === 'object' ? [...value] : [String(value)];
 }
 
 /**
- * `JSON.parse` is declared to return `any`, and that `any` spreads into every caller —
- * `@core/foundation/json.js` has the same note. An annotated alias fixes it without a cast:
- * the assignment is checked (any is assignable to unknown) and every call through this name
- * returns `unknown`, which has to be narrowed rather than trusted.
+ * `JSON.parse`, typed to return `unknown` instead of `any`.
  *
  * @type {(text: string) => unknown}
  */
@@ -450,8 +407,7 @@ async function readBody(response) {
   try {
     return parseJson(text);
   } catch {
-    // A JSON endpoint that answered with HTML is a routing mistake, and saying so
-    // beats "Unexpected token '<'" from a parser three frames down.
+    // HTML from a JSON endpoint is a routing mistake, and this error says so.
     throw new ApiError(response.status, 'malformed_json', response.url);
   }
 }

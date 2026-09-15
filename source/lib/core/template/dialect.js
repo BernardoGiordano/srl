@@ -1,21 +1,12 @@
 /**
- * The template dialect: what a binding may say, and what each sink means.
+ * The template dialect: what a binding may say and what each sink means.
  *
- * The dialect has two implementations by design — `core/template/template.js`
- * evaluates it in the browser, `cli/checks/template-check.mjs` emits TypeScript
- * for it in Node — and two adapters over one grammar is a good seam. Two *copies*
- * of the grammar is not: the tables, the directive regexes and the binding-syntax
- * dispatch were restated on both sides and had already drifted three ways.
+ * `core/template/template.js` evaluates the dialect in the browser, and
+ * `cli/checks/template-check.mjs` emits TypeScript for it in Node. Both import the
+ * grammar from here. The module imports nothing, so Node can load it directly.
  *
- * So the grammar lives here and both sides import it. Like
- * `expression-parser.js`, this module imports nothing at all — not signals, not
- * the DOM — so Node can load it directly and no future import can quietly make it
- * browser-only.
- *
- * What belongs here: which attributes are boolean, which elements are void, how a
- * directive head is written, which sink puts a value in a security context, and
- * how an attribute name is classified. What does not: anything that *acts*.
- * Sanitizing is security.js, evaluating is template.js, emitting is the checker.
+ * This module holds tables and parsing only. Sanitizing lives in security.js,
+ * evaluation in template.js and emission in the checker.
  */
 
 /** @import { SecurityContext, TargetClassification } from '@core/template/types.js' */
@@ -23,9 +14,8 @@
 /* ── Element and attribute tables ──────────────────────────────────────── */
 
 /**
- * HTML void elements. Emitting `</img>` would be ignored by the document
- * parser, but lit-html's own template parse is stricter about balance, and the
- * checker needs the same list to know an unclosed `<img>` does not open a scope.
+ * HTML void elements. lit-html's template parse needs balanced tags, and the checker
+ * needs the list to know that `<img>` opens no scope.
  *
  * @internal
  */
@@ -46,9 +36,8 @@ export const VOID_ELEMENTS = new Set([
 ]);
 
 /**
- * Boolean attributes, bound with lit's `?` semantics even when written without
- * one. `[disabled]="isBusy"` must remove the attribute when `isBusy` is false,
- * and a plain attribute binding would instead set `disabled="false"`.
+ * Boolean attributes, bound with lit's `?` semantics even without the `?`. So
+ * `[disabled]="isBusy"` removes the attribute when `isBusy` is false.
  */
 const BOOLEAN_ATTRIBUTES = new Set([
   'autofocus',
@@ -72,16 +61,15 @@ const BOOLEAN_ATTRIBUTES = new Set([
 /* ── Directive syntax ──────────────────────────────────────────────────── */
 
 /**
- * `{{ ... }}`. Global, and both call sites are safe with a shared instance:
- * `String.prototype.replace` resets `lastIndex`, and `matchAll` iterates over a
- * clone rather than this regex.
+ * `{{ ... }}`. Global and safe to share, because `replace` resets `lastIndex` and
+ * `matchAll` iterates over a clone.
  *
  * @internal
  */
 export const INTERPOLATION = /\{\{([\s\S]*?)\}\}/gu;
 
 /**
- * `*for="user of users"`, with two optional clauses:
+ * `*for="user of users"`, optionally followed by a key clause or an index clause.
  *
  *     *for="user of users; key: user.id"      keyed, reorders instead of rebuilding
  *     *for="user of users; index as position" names the index
@@ -95,25 +83,16 @@ export const FOR_KEY_CLAUSE = /^key\s*:\s*([\s\S]+)$/u;
 export const FOR_INDEX_CLAUSE = /^index\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)$/u;
 
 /**
- * `<template *fragment="cell(row of people, index)">`: markup the enclosing
- * element renders later, once per thing it has, with `row` and `index` as lexical
- * locals.
+ * `<template *fragment="cell(row of people, index)">` declares markup the enclosing
+ * element renders later, with `row` and `index` as locals.
  *
- * The head reads as a function signature because that is what a fragment is. The
- * name is the property it is assigned to on the parent element, kebab-cased like
- * every other property binding, and the parameters are the locals its body sees.
- * The consumer calls it positionally, so `<ui-table-column>` receives the same
- * `(row, index, value)` a `renderer` receives.
+ * The head reads like a function signature. The name is the property the fragment is
+ * assigned to, kebab-cased like other property bindings. The consumer calls it
+ * positionally, so `<ui-table-column>` passes `(row, index, value)`.
  *
- * `of` names where a local's *type* comes from, and means what it means in `*for`
- * — one element of that iterable. A table hands its columns rows typed `unknown`,
- * because a table works for any row, so without this a cell fragment could name no
- * member of the row it was written for. The page knows the answer and says it
- * once, in the same expression language as everything else.
- *
- * Parentheses and commas may not appear inside the head. That keeps the parameter
- * split unambiguous and keeps the annotation to what it is for: naming a
- * collection already in scope, not computing one. ADR-0104.
+ * `of` names where a local's type comes from, as in `*for`. A table types its rows
+ * `unknown`, so the page states the row type here. Parentheses and commas can't
+ * appear inside the head, which keeps the split unambiguous. ADR-0104.
  *
  * @internal
  */
@@ -123,11 +102,8 @@ export const FRAGMENT_HEAD = /^\s*([A-Za-z][A-Za-z0-9-]*)\s*\(([^()]*)\)\s*$/u;
 const FRAGMENT_PARAM = /^([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+of\s+(\S[\s\S]*))?$/u;
 
 /**
- * Read a `*fragment` head, or `undefined` when it is not one.
- *
- * Shared rather than restated, because the runtime binds these names to values and
- * the checker binds them to types, and a parameter list the two sides split
- * differently would type-check one template and run another.
+ * Read a `*fragment` head, or `undefined` when it isn't one. Shared, so the runtime
+ * and the checker split parameters the same way.
  *
  * @param {string} source
  * @returns {{ property: string, params: { name: string, iterable: string | undefined }[] } | undefined}
@@ -156,27 +132,19 @@ export function parseFragmentHead(source) {
 }
 
 /**
- * Member names an expression may never name, and identifiers it may never
- * resolve. A template expression is authored data rather than user input, so
- * this is not a sandbox: it exists so `{{ thing.constructor }}` resolves to
- * nothing useful and a template can never be the interesting half of a gadget
- * chain.
+ * Member names an expression may never use. Templates are authored code, so this is
+ * no sandbox. It keeps `{{ thing.constructor }}` useless as part of a gadget chain.
  *
  * @internal
  */
 export const FORBIDDEN_MEMBERS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /**
- * Why a member operation is refused, or `undefined` if it is allowed.
+ * Why a member operation is refused, or `undefined` if it's allowed.
  *
- * Reads were the only operation that consulted this list, so `x.__proto__`
- * threw while `x.__proto__ = y`, `x['__proto__'] = y` and `{ __proto__: y }`
- * went through and changed a prototype. The rule is about the *name*, not about
- * the direction the value travels, so every operation that names a member —
- * read, call, direct write, computed write, object construction — asks here.
- *
- * The message is the dialect's too, so the parser refusing a name it can see and
- * the evaluator refusing a key it can only compute say the same sentence.
+ * Every operation that names a member asks here, whether it reads, calls, writes
+ * directly, writes through a computed key or builds an object. The parser and the
+ * evaluator report the same message.
  *
  * @param {string} name
  * @returns {string | undefined}
@@ -187,8 +155,8 @@ export function refusedMember(name) {
 }
 
 /**
- * Attribute *names* are lowercased by the HTML parser, which is why property
- * bindings are written kebab-case and converted here, exactly as `dataset` does.
+ * Convert a kebab-case name to camelCase, as `dataset` does. The HTML parser
+ * lowercases attribute names, so property bindings are written kebab-case.
  *
  * @param {string} name
  * @returns {string}
@@ -199,12 +167,9 @@ export function camelCase(name) {
 }
 
 /**
- * `==` and `!=` are accepted by the grammar and then mean `===` and `!==`,
- * matching the `eqeqeq` rule the rest of the codebase lints for. Loose equality
- * in a template would be the only place in the project where it is legal.
- *
- * The evaluator and the emitter both normalise through this, so a template
- * cannot type-check under one meaning and run under the other.
+ * Map `==` and `!=` to `===` and `!==`, matching the `eqeqeq` lint rule. The
+ * evaluator and the emitter both use it, so a comparison means the same thing to the
+ * checker and at runtime.
  *
  * @param {string} operator
  * @returns {string}
@@ -221,9 +186,8 @@ export function strictOperator(operator) {
 /**
  * Classify an attribute name as written in the template.
  *
- * `(click)` is an event, `[href]` is a binding whose target still needs
- * `classifyBindingTarget`, `onclick=` is an inline handler and always an error,
- * and everything else is a plain attribute whose value may still interpolate.
+ * `(click)` is an event, `[href]` is a binding, `onclick` is an inline handler and
+ * always an error, and anything else is a plain attribute that may interpolate.
  *
  * @param {string} name
  * @returns {{ kind: 'event', event: string }
@@ -236,20 +200,18 @@ export function strictOperator(operator) {
 export function classifyAttributeName(name) {
   if (name.startsWith('(') && name.endsWith(')')) return { kind: 'event', event: name.slice(1, -1) };
   if (name.startsWith('[') && name.endsWith(']')) return { kind: 'binding', target: name.slice(1, -1) };
-  // Deliberately `startsWith` on the raw name: the HTML parser has already
-  // lowercased it, and the evaluator refuses the same shape, so the checker and
-  // the runtime reject exactly the same attributes.
+  // The parser already lowercased the name, and the evaluator refuses the same shape,
+  // so both reject the same attributes.
   if (name.startsWith('on')) return { kind: 'inline-handler', event: name.slice(2) };
   return { kind: 'plain' };
 }
 
 /**
- * Classify what is inside the brackets of a binding: `href`, `?disabled`,
+ * Classify what is inside a binding's brackets, such as `href`, `?disabled` or
  * `.max-rows`.
  *
- * `property` carries the camelCased name, because that is the only form either
- * adapter uses. `boolean` carries the name without its `?`, since a known
- * boolean attribute is boolean whether or not one was written.
+ * `property` carries the camelCased name. `boolean` carries the name without `?`,
+ * because a known boolean attribute is boolean either way.
  *
  * @param {string} target
  * @returns {TargetClassification}
@@ -258,8 +220,8 @@ export function classifyAttributeName(name) {
 export function classifyBindingTarget(target) {
   if (target === '') return { kind: 'empty-attribute', name: '' };
 
-  // `.onclick` does not match: a property binding is classified as a property
-  // and refused later by name, with a message about event *properties*.
+  // `.onclick` doesn't match here. It is classified as a property and refused later
+  // by name.
   if (target.toLowerCase().startsWith('on')) return { kind: 'inline-handler', name: target };
 
   if (target.startsWith('.')) {
@@ -277,9 +239,8 @@ export function classifyBindingTarget(target) {
 /* ── Sinks and their security contexts ─────────────────────────────────── */
 
 /**
- * Element/attribute pairs that load an executable or embeddable resource. A
- * string is never enough for these; they require a reviewed
- * `bypassSecurityTrustResourceUrl`.
+ * Element and attribute pairs that load an executable or embeddable resource. They
+ * accept only a reviewed `bypassSecurityTrustResourceUrl` value.
  *
  * @internal
  */
@@ -308,12 +269,11 @@ export const URL_ATTRIBUTES = new Set([
 ]);
 
 /**
- * The security context a value lands in when written to `tag`.`name`, or
- * `undefined` for an ordinary sink where escaping is enough.
+ * The security context of a value written to `tag`.`name`, or `undefined` when
+ * escaping is enough.
  *
- * One function for attributes and properties both: `src` is the same sink
- * whether it is reached as an attribute or as a property, and the two adapters
- * disagreeing about that was how `[.srcset]` ended up unchecked.
+ * Attributes and properties share one answer, since `src` is the same sink either
+ * way.
  *
  * @param {string} tag
  * @param {string} name
@@ -331,9 +291,8 @@ export function securityContextFor(tag, name) {
 }
 
 /**
- * Why a property binding is refused outright, or `undefined` if it is allowed.
- * A tag rather than a sentence: both adapters must agree on *which* properties
- * are refused, while each phrases its own diagnostic.
+ * Why a property binding is refused, or `undefined` if it's allowed. It returns a
+ * tag, so both adapters agree on which properties and phrase their own messages.
  *
  * @param {string} name camelCased property name.
  * @returns {'event-property' | 'outer-html' | 'forbidden-member' | undefined}

@@ -1,12 +1,8 @@
 /**
- * An update report as text, which is the one adapter there is.
+ * Formats an update report as text.
  *
- * A console is where a developer already is when they ask why something updated,
- * and a string is the form every other destination can still take — a test
- * assertion, a bug report, a file. A second inspection surface (a panel, a
- * protocol) is a real module when a real consumer needs one; until then this is
- * the whole of the presentation layer, and it reads the report rather than the
- * recorder. ADR-0109.
+ * Text works in a console, a test assertion, a bug report or a file. A richer surface,
+ * such as a panel, can read the same report later.
  */
 
 /** @import { UpdateRecord, UpdateReport } from '@core/diagnostics/types.js' */
@@ -20,11 +16,10 @@ const DEFAULT_RECORDS = 200;
  */
 
 /**
- * Render a report: two summaries, then the timeline that produced them.
+ * Render a report as two summaries followed by the timeline.
  *
- * The summaries come first because they answer the question that is usually
- * being asked — which component and which binding did the work — and the
- * timeline below them is where the order and the nesting are read.
+ * The summaries come first, because they answer which component and which binding did
+ * the work.
  *
  * @param {UpdateReport} report
  * @param {FormatOptions} [options]
@@ -110,7 +105,7 @@ function ms(value) {
 
 /**
  * @param {number} count
- * @param {string} noun Regular plural, which is all this file needs.
+ * @param {string} noun A noun with a regular plural.
  * @returns {string}
  */
 function plural(count, noun) {

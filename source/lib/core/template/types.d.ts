@@ -1,14 +1,12 @@
 /**
- * The template pipeline's surface: what a binding target turned out to be, the
- * scope an expression sees, the AST the parser builds, and the opaque values the
- * security bypasses return.
+ * The template pipeline's types: binding classifications, scopes, the expression AST
+ * and the opaque values the security bypasses return.
  */
 
 /**
  * The security context a bound value lands in, as named by `@core/template/dialect.js`.
- * `undefined` from `securityContextFor` means an ordinary sink where escaping is
- * enough. security.js turns these into sanitizers, the template checker turns
- * them into typed sink declarations.
+ * security.js maps each context to a sanitizer, and the template checker maps it to a
+ * typed sink.
  */
 export type SecurityContext = 'html' | 'style' | 'url' | 'urlSet' | 'resourceUrl';
 
@@ -28,11 +26,9 @@ export interface TargetClassification {
 }
 
 /**
- * Variables a template expression can see beyond the component's own members:
- * `$event` inside an event binding, and the loop variables `*for` introduces.
- *
- * Prototype-chained rather than copied, so a nested `*for` sees the outer loop's
- * variables through the chain and building a row's scope stays O(1).
+ * Variables an expression sees beyond the component's members, such as `$event` and
+ * `*for` variables. They are prototype-chained, so a nested `*for` sees outer
+ * variables and a row's scope builds in constant time.
  */
 export type TemplateLocals = Record<string, unknown>;
 
@@ -41,11 +37,9 @@ export interface Scope {
   readonly host: Record<string, unknown>;
   readonly locals: TemplateLocals;
   /**
-   * Bumped whenever anything this scope exposes may have changed: a Lit render
-   * of the host, or new `*for` locals for this row. A scope keeps its identity
-   * for the life of its host or its row, so bindings compare this number rather
-   * than the object to decide whether they must be re-evaluated. A row whose
-   * item and index are unchanged keeps its version, and its bindings do no work.
+   * Bumped when anything this scope exposes may have changed, such as a host render
+   * or new `*for` locals. The scope object keeps its identity, so bindings compare
+   * this number to decide whether to re-evaluate.
    */
   version: number;
 }
@@ -54,22 +48,18 @@ export interface Scope {
 export type Evaluator = (scope: Scope) => unknown;
 
 /**
- * Authored markup an element renders on its own terms, as many times as it needs.
+ * Authored markup an element renders when and as often as it chooses.
  *
- * A `<template *fragment="cell(row, index)">` compiles to one of these and is
- * assigned to the named property of the element it sits in. Calling it returns a
- * renderable value, so a consumer puts a fragment wherever it would put any other
- * bound value. Arguments become the body's lexical locals, in declaration order.
- *
- * The body still reads the *declaring* component's members, because it was written
- * there. A consumer supplies row locals; it does not supply a scope.
+ * `<template *fragment="cell(row, index)">` compiles to one of these and is assigned to
+ * the named property of its enclosing element. Calling it returns a renderable value,
+ * and its arguments become the body's locals in order. The body reads the declaring
+ * component's members, and a consumer supplies only the locals.
  */
 export type TemplateFragment = (...args: readonly unknown[]) => unknown;
 
 /**
- * One lit template's worth of compiled output. `strings` is handed to lit's
- * `html` tag on every render and must keep its identity forever: lit caches the
- * parsed template against it, and a rebuilt array means a rebuilt DOM.
+ * One lit template's compiled output. `strings` goes to lit's `html` tag on every
+ * render and keeps its identity, because lit caches the parsed template on it.
  */
 export interface TemplateChunks {
   readonly strings: TemplateStringsArray;
@@ -80,8 +70,8 @@ export interface TemplateChunks {
 export type CompiledTemplate = (host: object) => unknown;
 
 /**
- * Opaque values returned only by the deliberately noisy security bypass APIs.
- * They cannot be constructed by application code or mixed across DOM contexts.
+ * Opaque values only the security bypass functions return. Application code can't
+ * construct them or use one in another context.
  */
 declare const trustedHtmlBrand: unique symbol;
 declare const trustedStyleBrand: unique symbol;

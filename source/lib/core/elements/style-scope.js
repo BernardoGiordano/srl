@@ -1,12 +1,8 @@
 /**
- * An Element's stylesheet, rewritten so that its rules reach that Element and nothing
- * else in the document.
+ * Rewrites an Element's stylesheet so its rules reach only that Element.
  *
- * A component renders into light DOM, so a stylesheet cannot be isolated by a shadow
- * root, and a class name is a convention rather than a boundary. Ownership is what the
- * rules follow instead. A template compiled for a styled Element stamps every element
- * it renders with `data-ui-owner="<tag>"`, and this module rewrites each rule so that
- * the element it styles must carry that stamp and sit inside a host of that tag:
+ * A styled Element's template stamps `data-ui-owner="<tag>"` on everything it
+ * renders. Each rule is rewritten to require that stamp inside a host of that tag.
  *
  *     .title { color: red }
  *
@@ -16,25 +12,21 @@
  *       }
  *     }
  *
- * The stamp is lexical, so markup a caller projects into the card keeps its caller's
- * stamp and none of these rules. The scope is positional, so a card nested inside a card
- * answers `:host([flush])` for itself rather than for its outer instance. `:host` is the
- * element itself, and it is also the only way a rule may name context outside it:
+ * The stamp keeps projected markup out. The scope makes `:host` answer for the
+ * nearest instance. `:host` is also the only way to name outer context, as in
  * `[data-theme='dark'] :host .title`. ADR-0119.
  *
- * The layer is Tailwind's `components`, which sorts above `base` and below
- * `utilities`: preflight cannot undo a component's rules, and a utility class at a
- * call site still wins over them.
+ * The rules sit in Tailwind's `components` layer, above preflight and below
+ * utilities.
  *
- * Text in, text out, and no DOM, because three callers have to produce the same bytes:
- * the browser during source delivery, the production build that folds these rules into
- * the application stylesheet, and the project model that reports a refusal at its line.
+ * The module uses no DOM, so the browser, the build and the project model produce
+ * identical output.
  */
 
 /** The attribute a styled Element's template stamps on every element it renders. */
 export const OWNER_ATTRIBUTE = 'data-ui-owner';
 
-/** Tailwind's own layer name, so the order it declares is the order these rules obey. */
+/** Tailwind's layer name, so these rules follow Tailwind's layer order. */
 const LAYER = 'components';
 
 /** At-rules whose body is more rules, rewritten like the rules around them. */
@@ -74,10 +66,10 @@ const SHADOW = /::slotted\(|::part\(|:host-context\(/iu;
 const LEGACY_PSEUDO_ELEMENT = /^:(?:before|after|first-line|first-letter)(?![\w-])/iu;
 
 /**
- * A rule this module will not rewrite, with the place it was written.
+ * A rule that can't be scoped, with its location.
  *
- * `reason` is the sentence without its location, for a caller that reports the line
- * and column in fields of their own.
+ * `reason` is the message without the location, for callers that report line and
+ * column separately.
  *
  * @internal
  */
@@ -103,11 +95,8 @@ export class StylesheetScopeError extends Error {
 /**
  * Rewrite one Element's stylesheet so its rules apply only to that Element.
  *
- * Refuses what cannot be scoped rather than passing it through: a Tailwind directive,
- * because during development the browser reads this file as plain CSS; an `@import` or
- * `@layer`, because the one layer is this module's decision; a global definition such
- * as `@keyframes`, because its name would reach every stylesheet on the page; and a
- * shadow-DOM selector, because nothing here has a shadow root.
+ * Throws on anything it can't scope: Tailwind directives, `@import`, `@layer`,
+ * document-global definitions such as `@keyframes`, and shadow-DOM selectors.
  *
  * @internal
  * @param {string} tag The Element's tag, which roots the scope and names the owner.
@@ -135,9 +124,8 @@ export function scopeStylesheet(tag, source, where) {
 /**
  * Read the rules and declarations between two offsets and write them back scoped.
  *
- * `sheet` is the top of the file or the body of a condition written there, where only
- * rules may appear. `rule` is the body of a style rule, where a declaration and a nested
- * rule may both appear.
+ * In `sheet` mode, the top level or a condition there, only rules may appear. In
+ * `rule` mode, a style rule's body, declarations and nested rules may both appear.
  *
  * @param {string} text
  * @param {number} from
@@ -270,10 +258,8 @@ function scopeSelectorList(list, offset, context) {
 /**
  * Require the element one selector styles to be owned by `tag`.
  *
- * Only the subject — the compound after the last combinator — is filtered. An ancestor
- * inside the selector needs no stamp of its own: the scope already keeps it inside the
- * host, and `:host` is how a rule names context outside it. A subject that is the host,
- * or the parent a nested rule refers to with `&`, is left alone, because that element
+ * Only the subject, the compound after the last combinator, gets the filter. The
+ * scope already keeps ancestors inside the host. A subject that is `:scope` or `&`
  * was filtered where it was named.
  *
  * @param {string} selector
@@ -291,7 +277,7 @@ function scopeSelector(selector, tag) {
 }
 
 /**
- * `:host` and `:host(<selector>)`, spelled as the scope root they mean here.
+ * Rewrite `:host` and `:host(<selector>)` as the scope root.
  *
  * @param {string} selector
  * @returns {string}
@@ -346,8 +332,8 @@ function subjectStart(selector) {
 }
 
 /**
- * Where a compound's pseudo-element begins, or its length when it has none. A filter has
- * to go before it: `.title::before` styles the pseudo-element of an owned `.title`.
+ * Where a compound's pseudo-element begins, or its length when it has none. The
+ * filter goes before it, so `.title::before` styles an owned `.title`.
  *
  * @param {string} compound
  * @returns {number}
@@ -421,8 +407,8 @@ function splitList(list) {
 /* ── Text ─────────────────────────────────────────────────────────────────── */
 
 /**
- * The last index of an escape, a string or an attribute selector starting at `at`, or
- * `at` itself when none starts there. Nothing inside one of those is syntax.
+ * The last index of an escape, string or attribute selector that starts at `at`, or
+ * `at` when none starts there. Their contents aren't syntax.
  *
  * @param {string} text
  * @param {number} at
@@ -533,8 +519,8 @@ function stringEnd(text, open, to) {
 }
 
 /**
- * Comments blanked to spaces, so a brace inside one is not syntax and every offset
- * still points at the line the author wrote.
+ * Replace comments with spaces, so braces inside them aren't syntax and offsets
+ * still match the authored lines.
  *
  * @param {string} source
  * @returns {string}

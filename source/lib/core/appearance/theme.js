@@ -1,13 +1,11 @@
 /**
- * Runtime theme selection for the document and every light-DOM component in it.
+ * Runtime theme selection for the document and its light-DOM components.
  *
- * Components consume semantic custom properties such as `--ui-color-surface`;
- * this module decides which theme supplies them. The `light` and `dark` names are
- * built in but their values are not: they come from whichever palette stylesheet
- * the document links — `@components/theme-default.css` by default — so both work
- * before JavaScript and follow `prefers-color-scheme` while the preference is
- * `system`. A registered theme is the third way to supply the same tokens, and the
- * only one that needs this module at all.
+ * Components use semantic custom properties such as `--ui-color-surface`, and this
+ * module picks which theme supplies them. The `light` and `dark` values come from the
+ * linked palette stylesheet (`@components/theme-default.css` by default), so both work
+ * before JavaScript runs and follow `prefers-color-scheme` under `system`. A registered
+ * theme supplies its tokens through this module instead.
  */
 
 import { computed, signal } from '@core/foundation/reactive.js';
@@ -16,13 +14,9 @@ import { migrateLegacyKey, savePreference } from '@core/preferences/persistence.
 /** @import { ThemeConfig, ThemeDefinition, ThemePreference } from '@core/appearance/types.js' */
 
 /**
- * The preference this module owns, and the id it is stored under.
- *
- * `storageKey` was a raw `localStorage` key until UI preferences got one owner; it is
- * now the preference id, so the stored slot is
- * `ui.component-state:theme:<storageKey>` and an application that swaps the store
- * swaps it for the theme as well as for every table. A value written under the bare
- * key by an earlier build is adopted once, so nobody's chosen theme resets on upgrade.
+ * The preference this module owns. `storageKey` is the preference id, so the stored key
+ * is `ui.component-state:theme:<storageKey>`. A value an older build wrote under the
+ * bare key is adopted once, so saved themes survive the upgrade.
  */
 const STATE_COMPONENT = 'theme';
 const THEME_STATE_VERSION = 1;
@@ -144,9 +138,7 @@ export function setTheme(name, options = {}) {
   applyTheme();
 
   if (options.persist === false) return;
-  // A false return is a preference that did not persist, which is preferable to a
-  // theme picker that throws in private browsing or a storage-blocked embed. The
-  // policy is the store's; this call site has no fallback of its own.
+  // A failed save returns `false`, as in private browsing, and the theme still applies.
   savePreference(STATE_COMPONENT, storageKey, name, {
     schemaVersion: THEME_STATE_VERSION,
   });
@@ -203,12 +195,9 @@ function assertKnownTheme(name) {
 }
 
 /**
- * The stored preference, or undefined when there is none worth restoring.
- *
- * `accept` rejects a name no longer registered, so a theme an application stopped
- * shipping is dropped at migration time rather than adopted and then refused by
- * `setTheme`. Every other failure — storage blocked, malformed envelope, a version
- * this build does not know — is already `undefined` by the store's policy.
+ * The stored preference, or undefined when there's nothing to restore. `accept` drops a
+ * theme the application no longer registers, and every other failure is already
+ * `undefined`.
  *
  * @returns {string | undefined}
  */

@@ -4,51 +4,23 @@ import { effect, signal } from '@core/foundation/reactive.js';
 import { isNavigating } from '@core/navigation/router.js';
 
 /**
- * Which release the tab is running, and whether the origin has moved on.
- *
- * Every artifact this toolchain builds emits `build.json` — the application's name,
- * the commit it was built from, the source date — at a URL that never changes and a
- * cache policy that says to check it. Nothing read it. The cost of that is specific
- * and it is the workload this library is for: an internal tool left open across a
- * deploy keeps running last week's chunks until one of them 404s, and the first thing
- * the user sees is a route that will not load.
- *
- * A worker does not fix it. The generated one deliberately does not `skipWaiting`
- * (`@srljs/cli`'s `service-worker.mjs`), because swapping the code under a running
- * tab is the same failure with better caching. What is missing is not a mechanism but
- * a fact: the tab has no way to know.
- *
- * WHAT THIS OWNS, AND WHAT IT DOES NOT
- *
- * It owns *when the fact is true*: the file, the comparison, and the instant it is
- * safe to ask. The application owns everything after that — whether a banner appears,
- * what it says, whether it offers a reload or forces one after an idle minute. A
- * library that reloaded the page would be taking a decision that destroys unsaved
- * work in a form the user was halfway through.
- *
- * WHY A COMMIT BOUNDARY IS THE INSTANT
- *
- * A navigation is one transaction with exactly one moment when the DOM changes
- * (ADR-0002), and `isNavigating` falling back to false is that moment observed from
- * outside the router. It is also the only moment worth asking at: a release the tab
- * learns about mid-navigation is a release it can do nothing with until the screen
- * settles, and a poll on a timer asks the same question while the user is reading.
- * So the check rides the navigations the user is already making, throttled so a
- * click-heavy minute is one request rather than forty.
- *
- * WHAT MAKES A RELEASE DIFFERENT
- *
- * The name and both halves of the identity. A build of an uncommitted tree carries
- * `null` for both halves on purpose — `ArtifactRelease` says so — which makes two
- * such builds indistinguishable, so a document with no identity is read as "no
- * answer" rather than as "unchanged". A development origin serving something else
- * entirely at that URL reaches the same conclusion by the same rule.
- *
- * Once the answer is yes it stays yes, and the watch stops. Code cannot get less
- * stale by being asked again, and an application that dismissed the banner has not
- * changed which chunks the tab is running.
- *
+ * Tracks which release the tab is running and whether the origin has moved on.
  * ADR-0089.
+ *
+ * Every artifact emits `build.json` with its application name, commit and build date. A
+ * tab left open across a deploy keeps running old chunks until one of them 404s. The
+ * generated service worker doesn't `skipWaiting`, so the tab needs this fact to react.
+ *
+ * This module decides when the fact is true. The application decides what to show and
+ * whether to reload, since a forced reload can destroy unsaved work.
+ *
+ * The check runs at commit boundaries, when `isNavigating` falls back to `false`. That
+ * is when the DOM changes (ADR-0002) and when the application can act. Checks are
+ * throttled, so a busy minute costs one request.
+ *
+ * A release is identified by the application name, commit and source date. A build of
+ * an uncommitted tree has no commit or date, so such a document gives no answer. Once a
+ * change is detected it stays detected, and the watch stops.
  */
 
 /** @import { ReadonlySignal } from '@core/foundation/types.js' */
@@ -59,20 +31,16 @@ const running = signal(/** @type {ReleaseIdentity | null} */ (null));
 const moved = signal(false);
 
 /**
- * The release this tab is running: the first identity `build.json` answered with,
- * which is the one the loaded chunks came from. Null until the first answer arrives,
- * and null forever on an origin that publishes no identity.
+ * The release this tab is running, taken from the first `build.json` answer. Null until
+ * that answer arrives, and null on an origin that publishes no identity.
  *
  * @type {ReadonlySignal<ReleaseIdentity | null>}
  */
 export const runningRelease = running;
 
 /**
- * Whether the origin is serving a different release than this tab is running. False
- * until proven otherwise, and true from then on.
- *
- * This is the whole interface a banner binds to. It says the code is stale; it does
- * not say what to do about it.
+ * Whether the origin serves a different release than this tab runs. It starts false and
+ * stays true once set. A banner binds to this.
  *
  * @type {ReadonlySignal<boolean>}
  */
@@ -90,15 +58,11 @@ export function watchRelease(options = {}) {
 
   let stopped = false;
   let asking = false;
-  // Throttling by a flag a scheduled callback clears, rather than by comparing
-  // timestamps: `schedule` is the one seam the library has on the wall clock, and a
-  // suite that drove this with a manual clock would otherwise have to sleep past a
-  // real minute to see the second request. ADR-0079.
+  // A flag cleared by `schedule` throttles the checks, so a test's manual clock drives it
+  // without real sleeps. ADR-0079.
   let cooling = false;
-  // Assigned by `effect` below, and named here because `stop` closes over it: the
-  // effect's first run happens inside that call, so a `const` declared after it
-  // would be in its temporal dead zone for the one path that reaches `stop`
-  // synchronously.
+  // `effect` runs once synchronously and `stop` closes over this, so it's declared
+  // before that call.
   /** @type {() => void} */
   let dispose = () => {};
 
@@ -115,8 +79,8 @@ export function watchRelease(options = {}) {
       cooling = false;
     }, minIntervalMs);
     try {
-      // `no-cache` is the same instruction the file is served with. A stale-while-
-      // revalidate read here would answer with the release the tab already knows.
+      // `no-cache` matches how the file is served. A stale read would report the release
+      // the tab already knows.
       const response = await request(url, { cache: 'no-cache' });
       if (!response.ok || stopped) return;
       const next = identityOf(await readJson(response));
@@ -131,16 +95,13 @@ export function watchRelease(options = {}) {
         stop();
       }
     } catch {
-      // Offline, or the origin mid-swap. The next commit asks again, which is what
-      // makes this a watch rather than a probe that has to succeed.
+      // Offline, or the origin is mid-deploy. The next commit asks again.
     } finally {
       asking = false;
     }
   };
 
-  // Runs once on subscribe, with `isNavigating` false: that first read is what
-  // establishes which release the tab is running, before any navigation can change
-  // the answer.
+  // The first run sees `isNavigating` false and records the running release.
   dispose = effect(() => {
     if (!isNavigating.value) void ask();
   });
@@ -149,10 +110,8 @@ export function watchRelease(options = {}) {
 }
 
 /**
- * Forget the release this tab is running.
- *
- * Exported for tests: the two signals are module state, and a suite that asserted a
- * change would otherwise leave the next one comparing against a release it never set.
+ * Forget the release this tab is running. For tests, since the signals are module
+ * state.
  *
  * @internal
  */
@@ -162,11 +121,9 @@ export function resetRelease() {
 }
 
 /**
- * The identity in one `build.json` document, or null when it carries none.
+ * The identity in one `build.json` document, or null when it has none.
  *
- * Narrowed by hand rather than asserted, because this crosses a trust boundary in the
- * one direction that matters: the file is small, unversioned in the URL sense, and
- * the first thing a misconfigured origin answers with is its own index page.
+ * Narrowed by hand, because a misconfigured origin may answer with its index page.
  *
  * @param {unknown} value
  * @returns {ReleaseIdentity | null}
@@ -183,9 +140,8 @@ function identityOf(value) {
     commit: typeof commit === 'string' ? commit : null,
     sourceDateEpoch: typeof sourceDateEpoch === 'number' ? sourceDateEpoch : null,
   };
-  // Neither half set is a build of an uncommitted tree, which is a legitimate
-  // artifact and an identity nothing can compare. Reporting it would make every
-  // subsequent read a "change" or a "no change" by accident.
+  // With neither commit nor date, the build came from an uncommitted tree and can't be
+  // compared.
   return identity.commit === null && identity.sourceDateEpoch === null ? null : identity;
 }
 

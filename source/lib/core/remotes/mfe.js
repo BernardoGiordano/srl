@@ -1,27 +1,20 @@
 /**
- * Micro-frontend loading: the contract, not the adapter.
+ * Loads micro-frontends. This module holds the remote contract, and `host/` holds the
+ * adapter that builds host contexts.
  *
- * A remote is a separately released static folder mounted behind the shell's
- * origin, containing one ESM entry module that exports `rootTag`, `mount(host)`
- * returning one root element per route mount, and the `contract` version it was
- * written against. That is the whole interface: the shell knows a remote's mount
- * path and root tag and nothing about its internal routes, state or components.
+ * A remote is a separately released static folder under the shell's origin. Its entry
+ * module exports `rootTag`, a `mount(host)` that returns one root element per route
+ * mount, and the `contract` version it targets. The shell knows only a remote's mount
+ * path and root tag.
  *
- * A remote reaches the shell's services through `mount(host)` and nowhere else.
- * The host context is a capability object — an authorized `fetch`, a permission
- * query, navigation, translation — handed to one remote, bounded by that remote's
- * `grants`, and revoked when that exact root is unmounted. ADR-0016. This module
- * imports no auth, which is why it is in `core/` while the adapter that builds a
- * context lives in `host/`.
+ * A remote reaches the shell only through `mount(host)`. The host context is a
+ * capability object bounded by the remote's `grants` and revoked when its root
+ * unmounts. ADR-0016. This module imports no auth, which is why it lives in `core/`.
  *
- * Locations and artifact-owned styles, templates, and locales come from
- * app.manifest.json, fetched on every page load. Module digests are governed by
- * the page import map; stylesheet and template digests travel with their asset
- * records. Production composition projects a verified Remote artifact report into
- * both documents without putting the Remote implementation in the shell bundle.
- * Dependencies are shared because module identity is URL identity — one `lit`
- * URL, one instance — and a remote may use only its declared shared
- * bare-specifier interface. ADR-0017.
+ * Locations, styles, templates and locales come from the manifest. The import map pins
+ * module digests, and asset records carry stylesheet and template digests. Shared
+ * dependencies work because module identity is URL identity, and a remote may only use
+ * the bare specifiers it declares as shared. ADR-0017.
  */
 
 import { inject, token } from '@core/foundation/inject.js';
@@ -35,28 +28,24 @@ import { prefetchTemplates, seedTemplates } from '@core/template/template.js';
 /** @import { AppManifest, RemoteDescriptor, RemoteHostProvider, RemoteModule } from '@core/remotes/types.js' */
 
 /**
- * Version of the host context. Bump it when a capability changes shape, and
- * every remote written against the old one fails to load with a message naming
- * both numbers instead of dying later inside a method that moved.
+ * Version of the host context. Bump it when a capability changes shape, so a remote
+ * written against the old version fails to load with both numbers in the message.
  */
 export const HOST_CONTRACT = 2;
 
 /**
- * Supplies mount guards and host contexts. Injected rather than imported so that
- * `core/` never depends on `auth/`: `startHostedApplication` in `@host/runtime.js`
- * installs `@host/remote-host.js` as the default, and an application with a
- * different capability policy provides its own instead from its `providers` hook.
+ * Supplies mount guards and host contexts. It is injected, so `core/` never imports
+ * `auth/`. `startHostedApplication` in `@host/runtime.js` installs
+ * `@host/remote-host.js` by default, and an application can provide its own from its
+ * `providers` hook.
  *
  * @type {import('@core/foundation/types.js').InjectionToken<RemoteHostProvider>}
  */
 export const REMOTE_HOST = token('RemoteHostProvider');
 
 /**
- * The manifest every reader sees, installed by `useManifest`.
- *
- * Module state rather than a global: a global is reachable from anywhere, so
- * nothing would force startup to be the only writer, and nothing would say which
- * module owns it.
+ * The manifest every reader sees, set by `useManifest`. Module state, so only startup
+ * writes it.
  *
  * @type {AppManifest | undefined}
  */
@@ -81,11 +70,9 @@ export function manifest() {
 /**
  * Install the manifest, or clear it with `undefined`.
  *
- * Separate from `loadManifest` on purpose: fetching and validating is one thing,
- * deciding that this validated manifest is the application's is another, and the
- * second is a startup decision. `@core/application/runtime.js` is the caller that matters.
- * A test that needs a manifest whose remotes could never satisfy the page's
- * import-map pins is the other one.
+ * Separate from `loadManifest`, because choosing the application's manifest is a
+ * startup decision. Tests also install manifests whose remotes couldn't match the
+ * page's pins.
  *
  * @param {AppManifest | undefined} value
  */
@@ -94,18 +81,14 @@ export function useManifest(value) {
 }
 
 /**
- * Fetch app.manifest.json and admit it as this application's policy. Installs
- * nothing: pass the result to `useManifest`, or let `startApplication` do both in
- * order.
+ * Fetch `app.manifest.json` and admit it. This installs nothing, so pass the result to
+ * `useManifest` or let `startApplication` do both.
  *
- * `no-cache` rather than `no-store`: revalidate on every load so a redeployed
- * remote is picked up immediately, but still allow a 304 so the common case
- * costs no body transfer.
+ * The fetch uses `no-cache`, so every load revalidates and picks up a redeployed
+ * remote, while an unchanged manifest costs a 304.
  *
- * Admission itself lives in `@core/remotes/manifest-policy.js`, which decides the
- * whole document at once and knows nothing about the page. This function is the
- * browser half of that seam: it fetches the document and says where the integrity
- * pins come from.
+ * `@core/remotes/manifest-policy.js` does the admission. This function fetches the
+ * document and supplies the page's pins.
  *
  * @param {string} [url]
  * @returns {Promise<AppManifest>}
@@ -121,11 +104,9 @@ export async function loadManifest(url = '/app.manifest.json') {
 }
 
 /**
- * The integrity block of the page's static import map: the digests the browser
- * will actually enforce when a remote is imported.
- *
- * Read on demand rather than at load time, because it is only an answer to
- * "which bytes may execute", and an application with no remotes asks nobody.
+ * The integrity block of the page's static import map, which the browser enforces when
+ * a remote is imported. Read on demand, since an application without remotes never
+ * needs it.
  *
  * @returns {Readonly<Record<string, unknown>>}
  */
@@ -152,19 +133,12 @@ function pagePins() {
 /**
  * Build one lazily loaded route per remote.
  *
- * `${mount}/*` matches the mount path and everything under it, so the remote owns
- * its whole subtree and the shell needs no knowledge of the remote's internal
- * paths. That is what lets a remote add or rename a sub-view without a shell
- * change.
+ * `${mount}/*` gives the remote its whole subtree, so it can add sub-views without a
+ * shell change. Route objects are created up front, and only the remote's code waits
+ * for the first navigation.
  *
- * The route objects are created eagerly, which costs nothing: they are plain
- * objects with a closure. Only the remote's *code* is deferred, until the first
- * navigation into its mount path.
- *
- * The guard comes from the manifest's `requires` block, and the router runs it
- * before `load`. So a user without the entitlement never receives the remote's
- * code at all, which is a stronger statement than hiding its UI: for a remote
- * whose mere presence is confidential, the network tab is the leak.
+ * The guard from the manifest's `requires` runs before `load`, so a user without the
+ * entitlement never downloads the remote's code.
  *
  * @returns {RouteDef[]}
  */
@@ -182,18 +156,14 @@ export function remoteRoutes() {
       path: `${remote.mount}/*`,
       canActivate: host.guard(remote),
       mount: async () => {
-        // Cache only the immutable module. Every invocation below creates a new
-        // host connection and root element, which is the route mount boundary.
+        // Cache only the module. Each mount gets a new host connection and root element.
         pending ??= prepareRemote(remote);
         const module = await pending;
         const connection = host.connect(remote);
 
         try {
-          // The element itself is built by `@core/elements/mount.js`, which validates that
-          // the remote returned an element and that it is the `rootTag` the module
-          // exported. What stays here is the part that is not about mounting at
-          // all: one capability context per root, revoked the moment the mount
-          // does not complete.
+          // `@core/elements/mount.js` builds and validates the element. This code owns
+          // the capability context, which is revoked if the mount fails.
           const element = await requireElement({
             where: `Remote "${remote.name}"`,
             tag: module.rootTag,
@@ -212,7 +182,7 @@ export function remoteRoutes() {
         if (mounted === undefined) return;
         mounts.delete(element);
 
-        // Authority ends at route exit, before optional remote cleanup runs.
+        // Revoke authority before the remote's own cleanup runs.
         mounted.host.revoke();
         await mounted.module.unmount?.(element);
       },
@@ -224,8 +194,8 @@ export function remoteRoutes() {
 const loadedAssets = new Map();
 
 /**
- * Load descriptor-owned runtime assets before module evaluation. Guards still run first,
- * so a refused route downloads none of its independently published artifact.
+ * Load a remote's styles, templates and locales before its module evaluates. Guards run
+ * first, so a refused route downloads nothing.
  *
  * @param {RemoteDescriptor} remote
  */
@@ -264,15 +234,11 @@ function loadStyle(url, integrity) {
 }
 
 /**
- * Put a remote's markup in flight beside its entry module.
+ * Start a remote's markup beside its entry module. ADR-0081.
  *
- * Two shapes, one job. A bundle is fetched and seeded, and is awaited because the
- * remote's components read from the seeded cache the moment its module evaluates.
- * Split templates are separate immutable files the components fetch for themselves,
- * so there is nothing to await — but the URLs are known now and would otherwise not
- * be known until each component's module had arrived, which is one round trip per
- * component inside the remote's chunk. Starting them here costs nothing and is
- * where the descriptor's list stops being inert. ADR-0081.
+ * A template bundle is fetched, seeded and awaited, because the remote's components
+ * read the cache as soon as its module evaluates. Split templates are separate files,
+ * so their URLs are started now and nothing waits.
  *
  * @param {RemoteDescriptor} remote
  */
@@ -300,10 +266,8 @@ function seedRemoteTemplates(remote) {
  * @returns {Promise<RemoteModule>}
  */
 async function importRemote(remote) {
-  // A dynamic import of a specifier held in a variable is `any` to the type
-  // checker, by necessity: the target is not known until runtime. This is the
-  // exact point where static types stop being able to help, so the contract is
-  // enforced by validation instead of assumed.
+  // Importing a URL held in a variable is `any` to the type checker, so the contract is
+  // validated below.
   const module = /** @type {unknown} */ (await import(remote.url));
   return assertRemoteModule(module, remote);
 }

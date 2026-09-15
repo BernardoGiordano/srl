@@ -1,19 +1,15 @@
 /**
- * Security contexts for values that cross from a template expression into DOM.
+ * Sanitizes values that flow from template expressions into the DOM.
  *
- * Escaping text is sufficient only in a text node. URL, executable-resource,
- * HTML and style sinks each have different rules, so a value bound into one is
- * sanitized immediately before Lit writes it.
+ * Escaping only suffices in text nodes. URL, resource URL, HTML and style sinks each
+ * have their own rules, and a value is sanitized right before lit writes it.
  *
- * *Which* sink a binding writes into is settled once, while the template is
- * compiled: the element and the attribute name are both fixed by then, and
- * `attributeSinkFor`/`propertySinkFor` hand the compiler the single sanitizer
- * that binding will ever need — or `null`, when the binding is in no security
- * context and needs none.
+ * The sink is chosen at compile time. `attributeSinkFor` and `propertySinkFor` return
+ * the one sanitizer a binding needs, or `null` when it needs none.
  *
- * The four `bypassSecurityTrust*` functions are the public escape hatch. Their
- * deliberately noisy names are part of the API: every use should stand out in a
- * review and should sit next to the validation that makes the bypass safe.
+ * The four `bypassSecurityTrust*` functions are the escape hatch. Their names are
+ * noisy on purpose, so every use stands out in review next to the validation that
+ * makes it safe.
  */
 
 import {
@@ -27,16 +23,16 @@ import {
 
 const TRUSTED_VALUE = Symbol('ui-test trusted value');
 
-// Which sink is which is dialect.js's answer; these are the labels a developer
-// reads in an error message, and the tags a trusted value is stamped with.
+// Labels for error messages and trusted-value stamps. dialect.js decides which sink
+// is which.
 const HTML = 'HTML';
 const STYLE = 'Style';
 const URL_CONTEXT = 'URL';
 const RESOURCE_URL = 'Resource URL';
 
 /**
- * The browser's Trusted Types interfaces are not in TypeScript's DOM library.
- * Keep the small surface used here structural instead of adding ambient globals.
+ * TypeScript's DOM library lacks the Trusted Types interfaces, so the small surface
+ * used here is typed structurally.
  *
  * @typedef {{
  *   createHTML(value: string): unknown,
@@ -54,9 +50,8 @@ const nativeFactory = /** @type {{ trustedTypes?: NativePolicyFactory }} */ (
   /** @type {unknown} */ (globalThis)
 ).trustedTypes;
 
-// `lit-html` and the runtime template compiler create separate policies for
-// their static/framework-owned markup. This policy stays private to the
-// sanitizer and covers only values assigned to HTML/resource binding sinks.
+// lit-html and the template compiler create their own policies for framework markup.
+// This one stays private to the sanitizer and covers HTML and resource URL sinks.
 const nativePolicy = nativeFactory?.createPolicy('ui-test', {
   createHTML: (value) => value,
   createScriptURL: (value) => value,
@@ -97,7 +92,7 @@ class TrustedValue {
 }
 
 /**
- * Bypass HTML sanitization. The caller is responsible for proving `value` safe.
+ * Bypass HTML sanitization. The caller must prove `value` is safe.
  * @param {string} value
  * @returns {TrustedHtml}
  */
@@ -106,7 +101,7 @@ export function bypassSecurityTrustHtml(value) {
 }
 
 /**
- * Bypass style sanitization. The caller is responsible for proving `value` safe.
+ * Bypass style sanitization. The caller must prove `value` is safe.
  * @param {string} value
  * @returns {TrustedStyle}
  */
@@ -115,8 +110,8 @@ export function bypassSecurityTrustStyle(value) {
 }
 
 /**
- * Bypass ordinary URL sanitization. This is not sufficient for an executable
- * resource sink such as iframe.src or link.href.
+ * Bypass URL sanitization. It isn't enough for an executable resource sink such as
+ * `iframe.src` or `link.href`.
  * @param {string} value
  * @returns {TrustedUrl}
  */
@@ -125,8 +120,8 @@ export function bypassSecurityTrustUrl(value) {
 }
 
 /**
- * Trust a URL that loads an executable or embeddable resource. This is the
- * narrowest and most security-sensitive bypass; prefer fixed template literals.
+ * Trust a URL that loads an executable or embeddable resource. This is the most
+ * sensitive bypass, so prefer fixed URLs written in the template.
  * @param {string} value
  * @returns {TrustedResourceUrl}
  */
@@ -137,8 +132,8 @@ export function bypassSecurityTrustResourceUrl(value) {
 }
 
 /**
- * Assign framework-owned template source to a parser sink in a way that remains
- * compatible with `require-trusted-types-for 'script'`.
+ * Assign framework-owned template source to a parser sink under
+ * `require-trusted-types-for 'script'`.
  *
  * @param {HTMLTemplateElement} template
  * @param {string} source
@@ -150,12 +145,8 @@ function setTemplateSource(template, source) {
 }
 
 /**
- * Resolve the sink an attribute binding writes into.
- *
- * Every input to this decision is fixed when the binding is compiled — the
- * element, the attribute name — so the compiler asks once and keeps the answer
- * instead of re-deriving it per evaluation. `null` means the attribute lands in
- * no security context and the value needs no sanitizer at all.
+ * Resolve the sink an attribute binding writes into. `null` means no security
+ * context and no sanitizer.
  *
  * @param {string} tag
  * @param {string} name
@@ -170,13 +161,8 @@ export function attributeSinkFor(tag, name, where) {
 }
 
 /**
- * Resolve the sink a property binding writes into, and refuse outright the DOM
- * assignments whose lifecycle or code-execution semantics cannot be made safe.
- *
- * Those refusals used to be raised on every evaluation, and a compile-time call
- * with a `null` value existed alongside them so that a dangerous target failed
- * even when the binding never rendered. Resolving the sink at compile time is
- * that call, so the pair collapses into one.
+ * Resolve the sink a property binding writes into, and refuse properties that can't
+ * be made safe. Refusals happen at compile time, even if the binding never renders.
  *
  * @param {string} tag
  * @param {string} name camelCased property name.
@@ -202,8 +188,8 @@ export function propertySinkFor(tag, name, where) {
 }
 
 /**
- * The dialect decides which sink a name is; this binds that answer to the one
- * sanitizer it selects, together with the `where` its errors quote.
+ * Pair the dialect's context for a name with its sanitizer and the `where` its errors
+ * quote.
  *
  * @param {string} tag
  * @param {string} name
@@ -218,8 +204,7 @@ function sinkFor(tag, name, where) {
 }
 
 /**
- * One sanitizer per context, selected by name rather than by a chain of
- * comparisons the evaluator would walk again on every render.
+ * One sanitizer per context, looked up by name.
  *
  * @typedef {(value: unknown) => unknown | null} Sanitizer
  * @typedef {(value: unknown, where: string) => unknown | null} ContextSanitizer
@@ -235,8 +220,8 @@ const SANITIZERS = {
 };
 
 /**
- * A nullish value means "remove this attribute" in every context, which is why
- * each sanitizer answers `null` before looking at anything else.
+ * A nullish value removes the attribute in every context, so each sanitizer checks
+ * for it first.
  *
  * @param {unknown} value
  * @param {string} where
@@ -267,8 +252,7 @@ function sanitizeForUrl(value, where) {
 function sanitizeForUrlSet(value, where) {
   if (value === null || value === undefined) return null;
   const trusted = asTrustedValue(value);
-  // A URL set is stamped with the ordinary URL trust: `srcset` carries the same
-  // values `src` does, so a separate stamp would be a distinction without one.
+  // `srcset` carries the same values as `src`, so it accepts URL trust.
   return trusted === null ? sanitizeUrlSet(stringValue(value, where)) : trusted.unwrap(URL_CONTEXT);
 }
 
@@ -312,9 +296,9 @@ function nativeScriptUrl(value) {
   return nativePolicy?.createScriptURL(value) ?? value;
 }
 
-// Schemes that browsers treat as ordinary navigation/fetch destinations. Data
-// URLs are limited to non-SVG media; `data:text/html` and `data:image/svg+xml`
-// can carry active content in embedding contexts.
+// Schemes browsers treat as ordinary navigation or fetch targets. Data URLs are
+// limited to non-SVG media, because `data:text/html` and `data:image/svg+xml` can
+// carry active content.
 const SAFE_SCHEMES = new Set(['blob', 'ftp', 'http', 'https', 'mailto', 'sms', 'tel']);
 const SAFE_DATA_URL = /^data:(?:audio\/(?:aac|flac|midi|mpeg|mp4|ogg|wav|webm)|image\/(?:avif|bmp|gif|jpeg|jpg|png|webp)|video\/(?:mp4|mpeg|ogg|webm));base64,[a-z0-9+/]+=*$/iu;
 const SCHEME = /^([a-z][a-z0-9+.-]*):/iu;
@@ -322,8 +306,8 @@ const SCHEME = /^([a-z][a-z0-9+.-]*):/iu;
 /** @param {string} value @returns {string} */
 function sanitizeUrl(value) {
   const trimmed = value.trim();
-  // Remove ASCII controls only for scheme detection. Browsers ignore these in
-  // surprising positions, so `java\nscript:` must not evade the protocol check.
+  // Strip ASCII controls for scheme detection only, so `java\nscript:` can't slip
+  // past the check.
   const comparable = withoutAsciiControls(trimmed);
   const scheme = SCHEME.exec(comparable)?.[1]?.toLowerCase();
   if (scheme === undefined || SAFE_SCHEMES.has(scheme)) return trimmed;
@@ -359,9 +343,8 @@ const ACTIVE_STYLE = /(?:url\s*\(|@import\b|expression\s*\(|(?:-moz-)?binding\s*
 
 /** @param {string} value @returns {string | null} */
 function sanitizeStyle(value) {
-  // CSS escape and comment rules make block-list decoding deceptively complex.
-  // Dynamic declarations stay deliberately narrow; a reviewed TrustedStyle is
-  // required for URLs, imports or escapes.
+  // CSS escapes and comments make block lists hard to get right, so dynamic styles
+  // stay narrow. URLs, imports and escapes need a reviewed TrustedStyle.
   return ACTIVE_STYLE.test(value) ? null : value;
 }
 

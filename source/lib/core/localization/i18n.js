@@ -1,22 +1,16 @@
 /**
- * Internationalisation that changes at runtime, everywhere, without a reload.
+ * Runtime internationalization that switches language without a reload.
  *
- * The whole mechanism is two signals. `t()` reads the message table, so any
- * component whose template calls it has subscribed to it, and assigning a new
- * table re-renders exactly those components. No locale in the URL, no per-locale
- * bundle, no re-bootstrapping, and no subscription in application code.
+ * It rests on two signals. `t()` reads the message table, so a template that calls it
+ * is subscribed, and a new table re-renders exactly those components.
  *
- * A bundle is a URL pattern containing `{locale}`, resolved to JSON. Several may
- * be registered and are merged, which is what lets a micro-frontend ship its own
- * translations. Keys are flat and dotted after loading: a missing key is then one
- * lookup and one warning naming it, instead of a walk that has to report which
- * level of nesting went missing.
+ * A bundle is a URL pattern containing `{locale}` that resolves to JSON. Registered
+ * bundles merge, so a micro-frontend can ship its own translations. Keys are flattened
+ * to dotted paths on load.
  *
- * `Intl` does plurals and formatting, so there is no library and no ICU parser.
- * Pass `count` and the category comes from `Intl.PluralRules` for the active
- * locale, which is why a language with four forms costs nothing extra. `num`,
- * `cur`, `dt` and `rel` wrap the four formatters, memoised per locale and
- * reactive for the same reason `t` is.
+ * `Intl` handles plurals and formatting. Pass `count`, and `Intl.PluralRules` picks the
+ * category. `num`, `cur`, `dt` and `rel` wrap the formatters, cached per locale and
+ * reactive like `t`.
  */
 
 import { batch, computed, signal } from '@core/foundation/reactive.js';
@@ -26,17 +20,15 @@ import { migrateLegacyKey, savePreference } from '@core/preferences/persistence.
 /** @import { I18nConfig, MessageTable } from '@core/localization/types.js' */
 
 /**
- * The chosen locale is a UI preference, so it is stored by the module that owns
- * them rather than in a bare `localStorage` slot of its own: an application that
- * swaps the store now swaps it for the language too. `ui.locale` is the key an
- * earlier build wrote, and it is adopted once as the preference id so that nobody's
- * chosen language resets on upgrade.
+ * The chosen locale is stored through the preference module, so swapping the store
+ * covers it too. `ui.locale` is an older key, adopted once so saved choices survive the
+ * upgrade.
  */
 const STATE_COMPONENT = 'locale';
 const STATE_ID = 'ui.locale';
 const LOCALE_STATE_VERSION = 1;
 
-/** Locales written right to left. Enough to prove `dir` is handled. */
+/** Locales written right to left. */
 const RTL = new Set(['ar', 'fa', 'he', 'ur']);
 
 /* ── State ─────────────────────────────────────────────────────────────── */
@@ -52,7 +44,7 @@ let config = {
 /** @type {string[]} */
 const patterns = [];
 
-/** `pattern|locale` -> table, so a locale is fetched at most once. */
+/** Tables by resolved bundle URL, so each bundle is fetched once. */
 /** @type {Map<string, MessageTable>} */
 const fetched = new Map();
 
@@ -64,15 +56,11 @@ export const locale = signal('en');
 const messages = signal(emptyTable());
 
 /**
- * Read-only view of that table, for code that must react to translations
- * changing without being able to write them.
+ * Read-only view of the message table.
  *
- * A component never needs this: it calls `t()` inside a render effect and is
- * subscribed by that call. It exists for the one case that has no render effect
- * to hide inside — a micro-frontend built on a different stack, which is handed
- * `onChange` callbacks rather than signals. Watching `locale` alone would miss a
- * bundle being merged at a constant locale, which is exactly what happens when
- * another remote loads.
+ * Components don't need it, because calling `t()` subscribes them. It serves a remote
+ * built on another stack, which gets `onChange` callbacks. Watching `locale` alone
+ * would miss a bundle merged at the same locale.
  *
  * @type {import('@core/foundation/types.js').ReadonlySignal<MessageTable>}
  */
@@ -94,10 +82,8 @@ export const availableLocales = computed(() =>
 /**
  * Apply the manifest's `i18n` block and load the starting locale.
  *
- * Awaited by main.js before the first render, for the same reason the session
- * restore is: a component that renders once against an empty message table and
- * then again against a full one flashes untranslated text, and there is no
- * reason to ship that when startup can simply be ordered correctly.
+ * Startup awaits this before the first render, so no component flashes untranslated
+ * text.
  *
  * @param {I18nConfig} next
  * @returns {Promise<void>}
@@ -111,9 +97,8 @@ export async function configureI18n(next) {
 }
 
 /**
- * Contribute another message bundle. Safe to call after startup: a remote that
- * registers its own translations while it loads gets them merged into the active
- * table, which re-renders whatever is already on screen.
+ * Add a message bundle. It is safe after startup, and the merged table re-renders
+ * whatever is on screen.
  *
  * @param {string} pattern URL containing `{locale}`.
  * @returns {Promise<void>}
@@ -127,9 +112,8 @@ export async function registerMessages(pattern) {
 /**
  * Switch locale.
  *
- * The two signals are written inside one `batch`, so components re-render once
- * with a consistent pair rather than twice, the second time against a table that
- * does not match the locale their formatters just used.
+ * Both signals are written in one `batch`, so components re-render once with a matching
+ * table and locale.
  *
  * @param {string} requested BCP-47 tag. Negotiated against the supported list.
  * @returns {Promise<void>}
@@ -146,9 +130,8 @@ export async function setLocale(requested) {
       locale.value = next;
     });
 
-    // A locale that does not persist is a far smaller problem than a startup that
-    // throws, and deciding that is the preference store's job rather than this one's:
-    // private browsing and a storage-blocked embed both come back as `false` here.
+    // A save that fails, as in private browsing, returns `false` and doesn't break
+    // startup.
     savePreference(STATE_COMPONENT, STATE_ID, next, {
       schemaVersion: LOCALE_STATE_VERSION,
     });
@@ -166,12 +149,10 @@ export async function setLocale(requested) {
 /**
  * Translate a key.
  *
- * Reading `messages.value` here is the entire reactivity story: every template
- * that calls `t` has, by that call, subscribed to the message table.
+ * Reading `messages.value` subscribes the calling template to the message table.
  *
- * A missing key renders as the key itself and warns once in development. It does
- * not throw: an untranslated string is a visible, self-describing defect, while a
- * thrown error takes down the component that was going to show it.
+ * A missing key renders as the key itself and doesn't throw, so the defect is visible
+ * without breaking the component.
  *
  * @param {string} key
  * @param {Readonly<Record<string, unknown>>} [params]
@@ -188,23 +169,20 @@ export function t(key, params) {
     pattern = table[`${key}.${category}`] ?? table[`${key}.other`] ?? pattern;
   }
 
-  // A key with no message renders as itself, which is visible in the page and in
-  // `npm run verify`'s untranslated count.
+  // A key with no message renders as itself.
   if (pattern === undefined) return key;
   return params === undefined ? pattern : interpolate(pattern, params);
 }
 
 /**
- * Hoisted, because a regex literal is a fresh `RegExp` on every evaluation, and
- * this one is evaluated once per parameterised `t()` — which in a table is once per
- * cell. `String.prototype.replace` resets `lastIndex` on a global regex itself, so
- * sharing one instance is safe.
+ * Hoisted, because a regex literal is a new object per evaluation and this runs for
+ * every parameterized `t()`. `replace` resets `lastIndex`, so sharing it is safe.
  */
 const PLACEHOLDER = /\{(\w+)\}/gu;
 
 /**
- * `{name}` placeholders. Numbers and dates are formatted for the active locale
- * rather than stringified, so `{count}` in Italian reads `1.234` and not `1234`.
+ * Fill `{name}` placeholders. Numbers and dates are formatted for the active locale, so
+ * `{count}` reads `1.234` in Italian.
  *
  * @param {string} pattern
  * @param {Readonly<Record<string, unknown>>} params
@@ -217,8 +195,7 @@ function interpolate(pattern, params) {
     if (typeof value === 'number') return num(value);
     if (value instanceof Date) return dt(value);
     if (value === null || value === undefined) return '';
-    // An object, a function or a symbol renders nothing: `[object Object]` inside a
-    // sentence is worse than an obvious gap.
+    // Objects, functions and symbols render nothing, which beats `[object Object]`.
     if (typeof value === 'string') return value;
     if (typeof value === 'boolean' || typeof value === 'bigint') return String(value);
     return '';
@@ -228,24 +205,18 @@ function interpolate(pattern, params) {
 /* ── Formatters ────────────────────────────────────────────────────────── */
 
 /**
- * `Intl` constructors are expensive enough that building one per render is
- * measurable in a list, and cheap enough to keep forever once built. Keyed by
- * locale plus the options, so a page using two date formats keeps both.
+ * Cached `Intl` formatters. Building one per render is measurable in a list, so they
+ * are kept per locale and options.
  *
  * @type {Map<string, Intl.NumberFormat | Intl.DateTimeFormat | Intl.RelativeTimeFormat | Intl.PluralRules>}
  */
 const formatters = new Map();
 
 /**
- * The cache key is composed by the caller, not derived from an options object
- * here.
+ * Look up or build a formatter by a key the caller composes.
  *
- * `JSON.stringify(options)` is the obvious way to key this and the expensive one:
- * the fixed-shape formatters — money, relative time, a date with no options —
- * would allocate an options object and stringify it on every call to look up a
- * formatter already built. A thousand-row table with three money cells a row paid
- * for three thousand of those. Only `num`/`dt` with caller-supplied options still
- * stringify, and there the options really are arbitrary.
+ * Callers with fixed options pass a fixed key, so they skip stringifying an options
+ * object on every call. Only `num` and `dt` with custom options stringify them.
  *
  * @template {Intl.NumberFormat | Intl.DateTimeFormat | Intl.RelativeTimeFormat | Intl.PluralRules} T
  * @param {string} key
@@ -274,8 +245,8 @@ export function num(value, options) {
 }
 
 /**
- * Format an amount of money. Currency is a data property, never a locale one:
- * an Italian user looking at a dollar price must see dollars.
+ * Format money. The currency comes from the data, never from the locale, so an Italian
+ * user sees a dollar price in dollars.
  *
  * @param {number} value
  * @param {string} currency ISO 4217, e.g. `EUR`.
@@ -307,7 +278,7 @@ export function dt(value, options) {
   );
 }
 
-/** `rel` has one shape, so it has one options object. */
+/** The one options object `rel` uses. */
 const RELATIVE_OPTIONS = /** @type {Intl.RelativeTimeFormatOptions} */ ({ numeric: 'auto' });
 
 /**
@@ -338,10 +309,9 @@ function pluralRules(tag) {
 /**
  * Build the merged table for a locale.
  *
- * Bundles are fetched in parallel and merged in registration order, so a remote
- * registered later may override a shell key deliberately. The fallback locale is
- * merged underneath, which means a partially translated locale falls back key by
- * key rather than all at once.
+ * Bundles load in parallel and merge in registration order, so a later remote can
+ * override a shell key. Fallback locales merge underneath, so a partial translation
+ * falls back key by key.
  *
  * @param {string} tag
  * @returns {Promise<MessageTable>}
@@ -352,8 +322,8 @@ async function mergeFor(tag) {
     chain.flatMap((candidate) => patterns.map((pattern) => load(pattern, candidate))),
   );
 
-  // Reduced in reverse so the *first* entries of the chain win: the requested
-  // locale beats its base language, which beats the default locale.
+  // Reverse, so earlier chain entries win. The requested locale beats its base
+  // language, which beats the default.
   const merged = emptyTable();
   for (const table of tables.reverse()) Object.assign(merged, table);
   return merged;
@@ -372,15 +342,11 @@ function fallbackChain(tag) {
 }
 
 /**
- * A bundle that 404s resolves to an empty table rather than rejecting. A locale
- * for which one of several bundles has no file yet is a normal state during
- * translation work, and it must not take the application down.
+ * Load one bundle for a locale. A 404 or a failure yields an empty table, because a
+ * missing translation file is normal during translation work.
  *
- * The URL the pattern resolves to is the bundle's identity — it is what the cache
- * is keyed on and what `registerMessages` deduplicates — while `bundleFiles` says
- * which file currently answers for it. A build hash-names its bundles so they can
- * be served immutable, and a hash cannot live in a pattern; nothing else here
- * changes, because the substitution is still the only thing that names a locale.
+ * The URL the pattern resolves to is the bundle's identity and cache key. `bundleFiles`
+ * maps it to the hash-named file a build emitted.
  *
  * @param {string} pattern
  * @param {string} tag
@@ -398,8 +364,7 @@ async function load(pattern, tag) {
       table = flatten(/** @type {unknown} */ (await response.json()));
     }
   } catch {
-    // A locale that cannot be loaded falls back to the one already in the table:
-    // an untranslated page beats a blank one.
+    // Fall back to the locales already merged. An untranslated page beats a blank one.
   }
 
   fetched.set(url, table);
@@ -407,14 +372,10 @@ async function load(pattern, tag) {
 }
 
 /**
- * Accept nested JSON as well as flat, and flatten it to dotted keys. Translation
- * tools overwhelmingly produce nested files; the runtime wants flat lookups, and
- * doing this once at load is the cheapest place.
+ * Flatten nested JSON to dotted keys, once at load.
  *
- * A key beginning with `$` is a note to translators, not a message: JSON has no
- * comments, so bundles carry `$comment` entries, sometimes as an array of lines.
- * They are skipped here and by `verify-deps.mjs`, which is what lets that tool
- * claim it flattens exactly as the runtime does.
+ * Keys that start with `$` are translator notes, such as `$comment`, and are skipped
+ * here and by `verify-deps.mjs` alike.
  *
  * @param {unknown} value
  * @returns {MessageTable}
@@ -442,12 +403,9 @@ function flatten(value) {
 }
 
 /**
- * An empty message table with no prototype.
- *
- * A table's keys come from fetched bundles and the key `t` looks up may come from
- * data, so neither may reach `Object.prototype`. On a plain object `t('constructor')`
- * finds a function, and a bundle's `__proto__` entry goes to the setter instead of
- * the table. ADR-0118.
+ * An empty message table with no prototype. Keys come from bundles and lookups may come
+ * from data, so `t('constructor')` must find nothing and a `__proto__` entry must stay
+ * a plain key.
  *
  * @returns {MessageTable}
  */
@@ -460,11 +418,11 @@ function emptyTable() {
 /* ── Negotiation ───────────────────────────────────────────────────────── */
 
 /**
- * Pick a starting locale: an explicit `?lang=`, then a stored choice, then the
- * browser's preference list, then the default.
+ * Pick the starting locale, from `?lang=`, then the stored choice, then the browser's
+ * languages, then the default.
  *
- * `?lang=` wins so a link can pin a language for a screenshot or a support call
- * without changing what the user has chosen.
+ * `?lang=` wins, so a link can pin a language for a screenshot without changing the
+ * user's saved choice.
  *
  * @returns {string}
  */
@@ -472,8 +430,7 @@ function preferredLocale() {
   const requested = new URLSearchParams(location.search).get('lang');
   if (requested !== null && requested !== '') return requested;
 
-  // Storage unavailable, malformed, or holding a locale this build no longer
-  // supports all arrive here as undefined, and fall through to the browser's list.
+  // Unavailable storage, bad data and unsupported locales all come back undefined.
   const stored = migrateLegacyKey(STATE_COMPONENT, STATE_ID, STATE_ID, {
     schemaVersion: LOCALE_STATE_VERSION,
     accept: (raw) => (raw !== '' && isSupported(raw) ? raw : undefined),
@@ -509,8 +466,8 @@ function isSupported(tag) {
 }
 
 /**
- * `it-IT` requested against a supported list containing only `it` resolves to
- * `it`, so the message URL, the stored value and the `lang` attribute all agree.
+ * Resolve `it-IT` to `it` when only `it` is supported, so the bundle URL, the stored
+ * value and `lang` agree.
  *
  * @param {string} tag
  * @returns {string}
@@ -534,8 +491,7 @@ function baseLanguage(tag) {
  */
 function localeLabel(code) {
   try {
-    // Named in its own language, which is what a language picker should show:
-    // someone looking for Italian is looking for "italiano".
+    // Name each language in itself, so someone looking for Italian finds "italiano".
     const names = new Intl.DisplayNames([code], { type: 'language' });
     return names.of(code) ?? code;
   } catch {
@@ -546,9 +502,8 @@ function localeLabel(code) {
 /* ── Template globals ──────────────────────────────────────────────────── */
 
 /**
- * Everything above, callable from any `.html` template by bare name. This is the
- * equivalent of Angular's `DatePipe` and friends being available without an
- * import, and it is why no component needs to inject anything to be translated.
+ * Expose the helpers above to every template by bare name, like Angular's built-in
+ * pipes, so no component injects anything to translate.
  */
 registerTemplateGlobals({
   t,

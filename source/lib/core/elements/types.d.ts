@@ -1,42 +1,37 @@
 /**
- * What a component is, and what one request to mount a view carries.
+ * Component definitions and mount requests.
  *
- * `@core/elements/component.js` records definitions, `mount.js` performs a
- * request, and `outlet.js` turns a target into one.
+ * `@core/elements/component.js` records definitions, `mount.js` performs requests,
+ * and `outlet.js` turns a target into a request.
  */
 
 /**
- * What `defineComponent` is given: one component's identity, stated once.
- *
- * The template is not named here. It is the sibling `.html` of `module`, so a
- * renamed component module cannot leave a template URL pointing at the old name.
+ * What `defineComponent` receives. The template is the sibling `.html` of `module`.
  */
 export interface ComponentSpec {
-  /** Custom element name. Lowercase, hyphenated, and this component's only one. */
+  /** Custom element name, lowercase and hyphenated. */
   readonly tag: string;
   /** The class to register. */
   readonly element: CustomElementConstructor;
-  /** Always `import.meta.url`: the anchor for the template and for error messages. */
+  /** Always `import.meta.url`. Anchors the template and names the file in errors. */
   readonly module: string;
   /**
-   * `false` for a component that builds its markup in `render()`, or a path
-   * relative to `module` when the template is not its sibling.
+   * `false` for a component that renders in `render()`, or a path relative to
+   * `module` when the template isn't its sibling.
    */
   readonly template?: string | false;
   /**
    * `true` when the sibling `.css` of `module` is this Element's stylesheet. Its rules
-   * reach the markup this Element's template renders and, through `:host`, the
-   * Element itself — nothing a caller projects into it and nothing outside it.
-   * ADR-0119.
+   * reach the markup this Element's template renders, and the Element itself through
+   * `:host`. ADR-0119.
    *
-   * `'bundled'` is written by the production build, never by hand: the scoped rules are
-   * already in the application stylesheet, so nothing is fetched.
+   * The production build writes `'bundled'` when the scoped rules are already in the
+   * application stylesheet.
    */
   readonly styles?: boolean | 'bundled';
   /**
-   * The components this component's template may name, as classes. A real import,
-   * so ES module evaluation order defines them first, and the fact
-   * cli/checks/template-check.mjs checks the template against.
+   * The components this template may name, as classes. The import defines them
+   * first, and the template checker validates the template against this list.
    */
   readonly uses?: readonly ComponentRef[];
 }
@@ -56,25 +51,21 @@ export interface ComponentDefinition {
 }
 
 /**
- * Anything that names a component: its class, its definition, or its tag.
- *
- * A route, an `<x-outlet>` target, a remote entry and the startup root all take
- * one of these, so none of them repeats a tag string that already exists in the
- * component's own definition. `tagOf` in `@core/elements/component.js` reads the tag back
- * out.
+ * Anything that names a component: its class, its definition or its tag.
+ * `tagOf` in `@core/elements/component.js` reads the tag.
  */
 export type ComponentRef = string | CustomElementConstructor | ComponentDefinition;
 
 /** What a `<x-outlet>` should be showing. */
 export interface OutletTarget {
-  /** Component to mount: its class, its definition, or its tag. */
+  /** Component to mount: its class, its definition or its tag. */
   readonly tag?: ComponentRef;
   /**
-   * Loads the module that defines it. Awaited once, before mounting. What it
-   * resolves to is read as a `ComponentRef` when `tag` is not given.
+   * Loads the module that defines the component, once, before mounting. Its result
+   * is read as a `ComponentRef` when `tag` is absent.
    */
   readonly load?: () => Promise<unknown>;
-  /** Assigned as element *properties*, not attributes, so objects survive. */
+  /** Assigned as element properties, so objects survive. */
   readonly props?: Readonly<Record<string, unknown>>;
 }
 
@@ -82,40 +73,29 @@ export interface OutletTarget {
 export type ContentBuckets = Map<string, Node[]>;
 
 /**
- * One request to mount a view: what defines it, what instantiates it, and what
- * releases it if the attempt is superseded before its element is placed.
- *
- * An `<x-outlet>` target, one level of a matched route chain and a remote's root
- * are all expressed as one of these, which is what lets `@core/elements/mount.js` own the
- * load, definition, race and release rules for all three instead of each of them
- * owning its own copy.
+ * One request to mount a view. Outlet targets, route levels and remote roots all
+ * become one of these.
  */
 export interface MountRequest {
   /**
-   * The caller, as it appears at the front of every error message from this
-   * request: `<x-outlet>`, `Route "/users"`, `Remote "billing"`.
+   * The caller's name at the front of every error message, such as `<x-outlet>`,
+   * `Route "/users"` or `Remote "billing"`.
    */
   readonly where: string;
-  /**
-   * Component to instantiate, and what a `create` result is validated against:
-   * its class, its definition, or its tag.
-   */
+  /** Component to create, and what a `create` result is checked against. */
   readonly tag?: ComponentRef;
   /**
-   * Loads the module that defines it. Run only while `tag` is undefined or names
-   * an element that does not exist yet. What it resolves to is read as a
-   * `ComponentRef` when `tag` is not given, which is how a lazy route learns what
-   * it is mounting from the module it just loaded.
+   * Loads the defining module. Runs only when `tag` is absent or not yet defined. Its
+   * result is read as a `ComponentRef` when `tag` is absent.
    */
   readonly load?: () => Promise<unknown>;
   /**
-   * Builds the element itself, for a mount that also owns something external to
-   * it: a route's `mount()`, a remote's `mount(host)`. Takes precedence over
-   * instantiating `tag`.
+   * Builds the element directly, for a mount that also owns something else, such as
+   * a route's `mount()` or a remote's `mount(host)`. Takes precedence over `tag`.
    */
   readonly create?: () => HTMLElement | Promise<HTMLElement>;
-  /** Assigned as element *properties*, not attributes, so objects survive. */
+  /** Assigned as element properties, so objects survive. */
   readonly props?: Readonly<Record<string, unknown>>;
-  /** Pairs with `create` when the element is discarded before it is placed. */
+  /** Releases an element from `create` that was discarded before placement. */
   readonly release?: (element: HTMLElement) => void | Promise<void>;
 }

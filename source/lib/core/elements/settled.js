@@ -1,34 +1,19 @@
 /**
- * When a render is finished.
+ * When a render is finished. The router and the test harness share this one
+ * definition. ADR-0079.
  *
- * One rule, in one module, because a dozen places had written it. The router
- * waits for a layout to render before it looks for the outlet inside it. The test
- * harness waits before asserting. A router suite walked a mounted chain level by
- * level. Nine component suites each declared a local `ready()` that re-derived a
- * subtree walk, and no two of the nine agreed: some awaited every descendant,
- * some named two tag names, some settled the root twice and stopped.
- *
- * A dozen spellings of "finished" is how they disagree, and the one that is wrong
- * is the one whose assertion goes flaky on a slower machine. ADR-0079.
- *
- * Nothing here reads a clock or waits for a frame. Both exports resolve on the
- * element's own promises, so a suite that awaits them is not waiting on wall-clock
- * time — see `@core/foundation/clock.js` for the scheduled work that is.
+ * Both exports wait on the element's own promises, never on a clock or a frame.
  */
 
 /**
- * Wait until one element has finished rendering, including a render its first one
- * scheduled.
+ * Wait until one element finishes rendering, including a render its first one
+ * schedules.
  *
- * One `updateComplete` is not enough: a component that projects content puts its
- * children back at the end of *its own* first render, which its parent's update
- * only schedules, so a `<main>` authored inside `<ui-app-shell>` does not exist
- * yet when the shell's update completes. One more turn, then the host's
- * completion again, covers it.
+ * A projecting component puts its children back at the end of its own first render,
+ * after its parent's update has completed. One more turn and a second
+ * `updateComplete` cover that.
  *
- * An element with no `updateComplete` is not an error and not a no-op: awaiting
- * `undefined` still yields the three microtask turns, which is what the harness
- * has always done and what a caller holding a plain element expects.
+ * A plain element without `updateComplete` still gets the microtask turns.
  *
  * @param {Element} element
  * @returns {Promise<void>}
@@ -44,27 +29,17 @@ export async function whenRendered(element) {
 }
 
 /**
- * How many times `settled` will look for descendants that were not there last
- * time. A stable subtree needs two passes: one that waits for what it finds, one
- * that finds nothing new. Anything approaching this limit is a component that
- * grows the tree on every update, and hanging is a worse way to learn that than
- * the error below.
+ * Passes `settled` makes before it gives up. A stable subtree needs two. Reaching the
+ * limit means something adds an element on every update.
  */
 const PASS_LIMIT = 50;
 
 /**
  * Wait until an element and everything it rendered have finished.
  *
- * The walk repeats rather than sweeping once, because a level's children only
- * exist after that level has rendered: a routed chain reveals one layout at a
- * time, and a single pass over `querySelectorAll('*')` would return before the
- * deepest view was ever in the document. Each pass waits for the descendants it
- * has not waited for yet; when a pass finds none, the subtree has stopped growing
- * and the root's own render is awaited once more.
- *
- * Only elements with an `updateComplete` are waited for. A plain `<div>` has
- * nothing pending, and three microtask turns each across a table's worth of cells
- * is measurable for no gain.
+ * Each pass waits for updatable descendants it hasn't seen yet. A routed chain
+ * reveals one level at a time, so one pass isn't enough. When a pass finds nothing
+ * new, the root's render is awaited once more. Plain elements are skipped.
  *
  * @param {Element} element
  * @returns {Promise<void>}

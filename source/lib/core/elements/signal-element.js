@@ -8,36 +8,23 @@ import { templateFor } from '@core/template/template.js';
 /** @import { ContentBuckets } from '@core/elements/types.js' */
 
 /**
- * Classes whose instance fields have been checked against the members they could
- * hide.
- *
- * Fields are declared by the class body, so one passing instance answers for every
- * instance of that class. A class is added only after it passes, so a broken one
- * reports itself every time rather than once.
+ * Classes whose fields passed the hidden-member check. One instance answers for its
+ * class, and a failing class keeps reporting.
  *
  * @type {WeakSet<Function>}
  */
 const membersChecked = new WeakSet();
 
 /**
- * The base class every component extends: Angular's
- * `ChangeDetectionStrategy.OnPush` plus signals, in about eighty lines.
+ * The base class every component extends. It pairs lit with signals, much like
+ * Angular's `OnPush` change detection.
  *
- * Five responsibilities:
- *
- *  1. Render into light DOM, so Tailwind utility classes apply. See projection.js
- *     for why shadow DOM is off the table.
- *  2. Re-render when a signal read by a JavaScript `render()` changes. Compiled
- *     templates track and update each binding independently in template.js.
- *  3. Project authored children at `<x-content>` markers.
- *  4. Expose a lifetime AbortSignal so listeners and timers clean themselves up.
- *  5. Render the component's `.html` template, so `render()` need not be written
- *     at all. Override it and declare `template: false` when a component's markup
- *     is trivial or entirely computed.
- *
- * A base class rather than a mixin: a mixin's added members are close to
- * impossible to express in JSDoc without hand-writing a declaration file for its
- * return type, and a plain base class types itself for free.
+ * - Renders into light DOM, so Tailwind utilities apply.
+ * - Re-renders when a signal read by a JavaScript `render()` changes. Compiled
+ *   templates update each binding on their own.
+ * - Projects authored children at `<x-content>` markers.
+ * - Exposes `lifetime`, an AbortSignal that aborts on disconnect.
+ * - Renders the component's `.html` template by default.
  */
 export class SignalElement extends LitElement {
   /** @type {(() => void) | undefined} */
@@ -54,37 +41,27 @@ export class SignalElement extends LitElement {
   #hasAdoptedFields = false;
 
   /**
-   * Why the next render is happening.
+   * Why the next render happens, reported to `@core/diagnostics/updates.js`.
    *
-   * Only the paths that schedule a render can say. The tracking effect knows a
-   * signal woke it, `connectedCallback` knows the element came back, and
-   * `renderRevisedTemplate` and `renderRevisedDefinition` know an edit replaced
-   * the markup or the class. Every other route to `requestUpdate()` is a property
-   * write, which is what the default says. Read and reset by `performUpdate`, and
-   * reported to `@core/diagnostics/updates.js`. ADR-0109.
+   * The paths that schedule a render set it: the tracking effect, a reconnect and
+   * the two revision methods. Anything else is a property write, which is the
+   * default.
    *
    * @type {ElementUpdateCause}
    */
   #updateCause = 'properties';
 
   /**
-   * Hand every class field back to the reactive accessor it shadowed.
+   * Route class fields back through the reactive accessors they shadow.
    *
-   * `static properties = { open: {...} }` makes Lit define an accessor on the
-   * prototype. Writing the default next to it — `open = false` — is the shape
-   * every Lit example uses, and in plain JavaScript it silently breaks the
-   * property: a class field is installed with [[Define]], not [[Set]], so it
-   * creates an *own* data property that shadows the accessor. From then on
-   * `this.open = true` writes a plain value with no `requestUpdate`, no re-render
-   * and no reflection, and nothing throws.
+   * `static properties` makes Lit define an accessor on the prototype. A field such
+   * as `open = false` is installed with [[Define]], so it creates an own data
+   * property that hides the accessor, and writes stop triggering updates.
+   * TypeScript avoids this by compiling fields to assignments. With no compile
+   * step, the fix happens at runtime.
    *
-   * Lit solves this in its own constructor, but subclass field initialisers run
-   * *after* the base constructor returns. TypeScript escapes it by compiling
-   * fields down to assignments; there is no compile step here, which is why it
-   * has to be handled at runtime.
-   *
-   * Delete, then assign: the delete uncovers the accessor and the assignment goes
-   * through it, so the value survives and reactivity starts working.
+   * Deleting the own property uncovers the accessor, and reassigning the value goes
+   * through it.
    */
   #adoptShadowedFields() {
     if (this.#hasAdoptedFields) return;
@@ -105,27 +82,17 @@ export class SignalElement extends LitElement {
   }
 
   /**
-   * Refuse a field that hides a method this element is going to call.
+   * Throw when a field hides an inherited method.
    *
-   * `render = 'state'` is legal JavaScript and silently fatal. A class field is
-   * installed with [[Define]], so it creates an own data property that covers
-   * `SignalElement.prototype.render` rather than overriding it, and the first
-   * update calls a string. What Lit raises then names a member the author never
-   * wrote, at a line far from the one that caused it.
+   * `render = 'state'` creates an own property that covers
+   * `SignalElement.prototype.render`, and the first update calls a string. Every
+   * field is checked, since a fixed list of lifecycle names would go stale.
+   * Callable fields pass, and fields over reactive properties were already repaired
+   * by `#adoptShadowedFields`.
    *
-   * Every field, rather than a list of lifecycle names: hiding a callable member
-   * behind a value breaks whichever member it is, and a list would go stale the
-   * first time a base class grew a method. A field that *is* callable is left
-   * alone, so `render = () => ...` keeps working. So does a field over a declared
-   * reactive property — that is an accessor pair, not a method, and
-   * `#adoptShadowedFields` has already repaired it above.
-   *
-   * A live instance is the only place a field exists. `defineComponent` cannot
-   * build one, because a class extending HTMLElement is not constructible until
-   * `customElements.define` has run on it, and reading the class source instead
-   * would refuse valid components on a regular expression's word. The static model
-   * in cli/project-model/ answers the same question earlier, from the source, and
-   * names the line. ADR-0115.
+   * The check needs a live instance, because a class extending HTMLElement can't be
+   * constructed before `define`. `cli/project-model/` reports the same mistake
+   * statically, at its line.
    */
   #assertNoHiddenMembers() {
     const element = this.constructor;
@@ -148,9 +115,8 @@ export class SignalElement extends LitElement {
   }
 
   /**
-   * Light DOM. Returning `this` means lit-html patches our own children rather
-   * than a shadow root's, which is what lets Tailwind's document-level
-   * stylesheet reach them.
+   * Render into the element itself, so the document's Tailwind stylesheet reaches
+   * the markup.
    *
    * @returns {HTMLElement}
    */
@@ -159,10 +125,8 @@ export class SignalElement extends LitElement {
   }
 
   /**
-   * A DOM `AbortSignal` (not a reactive signal, despite living on a class called
-   * SignalElement) that aborts when the element leaves the DOM. Angular's
-   * `DestroyRef`, and the reason this codebase has no manual `removeEventListener`
-   * calls:
+   * A DOM `AbortSignal` that aborts when the element leaves the DOM, like Angular's
+   * `DestroyRef`. Pass it to listeners instead of removing them by hand.
    *
    *     window.addEventListener('resize', this.onResize, { signal: this.lifetime });
    *
@@ -174,30 +138,25 @@ export class SignalElement extends LitElement {
   }
 
   connectedCallback() {
-    // Before anything reads a declared property, including the first render.
+    // Before anything reads a declared property.
     this.#adoptShadowedFields();
 
-    // And before anything calls a member a field could be covering.
+    // Before anything calls a member a field could hide.
     this.#assertNoHiddenMembers();
 
-    // Must happen before the first render. lit-html clears its container, and
-    // the authored children are gone by the time any Lit hook could see them.
+    // Before the first render, because lit-html clears its container.
     this.#content ??= captureContent(this);
 
     super.connectedCallback();
 
-    // Re-entering the DOM after a move. Tracking was torn down on disconnect,
-    // so nothing is listening to signals any more. Without this the element
-    // renders once and then silently stops reacting.
+    // A moved element lost its tracking on disconnect and must render to track again.
     if (this.#hasRendered && this.#disposeTracking === undefined) {
       this.#updateCause = 'reconnect';
       this.requestUpdate();
     }
 
-    // A component that projects content renders immediately, not next microtask:
-    // its authored children have just been removed and are in no document until
-    // this render puts them back, which a parent's `firstUpdated` can observe.
-    // ADR-0019. Elements with no projected content keep the asynchronous default.
+    // A projecting component renders synchronously. Its children stay detached until
+    // this render puts them back, and a parent's `firstUpdated` can observe that.
     if (this.#content !== undefined && this.#content.size > 0) this.performUpdate();
   }
 
@@ -211,28 +170,20 @@ export class SignalElement extends LitElement {
   }
 
   /**
-   * Dependency tracking.
+   * Track the signals a JavaScript `render()` reads.
    *
-   * A JavaScript-authored `render()` runs inside an effect, so every signal it
-   * reads is recorded; when one changes the effect re-runs and hands control back
-   * to Lit's scheduler with `requestUpdate()` instead of rendering itself.
-   * Compiled `.html` templates do not read their expressions here — their binding
-   * directives each own an effect and patch their own Lit Part.
-   *
-   * The second pass reads no signals, so this effect ends with an empty
-   * dependency set and never fires again. It does not need to: the
-   * `requestUpdate()` schedules another `performUpdate()`, which disposes this
-   * effect and builds a fresh one that re-records dependencies. Rebuilding is the
-   * point — a template branching on `user.value` reads different signals in each
-   * branch, and a set captured once would go stale when the branch flipped.
+   * The render runs inside an effect. When a dependency changes, the effect calls
+   * `requestUpdate()`, and the next update disposes this effect and records
+   * dependencies again. A branch can read different signals on each render, so the
+   * set is rebuilt every time. Compiled templates track each binding separately.
    */
   performUpdate() {
     if (!this.isUpdatePending) return;
 
     this.#disposeTracking?.();
 
-    // Read before the render, reset before it: anything that schedules the *next*
-    // render during this one is describing that one, not this one.
+    // Read and reset before rendering, so a render scheduled during this one reports
+    // its own cause.
     const cause = this.#hasRendered ? this.#updateCause : 'mount';
     this.#updateCause = 'properties';
 
@@ -263,8 +214,7 @@ export class SignalElement extends LitElement {
   /** @param {Map<PropertyKey, unknown>} changed */
   updated(changed) {
     super.updated(changed);
-    // Inside the render `performUpdate` opened, and the first point at which Lit
-    // has said which properties moved.
+    // The first point where Lit reports which properties changed.
     noteElementProperties(this, changed.keys());
     if (this.#content !== undefined) projectContent(this, this.#content);
   }
@@ -272,12 +222,9 @@ export class SignalElement extends LitElement {
   /**
    * Render the compiled `.html` template against this instance.
    *
-   * Synchronous, and it has to be: Lit's render is synchronous, so a template
-   * still in flight would mean rendering nothing and patching it in later. That
-   * is why `defineComponent` attaches the template *before* registering the
-   * element — by the time an instance can exist, its template is compiled and
-   * waiting. Reaching this error means the element was registered with a bare
-   * `customElements.define` instead.
+   * Lit renders synchronously, so the template must already be compiled.
+   * `defineComponent` guarantees that by attaching it before `define`. The error
+   * below means the element was registered with a bare `customElements.define`.
    *
    * @returns {unknown}
    */
@@ -295,12 +242,8 @@ export class SignalElement extends LitElement {
   }
 
   /**
-   * Render markup that has replaced this element's template.
-   *
-   * Development only, and called by `@core/template/template.js` when an edited
-   * `.html` file compiles. The attachment has already been replaced by then, so
-   * this asks for a render and names the reason it is happening — `render()` reads
-   * the current attachment and finds the new one. ADR-0111.
+   * Render after an edit replaced this element's template. Development only, called
+   * by `@core/template/template.js`. ADR-0111.
    */
   renderRevisedTemplate() {
     this.#updateCause = 'template';
@@ -308,12 +251,8 @@ export class SignalElement extends LitElement {
   }
 
   /**
-   * Render after this element's class body was replaced.
-   *
-   * Development only, and called by `@core/elements/component.js` when an edited
-   * `.js` file is adopted. The methods and accessors this render will run are
-   * already the new ones; what this adds is the render itself and the reason for
-   * it. ADR-0113.
+   * Render after an edit replaced this element's class body. Development only,
+   * called by `@core/elements/component.js`. ADR-0113.
    */
   renderRevisedDefinition() {
     this.#updateCause = 'definition';
@@ -328,12 +267,10 @@ export class SignalElement extends LitElement {
 }
 
 /**
- * Delete an own property and write its value back, so the write lands on the
- * accessor the own property was hiding.
+ * Delete an own property and write its value back through the accessor it hid.
  *
- * A free function rather than three lines inline, because the cast it needs
- * would otherwise be an alias of `this`, which the linter refuses — and it is
- * right to: `this` in a loop body is how the wrong object gets mutated.
+ * A function instead of inline code, because the cast would alias `this`, which the
+ * linter refuses.
  *
  * @param {Record<PropertyKey, unknown>} target
  * @param {PropertyKey} name
@@ -345,13 +282,10 @@ function reassignThroughAccessor(target, name) {
 }
 
 /**
- * The class whose prototype holds a callable `name`, or undefined when nothing on
- * the chain does.
+ * The class whose prototype holds a callable `name`, or undefined.
  *
- * The first prototype carrying the name decides, because that is the one a call
- * would have reached. An accessor there is not a callable member: a declared
- * reactive property is an accessor pair, and a field over one is the shape
- * `#adoptShadowedFields` exists to repair.
+ * The first prototype with the name decides, since a call would reach it. An
+ * accessor doesn't count, because reactive properties are accessors.
  *
  * @param {object} instance
  * @param {PropertyKey} name
@@ -373,7 +307,7 @@ function hiddenMethodOwner(instance, name) {
 }
 
 /**
- * What a field holds, as the error message says it: `a string`, `null`.
+ * How the error message names a field's value, such as `a string` or `null`.
  *
  * @param {unknown} value
  * @returns {string}
