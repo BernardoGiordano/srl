@@ -32,7 +32,7 @@
  *   4. Typechecks a strict consumer of the import-map audience as one whole program,
  *      importing every library module through the published tsconfig base. It allows
  *      no diagnostic anywhere, the package's own included, and no library JavaScript in
- *      the program where a declaration belongs. ADR-0119.
+ *      the program where a declaration belongs. ADR-0120.
  *
  * What it does not cover: remotes, i18n, the release transport. Those are checked in
  * the checkout, and none of them is where the installed shape differs.
@@ -186,7 +186,7 @@ const HARNESS = './testing/harness.js';
  * Its module re-exports every module under every prefix the installed manifest declares,
  * by the specifier an application writes, plus the test harness by its subpath. A module
  * the scaffold happens not to import is covered all the same, so a missing declaration or
- * a type that fails under `strict` refuses the run. ADR-0119.
+ * a type that fails under `strict` refuses the run. ADR-0120.
  *
  * Importing every module directly also puts each one a single import from the consumer,
  * where `maxNodeModuleJsDepth` never elides anything. A clean typecheck therefore cannot

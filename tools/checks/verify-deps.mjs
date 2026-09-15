@@ -116,6 +116,7 @@ import {
   urlToFile,
 } from '../../cli/package/interface.mjs';
 import {
+  missingStylesheets,
   missingTemplates,
   orphanTemplates,
   projectErrors,
@@ -382,7 +383,7 @@ export async function verifyDependencies() {
    * published and maps each prefix into the declarations built from the directory the
    * import map serves. source/tsconfig.source.json maps it into that directory, for
    * this repository, which edits the modules the declarations are built from.
-   * ADR-0119.
+   * ADR-0120.
    *
    * Package-relative, not repository-relative. Path targets in an extended config
    * resolve against the file that declares them, which is inside the package wherever
@@ -892,7 +893,9 @@ export async function verifyDependencies() {
       const code =
         problem.kind === 'shadowed-lifecycle'
           ? 'deps/shadowed-member'
-          : 'deps/unreadable-declaration';
+          : problem.kind === 'stylesheet'
+            ? 'deps/stylesheet'
+            : 'deps/unreadable-declaration';
       refuse(code, problem.message, {
         group,
         file: problem.file,
@@ -916,6 +919,25 @@ export async function verifyDependencies() {
     pass(
       'deps/templates-resolve',
       `${String(withTemplates.length - missingTemplates(model).length)} component template(s) ` +
+        `resolve to a file`,
+      { group },
+    );
+
+    const withStylesheets = [...model.elements.values()].filter((record) => record.stylesheet !== null);
+    for (const record of missingStylesheets(model)) {
+      refuse(
+        'deps/missing-stylesheet',
+        `defines <${record.tag}> with \`styles: true\`, whose stylesheet is ` +
+          `${show(String(record.stylesheet))}, which does not exist. The browser refuses to ` +
+          `define the element and the build stops on it.\n` +
+          `    An Element's stylesheet is always its module's sibling .css. ADR-0119.`,
+        { group, file: record.module },
+      );
+    }
+
+    pass(
+      'deps/stylesheets-resolve',
+      `${String(withStylesheets.length - missingStylesheets(model).length)} element stylesheet(s) ` +
         `resolve to a file`,
       { group },
     );

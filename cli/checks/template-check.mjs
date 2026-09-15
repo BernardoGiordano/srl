@@ -1543,7 +1543,7 @@ export function checkTemplateSource(input) {
  * repository before it was published, and a consumer's program types that package
  * through its emitted declarations rather than the modules the templates bind to.
  * Reporting on them would put errors in front of a consumer about code they did not
- * write and cannot fix. ADR-0119.
+ * write and cannot fix. ADR-0120.
  *
  * @param {Component} component
  * @returns {boolean}

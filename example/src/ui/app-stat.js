@@ -60,4 +60,4 @@ export class AppStat extends SignalElement {
   }
 }
 
-await defineComponent({ tag: 'app-stat', element: AppStat, module: import.meta.url });
+await defineComponent({ tag: 'app-stat', element: AppStat, module: import.meta.url, styles: true });

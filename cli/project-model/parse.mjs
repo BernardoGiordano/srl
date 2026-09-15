@@ -35,6 +35,7 @@ import { readText } from '../layout.mjs';
  *   tag: string,
  *   template: string | undefined,
  *   templateDeclared: boolean,
+ *   styles: boolean,
  *   uses: string[],
  * }} RawDefinition
  */
@@ -283,6 +284,7 @@ function readDefineComponent(node, parsed, tree) {
   let template;
   let templateDeclared = false;
   let templateLiteral = true;
+  let styles = false;
   /** @type {string[]} */
   const uses = [];
   /** @type {string[]} */
@@ -308,6 +310,13 @@ function readDefineComponent(node, parsed, tree) {
       else if (value.kind !== ts.SyntaxKind.FalseKeyword) {
         templateLiteral = false;
         unreadable.push('a computed `template`');
+      }
+    } else if (name === 'styles') {
+      if (value.kind === ts.SyntaxKind.TrueKeyword) styles = true;
+      else if (ts.isStringLiteralLike(value) && value.text === 'bundled') {
+        unreadable.push("`styles: 'bundled'`, which only the production build writes");
+      } else if (value.kind !== ts.SyntaxKind.FalseKeyword) {
+        unreadable.push('a `styles` that is not `true` or `false`');
       }
     } else if (name === 'uses') {
       if (ts.isArrayLiteralExpression(value)) {
@@ -337,6 +346,7 @@ function readDefineComponent(node, parsed, tree) {
     tag,
     template,
     templateDeclared,
+    styles,
     uses,
   });
 }
@@ -379,6 +389,7 @@ function readCustomElementsDefine(node, parsed, tree) {
     tag: tagArgument.text.toLowerCase(),
     template: undefined,
     templateDeclared: false,
+    styles: false,
     uses: [],
   });
 }

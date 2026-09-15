@@ -11,7 +11,8 @@
  *   .html   a template revision. `reviseTemplate` recompiles the file and renders it
  *           into the hosts already showing it, so their fields, signals and
  *           subscriptions survive the edit (ADR-0111).
- *   .css    the linked stylesheet is fetched again and swapped in place.
+ *   .css    an Element's own stylesheet has its rules replaced in place (ADR-0119);
+ *           any other linked stylesheet is fetched again and swapped in place.
  *   .js     a component revision. `reviseComponentModule` runs the edited module
  *           again and installs its class body on the class the registry holds, or
  *           refuses and names what changed (ADR-0113).
@@ -88,6 +89,7 @@ export async function applyUpdate(update) {
   }
 
   for (const url of plan.stylesheets) {
+    if (await reviseElementStylesheet(url)) continue;
     if (!refreshStylesheet(url)) {
       location.reload();
       return;
@@ -174,6 +176,36 @@ async function reviseModules(urls) {
       location.reload();
       return;
     }
+  }
+}
+
+/**
+ * Replace the rules of an Element's own stylesheet, or report that no Element owns it.
+ *
+ * The page adopted that sheet rather than linking it, so there is no `<link>` to swap;
+ * the sheet keeps its place and every host keeps its state. A stylesheet that cannot be
+ * scoped is a line in the console and not a reload, for the reason a template that
+ * does not compile is one.
+ *
+ * @param {string} url
+ * @returns {Promise<boolean>} Whether an Element on this page owns it.
+ */
+async function reviseElementStylesheet(url) {
+  let revise;
+  try {
+    ({ reviseStylesheet: revise } = await import('@core/elements/stylesheet.js'));
+  } catch {
+    return false;
+  }
+
+  const response = await fetch(url, { cache: 'reload' });
+  if (!response.ok) return false;
+
+  try {
+    return await revise(url, await response.text());
+  } catch (cause) {
+    console.error('[srl] %s was refused; the page kept the rules it had', url, cause);
+    return true;
   }
 }
 

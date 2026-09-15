@@ -198,7 +198,7 @@
         [data-row-index]="rowIndexAttribute(offset)"
         [aria-rowindex]="rowAria(offset)"
         [tabindex]="rowTabIndex"
-        class="bg-surface transition-colors"
+        class="transition-colors"
         (click)="activate(row, rowIndexAt(offset), $event)"
         (keydown)="activateFromKeyboard(row, rowIndexAt(offset), $event)"
       >
@@ -293,7 +293,7 @@
       *for="number of pageNumbers; key: number"
       type="button"
       data-ui-part="table-page"
-      class="min-w-8 rounded-md border border-ui-border px-2 py-1 tabular-nums text-ink transition-colors hover:bg-canvas"
+      class="min-w-8 rounded-md border px-2 py-1 tabular-nums transition-colors"
       [aria-current]="pageCurrent(number)"
       (click)="goTo(number)"
     >

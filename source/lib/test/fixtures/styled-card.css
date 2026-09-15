@@ -1,0 +1,15 @@
+:host {
+  display: block;
+}
+
+.title {
+  background-color: rgb(0, 128, 0);
+}
+
+:host([flush]) > .body {
+  padding-top: 7px;
+}
+
+.body::before {
+  content: 'B';
+}

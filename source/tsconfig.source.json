@@ -8,7 +8,7 @@
   // because the emit compiles the source. It is not published.
   //
   // tools/checks/verify-deps.mjs fails when this table and the import map disagree,
-  // or when this file sets anything besides `paths`. ADR-0119.
+  // or when this file sets anything besides `paths`. ADR-0120.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "paths": {

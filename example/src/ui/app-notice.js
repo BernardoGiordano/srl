@@ -54,4 +54,4 @@ export class AppNotice extends SignalElement {
   }
 }
 
-await defineComponent({ tag: 'app-notice', element: AppNotice, module: import.meta.url });
+await defineComponent({ tag: 'app-notice', element: AppNotice, module: import.meta.url, styles: true });

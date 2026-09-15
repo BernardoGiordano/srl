@@ -105,6 +105,9 @@ same token names from its own stylesheet — or registers them as a theme throug
 above — with nothing in the first file to override, since there is no colour in it. Omit
 both and the components render unpainted, which fails visibly at first paint.
 
-Every selector in `style.css` is wrapped in `:where()`, so a Tailwind utility or an
-ordinary application class wins without `!important`. Layout, sizing and spacing stay
-entirely the consumer's.
+Every rule in `style.css` sits in Tailwind's `components` layer, and every selector is
+wrapped in `:where()`. A Tailwind utility or an ordinary application class therefore wins
+without `!important`, because the layer sorts under every utility and an unlayered
+application rule outranks every layer. The file's first line declares Tailwind's layer
+order, so linking it ahead of Tailwind's browser build still leaves these defaults above
+preflight. Layout, sizing and spacing stay entirely the consumer's.

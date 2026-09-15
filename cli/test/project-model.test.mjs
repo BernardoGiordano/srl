@@ -6,6 +6,7 @@ import test from 'node:test';
 import { REPO, apps } from '../layout.mjs';
 import {
   describeElement,
+  missingStylesheets,
   missingTemplates,
   orphanTemplates,
   projectErrors,
@@ -60,6 +61,37 @@ void test('a definition naming a template that does not exist is reported', asyn
   const model = await fixtureProject(APP_A);
   const missing = missingTemplates(model).map((record) => record.tag);
   assert.deepEqual(missing, ['fx-gone']);
+});
+
+void test('a stylesheet is the module sibling, and only when `styles: true` says so', async () => {
+  const model = await fixtureProject(APP_A);
+
+  const styled = model.elements.get('fx-styled');
+  assert.equal(styled?.stylesheet, join(APP_A.dir, 'src', 'styled.css'));
+  assert.equal(styled?.stylesheetExists, true);
+  assert.equal(model.elements.get('fx-child')?.stylesheet, null);
+  assert.equal(model.elements.get('fx-child')?.stylesheetExists, null);
+
+  assert.deepEqual(missingStylesheets(model).map((record) => record.tag), ['fx-styled-missing']);
+  assert.match(describeElement(model, 'fx-styled'), /styles\s+\S*src\/styled\.css/u);
+  assert.match(describeElement(model, 'fx-styled-missing'), /styles\s+.*MISSING/u);
+});
+
+void test('a stylesheet the browser and the build would refuse is an error at its line', async () => {
+  const model = await fixtureProject(APP_A);
+  const found = model.diagnostics.filter((diagnostic) => diagnostic.kind === 'stylesheet');
+
+  const refused = found.find((diagnostic) => diagnostic.file.endsWith('styled-refused.css'));
+  assert.equal(refused?.severity, 'error');
+  assert.equal(refused?.line, 2);
+  assert.equal(refused?.column, 3);
+  assert.match(refused?.message ?? '', /<fx-styled-refused> uses `@apply`, a Tailwind directive/u);
+
+  const headless = found.find((diagnostic) => diagnostic.file.endsWith('styled-headless.js'));
+  assert.equal(headless?.severity, 'error');
+  assert.match(headless?.message ?? '', /`styles: true` and `template: false`/u);
+
+  assert.equal(found.length, 2, found.map((diagnostic) => diagnostic.message).join('\n'));
 });
 
 void test('markup no definition claims is an orphan, and a fixture template is not', async () => {
@@ -332,6 +364,7 @@ void test('this repository has no unreadable declaration and no orphan template'
     );
     assert.deepEqual(orphanTemplates(model).map((template) => template.path), []);
     assert.deepEqual(missingTemplates(model).map((record) => record.tag), []);
+    assert.deepEqual(missingStylesheets(model).map((record) => record.tag), []);
     assert.ok(model.elements.size > 20, `${app.name} discovered ${String(model.elements.size)}`);
     assert.ok(model.entry !== null);
   }

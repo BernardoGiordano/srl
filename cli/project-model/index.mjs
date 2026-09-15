@@ -36,6 +36,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 import { fileURLToPath } from 'node:url';
 import { parseFragment } from 'parse5';
 
+import { StylesheetScopeError, scopeStylesheet } from '@srljs/core/lib/core/elements/style-scope.js';
 import { INTERPOLATION } from '@srljs/core/lib/core/template/dialect.js';
 import { REPO, apps, exists, readText, repoPath, selectedApp, walk } from '../layout.mjs';
 import {
@@ -145,6 +146,9 @@ export async function readProject(app, options = {}) {
               dirname(parsed.path),
               definition.template ?? `${basename(parsed.path, extname(parsed.path))}.html`,
             );
+      const stylesheet = definition.styles
+        ? join(dirname(parsed.path), `${basename(parsed.path, extname(parsed.path))}.css`)
+        : null;
 
       /** @type {ElementRecord} */
       const record = {
@@ -156,6 +160,8 @@ export async function readProject(app, options = {}) {
         template,
         templateDeclared: definition.templateDeclared,
         templateExists: template === null ? null : await exists(template),
+        stylesheet,
+        stylesheetExists: stylesheet === null ? null : await exists(stylesheet),
         uses: [],
         usesTags: [],
         properties: [],
@@ -255,6 +261,7 @@ export async function readProject(app, options = {}) {
 
   const templates = await readTemplates(app, elements, roots);
   await readProjectionSlots(elements);
+  await readStylesheets(elements, diagnostics, roots);
 
   return { app, prefixes, entry, modules, elements, globals, templates, diagnostics };
 }
@@ -579,6 +586,65 @@ async function readProjectionSlots(elements) {
 }
 
 /**
+ * Each Element's stylesheet, scoped exactly as the browser and the build scope it, so a
+ * rule both of them would refuse is reported at the line that wrote it. ADR-0119.
+ *
+ * @param {Map<string, ElementRecord>} elements
+ * @param {ProjectDiagnostic[]} diagnostics
+ * @param {string[]} roots
+ */
+async function readStylesheets(elements, diagnostics, roots) {
+  /** @type {Map<string, string>} */
+  const owners = new Map();
+  for (const record of elements.values()) {
+    if (record.stylesheet === null) continue;
+    const severity = isTestSource(record.module, roots) ? 'note' : 'error';
+
+    if (record.template === null) {
+      diagnostics.push({
+        kind: 'stylesheet',
+        severity,
+        file: record.module,
+        message:
+          `<${record.tag}> declares \`styles: true\` and \`template: false\`. An Element's ` +
+          'stylesheet reaches the markup its template renders, and this one renders none.',
+      });
+      continue;
+    }
+
+    const owner = owners.get(record.stylesheet);
+    if (owner !== undefined) {
+      diagnostics.push({
+        kind: 'stylesheet',
+        severity,
+        file: record.module,
+        message:
+          `<${owner}> and <${record.tag}> both declare \`styles: true\` in one module, so both ` +
+          'claim its sibling stylesheet. A stylesheet is scoped to one tag; give each Element ' +
+          'a module of its own.',
+      });
+      continue;
+    }
+    owners.set(record.stylesheet, record.tag);
+
+    if (record.stylesheetExists !== true) continue;
+    try {
+      scopeStylesheet(record.tag, await readText(record.stylesheet), record.stylesheet);
+    } catch (cause) {
+      if (!(cause instanceof StylesheetScopeError)) throw cause;
+      diagnostics.push({
+        kind: 'stylesheet',
+        severity,
+        file: record.stylesheet,
+        line: cause.line,
+        column: cause.column,
+        message: `The stylesheet of <${record.tag}> ${cause.reason}`,
+      });
+    }
+  }
+}
+
+/**
  * Every template file this application can reach, and the definition that claims it.
  *
  * One walk, one rule, two consumers. The bundler ships what is here and not a fixture;
@@ -679,6 +745,22 @@ export function missingTemplates(model) {
 }
 
 /**
+ * Stylesheets a definition declares that are not on disk.
+ *
+ * The browser refuses to define such an Element and the build stops on it, so the
+ * verifier names it before either does. An Element with no template is left out: its
+ * stylesheet has nothing to reach, which is the error reported against it instead.
+ *
+ * @param {ProjectModel} model
+ * @returns {ElementRecord[]}
+ */
+export function missingStylesheets(model) {
+  return [...model.elements.values()].filter(
+    (record) => record.template !== null && record.stylesheetExists === false,
+  );
+}
+
+/**
  * Markup beside a component module that no definition claims.
  *
  * Always a leftover from a rename or a deletion, and invisible: the old file keeps being
@@ -744,6 +826,7 @@ export function projectIndex(model) {
         exported: record.exported,
         kind: record.kind,
         template: rel(record.template),
+        stylesheet: rel(record.stylesheet),
         uses: record.uses.map((use) => use.tag ?? `${use.className} (unresolved)`).sort(),
         properties: record.properties,
         state: record.state,
@@ -827,6 +910,12 @@ export function describeElement(model, tag) {
           }`
     }`,
   ];
+
+  if (record.stylesheet !== null) {
+    lines.push(
+      `  styles    ${show(record.stylesheet)}${record.stylesheetExists === false ? ' — MISSING' : ''}`,
+    );
+  }
 
   if (record.properties.length > 0) {
     lines.push(`  inputs     ${record.properties.join(', ')}`);

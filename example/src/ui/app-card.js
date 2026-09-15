@@ -43,4 +43,4 @@ export class AppCard extends SignalElement {
   }
 }
 
-await defineComponent({ tag: 'app-card', element: AppCard, module: import.meta.url });
+await defineComponent({ tag: 'app-card', element: AppCard, module: import.meta.url, styles: true });

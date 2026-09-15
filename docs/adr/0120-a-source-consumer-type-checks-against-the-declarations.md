@@ -1,4 +1,4 @@
-# ADR-0119: A source consumer type-checks against the declarations
+# ADR-0120: A source consumer type-checks against the declarations
 
 - Status: accepted
 - Date: 2026-09-15

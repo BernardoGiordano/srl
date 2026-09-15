@@ -348,7 +348,7 @@ export const BUNDLES = Object.entries(
 /**
  * The declaration tree, package-relative: one `.d.ts` per module under the prefixes,
  * in the prefixes' own layout. The bundle barrels resolve through it, and
- * tsconfig.base.json maps each prefix into it. ADR-0108, ADR-0119.
+ * tsconfig.base.json maps each prefix into it. ADR-0108, ADR-0120.
  */
 export const DECLARATION_TREE = 'dist/types';
 

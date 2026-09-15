@@ -152,8 +152,10 @@ fetched it by, a multi-file save is one message rather than three, and
 `cli/dev/update-client.js` decides what each one means. An edited `.html` file is
 recompiled and rendered into the components already showing it, so the form still has what
 was typed into it and the store does not fetch again
-([ADR-0111](../adr/0111-an-edited-template-revises-the-page-rendering-it.md)). A linked
-stylesheet is swapped in place. Everything else — a module above all, because
+([ADR-0111](../adr/0111-an-edited-template-revises-the-page-rendering-it.md)). A
+component's own stylesheet has its rules replaced in place
+([ADR-0119](../adr/0119-an-element-stylesheet-reaches-only-that-element.md)), and any other
+linked stylesheet is swapped in place. Everything else — a module above all, because
 `customElements.define` is permanent — is the reload it always was. A browser that
 reconnects across an edit is told what it missed; one that reconnects to a server that
 restarted is told to reload, because the id it holds is from the process before.
