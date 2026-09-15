@@ -5,7 +5,7 @@
   // repository extends the base a consumer does, through source/tsconfig.source.json,
   // which changes one thing. The prefixes resolve into the source this repository
   // edits rather than into the declarations `npm run package` builds from it, so every
-  // other option it type-checks under is the one a consumer gets. ADR-0068, ADR-0120.
+  // other option it type-checks under is the one a consumer gets. ADR-0068, ADR-0066.
   //
   // Type checking only. `noEmit` is not a convenience, it is the whole point:
   // nothing in this project is ever compiled. The browser runs the same .js files

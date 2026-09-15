@@ -22,7 +22,7 @@
  * ## The trust rule
  *
  * Every URL in the manifest is a same-origin root-relative path, and admission
- * rejects anything else rather than repairing it. ADR-0012. Cross-origin
+ * rejects anything else rather than repairing it. ADR-0010. Cross-origin
  * authentication is therefore not expressible as a manifest string: it is a
  * capability of a deployment, not a value a fetched JSON file can introduce.
  */
@@ -137,7 +137,7 @@ export function admitManifest(value, source) {
  * template is named by exactly one module, which lives in exactly one chunk, so the
  * same URL in two groups is a join that went wrong — and it would be paid twice, once
  * per group that starts. A frozen empty record when the key is absent, so the consumer
- * reads it without a guard. ADR-0086.
+ * reads it without a guard. ADR-0081.
  *
  * @param {unknown} value
  * @param {string} where

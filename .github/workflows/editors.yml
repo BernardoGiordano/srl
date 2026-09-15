@@ -9,7 +9,7 @@ on:
 # imports, and neither is built by `npm run check`: check runs the contract CONTRIBUTING.md
 # states, and that contract does not ask a contributor for Java. So packaging lives here,
 # beside it, and the artifacts it uploads are the ones a reviewer installs to try a change.
-# ADR-0094.
+# ADR-0090.
 jobs:
   vscode:
     runs-on: ubuntu-latest

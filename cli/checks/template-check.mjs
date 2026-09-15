@@ -1185,7 +1185,7 @@ function compilerProgram(rootPaths, generated, overrides = new Map()) {
   // built while a buffer differed from disk is only reusable for that same buffer text.
   // The condition is the overlay itself rather than its absence: identical text means
   // every file the old program retained is still the text this check is about, and an
-  // empty overlay after a non-empty one is a change like any other. ADR-0091.
+  // empty overlay after a non-empty one is a change like any other. ADR-0090.
   const program = ts.createProgram({
     rootNames: [...state.fileNames, ...rootPaths],
     options: state.options,
@@ -1234,7 +1234,7 @@ let semanticShim = 0;
  * The language server supplies source context; this function supplies compiler meaning.
  * It emits the same host access, signal unwrapping, loop element type, template globals,
  * and DOM event target as diagnostics. No language feature reconstructs those types from
- * class names or regular expressions. ADR-0092.
+ * class names or regular expressions. ADR-0090.
  *
  * @param {{
  *   module: string,
@@ -1543,7 +1543,7 @@ export function checkTemplateSource(input) {
  * repository before it was published, and a consumer's program types that package
  * through its emitted declarations rather than the modules the templates bind to.
  * Reporting on them would put errors in front of a consumer about code they did not
- * write and cannot fix. ADR-0120.
+ * write and cannot fix. ADR-0066.
  *
  * @param {Component} component
  * @returns {boolean}

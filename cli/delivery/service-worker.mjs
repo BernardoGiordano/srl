@@ -77,7 +77,7 @@ const REVALIDATE = [DOCUMENT, '/app.manifest.json', '/build.json'];
  * The facts a worker is derived from. A whole `ShellArtifactReport` satisfies the
  * first three; so does a literal in a test, which is why the subset is named.
  *
- * `templateGroups` is the manifest's half of ADR-0086 rather than the report's — the
+ * `templateGroups` is the manifest's half of ADR-0081 rather than the report's — the
  * report says which templates exist, the manifest says which chunk names each — and
  * the build holds both at the moment it calls this. `null` is source delivery, which
  * has no chunks to group by and therefore no entry group to precache.

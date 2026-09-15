@@ -18,7 +18,7 @@ source/dist/                GENERATED, not committed: srl-core and srl-component
                             minified and not, emitted by `npm run package` for the
                             consumer who has no import map (ADR-0066)
   types/                    one declaration per module, which the four `.d.ts` beside
-                            the bundles are barrels over (ADR-0108)
+                            the bundles are barrels over (ADR-0066)
 
 source/lib/                 THE FRAMEWORK, served at /lib/
   importmap.json            generated from the manifest and the vendored bytes
@@ -225,7 +225,7 @@ cli/                        THE TOOLCHAIN, published as `@srljs/cli` (ADR-0067):
                             `--proxy` for an application whose backend sets the cookie
     updates.mjs             one update session: a changed file as the URL it is served
                             at, batched, delivered, and disposed of with the server
-                            (ADR-0112)
+                            (ADR-0111)
     update-client.js        the browser half — a template revision, a stylesheet swap, a
                             component revision, or the reload everything else still costs
   test/                     the suites for everything above, over fixtures/ (whole
@@ -245,7 +245,7 @@ tools/                      THIS REPOSITORY'S OWN TOOLS, published nowhere: the 
     package-bundle.mjs      source/dist/: the bundles a consumer with a bundler
                             installs and the declarations beside them, both resolved
                             out of the prefixes source is written against
-                            (ADR-0066, ADR-0108)
+                            (ADR-0066, ADR-0066)
   benchmark/                the performance gate: workloads, baseline, budgets
   test/                     the Node-side suites for everything above
 

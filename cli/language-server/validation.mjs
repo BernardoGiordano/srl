@@ -4,7 +4,7 @@
  * A template check is one synchronous compiler call, so the thread that runs it is the
  * thread that stops answering. This one is not the protocol thread. Overlays arrive as
  * messages and are applied in order; a check answers with the diagnostics for one
- * document, or says it was cancelled. ADR-0095.
+ * document, or says it was cancelled. ADR-0090.
  *
  * Cancellation cannot be a message, because a message is only read between checks. It is
  * a shared integer holding the highest check the parent no longer wants, which the

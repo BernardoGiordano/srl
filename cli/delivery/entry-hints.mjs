@@ -66,7 +66,7 @@ const MANIFEST = '/app.manifest.json';
  * `RouteDef` carries an opaque `load` closure and neither side has a fact that maps a
  * route to the chunk that import resolves to. What does exist is the other half —
  * `app.manifest.json` groups its templates by chunk under the same closure rule this
- * uses, so a router that gained such a fact would have a list to start. ADR-0086.
+ * uses, so a router that gained such a fact would have a list to start. ADR-0081.
  *
  * @param {HintFacts} facts
  * @returns {EntryHint[]}

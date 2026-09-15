@@ -22,10 +22,10 @@
  * a rule about files and not a policy: a file streamed from disk is sent with an
  * `ETag`, and an `If-None-Match` naming it is answered 304. Whether a browser ever
  * asks is the adapter's `headers` — `no-store` means it never will, `no-cache`
- * means it will on every reload. ADR-0085.
+ * means it will on every reload. ADR-0081.
  *
  * THERE IS NO PROXY OPTION, and there must not be one. The development server's
- * `--proxy` is load-bearing (ADR-0069) and it is one adapter's concern: it lives
+ * `--proxy` is load-bearing (ADR-0075) and it is one adapter's concern: it lives
  * in that adapter's `route`, which is consulted before the method check and before
  * the mounts for exactly the reason a proxy needs — a `POST /api/session` must not
  * be answered 405 by a server that is right to refuse a `POST` of a stylesheet. An

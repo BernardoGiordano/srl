@@ -234,7 +234,7 @@ function uri(path) {
  *
  * These use a lane that is slow on purpose (`fixtures/slow-lane.mjs`) rather than a large
  * fixture: the property under test is what the protocol thread can do while a check runs,
- * and a fast real check would race every assertion. ADR-0095.
+ * and a fast real check would race every assertion. ADR-0090.
  */
 const SLOW_LANE = new URL('./fixtures/slow-lane.mjs', import.meta.url);
 

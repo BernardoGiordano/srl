@@ -39,7 +39,7 @@ export const PUBLIC = 'public';
 /** How long a served file may be cached, by class. `metadata` is never served. */
 const CACHE_CLASSES = new Set(['immutable', 'revalidate', 'metadata']);
 
-/** How templates reach the browser. ADR-0071, ADR-0081. */
+/** How templates reach the browser. ADR-0081, ADR-0081. */
 const DELIVERIES = new Set(['split', 'split-lazy', 'bundle']);
 
 const NAME = /^[a-z0-9][a-z0-9._-]*$/u;

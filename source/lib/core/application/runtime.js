@@ -158,7 +158,7 @@ export async function startApplication(spec) {
  * preloads, so it is the group whose code is arriving anyway. A document with no
  * groups — source delivery, which has no chunks to group by — has only the flat list
  * to give, and giving all of it is what this used to do for every document.
- * ADR-0086, ADR-0085.
+ * ADR-0081, ADR-0081.
  *
  * @param {AppManifest} manifest
  * @returns {readonly string[]}

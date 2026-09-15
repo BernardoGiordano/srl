@@ -381,7 +381,7 @@ describe('template compiler', () => {
     // ordinary Lit property reads a different signal on each side, and a
     // dependency set captured once would keep tracking the abandoned one. The
     // render bumps `scope.version`, the binding evaluates again inside a fresh
-    // effect, and that is what re-records. ADR-0018.
+    // effect, and that is what re-records. ADR-0014.
     const left = signal('left');
     const right = signal('right');
     const model = { pick: true, left, right };

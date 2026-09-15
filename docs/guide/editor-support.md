@@ -39,7 +39,7 @@ content, and refuses an identity already registered by another element.
 A component may write markup in an `html` or `svg` tagged template instead of a sibling
 `.html` file. The server reads those templates in Lit's own syntax against the same
 element model, so the same questions get the same answers in the writing the form uses
-([ADR-0110](../adr/0110-the-lit-adapter-answers-in-lit-syntax.md)).
+([ADR-0090](../adr/0090-one-language-server-two-editor-clients.md)).
 
 | Question | Template file | Inline Lit |
 | --- | --- | --- |

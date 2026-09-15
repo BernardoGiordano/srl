@@ -4,21 +4,16 @@
 - Date: 2026-08-12
 - Affects: `docs/adr/`
 
-Copy this file, give it the next free number, and delete this paragraph. The number is
-permanent: it is what source comments cite, so it must survive every reorganisation of
-this directory. Nothing else about the file is — retitle it, rewrite it, supersede it.
+Copy this file, take the next unused number and delete this paragraph. The number is permanent because source comments cite it. The title and the text can change.
 
 ## Context
 
-What was true before the decision, and what forced a choice. The alternative that was
-rejected belongs here, named, with the reason it lost. This is the part that stops a
-future reader re-litigating a question that was already answered.
+Describe what forced a choice. Name each rejected alternative and say why it lost.
 
 ## Decision
 
-What was decided, in the present tense, as a rule the code follows today.
+State the rule the code follows today, in the present tense.
 
 ## Consequences
 
-What this costs, what it makes possible, and what would reopen it. A record with no
-reopening condition is a record that will be reopened by accident.
+List what the decision costs, what it enables and what would reopen it.

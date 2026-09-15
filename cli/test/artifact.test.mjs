@@ -59,7 +59,7 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.match(analyticsTransport.url, /^\/remotes\/analytics\/0+\/assets\/remote-entry-[A-Za-z0-9_-]{8}\.js$/u);
     assert.ok(billingTransport.assets.some((asset) => asset.type === 'style'));
     // Split delivery is the default, so a Remote's templates are files its own
-    // components fetch and there is nothing for the shell to preload. ADR-0071.
+    // components fetch and there is nothing for the shell to preload. ADR-0081.
     // The shell does start them, from the list the descriptor carries, which is a
     // list of URLs and not an asset it has to pin. ADR-0081.
     assert.ok(!billingTransport.assets.some((asset) => asset.type === 'template'));
@@ -121,7 +121,7 @@ void test('example composes independently verified Remote artifacts', async () =
     // is what lets startup put them in flight instead of the browser learning each
     // URL from the component module that just arrived — and it names them grouped by
     // the chunk that holds each naming module, so the entry closure can go first.
-    // ADR-0081, ADR-0086.
+    // ADR-0081, ADR-0081.
     const shellTemplates = /** @type {{ files: string[] }} */ (
       /** @type {Record<string, unknown>} */ (shell).templates
     );
@@ -412,7 +412,7 @@ void test('the manifest announces templates the way the delivery says to', async
 
     // `split` names every template, grouped by the chunk that holds each naming
     // module, so startup can put the entry closure's in flight before the first
-    // component module evaluates and leave the rest to follow. ADR-0086.
+    // component module evaluates and leave the rest to follow. ADR-0081.
     assert.equal(eager.manifest.templateBundle, undefined);
     assert.equal(eager.manifest.templateFiles, undefined);
     assert.deepEqual(
@@ -538,7 +538,7 @@ void test('a template is one immutable file, and a bundle only when asked for', 
     assert.equal(splitRemote.templates, undefined);
     // `split-lazy` announces nothing at all: no bundle to seed from and no list to
     // start, so every template is discovered by the component that needs it, which
-    // is ADR-0071 unchanged and the reason the mode exists.
+    // is ADR-0081 unchanged and the reason the mode exists.
     assert.deepEqual(lazyRemote.templateFiles, []);
     assert.equal(lazyRemote.templates, undefined);
     assert.deepEqual(bundledRemote.templateFiles, []);

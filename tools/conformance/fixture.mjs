@@ -23,7 +23,7 @@ export const APP = 'app';
 
 /**
  * A Lit component, for the one thing an srl adapter must not do: answer inside somebody
- * else's template dialect. ADR-0092.
+ * else's template dialect. ADR-0090.
  */
 const WIDGET = `import { LitElement, html } from 'lit';
 

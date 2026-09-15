@@ -34,7 +34,7 @@
       rename: every other feature this plugin offers works on 2026.1, and refusing to
       install there would cost a working editor to gate one refactor. The limit is stated
       in plugin.xml and docs/guide/editor-support.md instead of being implied by a version
-      the descriptor does not enforce. ADR-0094.
+      the descriptor does not enforce. ADR-0090.
     -->
     <intellij.platform.version>261.22158.277</intellij.platform.version>
     <plugin.since.build>261</plugin.since.build>

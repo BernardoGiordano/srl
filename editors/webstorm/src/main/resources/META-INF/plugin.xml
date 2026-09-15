@@ -22,7 +22,7 @@
   <extensions defaultExtensionNs="com.intellij">
     <platform.lsp.serverSupportProvider implementation="dev.santella.srl.SrlLspServerSupportProvider"/>
     <!-- One session per open project owns readiness, what the project is told and what it
-         started; the provider above only forwards file-open events to it. ADR-0094. -->
+         started; the provider above only forwards file-open events to it. ADR-0090. -->
     <projectService serviceImplementation="dev.santella.srl.SrlProjectSession"/>
     <notificationGroup id="srl" displayType="BALLOON"/>
     <!-- The same six snippets editors/vscode/snippets/*.json contributes. ADR-0090. -->

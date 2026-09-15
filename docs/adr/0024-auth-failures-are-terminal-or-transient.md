@@ -1,4 +1,4 @@
-# ADR-0024: An authentication failure is either terminal or transient, never both
+# ADR-0024: An authentication failure is terminal or transient
 
 - Status: accepted
 - Date: 2026-08-12
@@ -6,31 +6,16 @@
 
 ## Context
 
-`AuthSession` schedules a refresh before every expiry, and that timer has to act on the
-result with no human present.
-
-One error type for every failure forces the timer to pick one wrong behaviour for two
-opposite situations: end the session when the Wi-Fi drops, or keep an authenticated
-session holding a token that is definitively dead. Both are visible to users — the first
-as a random logout, the second as every request failing while the UI claims to be signed
-in.
+`AuthSession` refreshes before each expiry, and the timer must act on the result with no user present. With a single error type, the timer has to pick one wrong behavior for two opposite cases. It either logs the user out when the Wi-Fi drops, or keeps a session alive on a token that is dead.
 
 ## Decision
 
-Two error types, distinguished by whether retrying could produce a different answer:
+There are two error types, and they differ in whether a retry could change the answer.
 
-- **`AuthRejected`** — terminal. The grant was refused (4xx) or the payload could not be
-  admitted. Retrying sends the same credentials to the same endpoint for the same answer.
-  The session ends.
-- **`AuthUnavailable`** — transient. Transport failed or the server answered 5xx. The
-  session's own expiry has not passed, so the honest state is "not yet known" and the
-  caller may retry until it does.
+- `AuthRejected` is terminal. The grant was refused (4xx) or the payload couldn't be admitted, and the session ends.
+- `AuthUnavailable` is transient. The transport failed or the server returned 5xx. The session's expiry hasn't passed, so the caller may retry.
 
 ## Consequences
 
-The refresh timer, the 401 retry and the startup restore all read the same distinction and
-need no rules of their own.
-
-The classification is a policy decision made in one place, so a new failure mode — a
-gateway that answers 403 for an outage, say — is a change to one function rather than to
-every caller that guessed.
+- The refresh timer, the 401 retry and the startup restore all use the same distinction.
+- Classification lives in one function, so a gateway that answers 403 during an outage is a one-function change.

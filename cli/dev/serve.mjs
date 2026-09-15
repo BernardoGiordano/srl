@@ -32,7 +32,7 @@
  *   --proxy       forwards a URL prefix to a backend instead of serving it from
  *                 disk, which is what lets an application with an API develop on
  *                 one origin — the arrangement it is deployed into — rather than
- *                 on two. ADR-0069.
+ *                 on two. ADR-0075.
  *   templates     `app.manifest.json` is announced with `templateFiles`, computed
  *                 from `cli/project-model/` the way the build computes it from
  *                 what it emitted. Same manifest key, same runtime step, same
@@ -43,7 +43,7 @@
  *                 turns a reload's forty module bodies and fifty templates from
  *                 whole bodies into 304s. `cli/origin/` sends the `ETag` and
  *                 answers the `If-None-Match`; what is stated here is only that
- *                 the browser is allowed to ask. ADR-0085.
+ *                 the browser is allowed to ask. ADR-0081.
  *
  * `serveApplication` is the seam: it takes an application and its proxies and
  * returns a bound origin, so the behaviour below is assertable in-process rather

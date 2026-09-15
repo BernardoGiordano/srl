@@ -75,7 +75,7 @@
     "first condition it matches, and a type question has to land on the declaration.",
     "tsc would find that file anyway — it reads the `.d.ts` beside a `.js` it",
     "resolved — but saying which file it is is what keeps the answer right when the",
-    "two stop being siblings. ADR-0108.",
+    "two stop being siblings. ADR-0066.",
     "",
     "tsconfig.base.json is the same table in the form tsc reads, and is published for",
     "the same reason: a consumer extends it instead of copying four path mappings",

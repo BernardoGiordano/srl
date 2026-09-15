@@ -5,7 +5,7 @@
  * TypeScript and reports diagnostics. This module owns the editor-facing meaning of
  * incomplete source. It scans once, keeps scopes and exact source ranges together, and
  * asks the checker's compiler for member types. Callers do not search backwards with a
- * feature-specific regular expression. ADR-0092.
+ * feature-specific regular expression. ADR-0090.
  *
  * Element nesting, tag spans and attribute spans are HTML, so both authored forms read
  * them from the same scan. The `dialect` selects what else the scan means: srl records

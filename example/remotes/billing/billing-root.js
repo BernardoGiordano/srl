@@ -20,7 +20,7 @@ import { UiTableColumn } from '@components/data/ui-table-column.js';
  *
  * It does not share the shell's *state*. Routing arrives through `mount(host)`, not by
  * importing `currentPath` and `navigate` — which would resolve, and would duplicate the
- * mount path and bypass a capability `revoke()` can take back. ADR-0063.
+ * mount path and bypass a capability `revoke()` can take back. ADR-0016.
  *
  * Sub-view routing stays this remote's business. The shell's route table knows nothing of
  * `/invoices` or `/plans`, which is exactly what lets this folder add or rename a sub-view

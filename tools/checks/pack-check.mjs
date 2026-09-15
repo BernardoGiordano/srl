@@ -28,11 +28,11 @@
  *   2. Runs the toolchain against it through the published `srl` bin: the import-map
  *      check, the template checker, the build.
  *   3. Typechecks a consumer of the *other* audience — a bundler user with no import
- *      map — against nothing but the package's `exports`. ADR-0108.
+ *      map — against nothing but the package's `exports`. ADR-0066.
  *   4. Typechecks a strict consumer of the import-map audience as one whole program,
  *      importing every library module through the published tsconfig base. It allows
  *      no diagnostic anywhere, the package's own included, and no library JavaScript in
- *      the program where a declaration belongs. ADR-0120.
+ *      the program where a declaration belongs. ADR-0066.
  *
  * What it does not cover: remotes, i18n, the release transport. Those are checked in
  * the checkout, and none of them is where the installed shape differs.
@@ -117,7 +117,7 @@ const TYPED = 'typed-consumer';
  * carries types when the only thing pointing at them is the package's own map. So the
  * tsconfig extends nothing, declares no `paths`, and names no directory in this
  * checkout: an alias here would answer the question with the arrangement it is asking
- * about. ADR-0108.
+ * about. ADR-0066.
  *
  * The two `@ts-expect-error` lines are the assertion, and they are stronger than a
  * passing typecheck: tsc fails an unused directive, so a declaration that resolved to
@@ -186,7 +186,7 @@ const HARNESS = './testing/harness.js';
  * Its module re-exports every module under every prefix the installed manifest declares,
  * by the specifier an application writes, plus the test harness by its subpath. A module
  * the scaffold happens not to import is covered all the same, so a missing declaration or
- * a type that fails under `strict` refuses the run. ADR-0120.
+ * a type that fails under `strict` refuses the run. ADR-0066.
  *
  * Importing every module directly also puts each one a single import from the consumer,
  * where `maxNodeModuleJsDepth` never elides anything. A clean typecheck therefore cannot

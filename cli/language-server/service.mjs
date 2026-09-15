@@ -44,7 +44,7 @@ export class SrlLanguageService {
    * @type {MessageModel[]}
    */
   messages = [];
-  /** Which authoring form each document is in, and what may be asked of it. ADR-0092. */
+  /** Which authoring form each document is in, and what may be asked of it. ADR-0090. */
   #authoring = new AuthoredTemplates({ documents: this.documents });
 
   /** Rebuild project models after source, declarations, or import maps change. */
@@ -578,7 +578,7 @@ export class SrlLanguageService {
   /**
    * Resolve custom-element identity from a tag written in either authored form, or from
    * its JavaScript registration literal. The last lets rename start at the declaration
-   * while retaining one project-wide tag operation. ADR-0090, ADR-0092.
+   * while retaining one project-wide tag operation. ADR-0090, ADR-0090.
    *
    * @param {string} uri
    * @param {string} source

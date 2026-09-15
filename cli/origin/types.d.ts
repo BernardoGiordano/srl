@@ -95,7 +95,7 @@ export interface OriginOptions {
    * `true` means the request was answered here. This is where the development
    * server's proxy and live-reload stream live, where the benchmark's harness page
    * and backend live, and where the artifact suite's injected modules live. It is
-   * deliberately the only extension point of that kind: ADR-0069's proxy must stay
+   * deliberately the only extension point of that kind: ADR-0075's proxy must stay
    * one adapter's concern rather than an option every origin carries.
    */
   route?: (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean> | boolean;

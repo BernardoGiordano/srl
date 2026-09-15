@@ -294,7 +294,7 @@ export function vendorReferences(html, where) {
  * Each bundle is four files: the JavaScript a consumer runs, minified and not, and
  * the declaration beside each. `exports` names the readable pair by subpath and
  * reaches the minified one through `./dist/*`, where a resolver substitutes `.d.ts`
- * for the `.js` it was given. ADR-0108.
+ * for the `.js` it was given. ADR-0066.
  *
  * @typedef {{
  *   name: string,
@@ -348,7 +348,7 @@ export const BUNDLES = Object.entries(
 /**
  * The declaration tree, package-relative: one `.d.ts` per module under the prefixes,
  * in the prefixes' own layout. The bundle barrels resolve through it, and
- * tsconfig.base.json maps each prefix into it. ADR-0108, ADR-0120.
+ * tsconfig.base.json maps each prefix into it. ADR-0066, ADR-0066.
  */
 export const DECLARATION_TREE = 'dist/types';
 
@@ -386,7 +386,7 @@ function requirePrefixDir(bundle, prefix) {
  * A bundle's subpath is conditional rather than a bare string so that the same
  * entry carries its declaration. `types` comes first because conditions are matched
  * in order and a resolver that took `default` would answer a type question with
- * JavaScript. ADR-0108.
+ * JavaScript. ADR-0066.
  *
  * @returns {Record<string, string | Record<string, string>>}
  */

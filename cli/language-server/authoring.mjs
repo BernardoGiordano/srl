@@ -13,7 +13,7 @@
  * again. Each form is an adapter behind one view, and the binding surface each one
  * completes, describes and resolves belongs to the adapter rather than to the feature
  * asking. srl writes `[.row-key]="expr"`; Lit writes `.rowKey=${expr}` for the same
- * property of the same element. ADR-0090, ADR-0092.
+ * property of the same element. ADR-0090, ADR-0090.
  *
  * What a feature asks the view for is deliberately narrower for Lit. A substitution is
  * the module's own JavaScript, so TypeScript already completes, types and navigates it;

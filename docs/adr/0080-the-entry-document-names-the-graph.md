@@ -133,7 +133,7 @@ where that shows up.
 Two things this record does not do. Templates are still fetched one per component, so a
 chunk holding nine components still costs nine serial requests once it arrives — the hint
 list stops at the module graph because the template graph is owned by
-[ADR-0071](0071-a-built-template-is-fetched-by-the-component-that-needs-it.md) and reopening
+[ADR-0081](0081-templates-are-delivered-by-chunk.md) and reopening
 it is a decision of its own. And nothing yet gates chain depth, so a future change that adds
 a serial hop moves no measured number. Both are the follow-ups this record leaves open.
 

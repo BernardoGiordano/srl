@@ -167,7 +167,7 @@ export class MemoryTokenStore {
  *
  * The token is returned beside the session rather than on it: a `Session` reaches
  * guards, screens and the remote host contract, and a credential on it would
- * eventually be logged or copied into a diagnostic. ADR-0021, ADR-0023.
+ * eventually be logged or copied into a diagnostic. ADR-0021, ADR-0021.
  *
  * @param {unknown} value
  * @param {string} where

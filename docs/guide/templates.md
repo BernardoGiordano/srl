@@ -58,12 +58,12 @@ template in the application ahead of the first paint would cost more main thread
 round trips it saves — so a template is compiled when the component that names it is defined,
 and never before. Without it a chunk holding nine components costs nine requests in a
 row, because a component's template URL is not known until that component's module has been
-fetched and evaluated ([ADR-0081](../adr/0081-the-manifest-names-every-template.md)).
+fetched and evaluated ([ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md)).
 
 Startup starts the `entry` group; every other group starts on the first `attachTemplate` out
 of its own chunk, which is the module body that just arrived. Markup follows its code, so a
 visitor fetches the markup of the screens they were allowed to load and none of the rest
-([ADR-0087](../adr/0087-a-template-group-starts-with-the-chunk-that-names-it.md)).
+([ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md)).
 
 Nothing about that list changes how a template is delivered: the files stay separate,
 hash-named and immutable under every mode. Which of the three a deployment wants —

@@ -1,4 +1,4 @@
-# ADR-0017: Remotes share the shell's dependencies by URL identity
+# ADR-0017: Remotes share dependencies by URL identity
 
 - Status: accepted
 - Date: 2026-08-12
@@ -6,37 +6,16 @@
 
 ## Context
 
-Two independently released artifacts on one page can each bring their own copy of `lit`
-and their own `SignalElement`. When they do, an element defined by one is not the element
-the other extends, and the shared collection stops being shared: two registries, two
-reactive systems, and a class identity check that fails for reasons no stack trace
-explains.
+Two artifacts on one page can each bring their own `lit` and `SignalElement`. When they do, an element defined by one isn't the class the other extends. The page ends up with two registries, two reactive systems and identity checks that fail without a useful stack trace.
 
-The alternative — per-remote dependency versions, which a bundler-based host would give
-for free — means a remote's deployer chooses the framework version running in the shell's
-realm, for every user, without the shell rebuilding.
+Bundler-based hosts often allow per-remote dependency versions. Here that would let a remote's deployer choose the framework version running in the shell's realm.
 
 ## Decision
 
-Module identity is URL identity: one `lit` URL, one instance. The page's import map
-declares the shared specifiers, and a remote may use only its declared shared
-bare-specifier interface. Locations and artifact-owned styles, templates and locales come
-from `app.manifest.json`, fetched on every page load; module digests are governed by the
-import map, and stylesheet and template digests travel with their asset records.
-
-Production composition projects a verified remote artifact report into both documents
-without putting the remote's implementation into the shell bundle.
+Module identity is URL identity, so one `lit` URL means one instance. The page's import map declares the shared specifiers, and a remote may only use those. The manifest supplies locations and each artifact's styles, templates and locales. The import map pins module digests, and asset records carry stylesheet and template digests.
 
 ## Consequences
 
-A remote cannot upgrade the shell's framework version, and cannot pin an older one. That
-is governance rather than a defect: a shared dependency version is a security boundary,
-because the shared instance runs in the shell's realm with the shell's credentials in
-reach.
-
-The cost is coordination — a framework upgrade is a shell release plus a rebuild of every
-remote that declared the specifier — which is the same cost the integrity pinning already
-imposes and is checked by the same run.
-
-Reopen if remotes ever run in a realm of their own, at which point sharing by URL is no
-longer what makes them one application.
+- A remote can't upgrade or pin the shell's framework version. The shared instance runs with the shell's credentials in reach, so the version is a security decision.
+- A framework upgrade means a shell release plus a rebuild of every remote that uses the specifier.
+- Remotes running in a realm of their own would reopen this.

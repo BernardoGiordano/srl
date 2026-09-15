@@ -72,7 +72,7 @@ export class RouteOutlet extends HTMLElement {}
  * and the page component would silently break every layout utility applied to it.
  *
  * A default, not a rule: it sorts below Tailwind's utilities, so any class an
- * application puts on the outlet wins if it wants a real box. ADR-0001.
+ * application puts on the outlet wins if it wants a real box. ADR-0119.
  */
 defineElementDefault(ROUTE_OUTLET_TAG, 'display:contents');
 

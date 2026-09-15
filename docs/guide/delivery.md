@@ -49,7 +49,7 @@ before any route is known: on the example application that is 50 requests at ste
 the first paint reaches three of them. Grouped by the chunk whose modules name each
 template, startup starts the `entry` group — the closure the entry document already
 preloads — and leaves the other 35 registered
-([ADR-0086](../adr/0086-the-manifest-groups-templates-by-chunk.md)).
+([ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md)).
 `admitManifest` still derives the flat `templateFiles` union from the groups, so code that
 wants every template this artifact holds reads one property as before.
 
@@ -63,7 +63,7 @@ example application a visitor at the login form fetches 3 templates instead of 5
 signed-in session that opens the dashboard and the orders list fetches 24. The cost is one
 round trip on the first navigation into a chunk, because its markup now leaves after the code
 rather than before it
-([ADR-0087](../adr/0087-a-template-group-starts-with-the-chunk-that-names-it.md)).
+([ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md)).
 
 **`split` is the default** because the cost it removes is latency rather than bytes. Against
 `split-lazy`, measured to first paint: 59 ms slower at zero added round-trip time, 207 ms
@@ -71,7 +71,7 @@ faster at 40 ms, 547 ms faster at 100 ms. The sign flips near zero, which is the
 real users are never in — and the one `tools/benchmark` runs in, so read its byte budgets
 with that in mind.
 
-**`split-lazy` is [ADR-0071](../adr/0071-a-built-template-is-fetched-by-the-component-that-needs-it.md)
+**`split-lazy` is [ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md)
 unchanged**: a visitor downloads the markup of the routes they open and nothing else. It is
 the right mode for a metered connection, or an application whose visitors open one page.
 
@@ -83,7 +83,7 @@ them — and by blocking startup step 3 where the other two do not. Its individu
 still emitted and simply never fetched, since seeding short-circuits the network.
 
 The axis is first visit against repeat visits, and
-[ADR-0081](../adr/0081-the-manifest-names-every-template.md) has the measurements.
+[ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md) has the measurements.
 
 Production markup is not the authored markup: comments and indentation are dropped, and
 every build proves the result parses to the same tree the source did before it can be
@@ -146,13 +146,13 @@ files rather than being proxied to
 ([ADR-0075](../adr/0075-one-application-origin-not-four-servers.md)).
 
 **An edit is delivered, not announced.** Both servers run the same update session
-([ADR-0112](../adr/0112-a-development-update-names-what-changed.md)): the watcher keeps
+([ADR-0111](../adr/0111-development-edits-update-the-running-page.md)): the watcher keeps
 the changed file's identity, `cli/dev/updates.mjs` turns it into the URL the browser
 fetched it by, a multi-file save is one message rather than three, and
 `cli/dev/update-client.js` decides what each one means. An edited `.html` file is
 recompiled and rendered into the components already showing it, so the form still has what
 was typed into it and the store does not fetch again
-([ADR-0111](../adr/0111-an-edited-template-revises-the-page-rendering-it.md)). A
+([ADR-0111](../adr/0111-development-edits-update-the-running-page.md)). A
 component's own stylesheet has its rules replaced in place
 ([ADR-0119](../adr/0119-an-element-stylesheet-reaches-only-that-element.md)), and any other
 linked stylesheet is swapped in place. Everything else — a module above all, because
@@ -294,7 +294,7 @@ and `--api-only` is what keeps it from importing `cli/origin/` and the mount tab
 it, a development directory the deployed tree omits. nginx serves the static tree and proxies `/auth` and `/api` to
 8100 **on the site's own hostname**: the session cookie is `HttpOnly` and same-site, so a
 second port or a second host signs every visitor out
-([ADR-0069](../adr/0069-the-dev-server-proxies-the-backend.md)).
+([ADR-0075](../adr/0075-one-application-origin-not-four-servers.md)).
 
 Three repository secrets, the same three the deploy of any other static tree needs:
 `HOST`, `USERNAME` and `PRIVATE_KEY`. The remote user needs passwordless
@@ -328,9 +328,9 @@ only one of them exists in a browser:
 exist before `npm publish`, and `npm run verify` fails naming the command when `exports`
 points at a file that is not there, so a release cannot ship a map that reaches outside its
 own tarball. Why the second shape exists at all is
-[ADR-0066](../adr/0066-the-registry-consumer-gets-bundles.md); how it came to carry
+[ADR-0066](../adr/0066-the-package-serves-two-audiences.md); how it came to carry
 TypeScript declarations, emitted from the same JSDoc the first shape is typed by, is
-[ADR-0108](../adr/0108-the-bundles-carry-their-own-declarations.md). What a version bump
+[ADR-0066](../adr/0066-the-package-serves-two-audiences.md). What a version bump
 means is [the changelog](../../CHANGELOG.md).
 
 ### Keeping a name out of the bundle
@@ -355,7 +355,7 @@ Nothing becomes unreachable. The import-map consumer loads modules by path and s
 export it always did, and so does `srl check templates`, which shares the template dialect
 with the runtime by importing it. It is the flat namespace of `import { … } from
 '@srljs/core'` that is curated, because that is the only place a name reads as an offer —
-[ADR-0077](../adr/0077-a-module-declares-which-exports-are-the-door.md).
+[ADR-0066](../adr/0066-the-package-serves-two-audiences.md).
 
 One thing to know before marking: a name `components/` imports is one `srl-components`
 reaches through `./srl-core.js`, so marking it there would ship a pair of bundles that

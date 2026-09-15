@@ -8,7 +8,7 @@
  *
  * The defaults go in a cascade layer of their own, which is what an application's
  * utility class needs to outrank them — specificity alone does not do it, because
- * an unlayered rule beats every layered one whatever its specificity. ADR-0001.
+ * an unlayered rule beats every layered one whatever its specificity. ADR-0119.
  *
  * The layer has to sort before Tailwind's, and layer order is the order in which
  * layer names are first seen in document order. Hence prepended to `<head>` rather

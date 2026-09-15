@@ -10,14 +10,14 @@ The order detail layout and its summary tab both read one order. They are separa
 levels, and the router mounts a child without a props channel from its parent, so each
 previously owned a `resource()` and called `SalesService.order(id)` itself.
 
-[ADR-0101](0101-concurrent-identical-reads-are-one-request.md) made the concurrent pair one
+[ADR-0013](0013-one-http-client-with-an-injected-transport.md) made the concurrent pair one
 HTTP request. It deliberately retained no response after that request settled. The two
 resources therefore still held independent values, failure flags, refresh decisions and
 lifetimes. A status write refreshed the layout's copy only. The summary kept the customer
 projection from its earlier order response. Status does not change that projection today,
 but any mutable field added there would have exposed the split refresh immediately.
 
-This is the reopening trigger ADR-0101 named: two screens need the same settled record,
+This is the reopening trigger ADR-0013 named: two screens need the same settled record,
 not merely the same request. It is also the keyed-result trigger
 [ADR-0076](0076-an-asynchronous-read-is-a-resource.md) named, but it does not establish a
 general query-cache policy. The application knows that an order id is the identity, that a

@@ -227,7 +227,7 @@ export interface AppManifest {
    * The group is what makes the list actionable. A flat list can only be started at
    * once, before a route is known; grouped, startup starts the entry group and the
    * rest follow the code that needs them
-   * ([ADR-0086](../../../../docs/adr/0086-the-manifest-groups-templates-by-chunk.md)).
+   * ([ADR-0081](../../../../docs/adr/0081-templates-are-delivered-by-chunk.md)).
    * Emitted only under `--templates split`; an empty record everywhere else.
    */
   readonly templateGroups: Readonly<Record<string, readonly string[]>>;
@@ -237,7 +237,7 @@ export interface AppManifest {
    * Not a bundle and not a substitute for one: the files stay separate and
    * immutable, and this is only the discovery a component cannot do for itself, so
    * a caller can put them in flight instead of paying one round trip per component
-   * once its chunk arrives ([ADR-0081](../../../../docs/adr/0081-the-manifest-names-every-template.md)).
+   * once its chunk arrives ([ADR-0081](../../../../docs/adr/0081-templates-are-delivered-by-chunk.md)).
    *
    * Derived from `templateGroups` when the document carries one, entry group first,
    * so "everything this artifact holds" stays one property rather than a partition
