@@ -46,6 +46,7 @@ import {
 } from '@core/template/dialect.js';
 import { effect } from '@core/foundation/reactive.js';
 import { beginBindingUpdate, labelBinding } from '@core/diagnostics/updates.js';
+import { OWNER_ATTRIBUTE } from '@core/elements/style-scope.js';
 import {
   attributeSinkFor,
   propertySinkFor,
@@ -120,6 +121,16 @@ const byClass = new WeakMap();
 const attachedByUrl = new Map();
 
 /**
+ * The tag a template's compile stamps on every element it renders, or null for an
+ * unstyled one. Recorded before the first compile of a URL and fixed after it, because
+ * one URL has one strings array (ADR-0014) and a stamp is part of that array.
+ * ADR-0119.
+ *
+ * @type {Map<string, string | null>}
+ */
+const ownerByUrl = new Map();
+
+/**
  * The published revision of a template, once an edit has replaced the compile the
  * network produced. Development only, and empty in every other page.
  *
@@ -167,6 +178,7 @@ export function loadTemplate(url) {
 
   let pending = byUrl.get(href);
   if (pending === undefined) {
+    if (!ownerByUrl.has(href)) ownerByUrl.set(href, null);
     pending = fetchAndCompile(href);
     byUrl.set(href, pending);
   }
@@ -303,7 +315,7 @@ async function fetchAndCompile(href) {
   // An edit published while this request was in flight is the newer answer, and
   // compiling the bytes that arrived would also give one URL a second strings
   // array — two hosts of the same template rendering different DOM. ADR-0111.
-  return revisedByUrl.get(href) ?? compileTemplate(source, href);
+  return revisedByUrl.get(href) ?? compileTemplate(source, href, ownerByUrl.get(href) ?? undefined);
 }
 
 /**
@@ -340,12 +352,27 @@ export function seedTemplates(sources) {
  * so the first paint would be empty markup. This module owns compilation; which
  * class a compiled template belongs to is identity, and identity lives there.
  *
+ * An `owner` is the tag of a styled Element, and every element the template renders
+ * carries it as `data-ui-owner`. One template cannot render for two owners, or for an
+ * owner and an unstyled class, because both would share one compile.
+ *
  * @param {object} ctor
  * @param {string | URL} url
+ * @param {string} [owner]
  * @returns {Promise<void>}
  */
-export async function attachTemplate(ctor, url) {
+export async function attachTemplate(ctor, url, owner) {
   const href = new URL(url, document.baseURI).href;
+  const claimed = ownerByUrl.get(href);
+  if (claimed === undefined) {
+    ownerByUrl.set(href, owner ?? null);
+  } else if (claimed !== (owner ?? null)) {
+    throw new Error(
+      `${href} already renders ${claimed === null ? 'for an unstyled class' : `for <${claimed}>`}, ` +
+        `so it cannot also render ${owner === undefined ? 'unstyled' : `for <${owner}>`}. A styled ` +
+        'Element stamps its own markup, and one template has one compile. ADR-0119.',
+    );
+  }
   startTemplateGroup(href);
 
   // Recorded before the await, so an edit that lands while this template is still
@@ -428,7 +455,7 @@ export function reviseTemplate(url, source) {
   const href = new URL(url, document.baseURI).href;
   if (!sourceByUrl.has(href)) return false;
 
-  const compiled = compileTemplate(source, href);
+  const compiled = compileTemplate(source, href, ownerByUrl.get(href) ?? undefined);
 
   sourceByUrl.set(href, source);
   revisedByUrl.set(href, compiled);
@@ -748,17 +775,18 @@ const fragmentInstance = directive(FragmentDirective);
  *
  * @param {string} source
  * @param {string} where URL or label used in error messages.
+ * @param {string} [owner] The styled Element whose tag every rendered element carries.
  * @returns {CompiledTemplate}
  * @internal
  */
-export function compileTemplate(source, where) {
+export function compileTemplate(source, where, owner) {
   const { prepared, expressions } = liftInterpolations(source);
 
   const holder = document.createElement('template');
   setTemplateSource(holder, prepared);
 
   /** @type {CompileContext} */
-  const context = { where, expressions };
+  const context = { where, expressions, owner };
   const chunks = new Chunks();
   compileNodes([...holder.content.childNodes], context, chunks);
   const compiled = chunks.finish();
@@ -830,6 +858,7 @@ function childLocals(parent) {
  * @typedef {object} CompileContext
  * @property {string} where
  * @property {string[]} expressions
+ * @property {string | undefined} owner
  */
 
 /**
@@ -952,6 +981,7 @@ function compileElement(element, context, chunks, consumed) {
 
   chunks.text(`<${tag}`);
   compileAttributes(element, context, chunks);
+  if (context.owner !== undefined) chunks.text(` ${OWNER_ATTRIBUTE}="${context.owner}"`);
   for (const fragment of fragments) {
     chunks.text(` .${fragment.property}=`);
     chunks.hole(fragment.evaluate, `${context.where} *fragment ${fragment.property}`);
@@ -1082,6 +1112,15 @@ function compileAttributes(element, context, chunks) {
     const { name, value } = attribute;
 
     if (name === '*else') continue;
+
+    // Ownership is the compiler's to write. Authored, it would opt markup into another
+    // Element's stylesheet. ADR-0119.
+    if (name === OWNER_ATTRIBUTE || name === `[${OWNER_ATTRIBUTE}]`) {
+      throw new Error(
+        `<${element.localName}> in ${context.where} writes ${OWNER_ATTRIBUTE}, which the ` +
+          "template compiler stamps to scope an Element's stylesheet.",
+      );
+    }
 
     const syntax = classifyAttributeName(name);
 

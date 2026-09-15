@@ -18,6 +18,7 @@ enforced; the enforcement is named.
 | The remote host interface never exposes a credential | No method returns a token; `host.auth.fetch` is the only way out |
 | Remote contexts are mount-scoped and revocable | Every `mount(host)` gets a fresh frozen context; leaving the route revokes it |
 | Light DOM and Tailwind compatibility are intentional | No shadow roots; projection moves real child elements |
+| An Element's stylesheet reaches only the markup its own template rendered | `core/elements/style-scope.js` is the one rewrite, shared by the runtime, the build and the project model; ADR-0119 |
 | Dependency direction: application → components → host → {core, auth} → vendor | `npm run verify`, failure modes 1–14 |
 | Tests exercise real browser source, with no transform and no mock loader | `@web/test-runner` serves the same mounts the application does |
 | Production optimisation stays optional and behaviour-preserving | The CSS step, `npm run templates`, a comment strip |

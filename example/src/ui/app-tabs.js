@@ -72,4 +72,4 @@ export class AppTabs extends SignalElement {
   }
 }
 
-await defineComponent({ tag: 'app-tabs', element: AppTabs, module: import.meta.url });
+await defineComponent({ tag: 'app-tabs', element: AppTabs, module: import.meta.url, styles: true });

@@ -43,36 +43,10 @@
 }
 
 /*
- * What box each of this application's components is.
- *
- * A custom element is `display: inline` until something says otherwise, and an inline
- * box drops every rule that only block boxes obey. Two of those cost real layout here:
- * a vertical margin is ignored, so `space-y-*` between two cards produces no gap at
- * all; and the box sits on a line box, so the surrounding font's strut makes it taller
- * than its content and leaves that content sitting low inside it.
- *
- * The panels are blocks. A badge is `inline-flex` rather than `inline-block` so the
- * host hugs the pill inside it — that half-strut is exactly the amount a badge looks
- * low by when it is centred against a button beside it.
- *
- * A component that is always a grid or flex child is blockified by its parent and
- * would survive without a rule here. It gets one anyway: which box a component is
- * belongs to the component, not to the layout it happens to be dropped into.
- *
- * Kept in step with the same rules in index.html by hand, for the reason the theme
- * block above gives.
+ * Which box each component is lives in that component's own stylesheet, beside its
+ * module (`src/ui/app-card.css`), and the build folds those into this sheet's output.
+ * ADR-0119.
  */
-app-card,
-app-notice,
-app-stat,
-app-field,
-app-tabs {
-  display: block;
-}
-
-app-badge {
-  display: inline-flex;
-}
 
 /*
  * Where to scan for class names. Miss a directory and its utilities are absent from the

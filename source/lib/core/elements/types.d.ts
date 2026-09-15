@@ -24,6 +24,16 @@ export interface ComponentSpec {
    */
   readonly template?: string | false;
   /**
+   * `true` when the sibling `.css` of `module` is this Element's stylesheet. Its rules
+   * reach the markup this Element's template renders and, through `:host`, the
+   * Element itself — nothing a caller projects into it and nothing outside it.
+   * ADR-0119.
+   *
+   * `'bundled'` is written by the production build, never by hand: the scoped rules are
+   * already in the application stylesheet, so nothing is fetched.
+   */
+  readonly styles?: boolean | 'bundled';
+  /**
    * The components this component's template may name, as classes. A real import,
    * so ES module evaluation order defines them first, and the fact
    * cli/checks/template-check.mjs checks the template against.
@@ -38,6 +48,10 @@ export interface ComponentDefinition {
   readonly module: string;
   /** Compiled template URL, or undefined for a component that renders in JavaScript. */
   readonly templateUrl: string | undefined;
+  /** Whether its template stamps ownership for a stylesheet of its own. */
+  readonly styled: boolean;
+  /** The stylesheet this page fetched, or undefined when unstyled or bundled. */
+  readonly stylesheetUrl: string | undefined;
   readonly uses: readonly ComponentDefinition[];
 }
 

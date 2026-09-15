@@ -54,6 +54,42 @@ await defineComponent({
 by the templates that name them. `<x-content>` is not: it is the projection marker the
 template dialect defines.
 
+## Styling one component
+
+A component that needs CSS of its own says so, and the file is its module's sibling:
+
+```js
+await defineComponent({ tag: 'app-card', element: AppCard, module: import.meta.url, styles: true });
+```
+
+```css
+/* app-card.css */
+:host { display: block; }
+.title { letter-spacing: 0.01em; }
+:host([flush]) > .body { padding: 0; }
+[data-theme='dark'] :host .title { color: var(--ui-color-text); }
+```
+
+- **The rules reach this component and nothing else.** `.title` matches the `.title` this
+  component's template renders. It does not match a `.title` a caller projects into the
+  card, one inside another component, or one anywhere else on the page. The template
+  compiler stamps `data-ui-owner="app-card"` on the markup it renders, and every rule is
+  rewritten to require that stamp.
+- **`:host` is the element itself, and it answers for the nearest instance.** A flush card
+  does not flush the body of an unflushed card nested inside it. `:host` is also the only
+  way to name context outside the element, as the dark-theme rule above does.
+- **A utility class still wins.** The rules sit in Tailwind's `components` layer, above
+  preflight and under every utility, so `<app-card class="hidden">` hides the card.
+- **It is plain CSS.** Tailwind directives, `@import`, `@layer` and names the whole
+  document shares, such as `@keyframes`, are refused at their line by `npm run verify` and
+  by the browser. Utilities stay in the template, and colours come from `var(--ui-color-*)`.
+- **It needs a template of its own.** `template: false` with `styles: true` is refused, and
+  so are two styled components declared in one module.
+- **Development and production agree.** Source delivery fetches the file and adopts the
+  scoped rules before the tag is defined, and a saved edit replaces them in place. A build
+  scopes the same text with the same function and folds it into the one stylesheet.
+  [ADR-0119](../adr/0119-an-element-stylesheet-reaches-only-that-element.md).
+
 ## Two rules that are easy to trip over
 
 **Named content must be a whole element.** Content is projected by *moving* the

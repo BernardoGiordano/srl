@@ -38,4 +38,4 @@ export class AppBadge extends SignalElement {
   }
 }
 
-await defineComponent({ tag: 'app-badge', element: AppBadge, module: import.meta.url });
+await defineComponent({ tag: 'app-badge', element: AppBadge, module: import.meta.url, styles: true });

@@ -129,25 +129,6 @@
         --color-sidebar-active: var(--ui-color-sidebar-active);
         --color-overlay: var(--ui-color-overlay);
       }
-
-      /*
-       * What box each component is. A custom element is `display: inline` until
-       * something says otherwise, and an inline box ignores vertical margins —
-       * `space-y-*` between two cards then produces no gap — and sits on a line box,
-       * whose strut leaves its content low inside it. Duplicated in src/app.css,
-       * like the block above.
-       */
-      app-card,
-      app-notice,
-      app-stat,
-      app-field,
-      app-tabs {
-        display: block;
-      }
-
-      app-badge {
-        display: inline-flex;
-      }
     </style>
 
     <!-- <link rel="stylesheet" href="/app.css" /> -->

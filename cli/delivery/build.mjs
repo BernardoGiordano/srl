@@ -30,6 +30,7 @@ import { parse, parseFragment, serialize } from 'parse5';
 import ts from 'typescript';
 import { build as viteBuild } from 'vite';
 
+import { scopeStylesheet } from '@srljs/core/lib/core/elements/style-scope.js';
 import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
 import { REPO, readText, selectedApp, walk } from '../layout.mjs';
 import { extractImportMap, PACKAGE, urlToFile } from '../package/interface.mjs';
@@ -168,6 +169,9 @@ export async function buildArtifact({
         emptyOutDir: true,
         license: { fileName: 'THIRD_PARTY_LICENSES.md' },
         minify: 'oxc',
+        // One stylesheet, whichever chunk imported an Element's rules, so a lazy route
+        // is styled offline and the document links everything it will need. ADR-0119.
+        cssCodeSplit: false,
         // The engine's own preloading stays off: it injects hints from the document
         // it is given, and this build hands it one that is still a source file. The
         // hints are written afterwards, from the emitted graph. ADR-0080.
@@ -241,7 +245,7 @@ export async function buildArtifact({
       htmlPath,
       withEntryHints(await readFile(htmlPath, 'utf8'), { entry, chunks, security }),
     );
-    const stylesheet = await verifyBrowserRoot(app, publicDir);
+    const stylesheet = await verifyBrowserRoot(app, publicDir, templates.stylesheets());
     // Last write into the artifact, and before the inventory: the worker names the
     // document's stylesheet, which the check above is what proves the document
     // loads, and it is itself one more file the build then hashes, cache-classes and
@@ -374,7 +378,9 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
       modules: Object.entries(integrity).map(([path, value]) => ({ path, integrity: value })),
       csp: cspForImportMap(inlineHash),
     };
-    await verifyBrowserRoot(app, publicDir);
+    // The stylesheet is the bytes the build already proved carry every Element's scoped
+    // rules; recomposing Remotes rewrites the import map and the manifest, not the CSS.
+    await verifyBrowserRoot(app, publicDir, []);
     const files = verifyPayload(
       app,
       await inventory(stage),
@@ -468,6 +474,7 @@ export async function buildRemoteArtifact({
         emptyOutDir: true,
         license: { fileName: 'THIRD_PARTY_LICENSES.md' },
         minify: 'oxc',
+        cssCodeSplit: false,
         // A Remote has no document of its own — the shell owns the one that carries
         // the hints — so there is nothing here for the engine to inject into. ADR-0080.
         modulePreload: false,
@@ -513,6 +520,12 @@ export async function buildRemoteArtifact({
     );
 
     const payload = await inventory(stage);
+    const remoteCss = await Promise.all(
+      payload
+        .filter((file) => file.path.endsWith('.css'))
+        .map((file) => readFile(join(publicDir, file.path.replace(/^public\//u, '')), 'utf8')),
+    );
+    verifyScopedRules(app, remoteCss.join('\n'), templates.stylesheets());
     const entryModule = relative(REPO, entry).split(sep).join('/');
     const remoteEntry = chunks.find(
       (chunk) => chunk.entry && chunk.facade === entryModule,
@@ -1111,6 +1124,7 @@ function verifyRemotePayload(app, name, files, chunks, entry, templates) {
     .filter(
       (module) =>
         module !== '\0production-artifact.css' &&
+        !module.startsWith(ELEMENT_STYLESHEET) &&
         !module.startsWith(`${app.name}/remotes/${name}/`),
     );
   if (forbiddenModules.length > 0) {
@@ -1753,9 +1767,10 @@ function replaceImportMap(app, source, importMap) {
  *
  * @param {BuildApplication} app
  * @param {string} publicDir
+ * @param {readonly string[]} styled the Elements whose scoped rules the graph imported
  * @returns {Promise<string | null>} the stylesheet's URL, or null for a document with none
  */
-async function verifyBrowserRoot(app, publicDir) {
+async function verifyBrowserRoot(app, publicDir, styled) {
   const html = await readFile(join(publicDir, 'index.html'), 'utf8');
   const forbidden = [
     'tailwind-browser',
@@ -1793,14 +1808,43 @@ async function verifyBrowserRoot(app, publicDir) {
   if (!css.includes('--ui-color-canvas') || css.includes('@source') || css.includes('@import')) {
     throw artifactError(app, 'verify', 'production stylesheet lost tokens or retains build directives.');
   }
+  verifyScopedRules(app, css, styled);
   return `/${relativeCss}`;
 }
+
+/**
+ * Prove every styled Element the graph bundled has its scoped rules in the stylesheet
+ * that shipped. An Element declared `styles: 'bundled'` fetches nothing, so a rule
+ * missing here is a component rendered unstyled with no request that failed. ADR-0119.
+ *
+ * @param {BuildApplication} app
+ * @param {string} css
+ * @param {readonly string[]} styled
+ */
+function verifyScopedRules(app, css, styled) {
+  const missing = styled.filter((tag) => !new RegExp(`@scope\\s*\\(\\s*${tag}\\s*\\)`, 'u').test(css));
+  if (missing.length > 0) {
+    throw artifactError(
+      app,
+      'verify',
+      `production stylesheet lacks the scoped rules of ${missing.map((tag) => `<${tag}>`).join(', ')}.`,
+    );
+  }
+}
+
+/** The prefix of the virtual CSS module holding one Element's scoped rules. */
+const ELEMENT_STYLESHEET = '\0element-stylesheet:';
 
 /**
  * Inject explicit built template URLs into every bundled `defineComponent` call. Source
  * stays untouched; only Vite's in-memory module text changes. TypeScript AST ranges make
  * object formatting irrelevant and keep strings or comments containing the same words
  * out of the transform.
+ *
+ * A styled Element is declared `styles: 'bundled'` instead of `true`, and its module
+ * imports a virtual CSS module holding its rules scoped by the same function the browser
+ * uses. The stylesheet is therefore part of whichever chunk needs the Element, and
+ * `cssCodeSplit: false` folds every chunk's rules into the one stylesheet. ADR-0119.
  *
  * @param {BuildApplication} app
  * @param {import('../project-model/types.js').ProjectModel} model
@@ -1818,11 +1862,39 @@ function templateTransform(app, model, base) {
 
   /** @type {Map<string, TemplateAsset>} */
   const used = new Map();
+  /** @type {Map<string, import('../project-model/types.js').ElementRecord>} */
+  const styled = new Map();
+  /** @type {Set<string>} */
+  const scoped = new Set();
 
   return {
     plugin: /** @type {import('vite').Plugin} */ ({
       name: 'production-template-identity',
       enforce: 'pre',
+      resolveId(id) {
+        return id.startsWith(ELEMENT_STYLESHEET) ? id : null;
+      },
+      async load(id) {
+        if (!id.startsWith(ELEMENT_STYLESHEET)) return null;
+        const tag = id.slice(ELEMENT_STYLESHEET.length, -'.css'.length);
+        const record = styled.get(tag);
+        if (record === undefined || record.stylesheet === null) {
+          throw artifactError(app, 'css', `no bundled Element <${tag}> declares a stylesheet.`);
+        }
+        const path = relative(REPO, record.stylesheet);
+        try {
+          const rules = scopeStylesheet(tag, await readFile(record.stylesheet, 'utf8'), path);
+          if (rules !== '') scoped.add(tag);
+          return rules;
+        } catch (cause) {
+          throw artifactError(
+            app,
+            'css',
+            cause instanceof Error ? cause.message : `${path}: ${String(cause)}`,
+            { cause },
+          );
+        }
+      },
       async transform(code, id) {
         const module = id.split('?')[0] ?? id;
         const records = byModule.get(module);
@@ -1893,6 +1965,30 @@ function templateTransform(app, model, base) {
             });
           }
 
+          if (record.stylesheet !== null) {
+            if (record.stylesheetExists !== true) {
+              throw artifactError(
+                app,
+                'css',
+                `<${record.tag}> declares missing stylesheet ${relative(REPO, record.stylesheet)}.`,
+              );
+            }
+            const styles = propertyAssignment(definition, 'styles');
+            if (styles !== null) {
+              edits.push({
+                start: styles.initializer.getStart(tree),
+                end: styles.initializer.getEnd(),
+                text: "'bundled'",
+              });
+            }
+            edits.push({
+              start: 0,
+              end: 0,
+              text: `import ${JSON.stringify(`${ELEMENT_STYLESHEET}${record.tag}.css`)};\n`,
+            });
+            styled.set(record.tag, record);
+          }
+
           const collision = used.get(asset.url);
           if (collision !== undefined && collision.source !== asset.source) {
             throw artifactError(
@@ -1912,6 +2008,8 @@ function templateTransform(app, model, base) {
       },
     }),
     assets: () => [...used.values()].sort((left, right) => left.url.localeCompare(right.url)),
+    /** The Elements whose non-empty scoped rules the graph imported. */
+    stylesheets: () => [...scoped].sort(),
   };
 }
 

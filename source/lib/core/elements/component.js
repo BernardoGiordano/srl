@@ -31,6 +31,7 @@
  */
 
 import { attachTemplate } from '@core/template/template.js';
+import { attachStylesheet } from '@core/elements/stylesheet.js';
 
 /** @import { ComponentDefinition, ComponentRef, ComponentSpec } from '@core/elements/types.js' */
 
@@ -114,8 +115,16 @@ export async function defineComponent(spec) {
   const uses = (spec.uses ?? []).map((ref) => requireDefinition(ref, tag));
   const templateUrl =
     spec.template === false ? undefined : templateUrlFor(module, spec.template);
+  const styled = stylesDeclared(tag, spec, templateUrl);
+  const stylesheetUrl = spec.styles === true ? stylesheetUrlFor(module) : undefined;
 
-  if (templateUrl !== undefined) await attachTemplate(element, templateUrl);
+  // Together, and both before `define`: a first render needs its markup and its rules.
+  await Promise.all([
+    templateUrl === undefined
+      ? undefined
+      : attachTemplate(element, templateUrl, styled ? tag : undefined),
+    stylesheetUrl === undefined ? undefined : attachStylesheet(tag, stylesheetUrl),
+  ]);
 
   /** @type {ComponentDefinition} */
   const definition = Object.freeze({
@@ -123,6 +132,8 @@ export async function defineComponent(spec) {
     element,
     module,
     templateUrl,
+    styled,
+    stylesheetUrl,
     uses: Object.freeze(uses),
   });
   definitions.add(definition);
@@ -339,6 +350,11 @@ function assertReplaceable(previous, spec, module) {
         `already running the old class has to start again to run this one.`,
     );
   };
+
+  const styled = stylesDeclared(tag, spec, previous.templateUrl);
+  if (styled !== previous.styled) {
+    refuse(`it ${styled ? 'declares' : 'no longer declares'} a stylesheet`);
+  }
 
   if (Reflect.getPrototypeOf(fresh) !== Reflect.getPrototypeOf(registered)) {
     refuse('it extends a different class than the one on screen does');
@@ -569,6 +585,47 @@ function templateUrlFor(moduleUrl, template) {
   const module = new URL(moduleUrl);
   const file = module.pathname.slice(module.pathname.lastIndexOf('/') + 1);
   return new URL(template ?? file.replace(/\.js$/u, '.html'), module).href;
+}
+
+/**
+ * The sibling `.css` of the declaring module. Never named, for the reason the template
+ * is not: a rename carries it along.
+ *
+ * @param {string} moduleUrl
+ * @returns {string}
+ */
+function stylesheetUrlFor(moduleUrl) {
+  const module = new URL(moduleUrl);
+  const file = module.pathname.slice(module.pathname.lastIndexOf('/') + 1);
+  return new URL(file.replace(/\.js$/u, '.css'), module).href;
+}
+
+/**
+ * Whether a spec declares a stylesheet, refusing one this Element cannot have.
+ *
+ * A stylesheet reaches the markup its Element's template stamps, so an Element that
+ * renders in JavaScript has nothing for its rules to reach. ADR-0119.
+ *
+ * @param {string} tag
+ * @param {ComponentSpec} spec
+ * @param {string | undefined} templateUrl
+ * @returns {boolean}
+ */
+function stylesDeclared(tag, spec, templateUrl) {
+  const { styles } = spec;
+  if (styles !== undefined && styles !== true && styles !== false && styles !== 'bundled') {
+    throw new Error(
+      `<${tag}>: \`styles\` must be true or false, and ${JSON.stringify(styles)} is neither.`,
+    );
+  }
+  const styled = styles === true || styles === 'bundled';
+  if (styled && templateUrl === undefined) {
+    throw new Error(
+      `<${tag}> declares \`styles\` and \`template: false\`. An Element's stylesheet reaches ` +
+        'the markup its template renders, and this one renders none. ADR-0119.',
+    );
+  }
+  return styled;
 }
 
 /**

@@ -95,6 +95,7 @@
     ".": { "types": "./dist/srl-core.d.ts", "default": "./dist/srl-core.js" },
     "./components": { "types": "./dist/srl-components.d.ts", "default": "./dist/srl-components.js" },
     "./dist/*": "./dist/*",
+    "./lib/core/elements/style-scope.js": "./lib/core/elements/style-scope.js",
     "./lib/core/remotes/manifest-policy.js": "./lib/core/remotes/manifest-policy.js",
     "./lib/core/template/dialect.js": "./lib/core/template/dialect.js",
     "./lib/core/template/expression-parser.js": "./lib/core/template/expression-parser.js",

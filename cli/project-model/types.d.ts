@@ -87,6 +87,13 @@ export interface ElementRecord {
   templateDeclared: boolean;
   /** Whether `template` names a file that exists. Null when there is no template. */
   templateExists: boolean | null;
+  /**
+   * Absolute path of the module's sibling `.css` when the declaration writes
+   * `styles: true`, and null otherwise. ADR-0119.
+   */
+  stylesheet: string | null;
+  /** Whether `stylesheet` exists. Null when there is no stylesheet. */
+  stylesheetExists: boolean | null;
   uses: UsesEntry[];
   /** Tags this element's markup may name, from `uses` and its own tag. Sorted. */
   usesTags: string[];
@@ -148,7 +155,13 @@ export interface TemplateGlobal {
  * implementation to satisfy a tool that reads it.
  */
 export interface ProjectDiagnostic {
-  kind: 'dynamic' | 'duplicate-tag' | 'unresolved-uses' | 'unreadable' | 'shadowed-lifecycle';
+  kind:
+    | 'dynamic'
+    | 'duplicate-tag'
+    | 'unresolved-uses'
+    | 'unreadable'
+    | 'shadowed-lifecycle'
+    | 'stylesheet';
   severity: 'error' | 'note';
   /** Absolute path of the file the diagnostic is about. */
   file: string;
@@ -259,6 +272,7 @@ export interface ProjectIndex {
     exported: boolean;
     kind: DefinitionKind;
     template: string | null;
+    stylesheet: string | null;
     uses: string[];
     properties: string[];
     state: string[];

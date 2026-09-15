@@ -34,4 +34,4 @@ export class AppField extends SignalElement {
 
 let counter = 0;
 
-await defineComponent({ tag: 'app-field', element: AppField, module: import.meta.url });
+await defineComponent({ tag: 'app-field', element: AppField, module: import.meta.url, styles: true });

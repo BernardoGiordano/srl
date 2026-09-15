@@ -51,6 +51,11 @@ source/lib/                 THE FRAMEWORK, served at /lib/
       mount.js              one dynamic mount: load, definition, races, release
       outlet.js             <x-outlet>, signal-driven component swapping
       projection.js         <x-content>, the ng-content equivalent
+      style-scope.js        an Element's stylesheet, rewritten to reach only that
+                            Element. Imports nothing, so the runtime, the build and
+                            the project model share one copy (ADR-0119)
+      stylesheet.js         adopts an Element's scoped stylesheet during source
+                            delivery, and replaces its rules on an edit
     navigation/
       router.js             matching, child layout routes, guards, lazy loading,
                             link interception, <x-route-outlet>
@@ -103,8 +108,9 @@ source/components/          THE SHARED COLLECTION, served at /components/
                             filter-descriptor.js
   overlays/                 ui-dialog: the one native `<dialog>` wrapper, and the
                             only place style.css claims layout rather than colour
-  style.css                 zero-specificity component defaults, written against the
-                            `--ui-color-*` tokens and defining none of them
+  style.css                 zero-specificity component defaults in Tailwind's
+                            `components` layer, written against the `--ui-color-*`
+                            tokens and defining none of them
   theme-default.css         the optional default palette: those tokens' light and dark
                             values, achromatic. An application with a brand links its
                             own file instead and leaves style.css untouched

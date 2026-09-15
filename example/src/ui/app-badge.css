@@ -1,0 +1,8 @@
+/*
+ * `inline-flex` rather than `inline-block`, so the host hugs the pill inside it. The
+ * half-strut an inline box adds is exactly the amount a badge looks low by when it is
+ * centred against a button beside it.
+ */
+:host {
+  display: inline-flex;
+}
