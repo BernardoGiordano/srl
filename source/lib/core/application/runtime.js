@@ -1,23 +1,16 @@
 /**
  * Application startup.
  *
- * Booting is a transaction: fetch the manifest, seed the template cache from it,
- * load the starting locale, install providers, settle the session, then define the
- * root element. Every step depends on the one before it, and getting the order
- * wrong does not throw — it flashes untranslated text, or bounces a deep link to
- * the login page because a guard read a session that had not been restored yet.
+ * Startup runs in a fixed order: fetch the manifest, warm the template cache, load the
+ * locale, install providers, settle the session, then define the root element. Getting
+ * the order wrong doesn't throw. It flashes untranslated text, or bounces a deep link to
+ * the login page because a guard ran before the session was restored.
  *
- * So the order lives here once and an application supplies the parts that are
- * genuinely its own as hooks. A step is ordering the library owns; a hook is a
- * decision only the application can make, and the runtime never guesses at one.
- * Hooks receive the validated manifest, so an application reads its runtime
- * configuration from the argument rather than from a global.
+ * The library owns the order, and the application supplies hooks for the decisions only
+ * it can make. Hooks receive the admitted manifest.
  *
- * Every step is wrapped, and a failure inside one is rethrown as an
- * `ApplicationStartupError` naming the step, with the original error as `cause`:
- * a blank page is the worst thing this codebase can produce, and the console
- * message that comes with it usually points at whatever ran last rather than at
- * the step that failed.
+ * A failure inside a step is rethrown as `ApplicationStartupError` naming the step, with
+ * the original error as `cause`, so a blank page points at the step that failed.
  */
 
 import { configureI18n } from '@core/localization/i18n.js';
@@ -36,13 +29,9 @@ import {
 /**
  * Prefix of the User Timing measure each step emits.
  *
- * A startup step is the unit a startup regression happens in, and the total hides
- * it: 30 ms more in `templates` is 2% of one boot and invisible in every number
- * anybody records. So each step publishes its duration twice, on purpose — on the
- * returned `steps`, for an application that wants to report its own boot, and as a
- * measure, for everything that cannot hold that value: the browser's performance
- * panel, a field beacon, and the benchmark harness, which reads the page's own
- * clock at a moment long after `startApplication` resolved.
+ * Regressions happen inside a step and hide in the total. Each step reports its duration
+ * on the returned `steps` and as a measure, so the performance panel, field beacons and
+ * the benchmark can read it without holding the return value.
  */
 export const STARTUP_MEASURE = 'srl:startup:';
 
@@ -67,47 +56,28 @@ export class ApplicationStartupError extends Error {
 /**
  * Boot an application.
  *
- * Steps run in this order, and each is skipped when the application does not use
- * it:
+ * Steps run in this order, and each is skipped when the application doesn't use it.
  *
- *   1. `configure`   Synchronous application setup that must precede everything,
- *                    typically `configureTheme()`. Runs before the manifest so a
- *                    theme is in place before the first byte of it arrives.
- *   2. `manifest`    Fetch and validate `app.manifest.json`, then install it.
- *                    Remote locations, the API base URL and the locale
- *                    configuration all come from it, so nothing that depends on
- *                    any of them can be constructed before it lands.
- *   3. `templates`   Warm the template cache from whichever list the manifest
- *                    carries: seed it outright from `templateBundle`, or start
- *                    the entry group of `templateGroups` arriving — every URL in
- *                    `templateFiles` when the document is flat and has no groups.
- *                    The other groups are registered rather than started; each
- *                    starts on the first `attachTemplate` out of its own chunk,
- *                    so markup a guard refused is markup nobody fetched.
- *                    Here because a component fetches its own template while
- *                    loading, and by the time it does the URL has to be known
- *                    already — a chunk of nine components otherwise costs nine
- *                    requests in a row.
- *   4. `locale`      `configureI18n`, awaited. A component that renders once
- *                    against an empty message table and again against a full one
- *                    flashes untranslated text; ordering it away costs one await.
- *   5. `providers`   The application installs its injection providers. After the
- *                    manifest because most of them are configured from it.
- *   6. `ready`       Whatever the application needs settled before the first
- *                    route resolves — a session restore, which is what stops a
- *                    refresh on a deep link from bouncing the user to the login
- *                    page.
- *   7. `root`        Import the module that defines the root element, and verify
- *                    that it did. Last, because it is the point at which
- *                    components start rendering.
+ *   1. `configure`   Synchronous setup that must come first, typically
+ *                    `configureTheme()`.
+ *   2. `manifest`    Fetch, admit and install `app.manifest.json`. Remote locations,
+ *                    the API base and the locale settings all come from it.
+ *   3. `templates`   Seed the template cache from `templateBundle`, or start the entry
+ *                    group of `templateGroups` (or all of a flat `templateFiles`).
+ *                    Other groups start with their chunk.
+ *   4. `locale`      Await `configureI18n`, so nothing renders untranslated.
+ *   5. `providers`   Install injection providers, most of them configured from the
+ *                    manifest.
+ *   6. `ready`       Settle what the first route must not race, such as a session
+ *                    restore.
+ *   7. `root`        Import the root element's module and verify that it defined the
+ *                    element. Components start rendering here.
  *
- * The root module is imported dynamically rather than named in a static import,
- * because a static import is evaluated before any of the above runs.
+ * The root module is imported dynamically, because a static import would evaluate
+ * before any step runs.
  *
- * Every step that runs reports its duration, on the returned `steps` and as a
- * `srl:startup:<step>` User Timing measure. A boot is seven steps deep and the
- * total is the only number anything downstream used to be able to see, which made
- * "startup got 30 ms slower" a fact with no owner. ADR-0084.
+ * Every step that runs reports its duration on `steps` and as a `srl:startup:<step>`
+ * User Timing measure.
  *
  * @param {ApplicationSpec} spec
  * @returns {Promise<StartedApplication>}
@@ -126,17 +96,14 @@ export async function startApplication(spec) {
     return value;
   });
 
-  // Seeding wins when both are present: it puts the markup in the cache from bytes
-  // already in hand, which makes the prefetch it would otherwise start a set of
-  // requests for templates nothing will ever read from the network.
+  // A bundle wins over prefetching, since it already holds the markup.
   const bundle = manifest.templateBundle;
   if (bundle !== undefined) {
     await step('templates', steps, () => seedTemplateBundle(bundle));
   } else if (manifest.templateFiles.length > 0) {
     await step('templates', steps, () => {
-      // Registered before the entry group is started, so starting it is also what
-      // marks it started and the first component out of the entry closure does not
-      // start it a second time.
+      // Register the groups before starting the entry group, so starting it marks it
+      // started and its first component doesn't start it again.
       registerTemplateGroups(manifest.templateGroups);
       prefetchTemplates(entryTemplates(manifest));
     });
@@ -152,13 +119,8 @@ export async function startApplication(spec) {
 }
 
 /**
- * The templates a first paint needs, which is a smaller set than "all of them".
- *
- * `templateGroups.entry` is the markup named by modules the entry document already
- * preloads, so it is the group whose code is arriving anyway. A document with no
- * groups — source delivery, which has no chunks to group by — has only the flat list
- * to give, and giving all of it is what this used to do for every document.
- * ADR-0081, ADR-0081.
+ * The templates a first paint needs. That is the `entry` group when the manifest has
+ * groups, and the whole flat list under source delivery. ADR-0081.
  *
  * @param {AppManifest} manifest
  * @returns {readonly string[]}
@@ -168,11 +130,8 @@ function entryTemplates(manifest) {
 }
 
 /**
- * Run one step, recording what it cost and attaching its name to any failure.
- *
- * The duration is recorded in a `finally`, so a step that threw still reports how
- * long it took before it did — which is the number wanted when a boot fails on a
- * timeout rather than on a rejection.
+ * Run one step, record its duration and attach its name to any failure. The duration is
+ * recorded in `finally`, so a failed step still reports how long it took.
  *
  * @template T
  * @param {StartupStep} name
@@ -196,12 +155,10 @@ async function step(name, steps, body) {
 }
 
 /**
- * Fetch the pre-bundled template map and seed the cache with it.
+ * Fetch the template bundle and seed the cache.
  *
- * A bundle that is configured but missing is not a startup failure: the compile
- * path is identical either way, so the page still works at the cost of one
- * request per template, which is the correct behaviour for an optimisation.
- * `npm run verify` is what reports a bundle that is configured and stale.
+ * A missing bundle isn't a startup failure. The page still works with one request per
+ * template, and `npm run verify` reports a stale bundle.
  *
  * @param {string} url
  * @returns {Promise<void>}
@@ -212,18 +169,12 @@ async function seedTemplateBundle(url) {
 }
 
 /**
- * Import the root module and check that it defined the element the page holds.
+ * Import the root module and check that it defined the root element.
  *
- * `@core/elements/mount.js` owns that check, because every other load-then-define
- * path in the library goes through it. The root element is the one that is not
- * instantiated here — the page already contains it, and importing its module is
- * what makes the browser upgrade it — but the rule is the same one.
- *
- * The tag comes from the root component's own definition, because `load` resolves
- * the class. A spec that resolves nothing nameable and declares no `tag` is a
- * misconfiguration rather than a silent skip: that combination leaves a page whose
- * root element is never upgraded, which is the blank page this step exists to
- * catch. Nothing is loaded when the tag is already defined.
+ * `@core/elements/mount.js` performs the check, as it does for every load-then-define
+ * path. The page already contains the root element, so importing the module upgrades it.
+ * The tag comes from the root class's definition. A spec that names no component throws,
+ * because an element that never upgrades is a blank page.
  *
  * @param {ApplicationRoot} root
  * @returns {Promise<void>}

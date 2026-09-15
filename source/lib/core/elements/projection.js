@@ -1,16 +1,12 @@
 /**
- * Light-DOM content projection. The `<ng-content>` equivalent.
+ * Light-DOM content projection, the equivalent of `<ng-content>`.
  *
- * Components render into light DOM, not shadow DOM, because Tailwind v4 cannot
- * style a shadow root: it registers theme values with `@property`, which is
- * unsupported inside shadow roots, and emits its variables on `:root` rather than
- * `:host`. Choosing Tailwind means choosing light DOM.
- *
- * The bill for that is `<slot>`, a shadow-DOM feature that does not function in
- * light DOM. So projection is manual: capture the authored children before the
- * first render can destroy them, then put them back at `<x-content>` markers after
- * each render. Authoring stays identical to the native API, so the knowledge
- * transfers and a future move to shadow DOM is a find-and-replace.
+ * Components render into light DOM because Tailwind v4 can't style a shadow root.
+ * It registers theme values with `@property`, which shadow roots don't support, and
+ * emits its variables on `:root`. `<slot>` only works in shadow DOM, so projection
+ * is manual. Authored children are captured before the first render and put back at
+ * `<x-content>` markers after each render. The authoring syntax matches the native
+ * API.
  */
 
 import { defineElementDefault } from '@core/elements/element-defaults.js';
@@ -24,17 +20,12 @@ const MARKER_TAG = 'x-content';
 const HOST_ATTR = 'data-projects-content';
 
 /**
- * The marker is `display: contents` so it disappears from layout entirely.
+ * The marker uses `display: contents`, so it disappears from layout. A wrapper
+ * between a flex or grid parent and its children would break the parent's
+ * utilities.
  *
- * This is the detail that makes light-DOM projection usable with Tailwind. An
- * inline-by-default wrapper between a `flex` parent and its children silently
- * breaks every flex and grid utility applied to that parent, and the symptom
- * (spacing that is subtly wrong) is miserable to trace back to a wrapper
- * element you forgot was there.
- *
- * A default, not a rule: `defineElementDefault` puts it in a cascade layer that
- * sorts below Tailwind's, so a `class` on the marker still wins. See that module
- * for why an unlayered rule would not.
+ * `defineElementDefault` puts the rule in a layer below Tailwind's, so a class on
+ * the marker still wins.
  */
 defineElementDefault(MARKER_TAG, 'display:contents');
 
@@ -43,24 +34,18 @@ if (!customElements.get(MARKER_TAG)) {
 }
 
 /**
- * Move the element's authored children out of the DOM and bucket them by slot
- * name. Must run before the first render.
+ * Remove the element's authored children and group them by slot name. Runs before
+ * the first render.
  *
- * The nodes are *removed*, not merely read. lit-html clears its container on
- * first render, and relying on the exact moment it does so would make this
- * order-dependent on lit internals. Emptying the host up front makes the
- * outcome the same either way.
+ * Removing the nodes up front means the result doesn't depend on when lit-html
+ * clears its container.
  *
- * EVERY NODE IS TAKEN, INCLUDING COMMENTS AND WHITESPACE
+ * Every node moves, comments and whitespace included. A lit `ChildPart` is a range
+ * between two anchor nodes, and an anchor left behind would make later renders
+ * write to the wrong parent.
  *
- * A lit `ChildPart` is a *range* between two anchor nodes, so an anchor left
- * behind while its content moves makes every render after the first write to the
- * wrong parent. Anchors travel with the content they anchor, in document order,
- * and whitespace travels because it is frequently one of them. ADR-0020.
- *
- * Non-elements go to the default bucket: a comment carries no `slot` attribute,
- * so projecting into a *named* slot requires a whole element — see the note in
- * ui-sidebar-group.js.
+ * Non-elements go to the default slot. A comment has no `slot` attribute, so a named
+ * slot needs a whole element.
  *
  * @param {Element} host
  * @returns {ContentBuckets}
@@ -69,9 +54,8 @@ if (!customElements.get(MARKER_TAG)) {
 export function captureContent(host) {
   const nodes = Array.from(host.childNodes);
 
-  // Whitespace alone is not content, and a host with none must not be treated as
-  // projecting: that flag makes the first render synchronous and keeps buckets
-  // alive for the element's lifetime.
+  // A host with only whitespace doesn't project. Treating it as projecting would
+  // make its first render synchronous and keep its buckets alive.
   const meaningful = nodes.some(
     (node) => node instanceof Element || node.nodeType === Node.COMMENT_NODE,
   );
@@ -98,25 +82,18 @@ export function captureContent(host) {
 }
 
 /**
- * Fill this host's empty `<x-content>` markers from its captured buckets.
+ * Fill this host's empty `<x-content>` markers from its captured buckets. Safe to
+ * call after every render.
  *
- * Idempotent, so it is safe to call after every render. Two cases matter:
+ * - If lit reused a marker, it still holds the projected nodes and nothing moves.
+ * - If lit replaced a marker, the new one is empty. Nodes move into it and keep
+ *   their identity and listeners.
  *
- *  - lit reused the marker across renders. It still holds the projected nodes,
- *    so the ownership check skips it and nothing moves.
- *  - lit replaced the marker. The new one is empty and the old one, along with
- *    everything inside it, is detached. Nodes are moved, never cloned, so
- *    identity and event listeners survive.
+ * A marker counts as filled when a captured node still sits in it. A caller's `*if`
+ * can delete a branch, so having some child proves nothing.
  *
- * "Is this marker already filled?" is answered by asking whether any captured
- * node still sits in it, rather than by whether it has children. The captured
- * anchors are the stable part — a caller's `*if` deletes the branch it rendered,
- * so the presence of *some* child proves nothing about who owns it.
- *
- * What gets moved into a replacement marker is the previous marker's *current*
- * children, not the captured list. After a few updates those differ: the
- * captured list still names the branch the caller has since deleted, and
- * re-appending it would resurrect content the application removed.
+ * A replacement marker receives the old marker's current children, because the
+ * captured list may still name a branch the application has since removed.
  *
  * @param {Element} host
  * @param {ContentBuckets} buckets
@@ -126,9 +103,7 @@ export function projectContent(host, buckets) {
   if (buckets.size === 0) return;
 
   for (const marker of host.querySelectorAll(MARKER_TAG)) {
-    // querySelectorAll is not scoped to this component's own template, so a
-    // marker belonging to a nested projecting component would otherwise be
-    // filled with the outer component's content.
+    // Skip markers that belong to a nested projecting component.
     if (marker.closest(`[${HOST_ATTR}]`) !== host) continue;
 
     const bucket = buckets.get(marker.getAttribute('name') ?? DEFAULT_SLOT);
@@ -140,8 +115,8 @@ export function projectContent(host, buckets) {
 }
 
 /**
- * The nodes to move: whatever the previous marker holds now, or the captured
- * list on the first projection, when nothing holds them yet.
+ * The nodes to move. That is the previous marker's current children, or the
+ * captured list on the first projection.
  *
  * @param {readonly Node[]} bucket
  * @returns {Node[]}

@@ -1,13 +1,9 @@
 /**
- * Dependency injection, root scope only.
+ * Dependency injection with a single root scope.
  *
- * Angular's `inject()` minus hierarchical injectors, which enterprise apps
- * reach for far less often than the framework's prominence suggests. Services
- * are lazily constructed singletons keyed by a typed token.
- *
- * The reason to have this at all rather than importing service modules directly:
- * tests need to swap a service for a fake, and a direct `import` gives no seam
- * to do it through. `provide()` in a `beforeEach` is that seam.
+ * It works like Angular's `inject()` without hierarchical injectors. Services are lazily
+ * built singletons keyed by typed tokens. A test swaps a service by calling `provide()`
+ * in a `beforeEach`, which a direct import can't offer.
  *
  *     export const USER_SERVICE = token('UserService');
  *     provide(USER_SERVICE, () => new UserService(apiBaseUrl));
@@ -39,9 +35,8 @@ export function token(description) {
 }
 
 /**
- * Register how to build the value for a token. Registering twice replaces the
- * provider and discards any instance already built, which is what makes test
- * overrides work.
+ * Register how to build a token's value. Registering again replaces the provider and
+ * discards any built instance, which is how test overrides work.
  *
  * @template T
  * @param {InjectionToken<T>} key
@@ -88,7 +83,7 @@ export function inject(key) {
 }
 
 /**
- * Drop every provider and instance. For test isolation.
+ * Drop every provider and instance, for test isolation.
  *
  * @internal
  */

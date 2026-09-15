@@ -6,65 +6,40 @@ import { whenSettled } from '@core/forms/settled.js';
 /** @import { ReadonlySignal, Signal } from '@core/foundation/types.js' */
 
 /**
- * A repeating row: the same control built as many times as the data needs.
+ * A repeating row of controls, such as a customer's contacts, built once per item.
  *
- * A non-goal until a screen needed one, which was the recorded trigger. ADR-0009.
- * A customer's contacts are the screen: three fields per row, any number of rows,
- * each row's rules the same and each row's errors its own. What a screen
- * hand-rolls for that is a plain array in a signal plus five things it has to get
- * right — a stable key per row so a keyed `*for` does not re-render the lot, an
- * address per field so a 422 naming the second contact's email lands under the
- * second contact's email, a dirty flag that notices a row was *added* and not only
- * edited, a reset that puts the removed rows back, and a disabled state that
- * reaches rows built after the form was switched off.
+ * The array handles what a hand-rolled list gets wrong. It gives each row a stable
+ * key for keyed `*for`, an address per field so a 422 lands on the right row, a dirty
+ * flag that notices added rows, a reset that restores removed rows and a disabled
+ * state that reaches rows built later.
  *
- * WHAT A ROW IS
+ * A row is any `FormNode`, usually a `FormGroup`, or a `FormField` for a single value.
+ * The array builds rows with its factory and prefixes their answers with an index.
  *
- * Anything satisfying `FormNode`, which in practice is a `FormGroup` for a row
- * of fields and a `FormField` for a row of one value. The array never looks
- * inside: it builds rows with the factory it was given, asks them the contract's
- * questions and prefixes their answers with an index.
+ * Dirty covers shape as well as content. The baseline is the list of row keys, so
+ * removing one row and adding another still counts as a change.
  *
- * DIRTY IS STRUCTURAL, NOT ONLY CONTENT
+ * The third argument lists validators over all row values, such as `minRows(1)`.
+ * Their code belongs to the array, and a `ui-form-error` bound to the array shows it.
+ * A code for one row goes through `applyErrors({ 'contacts.1.email': 'duplicated' })`
+ * instead. An empty array counts as untouched, so "at least one contact" waits for a
+ * submit.
  *
- * The rows answer for their own values; only the array can answer whether the
- * *shape* changed. The baseline is the list of row keys rather than the row count,
- * because remove-one-add-one is the case a count gets wrong. ADR-0009.
- *
- * A RULE OVER THE ROWS
- *
- * The third argument is a list of validators over the whole list of row values:
- * how many there are, and whether two of them collide. `minRows(1)` is the common
- * one. The code belongs to the array rather than to a row, so it is shown by a
- * `ui-form-error` bound to the array. ADR-0102.
- *
- * A code that belongs to *one* row — "this contact repeats the one above" — is
- * `applyErrors({ 'contacts.1.email': 'duplicated' })` instead, which is the same
- * address a 422 carries and clears when that control is edited.
- *
- * An empty array counts as untouched, which is what keeps "at least one contact"
- * off a form nobody has filled in yet until they try to submit it.
- *
- * A ROW ADDED AFTER A SUBMIT STARTS QUIET
- *
- * `markSubmitted` makes every existing row's errors visible. A row created
- * afterwards does not inherit that, because three red messages under a row the
- * user just asked for is the greeting the timing rule in `FormField` exists to
- * prevent. The next submit marks it like everything else.
+ * A row added after a submit starts quiet. The next submit marks it like the others.
  *
  * @template {FormNode} C
  * @implements {FormNode}
  */
 export class FormArray {
   /**
-   * The form has been submitted. Written by a parent group, read by nothing
-   * here: it is the rows that show errors, and they carry their own.
+   * True once the form was submitted. A parent group writes it. Rows carry their own
+   * flag and show the errors.
    */
   submitted = signal(false);
 
   /**
-   * The rows, with a stable key and a current index each. What a template
-   * repeats over:
+   * The rows, each with a stable key and its current index. Templates repeat over
+   * this.
    *
    *     <div *for="row of form.fields.contacts.rows; key: row.key">
    *
@@ -82,7 +57,7 @@ export class FormArray {
   dirty;
 
   /**
-   * Every row is off, by this array's own switch or by a container's.
+   * True when this array or a container disabled every row.
    *
    * @type {ReadonlySignal<boolean>}
    */
@@ -92,7 +67,7 @@ export class FormArray {
   invalidPath;
 
   /**
-   * Every row has been visited, and there is at least one.
+   * True when every row has been visited and there is at least one.
    *
    * @type {ReadonlySignal<boolean>}
    */
@@ -102,14 +77,15 @@ export class FormArray {
   pending;
 
   /**
-   * This array's own code, ignoring its rows. Empty while it is disabled.
+   * This array's own code, ignoring its rows. Empty while disabled.
    *
    * @type {ReadonlySignal<string>}
    */
   error;
 
   /**
-   * The same, after a submit or once every row has been visited.
+   * The array's own code once it may show, after a submit or once every row was
+   * visited.
    *
    * @type {ReadonlySignal<string>}
    */
@@ -119,9 +95,8 @@ export class FormArray {
   #create;
 
   /**
-   * The rows as stored: key and control, without the index. The index is a
-   * function of position and would be stale the moment a row above it went, so
-   * it is computed in `rows` rather than kept.
+   * The stored rows, key and control. The index is derived in `rows`, since it changes
+   * whenever a row above moves.
    *
    * @type {Signal<readonly { key: string, control: C }[]>}
    */
@@ -133,7 +108,7 @@ export class FormArray {
   /** What `reset()` with no argument rebuilds. @type {readonly unknown[]} */
   #baselineValues = [];
 
-  /** Monotonic, never reused, and scoped to this array. */
+  /** Increases per row and is never reused within this array. */
   #nextKey = 0;
 
   #ownDisabled = signal(false);
@@ -142,28 +117,23 @@ export class FormArray {
   #inheritedDisabled = signal(null);
 
   /**
-   * @param {() => C} create Builds one empty row. Called once per row, so it
-   *   must return a fresh control rather than a shared one.
-   * @param {readonly PartialValueOf<C>[]} [initial] The rows to start with,
-   *   already clean: a form that opens on two contacts is not a form with two
-   *   unsaved changes in it.
+   * @param {() => C} create Builds one empty row. Called once per row, so it must
+   *   return a fresh control.
+   * @param {readonly PartialValueOf<C>[]} [initial] The starting rows, already clean,
+   *   so a form opening on two contacts has no unsaved changes.
    * @param {readonly Validator<ValueOf<C>[]>[]} [validators] Rules over the whole
-   *   list. Run in order; the first failure wins.
+   *   list, run in order. The first failure wins.
    */
   constructor(create, initial = [], validators = []) {
     this.#create = create;
 
-    // Before any row is built: `#build` hands this signal to each row, and a
-    // row built against `undefined` would never hear the form being switched
-    // off.
+    // Create `disabled` before any row, because `#build` hands it to each row.
     this.disabled = computed(() => this.#ownDisabled.value || (this.#inheritedDisabled.value?.value ?? false));
 
     this.rows = computed(() => this.#entries.value.map((entry, index) => ({ ...entry, index })));
     this.length = computed(() => this.#entries.value.length);
 
-    // A constant when there are no rules, for the reason `FormGroup` keeps one:
-    // a computed over `values` subscribes its readers to every keystroke in every
-    // row, and an array with no rule of its own has nothing to gain from that.
+    // Without rules, `own` is a constant, as in `FormGroup`.
     const own =
       validators.length === 0
         ? computed(() => '')
@@ -204,7 +174,7 @@ export class FormArray {
         const below = entry.control.invalidPath.value;
         if (below !== null) return prefix(index, below);
       }
-      // `''` is this array itself: a rule about the list, not about a row.
+      // `''` means the array itself, for a rule about the list.
       return this.disabled.value || own.value === '' ? null : '';
     });
 
@@ -214,11 +184,7 @@ export class FormArray {
   /* ── Reading ────────────────────────────────────────────────────────────── */
 
   /**
-   * Every row's value, in order.
-   *
-   * A getter rather than a signal, for the reason `FormGroup.values` is one: a
-   * caller wants this at submit time, and a computed would subscribe every
-   * reader to every keystroke in every row.
+   * Every row's value, in order. A getter for the same reason as `FormGroup.values`.
    *
    * @returns {ValueOf<C>[]}
    */
@@ -231,8 +197,8 @@ export class FormArray {
   /**
    * Add a row and return it.
    *
-   * @param {PartialValueOf<C>} [value] Filled in after the row is built, so the
-   *   row counts as an edit — which it is, since the user asked for it.
+   * @param {PartialValueOf<C>} [value] Filled in after the row is built, so the new
+   *   row counts as an edit.
    * @returns {C}
    */
   push(value) {
@@ -244,8 +210,8 @@ export class FormArray {
 
   /**
    * @param {number} index
-   * @returns {boolean} False when there is no row there, so a double-click on a
-   *   remove control cannot silently take the row below with it.
+   * @returns {boolean} False when no row exists at `index`, so a double-click can't
+   *   remove the next row too.
    */
   removeAt(index) {
     const entries = this.#entries.value;
@@ -254,7 +220,7 @@ export class FormArray {
     return true;
   }
 
-  /** Every row goes. The baseline does not, so this is an edit like any other. */
+  /** Remove every row. The baseline stays, so this counts as an edit. */
   clear() {
     this.#entries.value = [];
   }
@@ -264,11 +230,8 @@ export class FormArray {
   /**
    * Set the rows to these values without moving the baseline.
    *
-   * The length is part of the value: patching three rows onto two adds one and
-   * patching one onto two removes one, so `array.fill(array.values)` is the
-   * no-op it reads as. That is `patchValue` diverging from Angular, where extra
-   * entries are ignored and the caller is left to reconcile the length itself —
-   * which is the loop this class exists to stop screens from writing.
+   * The length is part of the value, so patching three rows onto two adds one, and
+   * `array.fill(array.values)` changes nothing. Angular ignores extra entries instead.
    *
    * @param {readonly PartialValueOf<C>[]} values
    */
@@ -281,9 +244,8 @@ export class FormArray {
   }
 
   /**
-   * Back to a clean state at these values, or at the ones this array was last
-   * clean at. The baseline moves with it, keys included, so a form reset to what
-   * the server returned is not dirty however many rows came and went.
+   * Return to a clean state at these values, or at the last clean values. The baseline
+   * moves, keys included, so a form reset to the server's response isn't dirty.
    *
    * @param {readonly PartialValueOf<C>[]} [values]
    */
@@ -299,8 +261,7 @@ export class FormArray {
   /* ── Disabled ───────────────────────────────────────────────────────────── */
 
   /**
-   * Switch every row off, or back on. A row disabled on its own stays disabled;
-   * see `FormField.setDisabled` for why the two sources do not collapse.
+   * Disable or enable every row. A row disabled on its own stays disabled.
    *
    * @param {boolean} next
    */
@@ -332,8 +293,7 @@ export class FormArray {
   /** @returns {boolean} */
   markSubmitted() {
     this.submitted.value = true;
-    // Every row, not until the first invalid one: a submit makes the whole form
-    // say what is wrong with it at once.
+    // Mark every row, so the whole form shows its errors at once.
     for (const entry of this.#entries.value) entry.control.markSubmitted();
     return this.valid.value;
   }
@@ -364,18 +324,15 @@ export class FormArray {
     if (path.length === 0) return this;
     const [head, ...rest] = path;
     const index = Number(head);
-    // `String(index) !== head` is the check that matters: `Number('01')` and
-    // `Number(' 1')` are both 1, and a server that addressed `contacts.01.email`
-    // is addressing something this form cannot confirm it means.
+    // `String(index) !== head` rejects `01` and ` 1`, which `Number` would accept.
     if (head === undefined || !Number.isInteger(index) || String(index) !== head) return null;
     return this.#entries.value[index]?.control.leafAt(rest) ?? null;
   }
 
   /**
    * @param {string} _code
-   * @returns {boolean} Always false: an array is not a control, so a code naming
-   *   one is reported to the screen as unmatched rather than shown under a row
-   *   that did not cause it.
+   * @returns {boolean} Always false. An array isn't a control, so a code naming it
+   *   comes back unmatched.
    */
   setServerError(_code) {
     return false;
@@ -384,13 +341,9 @@ export class FormArray {
   /* ── Internals ──────────────────────────────────────────────────────────── */
 
   /**
-   * The rows at this length, published, reusing the ones that survive.
-   *
-   * Reuse is what keeps a reset from re-rendering rows whose values did not
-   * change: same key, same control, so a keyed `*for` leaves the DOM and the
-   * focus alone. A length that already matches publishes nothing at all —
-   * writing an equal-but-new array would notify every reader that the shape
-   * changed when only the values are about to.
+   * Resize the rows, reusing survivors, and publish. Reused rows keep their key and
+   * control, so a keyed `*for` leaves their DOM and focus alone. An unchanged length
+   * publishes nothing.
    *
    * @param {number} length
    * @returns {readonly { key: string, control: C }[]}
@@ -415,7 +368,7 @@ export class FormArray {
 }
 
 /**
- * Rows that repeat.
+ * Create a field array.
  *
  *     const form = group({
  *       name: field('', [required()]),

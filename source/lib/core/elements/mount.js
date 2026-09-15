@@ -1,28 +1,17 @@
 /**
- * Dynamic mounting: turning "show this view here, now" into one mounted custom
- * element.
+ * Dynamic mounting. Turns "show this view here" into one mounted custom element.
  *
- * Three callers need the same transaction — `<x-outlet>` swapping its child when
- * a signal changes, the router mounting one level of the matched chain, and
- * `@core/remotes/mfe.js` mounting a remote's root — so the rules live here once
- * and each caller describes *what* to mount as a `MountRequest`. What stays with
- * each of them is genuinely its own: the outlet owns a signal, the router owns the
- * frame chain and its outlets, and `mfe.js` owns the revocable host context,
- * because capability lifetime is a security boundary rather than a mounting one.
+ * `<x-outlet>`, the router and `@core/remotes/mfe.js` each describe what to mount
+ * as a `MountRequest`, and this module applies the shared rules. Each caller keeps
+ * its own concerns. The outlet owns a signal, the router owns the route chain, and
+ * `mfe.js` owns the revocable host context.
  *
- * The unified rules:
- *
- *   - A tag already defined is instantiated without calling `load`, so a second
- *     visit to a lazily loaded view costs nothing.
- *   - A tag still undefined after its `load` resolved is an error naming the tag,
- *     not an indefinite wait: `defineComponent` is awaited at the end of a
- *     component module, so an import that resolves without defining the element is
- *     a bug in that module, and a blank view is the worst way to report it.
- *   - Interleaving is settled by generation, not cancellation. Two swaps in quick
- *     succession both run to the point of having an element and the older one
- *     discards its own work: `MountSequence` hands out one `MountAttempt` per
- *     swap, every await is followed by asking whether it is still current, and
- *     that answer is what pairs a `create` with its `release`.
+ * - A tag that is already defined is created without calling `load`.
+ * - A tag still undefined after `load` resolves is an error. `defineComponent` runs
+ *   at the end of a component module, so this means that module has a bug.
+ * - Overlapping mounts resolve by generation. `MountSequence` hands out one
+ *   `MountAttempt` per mount, and after every await the attempt checks whether it
+ *   is still the newest.
  */
 
 import { resolveTag } from '@core/elements/component.js';
@@ -30,10 +19,9 @@ import { resolveTag } from '@core/elements/component.js';
 /** @import { MountRequest } from '@core/elements/types.js' */
 
 /**
- * A mount could not be completed. `where` is the caller as it appears at the
- * front of the message — `<x-outlet>`, `Route "/users"`, `Remote "billing"` —
- * kept as a field so a shell-level handler can group failures by their source
- * without parsing the message.
+ * A mount failed. `where` names the caller, such as `<x-outlet>`, `Route "/users"`
+ * or `Remote "billing"`, so a handler can group failures without parsing the
+ * message.
  */
 export class MountError extends Error {
   /** @type {string} */
@@ -53,17 +41,16 @@ export class MountError extends Error {
 /* ── Load and definition ───────────────────────────────────────────────── */
 
 /**
- * Resolve the custom element a request names, loading its module first when that
- * element is not defined yet.
+ * Resolve the custom element a request names, loading its module first when the
+ * element isn't defined yet.
  *
- * Returns `undefined` only when the request names no tag at all, which is a
- * caller-level fact rather than a failure: a route level may exist to contribute
- * a path prefix and a guard and render nothing. Every other unhappy path throws.
+ * Returns `undefined` only when the request names no tag at all, which is legal for
+ * a route level that only adds a path prefix and a guard. Every other failure
+ * throws.
  *
- * What `load` resolves to is read as a component reference when the request named
- * none itself. That is how a caller discovers what it is mounting while loading
- * it — `load: () => import('./users-page.js').then((m) => m.UsersPage)`, the shape
- * a lazy route uses, and the reason no route table repeats a tag string.
+ * When the request names no tag, the value `load` resolves to is read as a
+ * component reference. A lazy route relies on this with
+ * `load: () => import('./users-page.js').then((m) => m.UsersPage)`.
  *
  * @param {MountRequest} request
  * @returns {Promise<string | undefined>}
@@ -99,17 +86,12 @@ export async function defineTag(request) {
 /* ── Instantiation ─────────────────────────────────────────────────────── */
 
 /**
- * Produce the element a request names: load it if needed, build it, validate it,
- * and assign its properties.
+ * Build the element a request names, loading it if needed, and assign its props.
  *
- * `null` means the request names nothing to mount, exactly as `defineTag`
- * returns `undefined`. A request carrying `create` never returns null, and a
- * caller for which "nothing" is not a legal answer should use `requireElement`.
+ * `null` means the request names nothing to mount. A request with `create` never
+ * returns null. Use `requireElement` when nothing is not a valid answer.
  *
- * The element is *not* inserted anywhere. Placement is the caller's, because
- * where a view goes is the one part of this that genuinely differs: the outlet
- * is its own container, and the router has to find the ancestor outlet the level
- * belongs in, after tearing down the level it replaces.
+ * The element isn't inserted anywhere, because each caller places it differently.
  *
  * @param {MountRequest} request
  * @returns {Promise<HTMLElement | null>}
@@ -120,14 +102,13 @@ export async function createElement(request) {
     create === undefined ? await fromTag(request) : await fromFactory(request, create);
   if (element === null) return null;
 
-  // Properties, not attributes. Attributes stringify, which would turn an object
-  // of props into "[object Object]".
+  // Props are assigned as properties, because attributes would stringify objects.
   Object.assign(element, request.props ?? {});
   return element;
 }
 
 /**
- * As `createElement`, for a caller whose request must produce an element.
+ * Like `createElement`, but throws when the request names nothing to mount.
  *
  * @param {MountRequest} request
  * @returns {Promise<HTMLElement>}
@@ -151,11 +132,9 @@ async function fromTag(request) {
 }
 
 /**
- * A request that builds its own element still has its result validated, and for
- * a stronger reason than the tag path: `create` is where a route's `mount()` and
- * a remote's `mount(host)` cross into code this module did not write. A factory
- * that returns the wrong thing has to fail here, naming what it returned, rather
- * than at the `replaceChildren` that would otherwise reject it without context.
+ * Validate what a `create` factory returns. A factory runs code this module didn't
+ * write, such as a route's `mount()` or a remote's `mount(host)`, so a wrong result
+ * fails here with a clear message.
  *
  * @param {MountRequest} request
  * @param {NonNullable<MountRequest['create']>} create
@@ -186,10 +165,7 @@ async function fromFactory(request, create) {
 }
 
 /**
- * The tag a request names, whether it named it as a tag, as a component class or
- * as a definition. One resolution point, in `@core/elements/component.js`, so a class is
- * what every caller may hold and no caller has to know how to read a tag out of
- * one.
+ * The tag a request names, whether given as a tag, a class or a definition.
  *
  * @param {MountRequest} request
  * @returns {string | undefined}
@@ -203,22 +179,17 @@ function readTag(request) {
 /**
  * One caller's series of mounts, of which only the newest may complete.
  *
- * Two navigations in quick succession start two mounts; if the first one's module
- * is slow and the second one's is cached, the slow one resolves last and would
- * win, leaving the wrong view on screen. Each mount claims an attempt, and an
- * attempt that is no longer the newest abandons its own work instead.
+ * A slow mount that resolves after a newer one must not replace the newer view.
+ * Each mount claims an attempt, and a superseded attempt discards its own work.
  *
- * A router shares one sequence between navigation and mounting deliberately:
- * "this navigation has been superseded" and "this mount has been superseded" are
- * the same fact, and keeping two counters for it is how a guard that resolves
- * late gets to publish a URL nobody asked for.
+ * The router shares one sequence between navigation and mounting, because a
+ * superseded navigation and a superseded mount are the same event.
  */
 export class MountSequence {
   #generation = 0;
 
   /**
-   * Claim the sequence for a new attempt, superseding whichever attempt was
-   * running.
+   * Start a new attempt and supersede the running one.
    *
    * @returns {MountAttempt}
    */
@@ -228,9 +199,8 @@ export class MountSequence {
   }
 
   /**
-   * Supersede the running attempt without starting one. What a router's `stop`
-   * and an outlet's teardown need: nothing further may mount, and nothing new is
-   * being asked for.
+   * Supersede the running attempt without starting a new one. Used when a router
+   * stops or an outlet disconnects.
    */
   cancel() {
     this.#generation += 1;
@@ -246,7 +216,7 @@ export class MountSequence {
 }
 
 /**
- * One mount, from a caller's point of view. Obtained from `MountSequence.begin`.
+ * One mount. Created by `MountSequence.begin`.
  */
 export class MountAttempt {
   #sequence;
@@ -267,12 +237,10 @@ export class MountAttempt {
   }
 
   /**
-   * Keep `element` only while this attempt is current, releasing it otherwise.
+   * Keep `element` if this attempt is still current, and release it otherwise.
    *
-   * This is the call that goes after every await in an adapter, and the reason
-   * `release` is part of a request: an element built by a `create` that acquired
-   * resources still has to be torn down when it never reaches the DOM, and a
-   * bare generation check would silently leak it.
+   * Callers use this after every await. A `create` may have acquired resources, so
+   * a discarded element must still be released.
    *
    * @param {HTMLElement | null} element
    * @param {MountRequest} request
@@ -285,11 +253,10 @@ export class MountAttempt {
   }
 
   /**
-   * Place `element` in `container`, replacing whatever it held, when this attempt
-   * is still current. Releases the element and returns false otherwise.
+   * Replace `container`'s children with `element` if this attempt is still current.
+   * Otherwise release the element and return false.
    *
-   * A null element is legal and places nothing: a request that names nothing to
-   * mount still has to be checked for staleness by the caller that asked for it.
+   * A null element places nothing, and the staleness check still applies.
    *
    * @param {HTMLElement} container
    * @param {HTMLElement | null} element

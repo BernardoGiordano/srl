@@ -1,49 +1,34 @@
 /**
- * Why the page just updated.
+ * Records why the page updated.
  *
- * There are two update paths and they are independent. An element renders when a
- * signal its `render()` read changed, or when a reactive property was written;
- * a compiled binding patches its own Lit Part when a signal *its* expression read
- * changed, and no element renders at all (ADR-0014). A timer around element
- * renders therefore sees half of what happened, and the half it misses is the one
- * a fine-grained framework produces the most of.
+ * There are two independent update paths. An element renders when a signal its
+ * `render()` read changes or a reactive property is written. A compiled binding patches
+ * its own lit Part when a signal its expression read changes, and no element renders
+ * (ADR-0014). Timing only element renders would miss most updates in this framework.
  *
- * So both paths report here, and this module does the reconstruction rather than
- * leaving it to whoever reads a log. Records nest: a binding patch that happened
- * while an element was rendering is a child of that render, and a binding patch
- * with no render around it is a top-level record — which is exactly the
- * difference between "this component re-rendered and its bindings followed" and
- * "one binding updated on its own". ADR-0109.
+ * Both paths report here, and records nest. A binding patch during an element render is
+ * a child of that render. A binding patch outside any render is a top-level record.
  *
- * WHAT IT DOES NOT CLAIM
+ * `cause: 'signal'` means the effect re-ran. The reactive library doesn't report which
+ * signal woke it, so reports don't name one.
  *
- * It does not name the signal. `cause: 'signal'` means the effect behind that
- * element or that binding re-ran, which is a fact the update path knows; which
- * signal woke it is not, because nothing in the reactive library reports a
- * dependency by name. Attribution stops where the evidence does.
- *
- * COST WHEN NOTHING IS RECORDING
- *
- * One module-level null check and one call to a shared empty function per update.
- * Compiling a template labels its bindings whether or not anything is recording —
- * a template compiles once per URL, and a recording started afterwards still has
- * to be able to name what it sees.
+ * With nothing recording, each update costs one null check and one call to a shared
+ * empty function. Compiling a template still labels its bindings, so a later recording
+ * can name them.
  */
 
 /** @import { BindingUpdateCause, ElementUpdateCause, StopRecording, UpdateCount, UpdateRecord, UpdateRecordingOptions, UpdateReport } from '@core/diagnostics/types.js' */
 
 /**
- * One open element render: the public record, plus what closing it needs.
- *
- * `host` is held so a late `noteElementProperties` can prove it belongs to the
- * frame on top of the stack rather than to a child that rendered inside it.
+ * One open element render, with what closing it needs. `host` lets
+ * `noteElementProperties` confirm that it belongs to the top frame.
  *
  * @typedef {{ record: OpenElement, host: Element, started: number, kept: boolean }} Frame
  */
 
 /**
- * The mutable form of `ElementUpdate`. The report hands out the same objects
- * under their readonly type once recording has stopped.
+ * The mutable form of `ElementUpdate`. The report returns the same objects under their
+ * readonly type.
  *
  * @typedef {{
  *   kind: 'element',
@@ -60,12 +45,12 @@
 
 const DEFAULT_LIMIT = 5000;
 
-/** What a binding compiled before this module could label it is called in a report. */
+/** The name a binding without a label gets in a report. */
 const UNLABELLED = 'an unlabelled binding';
 
 /**
- * Where each compiled binding is written, keyed by the evaluator the template
- * commits. Set while compiling, read only while recording.
+ * Where each compiled binding is written, keyed by its evaluator. Written while
+ * compiling and read while recording.
  *
  * @type {WeakMap<object, string>}
  */
@@ -81,11 +66,11 @@ const NO_ELEMENT_RECORD = () => {};
 const NO_BINDING_RECORD = () => {};
 
 /**
- * Start recording updates, and return the call that stops it and reads the report.
+ * Start recording updates, and return the call that stops recording and returns the
+ * report.
  *
- * One recording at a time. A second one would have to decide what to do about the
- * records already open in the first, and there is no useful answer: the honest
- * failure is louder than a silently split report.
+ * Only one recording runs at a time, because a second one couldn't sensibly share the
+ * first one's open records.
  *
  *     const stop = recordUpdates();
  *     await userDoesTheSlowThing();
@@ -107,8 +92,8 @@ export function recordUpdates(options) {
 }
 
 /**
- * Whether a recording is running. The instrumented paths ask before doing any
- * work a report would need; application code rarely has a reason to.
+ * Whether a recording is running. The instrumented paths check this before doing report
+ * work.
  *
  * @returns {boolean}
  */
@@ -130,11 +115,10 @@ export function beginElementUpdate(host, cause) {
 }
 
 /**
- * Name the reactive properties Lit reported changed for the render now open.
+ * Name the reactive properties Lit reported changed for the open render.
  *
- * Separate from `beginElementUpdate` because the two facts arrive at different
- * moments: the render starts before Lit has decided anything, and the changed
- * set reaches the element in `updated()`, inside that same render.
+ * Separate from `beginElementUpdate`, because Lit reports the changed set in
+ * `updated()`, after the render starts.
  *
  * @param {Element} host
  * @param {Iterable<PropertyKey>} changed
@@ -146,8 +130,8 @@ export function noteElementProperties(host, changed) {
 }
 
 /**
- * Open a binding evaluation. The returned call closes it, and takes whether the
- * value it committed differs from the one the binding held.
+ * Open a binding evaluation. The returned call closes it and takes whether the committed
+ * value changed.
  *
  * @param {object} evaluate The compiled evaluator, as its own identity.
  * @param {BindingUpdateCause} cause
@@ -160,10 +144,8 @@ export function beginBindingUpdate(evaluate, cause) {
 }
 
 /**
- * Record where a compiled binding is written, so a report can name it.
- *
- * Called by the compiler for every binding it emits, recording or not: a binding
- * is compiled once and a recording usually starts long after.
+ * Record where a compiled binding is written, so a report can name it. The compiler
+ * calls this for every binding, whether or not anything is recording.
  *
  * @param {object} evaluate
  * @param {string} where
@@ -174,12 +156,10 @@ export function labelBinding(evaluate, where) {
 }
 
 /**
- * One recording: the tree, the two summaries, and the stack that nests them.
+ * One recording, with its record tree, two summaries and the stack that nests records.
  *
- * The limit bounds the tree rather than the summaries. A recording left running
- * across a long session would otherwise retain a record per binding evaluation
- * and change the thing it was measuring; the counts stay exact because they cost
- * one map entry per distinct tag or binding however many updates there are.
+ * The limit bounds the tree. The summaries stay exact, since they cost one entry per
+ * distinct tag or binding.
  */
 class Recording {
   #limit;
@@ -281,10 +261,8 @@ class Recording {
   }
 
   /**
-   * Put a record where it belongs, or drop it.
-   *
-   * A record whose parent was dropped is dropped with it, so the tree never holds
-   * a child whose context is missing.
+   * Attach a record to its parent or to the top level, or drop it. A child of a dropped
+   * parent is dropped too, so the tree never loses context.
    *
    * @param {UpdateRecord} record
    * @returns {boolean} Whether it was retained.
@@ -302,11 +280,8 @@ class Recording {
   }
 
   /**
-   * Close a render, and anything a throw left open above it.
-   *
-   * Truncating rather than popping is what keeps the stack honest when a render
-   * throws past its own close: the alternative is a frame that stays on top
-   * forever and adopts every later record as a child.
+   * Close a render and anything a throw left open above it. Truncating the stack keeps a
+   * thrown render from adopting every later record.
    *
    * @param {Frame} frame
    */
@@ -337,9 +312,8 @@ function count(into, name, durationMs, changed) {
 }
 
 /**
- * Heaviest first, then busiest. Time is the ordering a slow update is found by;
- * the count breaks ties, which is how a binding that costs nothing each time and
- * runs four hundred times still reaches the top of its group.
+ * Sort by total time, then by update count, so a cheap binding that runs hundreds of
+ * times still ranks.
  *
  * @param {Map<string, Counter>} counters
  * @returns {UpdateCount[]}

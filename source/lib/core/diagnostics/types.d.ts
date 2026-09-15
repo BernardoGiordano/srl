@@ -1,20 +1,17 @@
 /**
- * What an update report holds. Two update paths produce records, both named by
- * `@core/diagnostics/updates.js`: an element render and a compiled binding patch.
+ * What an update report holds. Both update paths report through
+ * `@core/diagnostics/updates.js`, element renders and compiled binding patches alike.
  */
 
 /**
- * Why an element rendered, as the render path itself knew it.
+ * Why an element rendered.
  *
- *  - `mount`      the first render after the element connected.
- *  - `signal`     a signal read by `render()` changed, so the tracking effect
- *                 re-ran and asked Lit for another render.
- *  - `properties` something wrote a reactive property, or called `requestUpdate()`.
+ *  - `mount`      the first render after connecting.
+ *  - `signal`     a signal read by `render()` changed.
+ *  - `properties` a reactive property was written, or `requestUpdate()` was called.
  *  - `reconnect`  the element re-entered the DOM and rebuilt its tracking.
- *  - `template`   an edit to the element's `.html` file replaced its compiled
- *                 template, so the same host rendered new markup. Development only.
- *  - `definition` an edit to the element's `.js` file replaced its class body, so
- *                 the same host rendered from new code. Development only.
+ *  - `template`   an edit replaced the element's `.html` template. Development only.
+ *  - `definition` an edit replaced the element's class body. Development only.
  */
 export type ElementUpdateCause =
   | 'mount'
@@ -27,13 +24,11 @@ export type ElementUpdateCause =
 /**
  * Why a compiled binding re-evaluated.
  *
- *  - `mount`     first commit into this Part.
- *  - `signal`    a signal the expression read changed. The binding's own effect
- *                re-ran and patched its Part; no element rendered.
- *  - `rerender`  the scope it reads bumped its version: the host rendered, or its
- *                `*for` row was given a different item.
- *  - `rebind`    the Part now holds a different expression or a different scope,
- *                which is what an `*if` branch flip and a keyed move look like.
+ *  - `mount`     the first commit into this Part.
+ *  - `signal`    a signal the expression read changed, and no element rendered.
+ *  - `rerender`  the host rendered, or the `*for` row got a new item.
+ *  - `rebind`    the Part holds a different expression or scope, as after an `*if`
+ *                flip or a keyed move.
  *  - `reconnect` the directive reconnected and rebuilt its effect.
  */
 export type BindingUpdateCause = 'mount' | 'signal' | 'rerender' | 'rebind' | 'reconnect';
@@ -54,7 +49,7 @@ export interface ElementUpdate {
 
 export interface BindingUpdate {
   readonly kind: 'binding';
-  /** Where the expression is written: `employees-page.html {{ employee.name }}`. */
+  /** Where the expression is written, such as `employees-page.html {{ employee.name }}`. */
   readonly binding: string;
   readonly cause: BindingUpdateCause;
   /** Whether the value it committed differs from the one it held. */
@@ -70,7 +65,7 @@ export interface UpdateCount {
   readonly name: string;
   readonly updates: number;
   readonly durationMs: number;
-  /** Bindings only: how many updates committed a different value. Always 0 for an element. */
+  /** How many updates committed a different value. Always 0 for elements. */
   readonly changed: number;
 }
 
@@ -78,13 +73,13 @@ export interface UpdateReport {
   /** `performance.now()` when recording started. */
   readonly startedAt: number;
   readonly durationMs: number;
-  /** Element renders, and the binding patches that happened outside one. */
+  /** Element renders, plus binding patches that happened outside one. */
   readonly records: readonly UpdateRecord[];
   /** Every tag that rendered, heaviest first. */
   readonly elements: readonly UpdateCount[];
   /** Every binding that re-evaluated, heaviest first. */
   readonly bindings: readonly UpdateCount[];
-  /** Records the limit refused to retain. They are counted in the summaries either way. */
+  /** Records beyond the limit. The summaries still count them. */
   readonly dropped: number;
 }
 

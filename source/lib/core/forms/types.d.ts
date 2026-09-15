@@ -1,11 +1,9 @@
 /**
- * The contract a container needs from whatever it holds, and the recursive value
- * mapping that contract makes possible.
+ * The contract containers need from their members, and the recursive value types it
+ * enables.
  *
- * The three classes are imported for the mapping alone: `ValueOf` is recursive
- * and conditional, which is the one kind of type JSDoc-in-source cannot express
- * readably. The cycle exists only in the type graph — neither file imports the
- * other at runtime.
+ * The three classes are imported only for `ValueOf`, a recursive conditional type
+ * that JSDoc can't express readably. The import cycle exists only in types.
  */
 
 import type { ReadonlySignal, Signal } from '@core/foundation/types.js';
@@ -14,36 +12,23 @@ import type { FormField } from '@core/forms/field.js';
 import type { FormGroup } from '@core/forms/group.js';
 
 /**
- * A rule over one field's value, answering with an error *code* or the empty
- * string. Codes rather than sentences: see `@core/forms/validators.js`.
- *
- * A container takes the same type over its own value, which is what makes
- * `ordered('start', 'end')` a validator and not a second concept.
+ * A rule over a value that returns an error code, or the empty string when valid.
+ * Containers use the same type over their own value, as in `ordered('start', 'end')`.
  */
 export type Validator<T> = (value: T) => string;
 
 /**
- * A rule whose answer is somewhere else, which in practice means the server:
- * whether this email address is already registered, whether this code is free.
+ * A rule answered elsewhere, usually by the server, such as whether an email is
+ * already registered.
  *
- * The same shape as `Validator`, plus the signal that aborts a superseded check.
- * A validator that ignores the signal still works and costs one wasted response;
- * one that passes it to `fetch` costs nothing.
- *
- * A rejection is not an invalid value. The field reports no code and lets the
- * write decide, for the reason `resource` does not expose its rejection either:
- * a check that could not run has not found anything wrong.
+ * Pass the signal to `fetch` so a superseded check aborts. A rejection isn't an
+ * invalid value. The field reports no code and lets the write decide.
  */
 export type AsyncValidator<T> = (value: T, signal: AbortSignal) => Promise<string>;
 
 /**
- * The lifetime an in-flight asynchronous check is bound to.
- *
- * A function rather than only an `AbortSignal`, because an element's lifetime is
- * a *new* signal after every re-attach. Write `() => this.lifetime` and the field
- * reads the current one per check. Same shape and same reason as
- * `ResourceLifetime`; the two are not one type because `@core/forms` does not
- * import `@core/foundation/resource.js`.
+ * The lifetime an asynchronous check is bound to. Pass `() => this.lifetime` in a
+ * component, because an element gets a new lifetime signal after every re-attach.
  */
 export type FormLifetime = AbortSignal | (() => AbortSignal);
 
@@ -63,23 +48,15 @@ export interface FieldOptions<T> {
 }
 
 /**
- * What a container needs from whatever it holds, so that a group does not know
- * how deep it is.
+ * What a container needs from its members, so a group doesn't care how deep it is.
  *
- * This is the contract nested groups and field arrays are built on, and it is
- * deliberately an *interface* rather than a base class. Angular's
- * `AbstractControl` is a class every control extends, which means every control
- * inherits `updateOn`, the status observables and the async-validator machinery
- * whether or not it uses them. Here there is no inheritance at all: `FormField`,
- * `FormGroup` and `FormArray` are three unrelated classes that happen to answer
- * the same seventeen questions, and a fourth kind of node costs nothing but
- * answering them too.
+ * This is an interface, where Angular's `AbstractControl` is a base class.
+ * `FormField`, `FormGroup` and `FormArray` are unrelated classes that answer the same
+ * questions, and a new kind of node only has to answer them too.
  *
- * The members below are the *untyped* half of each class. `FormField.snapshot`
- * and `FormField.value.value` are the same value; `snapshot` is what a parent
- * reads when it does not know it is holding a field, `value` is what a screen
- * reads when it does. Same for `fill` beside `setValue`, and for
- * `setServerError` beside the `serverError` signal.
+ * Members here are the untyped side of each class. `snapshot` mirrors
+ * `FormField.value.value`, `fill` mirrors `setValue`, and `setServerError` mirrors the
+ * `serverError` signal.
  */
 export interface FormNode {
   readonly valid: ReadonlySignal<boolean>;
@@ -88,53 +65,39 @@ export interface FormNode {
   readonly submitted: Signal<boolean>;
 
   /**
-   * Visited at least once. A container's is every member's, and false while it
-   * holds none — an empty field array has not been anywhere, and a rule about
-   * its length must wait for the submit rather than greet the form.
-   *
-   * Disabled members are skipped, or a form with one switched-off control would
-   * never count as visited and its cross-field error would never appear.
+   * True once visited. A container is visited when every member is, and an empty
+   * container is not. Disabled members are skipped.
    */
   readonly touched: ReadonlySignal<boolean>;
 
   /**
-   * An asynchronous check is waiting or running below here. True through the
-   * debounce window as well as the request, so a submit that waits on this does
-   * not slip through the quiet gap between a keystroke and the call it causes.
-   *
-   * A pending node is not valid: the value is not known to be acceptable yet,
-   * and reporting it as valid is how an unchecked value reaches the server.
+   * True while an asynchronous check below here waits or runs, including the debounce.
+   * A pending node isn't valid.
    */
   readonly pending: ReadonlySignal<boolean>;
 
   /**
-   * The code this node has to show right now, or the empty string — its own
-   * error once the timing rule allows it. What `ui-field` and `ui-form-error`
-   * render; a container reads its members' `valid`, never this.
+   * The code to show now, or the empty string. `ui-field` and `ui-form-error` render
+   * it, and containers read `valid` instead.
    */
   readonly visibleError: ReadonlySignal<string>;
 
-  /** The value here, at whatever depth. A leaf's own, a container's structure. */
+  /** The value here. A leaf returns its own, and a container returns its structure. */
   readonly snapshot: unknown;
 
   /**
-   * Where the first invalid leaf is, relative to this node: `''` for this node
-   * itself, `'email'` or `'contacts.0.email'` below it, and `null` when there is
-   * none.
-   *
-   * `null` rather than `''` for "none", because a leaf has to be able to say
-   * "the invalid one is me" and the empty string is already that answer.
+   * The path to the first invalid leaf, relative to this node. `''` means this node,
+   * `'contacts.0.email'` means a node below, and `null` means none.
    */
   readonly invalidPath: ReadonlySignal<string | null>;
 
   /**
-   * The same, for a server error, and skipping disabled nodes. A getter rather
-   * than a signal: its caller is a submit handler deciding where to put the
-   * caret, not a render.
+   * The same, for server errors, skipping disabled nodes. A getter, because a submit
+   * handler reads it once.
    */
   readonly serverErrorPath: string | null;
 
-  /** Set values without moving the clean/dirty baseline. `patch`, untyped. */
+  /** Set values without moving the clean baseline, like an untyped `patch`. */
   fill(value: unknown): void;
 
   /** Back to a clean state, at `next` or at this node's baseline. */
@@ -155,24 +118,15 @@ export interface FormNode {
   leafAt(path: readonly string[]): FormNode | null;
 
   /**
-   * Carry the server's code for this node, and report whether it could.
-   *
-   * A container answers `false`: a 422 naming `contacts` rather than
-   * `contacts.0.email` describes something no single control can display, so it
-   * is reported to the screen as unmatched instead of being dropped into a field
-   * that did not cause it.
+   * Carry the server's code for this node, and report whether it could. Containers
+   * return `false`, so a 422 naming `contacts` comes back unmatched.
    */
   setServerError(code: string): boolean;
 }
 
 /**
- * The value shape of a node, all the way down: a field's own type, a group's
- * named structure, an array of its rows'.
- *
- * The mapping is recursive and conditional, which is why this file imports the
- * three classes at the top. The cycle it creates (`field.js` references this
- * file for `Validator`, this file references `field.js` for `FormField`) exists
- * only in the type graph; neither file imports the other at runtime.
+ * The value shape of a node, all the way down. A field gives its type, a group a named
+ * structure and an array a list.
  */
 export type ValueOf<N> =
   N extends FormField<infer T>
@@ -196,23 +150,18 @@ export type PartialValueOf<N> =
 /** One row of a `FormArray`, as a template reads it. */
 export interface FormRow<C> {
   /**
-   * Stable for the row's lifetime and never reused, so it is what a keyed
-   * `*for` tracks: an index would make removing the first row look to lit like
-   * every row changing its contents.
+   * Stable for the row's lifetime and never reused. Keyed `*for` tracks it, since an
+   * index would make removing the first row look like every row changing.
    */
   readonly key: string;
-  /** Current position. Recomputed on every change, so it is not stable. */
+  /** Current position. It changes when rows above it change. */
   readonly index: number;
   readonly control: C;
 }
 
 /**
- * A literal type widened to its base.
- *
- * `field('')` infers `''` for its type parameter, because that is what TypeScript
- * does with a literal argument in a generic position, and a field that can only
- * ever hold the empty string is not a field. `let x = ''` widens; inference does
- * not, so it is done here.
+ * A literal type widened to its base. `field('')` would otherwise infer `''`, and a
+ * field that can only hold the empty string is useless.
  */
 export type Widened<T> = T extends string
   ? string

@@ -1,23 +1,13 @@
 /**
- * The one seam between a scheduled callback and the wall clock.
+ * The seam between scheduled callbacks and the wall clock. ADR-0079.
  *
- * Three components debounce: the table persists its column configuration, the
- * sidebar persists its collapsed state, the dynamic filter holds a typeahead back
- * until the keystrokes stop. All three called `setTimeout` directly, and a suite
- * that wanted to see the far side of a debounce had one move available — sleep
- * past it. So `table.test.js` slept 400 real milliseconds to prove a flushed timer
- * does not fire twice, and `ui-dynamic-filter.js` exported its debounce constant
- * for no reason other than a test's arithmetic. A production module exporting a
- * number so a suite can add twenty to it is the shape of a missing seam.
+ * Components that debounce schedule through here, so tests can install a manual clock
+ * instead of sleeping. It works like `configurePreferences({ storage })` (ADR-0015).
+ * The default is the browser's timers, and an application or a test may install
+ * another clock.
  *
- * The seam is the same one `configurePreferences({ storage })` is: one module
- * owns the boundary, the default is the browser's, and an application or a suite
- * may hand over another implementation. ADR-0079, ADR-0015.
- *
- * `schedule` returns the call that cancels it, rather than a handle to pass back.
- * A handle would have to be interpreted by whichever clock is installed *now*,
- * which is not necessarily the one that issued it; a closure cannot be given to
- * the wrong clock.
+ * `schedule` returns a cancel function instead of a handle, so a cancel always reaches
+ * the clock that scheduled the callback.
  */
 
 /** @import { Clock, ClockConfig, ManualClock } from '@core/foundation/types.js' */
@@ -25,7 +15,7 @@
 /** @type {Clock | undefined} */
 let configured;
 
-/** Real timers, and what every consumer gets until an application says otherwise. */
+/** Real timers, used until an application installs another clock. */
 /** @type {Clock} */
 const REAL_TIMERS = {
   schedule(callback, delayMs) {
@@ -35,8 +25,8 @@ const REAL_TIMERS = {
 };
 
 /**
- * Change the clock every scheduled callback in the library goes through. Calling
- * with no args restores real timers.
+ * Replace the clock every scheduled callback in the library uses. Call it with no
+ * argument to restore real timers.
  *
  * @param {ClockConfig} [config]
  */
@@ -56,20 +46,17 @@ export function schedule(callback, delayMs) {
 }
 
 /**
- * How many callbacks one `flush()` will run before deciding it is not draining.
- * A callback that schedules its own successor would otherwise flush forever.
+ * How many callbacks one `flush()` runs before it gives up. A callback that schedules
+ * its own successor would otherwise flush forever.
  */
 const FLUSH_LIMIT = 1000;
 
 /**
- * A clock a test drives by hand, and the second implementation that makes the
- * seam above real rather than notional.
+ * A clock a test drives by hand.
  *
- * It exposes exactly what the suites need and no more. `flush()` runs everything
- * waiting, in the order it came due; `pending` is how many callbacks are waiting.
- * There is deliberately no `advance(ms)`: reaching a point "just before" a
- * debounce means knowing its length, and a suite knowing that number is the
- * export this module exists to delete.
+ * `flush()` runs everything waiting, in due order, and `pending` counts the waiting
+ * callbacks. There's no `advance(ms)`, because a test that knows a debounce length is
+ * coupled to it.
  *
  * @returns {ManualClock}
  */

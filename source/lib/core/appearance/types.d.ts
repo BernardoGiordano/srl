@@ -1,6 +1,5 @@
 /**
- * A theme, as an application declares it and as `@core/appearance/theme.js`
- * persists the choice between them.
+ * Theme declarations and preferences for `@core/appearance/theme.js`.
  */
 
 /** `system` follows the OS; every other value names a concrete theme. */

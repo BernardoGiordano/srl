@@ -6,41 +6,24 @@ import { whenSettled } from '@core/forms/settled.js';
 /** @import { ReadonlySignal, Signal } from '@core/foundation/types.js' */
 
 /**
- * A named set of controls, and the five questions a screen asks of all of them
- * at once: are they valid, has anything changed, may errors be shown, may they
- * be edited at all, and what did the server say.
+ * A named set of controls. It answers for all of them whether they are valid,
+ * changed, showing errors, editable and carrying server errors.
  *
- * WHAT A MEMBER IS
+ * A member is any `FormNode`, whether a `FormField`, a `FormGroup` or a `FormArray`.
+ * The group asks the contract's questions and prefixes each answer with the member's
+ * name. There is no base class.
  *
- * Any `FormNode`: a `FormField`, another `FormGroup`, or a `FormArray`. This
- * class never checks which. It asks the contract's questions and prefixes the
- * answers with the member's name, which is the whole of what nesting costs
- * here — there is no hierarchy, no base class, and no `AbstractControl`. ADR-0006.
+ * Paths are dotted, like `contacts.0.email`. The same string appears in
+ * `firstInvalid`, in a 422 body, in `applyErrors` and on `<ui-field name>`, so
+ * `focusInvalidField` finds the control with one `querySelector`.
  *
- * NAMES ARE PATHS
+ * The second argument lists validators over the group's value, such as "the end day
+ * may not precede the start day". Their code belongs to the group, and
+ * `ui-form-error` shows it. A code that belongs under one control goes through
+ * `applyErrors` instead, and clears when that control is edited.
  *
- * `firstInvalid` used to be a field name and is now a dotted path:
- * `contacts.0.email`. For a flat form the two are the same string, which is why
- * nothing about a flat form changed. What it buys is that one convention
- * addresses a control at any depth, and the same string is what a 422 carries,
- * what `applyErrors` resolves and what `<ui-field name>` is set to — so
- * `focusInvalidField` still finds the control with one `querySelector`.
- *
- * A RULE OVER THE WHOLE GROUP
- *
- * The second argument is a list of validators over this group's *value*, which is
- * how "the end day may not precede the start day" is written. They answer with a
- * code, like every other validator, and the code belongs to the group rather than
- * to any one member — which is why it has an element of its own, `ui-form-error`,
- * and why `invalidPath` can now answer `''`. ADR-0102.
- *
- * A code that belongs under one control is not this: put it there with
- * `applyErrors`, the same call a 422 goes through, and it clears when that
- * control is edited.
- *
- * They run last. A member that is itself invalid wins both `invalidPath` and the
- * focus, because a specific control is a better place to send someone than a
- * sentence about the form.
+ * Group rules report last. An invalid member wins `invalidPath` and focus, because a
+ * specific control is a better destination than a sentence about the form.
  *
  * @template {Record<string, FormNode>} F
  * @implements {FormNode}
@@ -50,9 +33,8 @@ export class FormGroup {
   fields;
 
   /**
-   * Submitted at least once. Reading it is rarely useful; its effect is: every
-   * error below here becomes visible, which is what makes a submit that fails
-   * validation say why rather than doing nothing.
+   * True once the form was submitted. It makes every error below here visible, so a
+   * refused submit explains itself.
    */
   submitted = signal(false);
 
@@ -63,23 +45,19 @@ export class FormGroup {
   dirty;
 
   /**
-   * Every member is off. What a form sets while it saves, so the user cannot
-   * edit the values that are in flight.
+   * True when every member is off. A form sets it while saving, so in-flight values
+   * can't be edited.
    *
-   * Read it, write it with `setDisabled`. A member disabled on its own is not
-   * visible here and is not switched on when this goes false — see
-   * `FormField.setDisabled`. The second source is a container above this one: a
-   * group inside an array inside a form is switched off by any of the three.
+   * Write it with `setDisabled`. A member disabled on its own stays disabled when this
+   * goes false. A container above this group is the second source.
    *
    * @type {ReadonlySignal<boolean>}
    */
   disabled;
 
   /**
-   * The path of the first invalid control in declaration order, or the empty
-   * string. What a screen focuses after a refused submit — the registry the
-   * hand-written version did not have, which is why it was a `querySelector`
-   * over an id convention.
+   * The path of the first invalid control in declaration order, or the empty string.
+   * A screen focuses it after a refused submit.
    *
    * @type {ReadonlySignal<string>}
    */
@@ -89,9 +67,8 @@ export class FormGroup {
   invalidPath;
 
   /**
-   * Every member has been visited, and there is at least one. Disabled members do
-   * not have to be: they cannot be visited, and waiting for them would keep a
-   * cross-field error off the screen for good.
+   * True when every member has been visited and there is at least one. Disabled
+   * members are skipped, since they can't be visited.
    *
    * @type {ReadonlySignal<boolean>}
    */
@@ -101,16 +78,15 @@ export class FormGroup {
   pending;
 
   /**
-   * This group's own code, ignoring its members. Empty while it is disabled.
+   * This group's own code, ignoring its members. Empty while disabled.
    *
    * @type {ReadonlySignal<string>}
    */
   error;
 
   /**
-   * The same, once the timing rule allows it: after a submit, or once every
-   * member has been visited. A cross-field rule has no single control to be left,
-   * so "every member touched" is what a blur is for one field.
+   * The group's own code once it may show, after a submit or once every member was
+   * visited. A cross-field rule has no single control to leave.
    *
    * @type {ReadonlySignal<string>}
    */
@@ -125,9 +101,9 @@ export class FormGroup {
   #inheritedDisabled = signal(null);
 
   /**
-   * @param {F} fields Declaration order is significant: it is `firstInvalid`'s order.
+   * @param {F} fields Declaration order sets the order of `firstInvalid`.
    * @param {readonly Validator<{ [K in keyof F]: ValueOf<F[K]> }>[]} [validators]
-   *   Rules over the whole group's value. Run in order; the first failure wins.
+   *   Rules over the group's value, run in order. The first failure wins.
    */
   constructor(fields, validators = []) {
     this.fields = fields;
@@ -136,9 +112,8 @@ export class FormGroup {
 
     for (const name of this.#names) fields[name]?.inheritDisabled(this.disabled);
 
-    // A group with no rules of its own keeps a constant here rather than a
-    // computed over `values`, which would subscribe every reader of `valid` to
-    // every keystroke in every member.
+    // Without rules, `own` is a constant. A computed over `values` would subscribe
+    // every reader of `valid` to every keystroke.
     const own =
       validators.length === 0
         ? computed(() => '')
@@ -177,8 +152,7 @@ export class FormGroup {
         const below = fields[name]?.invalidPath.value ?? null;
         if (below !== null) return prefix(name, below);
       }
-      // `''` is this group itself, which is what a group-level rule failing means
-      // and what `ui-form-error` with no name is bound to.
+      // `''` means the group itself, for a failing group rule.
       return this.disabled.value || own.value === '' ? null : '';
     });
 
@@ -186,14 +160,10 @@ export class FormGroup {
   }
 
   /**
-   * Every member's value, by name, all the way down: a field contributes its own
-   * value, a nested group an object, an array an array.
+   * Every member's value by name, nested all the way down.
    *
-   * A getter rather than a signal, because a caller wants this at submit time
-   * and a computed one would subscribe every reader to every keystroke.
-   *
-   * Disabled members are included. Angular drops them; see `FormField` for why a
-   * payload that silently loses a column is the worse of the two answers.
+   * A getter, because callers read it at submit time and a computed would subscribe
+   * readers to every keystroke. Disabled members are included (see `FormField`).
    *
    * @returns {{ [K in keyof F]: ValueOf<F[K]> }}
    */
@@ -205,13 +175,9 @@ export class FormGroup {
   }
 
   /**
-   * Mark the form submitted, and report whether it may be sent.
+   * Mark the form submitted and report whether it may be sent.
    *
    *     if (!this.form.markSubmitted()) return focusFirstInvalid();
-   *
-   * One call rather than a flag and a check, because the two are never wanted
-   * apart: every screen that sets `submitted` does it to make the errors visible
-   * for the submit it is about to refuse.
    *
    * @returns {boolean} Whether every control below here is valid.
    */
@@ -227,9 +193,8 @@ export class FormGroup {
    *     await this.form.whenSettled();
    *     if (!this.form.markSubmitted()) return void focusInvalidField(this, this.form);
    *
-   * Without the await, `markSubmitted()` refuses a form whose checks have not come
-   * back — correctly, since their values are not known to be acceptable, but with
-   * no error on screen to explain the refusal.
+   * Without the await, `markSubmitted()` refuses a form with pending checks and shows
+   * no error to explain why.
    *
    * @returns {Promise<void>}
    */
@@ -238,18 +203,13 @@ export class FormGroup {
   }
 
   /**
-   * Apply per-control error codes from a rejected write — the `fields` of a 422.
+   * Apply per-control error codes from a rejected write, the `fields` of a 422.
    *
-   * A name may be a path: `email` for a field of this form, `contacts.0.email`
-   * for the email of the first row of the `contacts` array. That is the same
-   * string `firstInvalid` produces and the same one `<ui-field name>` carries,
-   * so a server, a form and a template all address a control the same way.
+   * A name may be a path, such as `email` or `contacts.0.email`, matching
+   * `firstInvalid` and `<ui-field name>`.
    *
-   * Unknown names are returned rather than dropped, and so are paths naming a
-   * *container*: a code against `contacts` describes something no single control
-   * can display. A server that reports an error this form cannot place is still
-   * describing something the user needs to be told, and silently swallowing it
-   * is how a save fails with an empty screen.
+   * Unknown names and container paths come back unmatched, so the screen can still
+   * tell the user. A code against `contacts` has no single control to show it.
    *
    * @param {Readonly<Record<string, string>>} errors
    * @returns {string[]} The paths that matched no control.
@@ -265,7 +225,7 @@ export class FormGroup {
   }
 
   /**
-   * Switch every member off, or back on. What a form calls around a save.
+   * Disable or enable every member. A form calls this around a save.
    *
    * @param {boolean} next
    */
@@ -274,11 +234,8 @@ export class FormGroup {
   }
 
   /**
-   * The path of the first control carrying a server error, or the empty string.
-   *
-   * Disabled controls are skipped: their error is not on screen, and the caller
-   * is a screen about to focus what it names. Sending focus to a control the
-   * user cannot type in is the failure that looks like nothing happening.
+   * The path of the first control with a server error, or the empty string. Disabled
+   * controls are skipped, because the caller is about to focus the result.
    */
   get firstServerError() {
     return this.serverErrorPath ?? '';
@@ -289,28 +246,26 @@ export class FormGroup {
   }
 
   /**
-   * Set values without touching the clean/dirty baseline. What a screen uses to
-   * fill in a default the user may still change.
+   * Set values without moving the clean baseline, for defaults the user may still
+   * change.
    *
-   * Deep: a nested group takes an object, an array takes a list, and a member
-   * left out is left alone. An array given a list of a different length changes
-   * length — see `FormArray.patch`.
+   * It goes deep. A nested group takes an object, an array takes a list, and missing
+   * members are left alone. An array given a different length resizes (see
+   * `FormArray.patch`).
    *
    * @param {Partial<{ [K in keyof F]: PartialValueOf<F[K]> }>} values
    */
   patch(values) {
     for (const [name, value] of Object.entries(values)) {
-      // Own members only, as in `leafAt`. A payload naming `constructor` would
-      // otherwise resolve off `Object.prototype` and throw. ADR-0118.
+      // Own members only, so a key like `constructor` can't resolve off
+      // `Object.prototype`.
       if (value !== undefined && Object.hasOwn(this.fields, name)) this.fields[name]?.fill(value);
     }
   }
 
   /**
-   * Back to a clean state at these values, or at the ones the controls were last
-   * clean at. The baseline moves, so a form reset to what the server returned is
-   * not dirty — which is what a screen wants after a successful save and before
-   * it navigates away.
+   * Return to a clean state at these values, or at the last clean values. The
+   * baseline moves, so a form reset to the server's response isn't dirty.
    *
    * @param {Partial<{ [K in keyof F]: PartialValueOf<F[K]> }>} [values]
    */
@@ -359,16 +314,14 @@ export class FormGroup {
     if (path.length === 0) return this;
     const [head, ...rest] = path;
     if (head === undefined) return null;
-    // `Object.hasOwn` rather than a truthiness check on the lookup: a path of
-    // `constructor` or `toString` would otherwise resolve to something off the
-    // prototype and be asked to carry a server error.
+    // `Object.hasOwn`, so `constructor` or `toString` can't resolve off the prototype.
     if (!Object.hasOwn(this.fields, head)) return null;
     return this.fields[head]?.leafAt(rest) ?? null;
   }
 
   /**
    * @param {string} _code
-   * @returns {boolean} Always false; see `FormArray.setServerError`.
+   * @returns {boolean} Always false. See `FormArray.setServerError`.
    */
   setServerError(_code) {
     return false;
@@ -376,11 +329,8 @@ export class FormGroup {
 }
 
 /**
- * A member's answer, seen from its container.
- *
- * The empty string means "the member itself", so the path to it is the member's
- * name; anything else is a path below the member and the name goes in front of
- * it. `FormArray` states the same rule with an index in place of a name.
+ * A member's path as seen from its container. An empty `below` means the member
+ * itself.
  *
  * @param {string} name
  * @param {string} below
@@ -391,7 +341,7 @@ function prefix(name, below) {
 }
 
 /**
- * A form.
+ * Create a group.
  *
  *     const form = group({
  *       name: field('', [required(), maxLength(80)]),

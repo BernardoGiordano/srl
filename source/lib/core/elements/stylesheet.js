@@ -1,34 +1,29 @@
 /**
- * The stylesheets Elements own, adopted by the page that defines them.
+ * Adopts the stylesheets Elements own. Source delivery only.
  *
- * Source delivery only. A styled Element's `.css` sibling is fetched, scoped to its tag
- * by `@core/elements/style-scope.js` and adopted by the document before the tag is
- * defined, so its first render is already styled. A production build folds the same
- * scoped text into the application stylesheet instead, and declares the Element with
- * `styles: 'bundled'` so nothing here runs. ADR-0119.
+ * A styled Element's sibling `.css` is fetched, scoped by
+ * `@core/elements/style-scope.js` and adopted before its tag is defined, so the first
+ * render is styled. A production build puts the scoped rules in the application
+ * stylesheet and marks the Element `styles: 'bundled'` instead. ADR-0119.
  *
- * Adopted rather than inserted as a `<style>`, because adopted sheets follow every
- * stylesheet in the document. Tailwind's browser build declares its layer order in a
- * `<style>` it injects later, and an element inserted before that would declare
- * `components` first and sort it under preflight.
+ * Adopted sheets come after every stylesheet in the document. A `<style>` inserted
+ * first would declare the `components` layer before Tailwind declares its order,
+ * and sort it under preflight.
  */
 
 import { scopeStylesheet } from '@core/elements/style-scope.js';
 
 /**
- * One entry per stylesheet URL, holding the tag it is scoped to and the sheet the
- * document adopted. The promise is cached, so a revision that arrives while the first
- * request is in flight lands after it rather than being overwritten by it.
+ * The tag and adopted sheet for each stylesheet URL. The promise is cached, so a
+ * revision that arrives mid-request applies after the request finishes.
  *
  * @type {Map<string, { tag: string, sheet: Promise<CSSStyleSheet> }>}
  */
 const byUrl = new Map();
 
 /**
- * Fetch, scope and adopt the stylesheet an Element owns.
- *
- * Called only by `defineComponent`, which awaits it beside the template and before
- * `customElements.define`.
+ * Fetch, scope and adopt the stylesheet an Element owns. `defineComponent` awaits
+ * this before `customElements.define`.
  *
  * @internal
  * @param {string} tag
@@ -52,12 +47,10 @@ export async function attachStylesheet(tag, url) {
 }
 
 /**
- * Replace the rules of an adopted stylesheet in place.
+ * Replace the rules of an adopted stylesheet in place. Development only.
  *
- * Development only. The sheet keeps its position among the adopted sheets and every
- * host keeps its state, because nothing but the rules changes. A stylesheet that cannot
- * be scoped throws before anything is replaced, so a file caught half-written leaves the
- * rules the page already had.
+ * The sheet keeps its position and hosts keep their state. A stylesheet that can't
+ * be scoped throws before anything changes.
  *
  * @internal
  * @param {string | URL} url

@@ -1,5 +1,5 @@
 /**
- * One application's admitted manifest, the remotes it declares, and the contract
+ * An application's admitted manifest, the remotes it declares, and the contract
  * between a shell and a remote it mounts.
  */
 
@@ -22,15 +22,13 @@ export interface RemoteDescriptor {
   /** Optional content-hashed template bundle seeded before its module evaluates. */
   readonly templates?: string;
   /**
-   * Every template this remote published, as the URLs its own components will ask
-   * for, put in flight alongside its entry module rather than discovered one at a
-   * time once that module arrives. Empty under bundle delivery, where `templates`
-   * already carries the markup itself. ADR-0081.
+   * The URLs of this remote's templates, started beside its entry module. Empty under
+   * bundle delivery, where `templates` carries the markup. ADR-0081.
    */
   readonly templateFiles: readonly string[];
   /**
-   * Path prefix the remote owns, e.g. `/billing`. Normalized without a trailing
-   * slash, and admitted so that no two remotes claim one subtree.
+   * Path prefix the remote owns, such as `/billing`. It has no trailing slash, and no
+   * two remotes may claim one subtree.
    */
   readonly mount: string;
   /** Checked before the remote's code is fetched. */
@@ -48,8 +46,8 @@ export interface RemoteAsset {
 }
 
 /**
- * Access control on the mount path, enforced by the shell's own guard so an
- * unauthorized user never downloads the remote's code in the first place.
+ * Access rules on the mount path, enforced by the shell's guard, so an unauthorized
+ * user never downloads the remote's code.
  */
 export interface RemoteRequirements {
   /** Redirect to /login without a session. */
@@ -59,9 +57,8 @@ export interface RemoteRequirements {
 }
 
 /**
- * Least privilege for one remote, declared in the manifest rather than in code.
- * Everything the host context will do is bounded by this, and nothing widens it
- * at runtime.
+ * Least privilege for one remote, declared in the manifest. The host context can never
+ * exceed it.
  */
 export interface RemoteGrants {
   /**
@@ -70,27 +67,22 @@ export interface RemoteGrants {
    */
   readonly api: readonly string[];
   /**
-   * Permissions the remote may ask about. `host.auth.permissions()` is this list
-   * intersected with the session's scopes, so a remote learns nothing about the
-   * user's other entitlements.
+   * Permissions the remote may ask about. `host.auth.permissions()` intersects this
+   * list with the session's scopes, so the remote learns nothing else.
    */
   readonly permissions: readonly string[];
 }
 
 /**
- * The contract every remote entry module must satisfy. Enforced at runtime by
- * `assertRemoteModule`, because a dynamic `import()` of a URL held in a variable
- * is `any` as far as the type checker is concerned. This is the seam where types
- * stop and validation has to start.
+ * The contract every remote entry module satisfies. `assertRemoteModule` checks it at
+ * runtime, because an `import()` of a variable URL is `any` to the type checker.
  */
 export interface RemoteModule {
   /** Tag of the remote's root element. Defined by importing the module or during `mount`. */
   readonly rootTag: string;
   /**
-   * Version of the host contract the remote was written against. Required
-   * whenever `mount` is exported, so a shell upgrade that changes the
-   * context fails loudly at load rather than at the first call into a method
-   * that moved.
+   * The host contract version the remote targets. Required whenever `mount` is
+   * exported, so a changed contract fails at load.
    */
   readonly contract?: number;
   /** Create one root instance with one fresh capability context. */
@@ -101,19 +93,17 @@ export interface RemoteModule {
 
 /* ── The host contract ────────────────────────────────────────────────────
  *
- * What a remote is given, as opposed to what it may import. Capabilities are
- * handed to `mount` as one object and are revocable; nothing here is
- * reachable from a global, and no method returns a credential.
+ * What a remote is handed, as opposed to what it may import. Capabilities arrive as
+ * one revocable object passed to `mount`. Nothing is global, and no method returns a
+ * credential.
  *
- * Callbacks rather than signals, on purpose. Exposing a `Signal` would oblige
- * every remote to import the shell's reactive library and to agree on its
- * version, which is the coupling the contract exists to remove. `onChange`
- * costs the shell one adapter and costs a foreign remote nothing.
+ * The contract uses callbacks instead of signals, so a remote doesn't have to import
+ * the shell's reactive library or match its version.
  */
 
 export type Unsubscribe = () => void;
 
-/** Who the user is, minus anything that could authenticate as them. */
+/** Who the user is, without anything that could authenticate as them. */
 export interface HostIdentity {
   readonly subject: string;
   readonly name: string;
@@ -128,15 +118,14 @@ export interface HostAuth {
   /** Fires on sign-in, sign-out and any change of scopes. */
   onChange(listener: () => void): Unsubscribe;
   /**
-   * An authorized request, through the shell's single outbound HTTP path:
-   * credential attachment, refresh-on-401 and retry included. The remote never
-   * sees a token, so this keeps working unchanged when the shell switches to a
-   * strategy where JavaScript genuinely cannot read one.
+   * An authorized request through the shell's outbound path, with credentials, refresh
+   * on 401 and retry. The remote never sees a token, so this works under any token
+   * strategy.
    *
    * Rejects if `path` falls outside `grants.api`.
    */
   fetch(path: string, init?: RequestInit): Promise<Response>;
-  /** As `fetch`, parsed, and throwing on a non-2xx. `unknown` because the remote must validate. */
+  /** Like `fetch`, but parsed, and throwing on a non-2xx. Returns `unknown`, so the remote validates it. */
   json(path: string, init?: RequestInit): Promise<unknown>;
 }
 
@@ -172,19 +161,16 @@ export interface HostContext {
 export interface RemoteHost {
   readonly context: HostContext;
   /**
-   * Drop every subscription and make each method throw. Called whenever the
-   * matching remote mount is torn down or fails to complete.
+   * Drop every subscription and make each method throw. Called when the remote's mount
+   * is torn down or fails.
    */
   revoke(): void;
 }
 
 /**
- * What @core/remotes/mfe.js injects to obtain the two things it cannot know itself: the
- * guard for a remote's mount path, and the capabilities to hand its mount.
- *
- * This indirection is what keeps `source/lib/core/` free of any import from
- * `source/lib/auth/`. The core owns the remote contract; the application decides
- * what a capability is. See `source/lib/host/remote-host.js`.
+ * What `@core/remotes/mfe.js` injects to get a remote's guard and host context. The
+ * indirection keeps `source/lib/core/` free of imports from `source/lib/auth/`. See
+ * `source/lib/host/remote-host.js`.
  */
 export interface RemoteHostProvider {
   /** Undefined when the remote declares no requirements. */
@@ -193,19 +179,15 @@ export interface RemoteHostProvider {
 }
 
 /**
- * One application's runtime configuration, as `@core/remotes/manifest-policy.js`
- * admitted it: every URL is a normalized same-origin path, every cross-field
- * collision has already been refused, and the object graph is frozen. A consumer
- * reads these values instead of re-reading the fetched document, because the
- * document alone cannot say whether the set of them is coherent.
+ * An application's runtime configuration, as `@core/remotes/manifest-policy.js`
+ * admitted it. URLs are normalized same-origin paths, collisions are already refused
+ * and the object is frozen.
  */
 export interface AppManifest {
   readonly remotes: readonly RemoteDescriptor[];
   /**
-   * Where this application's API lives. Nothing about *authentication* is here:
-   * which strategy an application uses, and what its authorization server calls
-   * its endpoints and fields, is the application's own configuration, and a
-   * manifest key for it would be the library dictating a backend contract.
+   * Where the application's API lives. Authentication strategy and endpoint names are
+   * application configuration and don't belong in the manifest.
    */
   readonly auth: {
     /** Root-relative. Requests carry the session's authorization material. */
@@ -213,45 +195,28 @@ export interface AppManifest {
   };
   readonly i18n: I18nConfig;
   /**
-   * Optional pre-bundled `{ url: source }` map of every template, fetched once at
-   * startup so no component costs a request of its own. Emitted only under
-   * `--templates bundle`; absent in development, where templates are fetched
-   * individually and reloaded on change.
+   * Optional `{ url: source }` map of every template, fetched once at startup. Emitted
+   * only under `--templates bundle`.
    */
   readonly templateBundle?: string;
   /**
-   * The templates this artifact emitted, grouped by the chunk whose modules name
-   * them: `entry` for the closure the document already preloads, and
-   * `chunk:<emitted path>` for every other chunk.
+   * Templates grouped by the chunk whose modules name them. `entry` holds the closure
+   * the document preloads, and `chunk:<emitted path>` holds each other chunk. Startup
+   * starts the entry group, and the rest follow their code. ADR-0081.
    *
-   * The group is what makes the list actionable. A flat list can only be started at
-   * once, before a route is known; grouped, startup starts the entry group and the
-   * rest follow the code that needs them
-   * ([ADR-0081](../../../../docs/adr/0081-templates-are-delivered-by-chunk.md)).
-   * Emitted only under `--templates split`; an empty record everywhere else.
+   * Emitted only under `--templates split`, and an empty record otherwise.
    */
   readonly templateGroups: Readonly<Record<string, readonly string[]>>;
   /**
-   * Every template this artifact emitted, as the URLs its components will ask for.
-   *
-   * Not a bundle and not a substitute for one: the files stay separate and
-   * immutable, and this is only the discovery a component cannot do for itself, so
-   * a caller can put them in flight instead of paying one round trip per component
-   * once its chunk arrives ([ADR-0081](../../../../docs/adr/0081-templates-are-delivered-by-chunk.md)).
-   *
-   * Derived from `templateGroups` when the document carries one, entry group first,
-   * so "everything this artifact holds" stays one property rather than a partition
-   * the caller has to know about. Read from the document under source delivery,
-   * which has no chunks to group by. Empty under bundle delivery.
+   * Every template URL, entry group first. Derived from `templateGroups` when present,
+   * read from the document under source delivery, and empty under bundle delivery.
    */
   readonly templateFiles: readonly string[];
 }
 
 /**
- * Where a manifest document came from, and what the page pins. The two halves an
- * admission adapter supplies: the browser reads them from `document`, and
- * tools/checks/verify-deps.mjs from the application's `index.html`, so both admit
- * a manifest under the same rules.
+ * Where a manifest came from and what the page pins. The browser reads both from
+ * `document`, and `tools/checks/verify-deps.mjs` reads them from `index.html`.
  */
 export interface ManifestSource {
   /** The manifest's own location, used in every message. */
@@ -259,9 +224,8 @@ export interface ManifestSource {
   /** Absolute URL the page's pins resolve against, e.g. `document.baseURI`. */
   readonly base: string;
   /**
-   * The static import map's `integrity` block. A function because a manifest with
-   * no remotes needs no import map, and calling it is what decides whether a
-   * missing one is an error.
+   * The static import map's `integrity` block. A function, because a manifest without
+   * remotes needs no import map.
    */
   readonly pins: () => Readonly<Record<string, unknown>>;
 }

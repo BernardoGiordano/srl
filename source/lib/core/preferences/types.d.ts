@@ -1,6 +1,6 @@
 /**
- * The storage adapter an application may supply, and what one preference read
- * is allowed to say about the value it finds. ADR-0015.
+ * The storage adapter an application may supply, and the options for reading one
+ * preference. ADR-0015.
  */
 
 /** Synchronous subset shared by localStorage, sessionStorage, and memory adapters. */
@@ -27,8 +27,8 @@ export interface PreferenceLoadOptions<T> {
 /** How `migrateLegacyKey` adopts a raw value written before this module owned it. */
 export interface LegacyKeyOptions<T> {
   /**
-   * Turn the raw stored string into state worth keeping, or return undefined to
-   * discard it. Called at most once per key, because the key is then removed.
+   * Turn the raw stored string into state, or return undefined to discard it. Called at
+   * most once per key, because the key is then removed.
    */
   readonly accept: (raw: string) => T | undefined;
   /** Schema version to store the adopted value under. Defaults to 1. */

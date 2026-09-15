@@ -1,34 +1,21 @@
 /**
- * Templates in their own `.html` files, compiled at runtime.
+ * Compiles `.html` templates at runtime.
  *
- * A component is a `.js` and a sibling `.html`, and the markup is ordinary HTML
- * with ordinary HTML tooling. `@core/elements/component.js` derives the template
- * URL from the module rather than having every component write it down.
+ * Each `.html` file is fetched once, walked once and compiled to one strings array
+ * plus one evaluator per binding. The result is cached per URL and never rebuilt,
+ * because lit keys its parsed template on the array's identity. ADR-0014.
  *
- * WHY IT IS NOT SLOW, AND THE INVARIANT THAT KEEPS IT THAT WAY
+ * Bindings use a restricted expression language over a component's public members
+ * (see expression.js). `prefetchTemplates` starts template requests early without
+ * compiling, and `seedTemplates` fills the cache from a bundle.
  *
- * Each `.html` file is fetched once, walked once, and emitted as exactly one
- * strings array plus one compiled evaluator per binding. The compiled result is
- * cached per URL and must never be rebuilt: lit keys its parsed template on the
- * *identity* of that array, so a byte-identical replacement rebuilds the DOM
- * instead of patching it. ADR-0014.
- *
- * Bindings are a restricted expression language over a component's *public*
- * members — see expression.js — and each template costs one request of its own.
- * `prefetchTemplates` starts those requests together from a list the build knows —
- * the bytes only, so the compile still follows the mount rather than preceding it;
- * `seedTemplates` removes the requests entirely, when a bundle is configured.
- *
- * `registerTemplateGroups` is what decides *when* a list is started: the manifest
- * groups the artifact's markup by chunk, startup starts the entry group, and every
- * other group starts on the first `attachTemplate` out of its chunk. Markup follows
- * its code, so it is fetched only by a visitor who was allowed to load that code.
- * ADR-0081.
+ * `registerTemplateGroups` records which templates travel together. Startup starts
+ * the entry group, and every other group starts on the first `attachTemplate` from
+ * its chunk. ADR-0081.
  */
 
 import { html, nothing } from 'lit';
-// `Directive` comes from the same module: lit-html's async-directive re-exports
-// the base class and the factory, so one specifier covers both kinds.
+// `Directive` and `AsyncDirective` both come from lit's async-directive module.
 import { AsyncDirective, Directive, directive } from 'lit/async-directive.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { compileExpression } from '@core/template/expression.js';
@@ -52,18 +39,16 @@ import {
   propertySinkFor,
 } from '@core/template/security.js';
 
-// Side effect only: i18n registers `t`, `num`, `dt` and friends as template
-// globals. Imported here rather than left to the application, so that every
-// template can be translated whether or not anything else pulled i18n in.
+// i18n registers `t`, `num`, `dt` and the other template globals, so every template
+// can translate.
 import '@core/localization/i18n.js';
 
 /** @import { BindingUpdateCause } from '@core/diagnostics/types.js' */
 /** @import { CompiledTemplate, Evaluator, Scope, TemplateChunks, TemplateFragment, TemplateLocals } from '@core/template/types.js' */
 
 /**
- * The runtime-loaded component template is framework-owned source, not a bound
- * application value. Its identity policy is private to this module so it cannot
- * become an unreviewed application escape hatch.
+ * A Trusted Types policy for framework-owned template source. It stays private to
+ * this module, so application code can't use it to bypass sanitization.
  *
  * @typedef {{ createHTML(value: string): unknown }} TemplatePolicy
  * @typedef {{ createPolicy(name: string, rules: { createHTML(value: string): string }): TemplatePolicy }} TemplatePolicyFactory
@@ -85,17 +70,15 @@ function setTemplateSource(template, source) {
 /* ── Registry ──────────────────────────────────────────────────────────── */
 
 /**
- * Two caches, because a template costs two separable things: bytes off the
- * network, and a compile on the main thread. `sourceByUrl` holds the first,
- * `byUrl` the second, and nothing may collapse them back into one — a prefetch
- * that compiles pays the whole application's compiler in front of the first
- * paint, for markup nobody has opened. ADR-0081 buys the round trip; the compile
- * belongs to `attachTemplate`, which runs once per component that actually
- * mounts.
+ * Compiled templates by URL.
  *
- * A source entry is a string when it was seeded from a bundle and a promise when
- * it is in flight or has been fetched. Both are cached under the URL, so a
- * prefetch and the `attachTemplate` that follows it share one request.
+ * Fetching and compiling are cached separately. `sourceByUrl` holds bytes, which
+ * `prefetchTemplates` may start early. `byUrl` holds compiles, which happen in
+ * `attachTemplate` once per component that mounts. Merging the two would compile
+ * every prefetched template before the first paint.
+ *
+ * A source entry is a string when seeded from a bundle and a promise when fetched,
+ * so a prefetch and the `attachTemplate` after it share one request.
  *
  * @type {Map<string, Promise<CompiledTemplate>>}
  */
@@ -108,22 +91,15 @@ const sourceByUrl = new Map();
 const byClass = new WeakMap();
 
 /**
- * Which classes attached a template, for the development revision path below.
- *
- * `byClass` answers "what does this class render", and an edit asks the question
- * the other way round. It names a URL, and every class that attached that URL has
- * to be handed the new compile. Classes are held strongly, which costs nothing
- * anyone else is not already paying — `customElements.define` retains every one of
- * them for the life of the page.
+ * Classes that attached each URL, so a development revision can update them all.
  *
  * @type {Map<string, Set<object>>}
  */
 const attachedByUrl = new Map();
 
 /**
- * The tag a template's compile stamps on every element it renders, or null for an
- * unstyled one. Recorded before the first compile of a URL and fixed after it, because
- * one URL has one strings array (ADR-0014) and a stamp is part of that array.
+ * The owner tag each template's compile stamps, or null when unstyled. It is fixed at
+ * the first compile, because the stamp is part of the one strings array a URL has.
  * ADR-0119.
  *
  * @type {Map<string, string | null>}
@@ -131,34 +107,25 @@ const attachedByUrl = new Map();
 const ownerByUrl = new Map();
 
 /**
- * The published revision of a template, once an edit has replaced the compile the
- * network produced. Development only, and empty in every other page.
+ * The latest development revision of each edited template.
  *
- * Kept as well as written into `byUrl`, because a request already in flight when
- * the edit arrived resolves *after* it. `fetchAndCompile` reads this and publishes
- * the revision instead of compiling the bytes it was handed, which are both stale
- * and a second strings array for one URL. ADR-0014.
+ * A request already in flight when the edit arrived resolves afterwards.
+ * `fetchAndCompile` returns the revision instead of compiling the stale bytes, which
+ * would also create a second strings array for the URL. ADR-0014.
  *
  * @type {Map<string, CompiledTemplate>}
  */
 const revisedByUrl = new Map();
 
 /**
- * Which group a template belongs to, for the groups that have not started yet.
+ * The group each template belongs to, for groups that haven't started yet.
  *
- * The manifest partitions an artifact's markup by the chunk whose modules name it
- * (ADR-0081), and the entry group aside, the moment to start a group is the moment
- * its chunk turns out to be needed. That moment is observable here and nowhere else:
- * `attachTemplate` is called by `defineComponent` while the chunk's own module body
- * is running, which is after whatever imported that chunk was allowed to. So a group
- * starts because a level asked for it rather than because startup finished, and it
- * inherits every guard that stood between the visitor and that chunk without
- * restating one of them. ADR-0081.
+ * `attachTemplate` runs while a chunk's module body evaluates, which only happens
+ * after the router let that chunk load. Starting the group there means markup
+ * follows the same guards as code. ADR-0081.
  *
- * An entry is removed once its group has been started, so this map is also the set
- * of groups still to start and the second component out of the same chunk finds
- * nothing left to do. `prefetchTemplates` is what removes them, which makes any
- * deliberate start count as the group's start — startup's entry group included.
+ * `prefetchTemplates` removes entries as it starts them, so each group starts at
+ * most once, the entry group included.
  *
  * @type {Map<string, readonly string[]>}
  */
@@ -167,8 +134,7 @@ const groupByTemplate = new Map();
 /**
  * Load and compile a template, once per URL.
  *
- * The promise is cached rather than the result, so two components mounting at the
- * same moment share one compile instead of racing two.
+ * The promise is cached, so two components mounting together share one compile.
  *
  * @param {string | URL} url
  * @returns {Promise<CompiledTemplate>}
@@ -186,15 +152,10 @@ export function loadTemplate(url) {
 }
 
 /**
- * The source of a template, once per URL, without compiling it.
+ * A template's source, fetched once per URL and not compiled.
  *
- * Returns the seeded string synchronously when a bundle put one there, so the
- * bundle path costs no extra turn of the microtask queue, and otherwise the
- * cached fetch — shared by the prefetch that started it and by every
- * `loadTemplate` that follows.
- *
- * A rejection stays in the cache on purpose: the request failed for this URL, and
- * repeating it once per mounting component would turn one 404 into many.
+ * A seeded bundle returns a string synchronously. A rejection stays cached, so one
+ * 404 isn't repeated for every component that mounts.
  *
  * @param {string} href Already resolved against `document.baseURI`.
  * @returns {string | Promise<string>}
@@ -223,31 +184,17 @@ async function fetchSource(href) {
 }
 
 /**
- * Start a list of templates arriving, without waiting for any of them.
+ * Start fetching a list of templates without waiting for them.
  *
- * The list is the one thing this cannot work out for itself. A component names its
- * own template, so a URL is known only once that component's module has been
- * fetched and evaluated — and nine components concatenated into one chunk means
- * nine requests in a row inside a single file, because each `await attachTemplate`
- * sits in a module body and module bodies run in sequence. The build holds all nine
- * URLs before the chunk exists. Handed them, this puts them in flight at once, and
- * every `await` that follows resolves from the cache above. ADR-0081.
+ * A component only learns its template URL when its module evaluates, so nine
+ * components in one chunk would otherwise fetch one after another. The build knows
+ * the URLs ahead of time, and this starts them together. ADR-0081.
  *
- * Bytes only, and that is the whole point of the split. Compiling here would walk
- * the HTML and parse every expression of every template in the application before
- * the first paint, when a route mounts a handful of them — the requests are what
- * cost a round trip, and they are the only part worth starting early. The compile
- * stays in `attachTemplate`, per component, over the source this warmed.
+ * Only bytes are fetched. Compiling waits for `attachTemplate`, so the first paint
+ * doesn't pay for templates nothing mounts.
  *
- * Idempotent and safe to call with URLs nothing will ever ask for: `sourceOf`
- * caches the request, so a duplicate is not a second request, and a component that
- * is never mounted has simply had its markup fetched early.
- *
- * A rejection is swallowed here on purpose. This is an optimisation, and the
- * component that actually needs the template awaits the same request through
- * `attachTemplate` — which is where the failure belongs: raised once, at the point
- * that genuinely cannot continue, rather than a second time as an unhandled
- * rejection for a route nobody opened.
+ * Duplicates cost nothing. Rejections are swallowed here, and the component that
+ * needs the template sees the failure when it awaits.
  *
  * @param {Iterable<string | URL>} urls
  * @returns {void}
@@ -255,28 +202,23 @@ async function fetchSource(href) {
 export function prefetchTemplates(urls) {
   for (const url of urls) {
     const href = new URL(url, document.baseURI).href;
-    // Started deliberately, so whichever group it belongs to has now started. Doing
-    // this here rather than at the one call site that starts a group is what keeps
-    // startup's entry group from being started a second time by the first component
-    // that attaches out of it.
+    // Starting a template counts as starting its group, so the entry group isn't
+    // started again by its first component.
     groupByTemplate.delete(href);
-    // Attaching the handler to the cached promise rather than to a copy: this is
-    // what marks *that* promise handled, so a template that 404s stays a quiet
-    // prefetch until someone awaits it.
+    // Mark the cached promise itself as handled, so a 404 stays quiet until someone
+    // awaits it.
     const source = sourceOf(href);
     if (typeof source !== 'string') source.catch(() => {});
   }
 }
 
 /**
- * Tell this module how the artifact's templates are partitioned.
+ * Record how the artifact's templates are grouped. Startup calls this once with
+ * `AppManifest.templateGroups`.
  *
- * Called once, by startup, with `AppManifest.templateGroups`. The keys are the
- * build's names for its own chunks and are not read: what matters is which URLs
- * travel together, not what the group they travel in is called. A document with no
- * groups — source delivery, which has no chunks to group by, and `split-lazy`, which
- * announces nothing — registers nothing, and every template is started by whoever
- * asks for it exactly as before. ADR-0081.
+ * Only membership matters, and the group keys are ignored. Source delivery and
+ * `split-lazy` register nothing, so each component fetches its own template.
+ * ADR-0081.
  *
  * @param {Readonly<Record<string, readonly string[]>>} groups
  * @returns {void}
@@ -289,15 +231,10 @@ export function registerTemplateGroups(groups) {
 }
 
 /**
- * Start the group this template belongs to, unless it has already started.
+ * Start this template's group, unless it already started.
  *
- * The template itself is in the group, deliberately: the caller is about to await it
- * and `sourceOf` caches per URL, so the request started here is the one that await
- * resolves from. What the group adds is the rest of the chunk whose module body is
- * running at this instant — nine components in one file are nine requests in a row
- * when each waits for its own `attachTemplate` to be reached, and one batch when the
- * first of them starts all nine. ADR-0081's round trip, closed per chunk at the point
- * the chunk is known to be wanted.
+ * The group includes the template itself, so the request started here is the one
+ * the caller awaits. The rest of the group belongs to the chunk evaluating now.
  *
  * @param {string} href Already resolved against `document.baseURI`.
  */
@@ -312,21 +249,16 @@ function startTemplateGroup(href) {
  */
 async function fetchAndCompile(href) {
   const source = await sourceOf(href);
-  // An edit published while this request was in flight is the newer answer, and
-  // compiling the bytes that arrived would also give one URL a second strings
-  // array — two hosts of the same template rendering different DOM. ADR-0111.
+  // A revision published while this request was in flight wins. ADR-0111.
   return revisedByUrl.get(href) ?? compileTemplate(source, href, ownerByUrl.get(href) ?? undefined);
 }
 
 /**
- * Seed the cache from a pre-bundled `{ url: source }` map, so no template costs
- * a request of its own.
+ * Fill the source cache from a bundled `{ url: source }` map, so no template needs a
+ * request of its own.
  *
- * Deliberately a seed rather than a replacement: the compile path is identical
- * either way, which means development and production run the same compiler over
- * the same bytes and a bundling bug cannot change rendering behaviour. It fills
- * the same source cache `prefetchTemplates` warms, which is why a bundle simply
- * makes the prefetch find everything already there.
+ * Compilation is unchanged, so development and production run the same compiler
+ * over the same bytes.
  *
  * @param {Readonly<Record<string, string>>} sources Keys are URLs, absolute or
  *   root-relative.
@@ -340,21 +272,14 @@ export function seedTemplates(sources) {
 /**
  * Compile a template and make it the one a class renders.
  *
- * Also the point at which this component's chunk turns out to be needed, so the rest
- * of that chunk's markup is started here before this template is awaited. See
- * `startTemplateGroup`: the call is the whole of the router's leg of template
- * delivery, and it is here rather than in the router because this is the only place
- * that knows which chunk is running. ADR-0081.
+ * Also starts the rest of this template's chunk group (see `startTemplateGroup`),
+ * because this is the only place that knows which chunk is running. ADR-0081.
  *
- * Called only by `defineComponent` in `@core/elements/component.js`, which owns the order:
- * a template is attached before `customElements.define`, because defining first
- * would upgrade elements already in the document and Lit renders on connection,
- * so the first paint would be empty markup. This module owns compilation; which
- * class a compiled template belongs to is identity, and identity lives there.
+ * Only `defineComponent` calls this, before `customElements.define`.
  *
- * An `owner` is the tag of a styled Element, and every element the template renders
- * carries it as `data-ui-owner`. One template cannot render for two owners, or for an
- * owner and an unstyled class, because both would share one compile.
+ * `owner` is the tag of a styled Element. Every element the template renders carries
+ * it as `data-ui-owner`, so one template can't serve two owners, or an owner and an
+ * unstyled class.
  *
  * @param {object} ctor
  * @param {string | URL} url
@@ -375,9 +300,7 @@ export async function attachTemplate(ctor, url, owner) {
   }
   startTemplateGroup(href);
 
-  // Recorded before the await, so an edit that lands while this template is still
-  // arriving reaches this class too. Both orders agree, because the revision writes
-  // `byClass` here and the `loadTemplate` below resolves to that same revision.
+  // Record the class before awaiting, so an edit that lands mid-request reaches it.
   let attached = attachedByUrl.get(href);
   if (attached === undefined) {
     attached = new Set();
@@ -389,24 +312,21 @@ export async function attachTemplate(ctor, url, owner) {
 }
 
 /**
- * The compiled template registered for a class, if any. Read by
- * `SignalElement.render`.
+ * The compiled template registered for a class, if any. `SignalElement.render` reads
+ * it.
  *
  * @param {object} ctor
  * @returns {CompiledTemplate | undefined}
  */
 export function templateFor(ctor) {
-  // Walks the chain so a component subclassed to tweak behaviour inherits its
-  // parent's template instead of failing with "no template", which is otherwise
-  // a genuinely confusing first encounter with class inheritance here.
+  // Walk the prototype chain, so a subclass inherits its parent's template.
   /** @type {object | null} */
   let current = ctor;
   while (current !== null) {
     const found = byClass.get(current);
     if (found !== undefined) return found;
-    // `Reflect.getPrototypeOf` rather than `Object.getPrototypeOf`: the former is
-    // declared to return `object | null`, the latter `any`, and an `any` here
-    // would spread into the return type.
+    // `Reflect.getPrototypeOf` returns `object | null`, where `Object.getPrototypeOf`
+    // returns `any`.
     current = Reflect.getPrototypeOf(current);
   }
   return undefined;
@@ -415,41 +335,27 @@ export function templateFor(ctor) {
 /* ── Development revisions ─────────────────────────────────────────────── */
 
 /**
- * The one thing `renderRevision` needs of a host is a way to be told its markup
- * changed. `SignalElement` has it, and anything else holding a template of its own
- * is left alone.
+ * A host that can be told its markup changed. `SignalElement` implements it.
  *
  * @typedef {{ renderRevisedTemplate?: () => void }} RevisableHost
  */
 
 /**
- * Render an edited `.html` file in a page that is already showing it.
+ * Render an edited `.html` file in the page already showing it. Development only.
+ * ADR-0111.
  *
- * Development only. An editor saves the file, the development server hands the
- * bytes to its browser adapter, and the adapter calls this. The components that
- * render that file render the new markup, and each host keeps the instance it
- * already was, so its fields, its signals, its subscriptions and its place in the
- * document all survive an edit to its markup. ADR-0111.
+ * Each host stays the same instance, so fields, signals and subscriptions survive.
+ * The edit commits only if it compiles, so a half-written file changes nothing.
+ * State held by the old DOM, such as focus, scroll and uncontrolled input values, is
+ * lost.
  *
- * One compile, committed only once it has succeeded. Markup that does not compile
- * throws and changes nothing, so a file caught half-written leaves the page
- * rendering the revision it already had rather than blanking a screen.
- *
- * The new strings array is the one deliberate exception to ADR-0014's "never
- * rebuilt". lit keys its parsed template on that array's identity, so a new array
- * is precisely how the DOM gets rebuilt from new markup, and this is the only
- * caller that ever asks for one. A page nobody is editing never reaches here.
- *
- * What does not survive is what the old DOM held: focus, scroll position, an open
- * `<details>`, a half-typed value in an uncontrolled input. The host is the same
- * object; its children are new nodes.
+ * The new strings array is the one sanctioned exception to ADR-0014.
  *
  * @internal
  * @param {string | URL} url
  * @param {string} source
- * @returns {boolean} Whether this page had the template. `false` means nothing
- *   here ever asked for that URL, so there is nothing to revise and whichever
- *   component mounts next fetches the edited file in the ordinary way.
+ * @returns {boolean} Whether this page had the template. `false` means nothing here
+ *   asked for that URL, and the next component to mount fetches the edited file.
  */
 export function reviseTemplate(url, source) {
   const href = new URL(url, document.baseURI).href;
@@ -467,28 +373,18 @@ export function reviseTemplate(url, source) {
 }
 
 /**
- * Ask every live host of a revised template to render it.
+ * Ask every live host of a revised template to render.
  *
- * The document is walked rather than a registry of hosts kept. A registry would
- * cost a set entry on every connect and disconnect in every page, production
- * included, to serve an edit that only ever happens in development; the walk costs
- * nothing until an edit arrives. It also finds subclasses for free, because
- * `templateFor` is the same inheritance walk a render does.
- *
- * Hosts outside the document are skipped and need nothing. `SignalElement.render`
- * reads its attachment on every render, so one that is connected again renders the
- * revision then. Shadow roots are not walked either, which reaches every host there
- * is because a component renders into light DOM — see projection.js.
+ * Walks the document instead of tracking hosts, so production pays nothing.
+ * `templateFor` also matches subclasses. Detached hosts pick up the revision on their
+ * next render. Shadow roots aren't walked, because components render into light DOM.
  *
  * @param {CompiledTemplate} compiled
  */
 function renderRevision(compiled) {
   for (const element of document.querySelectorAll('*')) {
     if (templateFor(element.constructor) !== compiled) continue;
-    // Called rather than imported, because `@core/elements/signal-element.js`
-    // imports this module. Named on the host rather than inverted into a handler it
-    // registers, because one consumer is not a seam, and because the host is what
-    // knows how to report why it is rendering. ADR-0109.
+    // A method call, because signal-element.js imports this module.
     /** @type {RevisableHost} */ (/** @type {unknown} */ (element)).renderRevisedTemplate?.();
   }
 }
@@ -496,13 +392,8 @@ function renderRevision(compiled) {
 /* ── Interpolation pre-pass ────────────────────────────────────────────── */
 
 /**
- * `{{ ... }}` bodies are lifted out before the HTML parser sees the source, and
- * replaced with `⟦n⟧` placeholders.
- *
- * Not an optimisation. `{{ a < b }}` in text content would otherwise be parsed as
- * the start of a tag named `b`, and the expression would be silently mangled into
- * markup. Lifting the bodies first means the parser only ever sees inert text,
- * and every expression survives byte for byte.
+ * `{{ ... }}` bodies are replaced with `⟦n⟧` placeholders before the HTML parser sees
+ * the source. Otherwise `{{ a < b }}` would parse as the start of a `<b>` tag.
  */
 const PLACEHOLDER = /⟦(\d+)⟧/u;
 const PLACEHOLDER_ALL = /⟦(\d+)⟧/gu;
@@ -524,12 +415,8 @@ function liftInterpolations(source) {
 /* ── Chunk accumulation ────────────────────────────────────────────────── */
 
 /**
- * Accumulates the static strings and the binding evaluators that together become
- * one lit template.
- *
- * The strings array is built once and frozen into the shape lit expects, then
- * handed to `html()` on every render. Its identity is the cache key inside
- * lit-html, so it must never be rebuilt.
+ * Collects the static strings and binding evaluators that become one lit template.
+ * The strings array is built once, because lit caches on its identity.
  */
 class Chunks {
   /** @type {string[]} */
@@ -548,10 +435,8 @@ class Chunks {
    * @param {string} where Where the expression is written, for a diagnostics report.
    */
   hole(evaluator, where) {
-    // Every binding passes through here, so this is the one place that knows the
-    // final evaluator a Part will commit — the one after a sink or an
-    // interpolation join wrapped it, which is the identity a report has to name.
-    // ADR-0109.
+    // Every binding passes through here with its final evaluator, so the diagnostics
+    // label attaches here.
     labelBinding(evaluator, where);
     this.#parts.push(this.#current);
     this.#current = '';
@@ -563,9 +448,7 @@ class Chunks {
     this.#parts.push(this.#current);
 
     const strings = /** @type {string[] & { raw?: readonly string[] }} */ ([...this.#parts]);
-    // lit reads `strings.raw`, which a hand-built array does not have. Not
-    // enumerable, so the array still looks like a plain string array everywhere
-    // else.
+    // lit reads `strings.raw`. It is non-enumerable, so the array still looks plain.
     Object.defineProperty(strings, 'raw', { value: Object.freeze([...this.#parts]) });
 
     return {
@@ -576,23 +459,18 @@ class Chunks {
 }
 
 /**
- * Give every compiled binding its own signal dependency set and Lit update path,
- * so a signal changing in one interpolation updates that one Part instead of
- * re-rendering the whole template.
+ * Gives each compiled binding its own signal dependencies and lit Part, so a signal
+ * change updates one Part without re-rendering the template.
  *
- * Three things make a binding re-evaluate:
+ * A binding re-evaluates in three cases.
  *
- *  1. A signal it reads changed. The effect re-runs, writes with `setValue`, and
- *     Lit commits this Part and nothing else.
- *  2. The host rendered, so an ordinary Lit property it reads may have changed.
- *     Lit properties are not signals, so the binding is evaluated again inside a
- *     fresh effect: a template that branches reads different signals in each
- *     branch, and a dependency set captured once would go stale.
- *  3. Its `*for` row was given a different item or index.
+ * 1. A signal it reads changes, and the effect commits this Part.
+ * 2. The host renders. Lit properties aren't signals, so the binding runs again in a
+ *    fresh effect, which also picks up a branch that reads different signals.
+ * 3. Its `*for` row gets a new item or index.
  *
- * Anything else must cost nothing, which is what `scope.version` is for: the
- * scope keeps its identity for the life of its host or its row, and this
- * directive short-circuits on that identity. ADR-0014.
+ * Otherwise it does no work. The scope keeps its identity, and `scope.version` says
+ * when to re-read. ADR-0014.
  */
 class ReactiveBindingDirective extends AsyncDirective {
   /** @type {Evaluator | undefined} */
@@ -643,11 +521,9 @@ class ReactiveBindingDirective extends AsyncDirective {
   }
 
   /**
-   * Why this evaluation is happening, read off the state the short-circuit above
-   * already compares. A different evaluator or a different scope object means the
-   * Part now holds a different binding — an `*if` branch that flipped, or a row
-   * template that moved — and a bumped version on the same pair means the host
-   * rendered or the row was given a new item.
+   * Why this evaluation happens. A new evaluator or scope means the Part holds a
+   * different binding, such as a flipped `*if` or a moved row. A new version on the
+   * same pair means the host rendered or the row changed.
    *
    * @param {Evaluator} evaluate
    * @param {Scope} scope
@@ -674,8 +550,7 @@ class ReactiveBindingDirective extends AsyncDirective {
     this.#version = scope.version;
 
     if (!this.isConnected) {
-      // Reported like any other: a report that quietly skipped a class of
-      // evaluation would undercount the binding it skipped.
+      // Report detached evaluations too, so the report doesn't undercount.
       const finish = beginBindingUpdate(evaluate, cause);
       const previous = this.#value;
       this.#value = evaluate(scope);
@@ -685,9 +560,8 @@ class ReactiveBindingDirective extends AsyncDirective {
 
     let initial = true;
     this.#dispose = effect(() => {
-      // Only the first run of this effect has the reason the caller gave. Every
-      // later one is the effect waking on its own, which is the update path an
-      // element-render timer cannot see.
+      // Only the first run has the caller's cause. Later runs are the effect waking
+      // on a signal.
       const finish = beginBindingUpdate(evaluate, initial ? cause : 'signal');
       const previous = this.#value;
       this.#value = evaluate(scope);
@@ -712,17 +586,11 @@ function renderChunks(chunks, scope) {
 }
 
 /**
- * One rendered instance of a `*fragment`, holding the row scope for its position.
+ * One rendered `*fragment` instance, holding the row scope for its DOM position.
  *
- * The scope has to live somewhere, and the consumer is the wrong place: a table
- * would have to invent a cache key, keep it in step with its own rows, and drop
- * entries nobody told it about. Lit already tracks this. A directive instance
- * belongs to the Part it was committed to, so it survives exactly as long as the
- * cell does, and a keyed `*for` that moves a row moves its Parts with it.
- *
- * Locals are updated in place and the version moves only when one of them, or the
- * declaring scope, actually changed. That is `compileFor`'s rule, applied to a
- * position in the DOM rather than an index in a list. ADR-0014, ADR-0104.
+ * Lit ties a directive instance to its Part, so the scope lives exactly as long as
+ * the cell and moves with a keyed row. Locals update in place, and the version
+ * changes only when a local or the declaring scope changed. ADR-0014, ADR-0104.
  */
 class FragmentDirective extends Directive {
   /** @type {Scope | undefined} */
@@ -748,9 +616,8 @@ class FragmentDirective extends Directive {
     let changed = this.#parentVersion !== parent.version;
     for (const [index, param] of params.entries()) {
       const value = args[index];
-      // `hasOwn`, not `in`: locals are prototype-chained, and a parameter named
-      // after an enclosing `*for` variable must shadow it rather than compare
-      // equal to it and be left unwritten.
+      // `hasOwn`, because locals are prototype-chained and a parameter must shadow an
+      // enclosing `*for` variable with the same name.
       if (Object.hasOwn(scope.locals, param) && scope.locals[param] === value) continue;
       scope.locals[param] = value;
       changed = true;
@@ -769,9 +636,8 @@ const fragmentInstance = directive(FragmentDirective);
 /* ── Compiler ──────────────────────────────────────────────────────────── */
 
 /**
- * Compile template source into a render function.
- *
- * Exported for tests; application code goes through `loadTemplate`.
+ * Compile template source into a render function. Application code uses
+ * `loadTemplate`.
  *
  * @param {string} source
  * @param {string} where URL or label used in error messages.
@@ -792,12 +658,8 @@ export function compileTemplate(source, where, owner) {
   const compiled = chunks.finish();
 
   /**
-   * One scope per host, for the life of the host.
-   *
-   * The binding directive short-circuits on scope *identity*, so a fresh object
-   * per render would make every binding throw away its effect and build another.
-   * Bumping a version says the same thing — "the host rendered, re-read what you
-   * read" — without allocating, and without making a `*for` row look new.
+   * One scope per host, for the host's lifetime. Each render bumps its version
+   * instead of allocating a new scope, which would rebuild every binding's effect.
    *
    * @type {WeakMap<object, Scope>}
    */
@@ -806,8 +668,8 @@ export function compileTemplate(source, where, owner) {
   return (host) => {
     const existing = byHost.get(host);
     if (existing !== undefined) {
-      // A Lit render. Ordinary reactive properties are not signals, so nothing
-      // can be assumed about what they now hold.
+      // A lit render. Plain reactive properties aren't signals, so anything may have
+      // changed.
       existing.version += 1;
       return renderChunks(compiled, existing);
     }
@@ -824,26 +686,19 @@ export function compileTemplate(source, where, owner) {
 }
 
 /**
- * Shared, never written to. A component with no `*for` and no event binding above
- * it needs no locals at all.
+ * Shared empty locals, never written to.
  *
- * Row locals are prototype-chained with `Object.create`, so a nested `*for` sees
- * the outer loop's variables through the chain and a row's locals can be updated
- * in place. That only works if the chain ends in `null`: a chain reaching
- * `Object.prototype` would resolve `{{ toString }}` to an inherited function.
- * `expression.js` keeps a denylist for host lookups, and this is the locals half
- * of the same rule.
+ * Row locals chain with `Object.create`, so a nested `*for` sees outer variables.
+ * The chain ends in `null`, so `{{ toString }}` can't reach `Object.prototype`.
  *
  * @type {TemplateLocals}
  */
 const EMPTY_LOCALS = Object.freeze(childLocals(null));
 
 /**
- * A locals object chained to `parent`, or the root of a chain when given `null`.
+ * A locals object chained to `parent`, or a chain root when given `null`.
  *
- * A named helper because `Object.create` is typed `any`, and an `any` spreading
- * into every row's locals would quietly disable type checking around the one
- * object templates read the most.
+ * A helper, because `Object.create` returns `any`.
  *
  * @param {TemplateLocals | null} parent
  * @returns {TemplateLocals}
@@ -862,8 +717,7 @@ function childLocals(parent) {
  */
 
 /**
- * One `*for` row's held scope, plus the parent version it was last refreshed
- * against.
+ * One `*for` row's scope, and the parent version it was last refreshed against.
  *
  * @typedef {{ scope: Scope, parentVersion: number }} Row
  */
@@ -953,10 +807,8 @@ function compileElement(element, context, chunks, consumed) {
     );
   }
 
-  // Reaching here means this `<template>` was not taken by a parent element, so it
-  // is either missing its head or written where no element can own it. Both are
-  // silent failures otherwise: the parser parks a template's children in `content`,
-  // where nothing would ever compile them.
+  // A `<template>` reaching here lacks a fragment head or an element to belong to.
+  // Its children sit in `content`, where nothing would compile them, so throw.
   if (tag === 'template') {
     throw new Error(
       element.hasAttribute('*fragment')
@@ -975,8 +827,7 @@ function compileElement(element, context, chunks, consumed) {
     );
   }
 
-  // Before the attributes, because a fragment compiles to a property binding on
-  // this element and every hole must be emitted inside the start tag.
+  // Fragments first, because they compile to property bindings inside the start tag.
   const fragments = takeFragments(element, context);
 
   chunks.text(`<${tag}`);
@@ -995,14 +846,8 @@ function compileElement(element, context, chunks, consumed) {
 }
 
 /**
- * Take this element's `<template *fragment>` children and compile each into the
- * property binding that hands it to the element.
- *
- * Removed from the tree, so the fragment leaves no markup behind: `<template>` is
- * where the body is *written*, and the element it sits in decides where the body
- * is rendered. A stray `<template>` deeper in the tree is refused by
- * `compileElement`, because its children are parked in `content` where nothing
- * would ever compile them.
+ * Remove this element's `<template *fragment>` children and compile each into a
+ * property binding on the element.
  *
  * @param {Element} element
  * @param {CompileContext} context
@@ -1029,10 +874,8 @@ function takeFragments(element, context) {
 
     const { property, params } = head;
 
-    // A fragment is a function, and every name these two refuse wants a string:
-    // an event property, a forbidden member, or a sink that writes markup or a
-    // URL. None of them can hold a fragment, so the name is wrong rather than the
-    // value dangerous.
+    // A fragment is a function, and these names only accept strings (event
+    // properties, forbidden members, markup or URL sinks), so the name is refused.
     if (
       refusedProperty(property) !== undefined ||
       securityContextFor(element.localName, property) !== undefined
@@ -1053,8 +896,7 @@ function takeFragments(element, context) {
     child.remove();
     fragments.push({
       property,
-      // Only the names. `of` in a parameter says where the checker should get its
-      // type; at runtime a local is whatever the consumer passed for it.
+      // `of` only matters to the checker. At runtime a local is whatever was passed.
       evaluate: compileFragment(
         /** @type {HTMLTemplateElement} */ (child),
         property,
@@ -1068,13 +910,11 @@ function takeFragments(element, context) {
 }
 
 /**
- * Compile a fragment body, and produce the evaluator that binds it to a host.
+ * Compile a fragment body and return the evaluator that binds it to a scope.
  *
- * The fragment function is cached per declaring scope, so the property receives
- * the same value on every render of the declaring component. A fresh function each
- * time would commit a new property on every render, and an element that reacts to
- * the property being set — `<ui-table-column>` tells its table — would react to
- * every unrelated render of the page it sits in.
+ * The function is cached per declaring scope, so the property keeps the same value
+ * across renders. A new function on each render would retrigger elements that react
+ * to the property, such as `<ui-table-column>`.
  *
  * @param {HTMLTemplateElement} element
  * @param {string} property
@@ -1084,8 +924,7 @@ function takeFragments(element, context) {
  */
 function compileFragment(element, property, params, context) {
   const chunks = new Chunks();
-  // `content`, not `childNodes`: the HTML parser puts a template's children in its
-  // content fragment, and the element itself always has none.
+  // The HTML parser puts a template's children in `content`.
   compileNodes([...element.content.childNodes], { ...context, where: `${context.where} *fragment ${property}` }, chunks);
   const body = chunks.finish();
 
@@ -1113,8 +952,7 @@ function compileAttributes(element, context, chunks) {
 
     if (name === '*else') continue;
 
-    // Ownership is the compiler's to write. Authored, it would opt markup into another
-    // Element's stylesheet. ADR-0119.
+    // Only the compiler writes ownership. ADR-0119.
     if (name === OWNER_ATTRIBUTE || name === `[${OWNER_ATTRIBUTE}]`) {
       throw new Error(
         `<${element.localName}> in ${context.where} writes ${OWNER_ATTRIBUTE}, which the ` +
@@ -1141,9 +979,7 @@ function compileAttributes(element, context, chunks) {
         (scope) =>
           /** @param {Event} domEvent */
           (domEvent) => {
-            // `Object.create` rather than a spread: locals are chained, so a
-            // spread would copy the row's own variables and lose every one it
-            // inherits from an enclosing `*for`.
+            // `childLocals`, because a spread would drop inherited `*for` variables.
             const locals = childLocals(scope.locals);
             locals.$event = domEvent;
             handler({ host: scope.host, locals, version: scope.version });
@@ -1158,8 +994,7 @@ function compileAttributes(element, context, chunks) {
       continue;
     }
 
-    // Plain attribute. Its value may still interpolate, which is how a static
-    // Tailwind class list and a conditional one live in the same attribute:
+    // A plain attribute may still interpolate, for example
     //   class="rounded border {{ active ? 'bg-sky-50' : 'bg-white' }}"
     const pieces = splitPlaceholders(value);
     if (pieces.length === 1 && typeof pieces[0] === 'string') {
@@ -1204,8 +1039,7 @@ function compileBinding(element, target, source, context, chunks) {
   const evaluate = compileExpression(source, where);
 
   if (classified.kind === 'property') {
-    // Resolving the sink is also what rejects a dangerous property target, and
-    // it happens here, while compiling, even if this binding never renders.
+    // Resolving the sink also rejects a dangerous target at compile time.
     chunks.text(` .${name}=`);
     chunks.hole(throughSink(evaluate, propertySinkFor(element.localName, name, where)), where);
     return;
@@ -1239,8 +1073,8 @@ function compileIf(element, source, context, consumed) {
   if (next?.hasAttribute('*else') === true) {
     next.removeAttribute('*else');
     consumed.add(next);
-    // Whitespace between the two elements is consumed with the `*else` branch,
-    // or it would render as a stray text node whichever branch is showing.
+    // Whitespace between the pair goes with the `*else` branch, or it would render as
+    // a stray text node.
     for (const between of nodesBetween(element, next)) consumed.add(between);
     alternate = compileSubtree(next, context);
   }
@@ -1252,10 +1086,9 @@ function compileIf(element, source, context, consumed) {
 }
 
 /**
- * `*for="user of users"`, with two optional clauses. The syntax itself lives in
- * dialect.js; `key` is not optional in spirit — without it a reorder re-renders
- * every row's bindings, with it lit-html moves the existing DOM. `$index`,
- * `$first`, `$last` and `$count` are always in scope.
+ * `*for="user of users"`, with optional clauses defined in dialect.js. Without `key`,
+ * a reorder re-renders every row. `$index`, `$first`, `$last` and `$count` are always
+ * in scope.
  *
  * @param {Element} element
  * @param {string} source
@@ -1300,13 +1133,9 @@ function compileFor(element, source, context) {
   const row = compileSubtree(element, context);
 
   /**
-   * Row scopes, per enclosing scope, held across evaluations by position.
-   *
-   * Keyed by the parent scope because one compiled `*for` serves every instance
-   * of the component and every row of an enclosing loop, and the parent scope is
-   * now exactly the identity that distinguishes them. Positional rather than
-   * keyed by the `key` expression, because the key is evaluated *against* a row
-   * scope and cannot be known before one exists.
+   * Row scopes held by position, per enclosing scope. One compiled `*for` serves
+   * every host and every outer row, and the parent scope tells them apart. The key
+   * expression can't index these, because it evaluates against a row scope.
    *
    * @type {WeakMap<Scope, Row[]>}
    */
@@ -1336,10 +1165,8 @@ function compileFor(element, source, context) {
       }
 
       const { locals } = entry.scope;
-      // The row's own version only moves when something it can see moved: its
-      // item, its position, the length of the list, or the host itself. A row
-      // that survives a re-render unchanged costs one comparison, not eight
-      // effect rebuilds.
+      // Bump the row's version only when its item, position, list length or host
+      // changed, so an unchanged row costs one comparison.
       if (
         entry.parentVersion !== scope.version ||
         locals[alias] !== item ||
@@ -1357,8 +1184,7 @@ function compileFor(element, source, context) {
       }
       scopes.push(entry.scope);
     }
-    // Rows that no longer exist keep no scope, so a list that shrinks and grows
-    // again does not hand a new row the previous occupant's locals.
+    // Drop scopes past the end, so a list that grows again doesn't reuse old locals.
     rows.length = count;
 
     if (key === undefined) return scopes.map((child) => renderChunks(row, child));
@@ -1373,9 +1199,8 @@ function compileFor(element, source, context) {
 }
 
 /**
- * Compile one element as a template of its own. Used by the structural
- * directives, whose bodies must be separate lit templates so that lit can insert
- * and remove them as units.
+ * Compile one element as its own template, so lit can insert and remove a structural
+ * directive's body as a unit.
  *
  * @param {Element} element
  * @param {CompileContext} context
@@ -1434,9 +1259,8 @@ function interpolationWhere(index, context) {
 }
 
 /**
- * Compile a plain attribute containing one or more `{{ }}` expressions into one
- * value. Keeping it as one Lit part lets TrustedHTML reach sinks such as srcdoc
- * without being stringified by interpolation concatenation.
+ * Compile a plain attribute with `{{ }}` expressions into one value. A single Part
+ * lets TrustedHTML reach sinks such as `srcdoc` without string concatenation.
  *
  * @param {(string | number)[]} pieces
  * @param {CompileContext} context
@@ -1450,20 +1274,18 @@ function compileInterpolatedAttribute(pieces, context) {
 
   return (scope) =>
     compiled
-      // Preserve Lit's existing interpolation coercion for non-security
-      // attributes; objects intentionally render with their JavaScript string.
+      // Plain attributes keep lit's string coercion, so an object renders as its
+      // JavaScript string.
       // eslint-disable-next-line @typescript-eslint/no-base-to-string
       .map((piece) => (typeof piece === 'string' ? piece : String(piece(scope) ?? '')))
       .join('');
 }
 
 /**
- * Wrap a binding's evaluator in the sink resolved for it while compiling.
+ * Wrap a binding's evaluator in the sink chosen at compile time.
  *
- * A binding in no security context gets no sanitizer call at all — the common
- * case, since `class`, `id` and every `aria-` attribute land there. `nothing`
- * removes the attribute, which is what a nullish value has always meant here
- * and what a sanitizer says when it refuses one.
+ * A binding outside any security context gets no sanitizer. `nothing` removes the
+ * attribute for a nullish or refused value.
  *
  * @param {Evaluator} evaluate
  * @param {((value: unknown) => unknown | null) | null} sink
@@ -1484,8 +1306,7 @@ function toArray(value) {
   if (typeof value === 'object' && Symbol.iterator in value) {
     return [...(/** @type {Iterable<unknown>} */ (value))];
   }
-  // Not iterable: an empty list. `npm run templates:check` types the expression
-  // against the component, which is where a non-iterable `*for` is caught.
+  // A non-iterable renders nothing. `npm run templates:check` catches it statically.
   return [];
 }
 

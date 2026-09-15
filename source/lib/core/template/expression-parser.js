@@ -1,23 +1,16 @@
 /**
  * Parser for the template expression language.
  *
- * Kept apart from expression.js so Node-side tools can consume the exact AST
- * used by the browser without importing signals or browser environment flags.
- * The one import is dialect.js, which imports nothing itself, so this module
- * stays loadable directly from Node.
+ * Separate from expression.js, so Node tools can build the same AST without loading
+ * signals. Its only import is dialect.js, which imports nothing.
  *
- * That import is what gives the member policy one enforcement point. Every
- * member name written in the source — after `.`, as an object key, as a string
- * index — passes through here on the way to both adapters, so refusing a name
- * here refuses it for the evaluator and for the checker at once, instead of
- * asking each of the two to remember the rule at six sites. Names that only
- * exist at runtime, as in `row[key] = value`, cannot be seen from here and are
- * refused by the evaluator against the same list.
+ * Every member name written in the source passes through here, so refusing a name
+ * here refuses it for the evaluator and the checker at once. Names computed at
+ * runtime, as in `row[key] = value`, are refused by the evaluator.
  *
- * Relative rather than `@core/`, and the only relative import under source/lib:
- * the alias is an import-map entry the browser resolves and Node does not, and
- * cli/checks/template-check.mjs loads this file from Node by path. A sibling
- * specifier resolves to the same module in both.
+ * The import is relative, the only relative import under source/lib. `@core/` is an
+ * import map entry Node doesn't resolve, and the template checker loads this file by
+ * path.
  */
 
 import { refusedMember } from './dialect.js';
@@ -150,9 +143,8 @@ class Parser {
         const at = this.#peek()?.at ?? this.#source.length;
         const index = this.#assignment();
         this.#expect(']');
-        // `row['constructor']` is the same operation as `row.constructor` and is
-        // refused in the same place. A computed key is not visible here and is
-        // refused by the evaluator instead.
+        // `row['constructor']` is refused like `row.constructor`. The evaluator
+        // refuses computed keys.
         if (index.kind === 'literal' && typeof index.value === 'string') this.#refuseMember(index.value, at);
         node = { kind: 'index', object: node, index, optional: false };
       } else if (this.#eat('(')) node = { kind: 'call', callee: node, args: this.#arguments() };
@@ -207,8 +199,7 @@ class Parser {
             throw this.#error(key?.at ?? token.at, 'Object keys must be names or strings');
           }
           this.#index += 1;
-          // An object literal builds its result by assigning each key, so a
-          // reserved key here is a prototype write with different syntax.
+          // An object literal assigns each key, so a reserved key is a prototype write.
           this.#refuseMember(key.text, key.at);
           this.#expect(':');
           entries.push({ key: key.text, value: this.#assignment() });
@@ -221,8 +212,7 @@ class Parser {
   }
 
   /**
-   * The name after `.` or `?.`, whether the access ends up being read, called
-   * or written to.
+   * The name after `.` or `?.`, for a read, a call or a write.
    *
    * @returns {string}
    */

@@ -9,71 +9,44 @@ import { whenSettled } from '@core/forms/settled.js';
 const DEFAULT_DEBOUNCE = 300;
 
 /**
- * No asynchronous answer is held for any value.
- *
- * A sentinel rather than a boolean beside the stored value, because `undefined`
- * and `null` are both values a field can legitimately hold.
+ * Marks that no asynchronous answer is held. A symbol, because `undefined` and `null`
+ * are valid field values.
  */
 const UNCHECKED = Symbol('unchecked');
 
 /**
- * One editable value, and everything a control needs to know about it: the value,
- * the touched flag, the "may this error be shown yet" rule, the server error and
- * its clear-on-edit, and the dirty comparison. That list came from measuring a
- * screen that hand-rolled all five.
+ * One editable value, with its touched flag, error visibility rule, server error,
+ * dirty comparison and optional asynchronous check.
  *
- * Not Angular's `FormControl`: no `updateOn`, no `statusChanges`, and no
- * hierarchy. What this class shares with `FormGroup` and `FormArray` is the
- * `FormNode` interface in `@core/forms/types.js`, not a base class. ADR-0006.
+ * It isn't Angular's `FormControl`. There is no `updateOn`, no `statusChanges` and no
+ * class hierarchy. `FormField`, `FormGroup` and `FormArray` share the `FormNode`
+ * interface in `@core/forms/types.js`.
  *
- * The contract's half of this class is the untyped half. `snapshot` is
- * `value.value`, `fill` is `setValue`, `setServerError` writes the signal of
- * that name; each pair exists because a parent reading a node it cannot name
- * needs a signature that does not mention `T`.
+ * A disabled field skips its validators, reports `valid` and shows no error. It keeps
+ * its value, so `group.values` and `dirty` still include it. Angular drops disabled
+ * values, and a payload silently missing a column is the worse outcome.
  *
- * DISABLED IS A STATE, NOT A DELETION
+ * Values are whatever the control holds: a string, `string[]` for a multi-select, a
+ * boolean for a checkbox. The type follows the initial value. Convert to domain types
+ * at the service boundary.
  *
- * A disabled field stops being answerable for: its validators do not run, it
- * reports `valid`, and it shows no error. It keeps its value, so `group.values`
- * and `dirty` both still count it — deliberately unlike Angular. ADR-0007.
+ * Errors follow a fixed precedence. A server error outranks every validator, since
+ * some rules, like uniqueness, can only be checked there. It describes the value that
+ * was sent, so `setValue` clears it. Synchronous rules come next, and the asynchronous
+ * check runs only once they all pass.
  *
- * VALUES ARE WHATEVER THE CONTROL HOLDS
+ * `{ async: [notTaken()] }` adds an asynchronous check. The field debounces
+ * keystrokes, aborts a check the next keystroke supersedes, aborts when its owner's
+ * lifetime ends and remembers the last value it checked.
  *
- * Usually a string, because that is what a DOM control gives back; `string[]` for
- * a multi-select, a boolean for a checkbox. The type parameter follows the initial
- * value and the validators are typed against it. Conversion happens at the service
- * boundary, not per keystroke. ADR-0008.
+ * When the owner's lifetime ends, the field stops pending and drops any late answer,
+ * even from a validator that ignores its abort signal, so `whenSettled()` never hangs.
  *
- * ERROR PRECEDENCE, WHICH IS THE ONE RULE WORTH READING
+ * No check runs for the initial value or a value set by `reset`. Those come from the
+ * server, and a saved customer's own address must not report as taken.
  *
- * A server error outranks every validator: it is the authority, and some rules —
- * a name and an email address are unique — cannot be checked here at all. That
- * answer is about the value that was *sent*, so `setValue` clears it. Left in
- * place it outlives the correction, and the form looks broken to the one user who
- * did what it asked.
- *
- * Below the server come the synchronous rules, and below those the asynchronous
- * one, which never collides with them: it does not run until they all pass.
- *
- * AN ASYNCHRONOUS RULE IS A ROUND TRIP THIS FIELD OWNS
- *
- * `{ async: [notTaken()] }` and the field debounces the keystrokes, aborts the
- * check the next keystroke supersedes, aborts again when its owner's lifetime
- * does, and remembers the value it last got an answer for so a re-render does not
- * ask twice. What an application writes is a function from a value to a code.
- * ADR-0103.
- *
- * The owner's end is terminal. The field stops being pending, drops whatever the
- * validator answers afterwards, and holds no answer for the value it was asking
- * about — a validator that ignores its abort signal cannot report on a screen that
- * has gone, and cannot leave a submit awaiting `whenSettled()` forever. ADR-0114.
- *
- * A check never runs for the value the field was *built* with, or for one a
- * `reset` installed. Those came from the server, and a form opened on a saved
- * customer would otherwise report that customer's own address as taken.
- *
- * `pending` is the state a submit has to respect: not valid, not invalid, no
- * error to show. `whenSettled()` is how a submit waits for it.
+ * While `pending`, the field is neither valid nor showing an error. A submit waits
+ * with `whenSettled()`.
  *
  * @template T
  * @implements {FormNode}
@@ -82,13 +55,12 @@ export class FormField {
   /** @type {Signal<T>} */
   value;
 
-  /** Left at least once. Errors stay quiet until then. */
+  /** True once the control has been left. Errors stay hidden until then. */
   touched = signal(false);
 
   /**
-   * The form has been submitted. Written by the group, and the second half of
-   * the timing rule: on submit every error becomes visible at once, including
-   * the ones under fields the user never reached.
+   * True once the form was submitted. The group writes it, and it makes every error
+   * visible, including errors under fields the user never reached.
    */
   submitted = signal(false);
 
@@ -96,17 +68,14 @@ export class FormField {
   serverError = signal('');
 
   /**
-   * The code the last settled asynchronous check produced, for the value it
-   * checked. Empty while nothing has been checked, and cleared the moment the
-   * value moves away from the one it describes.
+   * The code from the last settled asynchronous check. Empty until a check settles,
+   * and cleared as soon as the value changes.
    */
   asyncError = signal('');
 
   /**
-   * A check is waiting out its debounce or is in flight.
-   *
-   * False while the field is disabled, whichever way it was switched off: a form
-   * that disables itself to save must not be held up by a check whose answer it
+   * True while a check waits out its debounce or is in flight. Always false while
+   * disabled, so a form that disables itself to save isn't held up by a check it
    * would ignore.
    *
    * @type {ReadonlySignal<boolean>}
@@ -114,12 +83,10 @@ export class FormField {
   pending;
 
   /**
-   * Not editable: by this field's own switch, or by the group's.
+   * True when this field or its group disabled it. Write it with `setDisabled`.
    *
-   * Read it, write it with `setDisabled`. The two-source shape is why it is a
-   * computed rather than a plain signal like `touched`: a form disabled while it
-   * saves must not, on re-enabling, switch on the one field a domain rule had
-   * disabled all along.
+   * It combines two sources, so re-enabling a form after a save doesn't enable a field
+   * that a domain rule disabled.
    *
    * @type {ReadonlySignal<boolean>}
    */
@@ -138,8 +105,7 @@ export class FormField {
   dirty;
 
   /**
-   * `''` when this field is the invalid one, `null` when it is not. A leaf has
-   * no path below it, so those are the only two answers it can give.
+   * `''` when this field is invalid, `null` otherwise.
    *
    * @type {ReadonlySignal<string | null>}
    */
@@ -152,9 +118,8 @@ export class FormField {
   #ownDisabled = signal(false);
 
   /**
-   * The group's half, once there is a group. A signal holding a signal rather
-   * than a plain property, because `disabled` is computed before the group links
-   * it and a computed cannot depend on a value nothing notifies it about.
+   * The group's half of `disabled`. A signal holding a signal, because `disabled` is
+   * computed before the group links it.
    *
    * @type {Signal<ReadonlySignal<boolean> | null>}
    */
@@ -174,13 +139,13 @@ export class FormField {
   /** Waiting or in flight, before `disabled` is taken into account. */
   #checking = signal(false);
 
-  /** The check in flight, or none. Anything else that resolves is superseded. */
+  /** The check in flight. A check that resolves after being replaced is ignored. */
   /** @type {AbortController | undefined} */
   #request;
 
   /**
-   * Drops the owner listener of the check that is waiting or in flight. One per
-   * scheduled check, cleared on every path that ends one.
+   * Removes the owner listener of the current check. Cleared on every path that ends a
+   * check.
    *
    * @type {(() => void) | undefined}
    */
@@ -190,8 +155,7 @@ export class FormField {
   #timer;
 
   /**
-   * The value `asyncError` is an answer about, when there is one. A sentinel
-   * rather than a flag beside it, because `undefined` is a value a field can hold.
+   * The value `asyncError` answers for, or `UNCHECKED`.
    *
    * @type {T | typeof UNCHECKED}
    */
@@ -214,35 +178,29 @@ export class FormField {
     this.#debounce = options.debounce ?? DEFAULT_DEBOUNCE;
     this.#lifetime = options.lifetime;
 
-    // The first failing code, which is why validators are ordered: `required`
-    // before `minLength` means an empty field says "required" rather than
-    // "too short", and a field that reported both would be a field showing two
-    // sentences for one mistake.
+    // Validators run in order and the first failure wins, so `required` before
+    // `minLength` reports "required" for an empty field.
     const own = computed(() => this.#validateSync(this.value.value));
 
     this.disabled = computed(() => this.#ownDisabled.value || (this.#inheritedDisabled.value?.value ?? false));
 
-    // A check whose answer would be ignored does not hold a submit up.
+    // A check whose answer would be ignored doesn't hold up a submit.
     this.pending = computed(() => !this.disabled.value && this.#checking.value);
 
-    // A disabled field has nothing to say. The server's answer is kept rather
-    // than cleared — it describes a value that is still in the form and still
-    // going to be sent — and reappears if the field is enabled again.
+    // A disabled field shows no error. The server error is kept, because its value is
+    // still in the form, and it reappears if the field is enabled.
     this.error = computed(() => {
       if (this.disabled.value) return '';
       if (this.serverError.value !== '') return this.serverError.value;
       return own.value !== '' ? own.value : this.asyncError.value;
     });
 
-    // `valid` ignores the server's answer on purpose. A 422 describes a value
-    // that has since been edited or is about to be resubmitted, and a form that
-    // treated it as invalidity would refuse the submit that is the only way to
-    // find out whether the new value is acceptable.
+    // `valid` ignores the server error. A 422 describes a value that was edited or is
+    // about to be resubmitted, and resubmitting is the only way to learn whether the
+    // new value is accepted.
     //
-    // A disabled field is valid for a blunter reason: there is no control to
-    // correct, so a form that refused to submit for it would refuse for good.
-    // A pending field is not valid. The value is not known to be acceptable, and
-    // the alternative — reporting it valid — is how an unchecked value is sent.
+    // A disabled field is valid, because the user can't correct it. A pending field
+    // isn't, because its value isn't known to be acceptable yet.
     this.valid = computed(
       () => this.disabled.value || (own.value === '' && this.asyncError.value === '' && !this.#checking.value),
     );
@@ -258,9 +216,8 @@ export class FormField {
   }
 
   /**
-   * The documented way to write the value. `field.value.value = x` reaches the
-   * same signal and skips both of the rules below, which is why screens are told
-   * to call this.
+   * Write the value, clear the server error and schedule the asynchronous check.
+   * Writing `field.value.value` directly skips the last two.
    *
    * @param {T} next
    */
@@ -270,21 +227,19 @@ export class FormField {
     this.#scheduleCheck();
   }
 
-  /** The control was left. Idempotent, so a blur handler can call it freely. */
+  /** Mark the control as left. Idempotent, so a blur handler can call it freely. */
   touch() {
     if (!this.touched.value) this.touched.value = true;
   }
 
   /**
-   * Switch this field off, or back on.
+   * Disable or enable this field.
    *
-   * Only this field's own half: a field the group has disabled stays disabled
-   * until the group enables it, which is what makes `setDisabled(false)` on a
-   * saving form a no-op rather than a hole in the busy state.
+   * This sets only the field's own half. A field the group disabled stays disabled
+   * until the group enables it.
    *
-   * `setValue`, `patch` and `reset` still work on a disabled field. They are how
-   * a screen fills a control the user may not edit, and refusing them would mean
-   * a loaded form could not show what it loaded.
+   * `setValue`, `patch` and `reset` still work while disabled, so a screen can fill a
+   * read-only control.
    *
    * @param {boolean} next
    */
@@ -293,11 +248,8 @@ export class FormField {
   }
 
   /**
-   * Take the group's disabled state as a second source.
-   *
-   * Called by `FormGroup` for each of its fields, and the reason a field does
-   * not hold a reference to its group: one signal is the whole of what a field
-   * needs from above, and a link that narrow cannot grow into a hierarchy.
+   * Use the group's disabled state as a second source. `FormGroup` calls this for
+   * each member, and the field keeps no other reference to its group.
    *
    * @param {ReadonlySignal<boolean>} source
    */
@@ -306,15 +258,11 @@ export class FormField {
   }
 
   /**
-   * Back to a clean state, at `next` or at the value this field was built with.
+   * Return to a clean state at `next`, or at the baseline.
    *
-   * Also moves the baseline, which is what makes a saved form stop being dirty
-   * without being rebuilt: the values that came back from the server are the new
-   * "unchanged".
-   *
-   * Disabled is not cleaned up here. It is the screen's rule about who may edit
-   * what, not a trace the user left, and a reset that switched a read-only field
-   * back on would hand the wrong person a control.
+   * The baseline moves too, so a saved form stops being dirty without a rebuild. The
+   * disabled state is left alone, because it's the screen's rule about who may edit,
+   * and a reset must not re-enable a read-only field.
    *
    * @param {T} [next]
    */
@@ -331,8 +279,8 @@ export class FormField {
   }
 
   /**
-   * Resolve once no asynchronous check is waiting or in flight. What a submit
-   * awaits before asking `markSubmitted()`.
+   * Resolve once no asynchronous check is waiting or in flight. A submit awaits this
+   * before calling `markSubmitted()`.
    *
    * @returns {Promise<void>}
    */
@@ -343,10 +291,7 @@ export class FormField {
   /* ── Asynchronous checks ────────────────────────────────────────────────── */
 
   /**
-   * The first failing synchronous code, which is why validators are ordered:
-   * `required` before `minLength` means an empty field says "required" rather
-   * than "too short", and a field that reported both would be a field showing two
-   * sentences for one mistake.
+   * The first failing synchronous code, or the empty string.
    *
    * @param {T} value
    * @returns {string}
@@ -360,11 +305,8 @@ export class FormField {
   }
 
   /**
-   * Decide what the current value owes an asynchronous check, and start the clock
-   * if it owes one.
-   *
-   * Four of the five branches end without a request, which is the point: the
-   * cheapest check is the one a keystroke does not cause.
+   * Decide whether the current value needs an asynchronous check, and start the
+   * debounce if it does. Most branches end without a request.
    */
   #scheduleCheck() {
     if (this.#asyncValidators.length === 0) return;
@@ -372,22 +314,19 @@ export class FormField {
 
     const value = this.value.value;
 
-    // Already answered for this exact value. A control that re-emits `input` with
-    // an unchanged value, or a field written back after a render, asks nothing.
+    // Already answered for this exact value, so a re-emitted `input` asks nothing.
     if (this.#checked !== UNCHECKED && this.#equals(/** @type {T} */ (this.#checked), value)) return;
 
     this.#checked = UNCHECKED;
 
-    // A malformed address is not worth a round trip, and "taken" under a value the
-    // user has not finished typing is the wrong sentence for the wrong reason.
+    // A value that fails a synchronous rule isn't worth a round trip.
     if (this.#validateSync(value) !== '') {
       this.asyncError.value = '';
       return;
     }
 
-    // Nothing is listening any more: not asking is the same answer as asking and
-    // dropping the response, one request cheaper. The value stays unchecked, so a
-    // field whose owner comes back asks rather than carrying an answer it never got.
+    // The owner is gone, so skip the request. The value stays unchecked, so a
+    // returning owner asks again.
     const lifetime = this.#ownerLifetime();
     if (lifetime?.aborted === true) {
       this.asyncError.value = '';
@@ -398,17 +337,16 @@ export class FormField {
     this.#request = request;
 
     if (lifetime !== undefined) {
-      // Bound to the owner from the keystroke rather than from the request, so an
-      // owner that ends during the debounce window ends the check in it.
+      // Bind to the owner at scheduling time, so an owner that ends during the
+      // debounce ends the check too.
       const abandonWithOwner = () => {
         request.abort(lifetime.reason);
         if (this.#request === request) this.#abandonCheck();
       };
 
-      // Two removals, for the two ways a check ends. `signal: request.signal` covers
-      // a supersession whose validator never settles; `#release` covers one that
-      // settles, which never aborts and would otherwise leave a listener per
-      // keystroke on a lifetime that outlives all of them. ADR-0076.
+      // `signal: request.signal` removes the listener when a check is superseded, and
+      // `#release` removes it when a check settles. Without both, a long-lived lifetime
+      // would collect one listener per keystroke. ADR-0076.
       lifetime.addEventListener('abort', abandonWithOwner, { once: true, signal: request.signal });
       this.#release = () => lifetime.removeEventListener('abort', abandonWithOwner);
     }
@@ -424,11 +362,8 @@ export class FormField {
   }
 
   /**
-   * The owner's lifetime right now.
-   *
-   * Read per check rather than held, because an element's lifetime is a new
-   * signal after every re-attach: a field handed `() => this.lifetime` that kept
-   * the first one would refuse to check anything after a move.
+   * The owner's current lifetime. Read per check, because an element gets a new
+   * lifetime signal after every re-attach.
    *
    * @returns {AbortSignal | undefined}
    */
@@ -437,7 +372,7 @@ export class FormField {
   }
 
   /**
-   * Ask every asynchronous validator in order, first failure wins.
+   * Run every asynchronous validator in order. The first failure wins.
    *
    * @param {T} value
    * @param {AbortController} request
@@ -453,8 +388,7 @@ export class FormField {
       }
       this.#settle(value, code);
     } catch {
-      // A check that could not run has not found anything wrong. The write is what
-      // decides, the same way `resource` refuses to turn a rejection into a value.
+      // A check that couldn't run found nothing wrong, and the write decides.
       if (this.#request === request) this.#settle(value, '');
     } finally {
       if (this.#request === request) {
@@ -493,11 +427,8 @@ export class FormField {
   /**
    * The owner's lifetime ended. Drop the check and hold no answer for its value.
    *
-   * Aborting only *asks* a validator to stop, and a validator that ignores the
-   * signal is the case this closes. The request stops being the current one, so a
-   * late answer is dropped rather than published under an owner that has gone, and
-   * `pending` goes false, so a submit awaiting `whenSettled()` is not left waiting
-   * on a promise nothing will settle. ADR-0114.
+   * Aborting only asks a validator to stop. Clearing the current request drops a late
+   * answer, and clearing `pending` releases a submit waiting on `whenSettled()`.
    */
   #abandonCheck() {
     this.#cancelCheck();
@@ -506,11 +437,9 @@ export class FormField {
 
   /* ── The FormNode contract ──────────────────────────────────────────────
    *
-   * Everything below is a one-line restatement of something above, under a name
-   * that mentions no type parameter. A `FormGroup` holding this field does not
-   * know it is holding a field, so it cannot call `setValue(next: T)`; it calls
-   * `fill(value: unknown)`, and the cast happens here, once, where the field is
-   * the thing that knows what it holds.
+   * Untyped versions of the members above. A parent group can't call
+   * `setValue(next: T)` without knowing `T`, so it calls `fill(value: unknown)` and
+   * the cast happens here.
    */
 
   /** @returns {T} */
@@ -519,11 +448,8 @@ export class FormField {
   }
 
   /**
-   * `''` when this field is carrying the server's answer, `null` when it is not.
-   *
-   * A disabled field says `null` even while it holds one: the caller is a screen
-   * about to focus what this names, and sending focus to a control the user
-   * cannot type in is the failure that looks like nothing happening.
+   * `''` when this field carries a server error, `null` otherwise. A disabled field
+   * returns `null`, because the caller is about to focus the control it names.
    *
    * @returns {string | null}
    */
@@ -537,12 +463,8 @@ export class FormField {
   }
 
   /**
-   * Make this field's error visible and report whether it may be sent.
-   *
-   * `touched` is left alone. Submitting is not visiting, and a form that marked
-   * every field touched would report the user as having been somewhere they
-   * were not — which is the flag `visibleError` reads to decide the *other* half
-   * of the timing rule.
+   * Make this field's error visible and report whether it may be sent. `touched`
+   * stays as it is, because submitting isn't visiting.
    *
    * @returns {boolean}
    */
@@ -574,7 +496,7 @@ export class FormField {
 }
 
 /**
- * One field.
+ * Create a field.
  *
  *     const name = field('', [required(), maxLength(80)]);
  *     const segment = field('', [required()]);
@@ -592,9 +514,8 @@ export class FormField {
  * @returns {FormField<Widened<T>>}
  */
 export function field(initial, validators, options) {
-  // Cast rather than parametrise the class: `Signal<T>` is invariant, so
-  // `FormField<''>` is not a `FormField<string>` however obviously it should be.
-  // The widening is a fact about inference, not about the field.
+  // A cast, because `Signal<T>` is invariant and `FormField<''>` isn't assignable to
+  // `FormField<string>`. The widening only fixes inference.
   return /** @type {FormField<Widened<T>>} */ (
     /** @type {unknown} */ (
       new FormField(
@@ -609,10 +530,8 @@ export function field(initial, validators, options) {
 /**
  * The default comparison behind `dirty`.
  *
- * Element-wise for arrays, because a multi-select's value is one, and
- * `Object.is` on two arrays holding the same three codes says they differ — a
- * form that is dirty the moment it loads. Order counts: reordering a selection
- * is an edit.
+ * Arrays compare element by element, so a multi-select isn't dirty on load. Order
+ * counts, because reordering a selection is an edit.
  *
  * @param {unknown} left
  * @param {unknown} right
