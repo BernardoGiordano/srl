@@ -14,12 +14,12 @@
  * message meant knowing about scheduling: a second file opened within the debounce window
  * replaced the first one's pending validation, and the first never got diagnostics at
  * all. Ordering is not a protocol concern, and freshness is not a per-message decision.
- * ADR-0091.
+ * ADR-0090.
  *
  * Execution moved here for the same reason. A check is one synchronous compiler call, so
  * the only bound the protocol thread had was a time budget, and a check the budget
  * cancelled was retried without one. Freshness and execution are one decision: the reason
- * to stop a check is that its answer stopped being wanted. ADR-0095.
+ * to stop a check is that its answer stopped being wanted. ADR-0090.
  *
  * WHAT IT DELIBERATELY DOES NOT DO
  *
@@ -316,7 +316,7 @@ export class LiveAnalysis {
    *
    * This is what replaces the time budget. A check stops because the text it is about has
    * been replaced, not because a clock ran out, so no document keeps losing its answer to
-   * a deadline. ADR-0095.
+   * a deadline. ADR-0090.
    */
   #abandonSuperseded() {
     const flight = this.#inFlight;

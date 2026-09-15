@@ -1,4 +1,4 @@
-# ADR-0032: Runtime dependencies are vendored and integrity-pinned, never fetched from a CDN
+# ADR-0032: Runtime dependencies are vendored and integrity-pinned
 
 - Status: accepted
 - Date: 2026-08-12
@@ -6,35 +6,23 @@
 
 ## Context
 
-A buildless application resolves bare specifiers through an import map, and the obvious
-place to point that map is a CDN. It was tried, and it failed on a real dependency:
-jsDelivr's `/+esm` bundle for `@vaadin/router` pulled three further modules, one at a
-caret range, and jsDelivr's own documentation says not to use Subresource Integrity with
-dynamically generated files. There is no way to pin that graph, so there is no way to know
-what executes tomorrow. The router in this repository is hand-written as a direct result.
+A buildless application resolves bare specifiers through an import map, and a CDN is the obvious target. It failed in practice. jsDelivr's `/+esm` build of `@vaadin/router` pulled in three more modules, one at a caret range, and jsDelivr advises against Subresource Integrity on generated files. A graph like that can't be pinned, so nobody can know what runs tomorrow. The router in this repository is hand-written as a result.
 
-Vendoring without a hash is not the fix on its own. It swaps a CDN nobody controls for a
-folder anybody with commit access can edit silently.
+Vendoring without hashes only swaps an uncontrolled CDN for a folder anyone with commit access can edit.
 
 ## Decision
 
-Runtime dependencies are committed under `source/lib/vendor/`, served same-origin, and
-pinned by integrity hash in every import map. `npm run vendor` fetches and verifies them;
-`npm run verify` fails on an undeclared bare specifier, a cross-origin entry, a vendored
-file with no hash, and a `node_modules` version that differs from the vendored one.
+Runtime dependencies are committed under `source/lib/vendor/`, served from the same origin and pinned by integrity hash in every import map. `npm run vendor` fetches and verifies them. `npm run verify` fails on:
 
-That last check is the sharpest edge in the architecture: `tsc` reads `node_modules` and
-the browser reads `source/lib/vendor`, so without it the type checker validates against an
-API the browser will not have, and nothing else ties the two together.
+- an undeclared bare specifier
+- a cross-origin import map entry
+- a vendored file without a hash
+- a `node_modules` version that differs from the vendored copy
+
+The last check matters most. `tsc` reads `node_modules` and the browser reads `source/lib/vendor`, and without the check the types could describe an API the browser doesn't have.
 
 ## Consequences
 
-The hash is what makes `source/lib/vendor` a control rather than a copy: the bytes that
-run are the bytes that were reviewed, and a change to them is a change to a diff.
-
-Upgrading a dependency is a deliberate act with a verification step, rather than something
-a CDN can do on a Tuesday.
-
-The CDN checks stay in the verifier even though the maps point only at `/lib/vendor`
-today, because re-adding a remote entry is one line and the pinning requirement has to
-survive it.
+- The bytes that run are the bytes that were reviewed, and changing them shows up in a diff.
+- Upgrading a dependency is a deliberate step with verification.
+- The CDN checks stay even though no map points at a CDN today, because adding one back is a one-line change.

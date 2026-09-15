@@ -56,11 +56,11 @@
     // modules import each other several levels deep, so the depth that clears those
     // errors depends on what the consumer imports, and raising it lets every other
     // installed package's JavaScript in too, where the consumer's `strict` checks it.
-    // Declarations do not count against the depth. ADR-0120.
+    // Declarations do not count against the depth. ADR-0066.
     //
     // The bundled path does not come through here at all. It resolves `@srljs/core`
     // through `exports`, which names barrels over the same tree, so a consumer with a
-    // bundler needs none of this file. ADR-0108.
+    // bundler needs none of this file. ADR-0066.
     //
     // Depth 1 is for the subpaths `exports` names as JavaScript, the test harness
     // among them. tsc reads those files for their JSDoc, and their own `@core/`

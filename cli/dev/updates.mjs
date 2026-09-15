@@ -7,7 +7,7 @@
  * debounce that turned three writes into one event also threw away which files were
  * in it, and the browser could do nothing with "something changed" except start the
  * page again. An edited `.html` file is now a revision the page can apply
- * ([ADR-0111](../../docs/adr/0111-an-edited-template-revises-the-page-rendering-it.md)),
+ * ([ADR-0111](../../docs/adr/0111-development-edits-update-the-running-page.md)),
  * and that needs the identity the old message dropped.
  *
  * What this owns, so that neither adapter repeats it:

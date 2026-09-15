@@ -146,7 +146,7 @@ describe('manifest admission', () => {
       });
       assert.sameArray([...(admitted.templateGroups.entry ?? [])], ['/assets/templates/a.html']);
       // The union is derived, entry first, so a caller that wants every template
-      // this artifact holds reads one property and not a partition. ADR-0086.
+      // this artifact holds reads one property and not a partition. ADR-0081.
       assert.sameArray(
         [...admitted.templateFiles],
         ['/assets/templates/a.html', '/assets/templates/b.html'],
@@ -168,7 +168,7 @@ describe('manifest admission', () => {
     it('refuses a document that names its templates both ways', () => {
       // A generator that could not decide. One document cannot say both which chunk
       // needs what and that everything is needed at once, and the runtime would have
-      // to pick — quietly, and differently from the next reader. ADR-0086.
+      // to pick — quietly, and differently from the next reader. ADR-0081.
       assert.throws(
         () =>
           admit({

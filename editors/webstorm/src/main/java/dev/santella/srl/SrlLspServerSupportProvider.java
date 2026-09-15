@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 /**
  * The WebStorm half of ADR-0090's thin launcher: it turns a file-open event into one
  * project's session. Which files count, when a server may start and what a project is told
- * are {@link SrlProjectSession} and {@link SrlEditorSession}. ADR-0094.
+ * are {@link SrlProjectSession} and {@link SrlEditorSession}. ADR-0090.
  */
 public final class SrlLspServerSupportProvider implements LspServerSupportProvider {
   @Override

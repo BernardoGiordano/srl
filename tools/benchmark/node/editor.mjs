@@ -256,7 +256,7 @@ function positionAt(source, offset) {
  * completion and the first diagnostics an editor asks of it.
  *
  * `firstCompletion` is the interactive thread's own cold cost — the program build behind
- * `templateExpressionMembers()` — which ADR-0095 left as the next measurable thing.
+ * `templateExpressionMembers()` — which ADR-0090 left as the next measurable thing.
  *
  * @param {NodeWorkloadContext} context
  * @param {number} scale

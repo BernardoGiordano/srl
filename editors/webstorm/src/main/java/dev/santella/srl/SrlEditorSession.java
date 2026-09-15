@@ -14,7 +14,7 @@ import java.util.function.Supplier;
  * The replaced path-or-null lookup could not tell a project that is not built on srl from
  * one whose manifest asks for the toolchain and has none installed, so both were silence.
  * Readiness, the message a project gets at most once, and start policy live here instead of
- * around the file-open callback. ADR-0094.
+ * around the file-open callback. ADR-0090.
  *
  * The disk, the notifications and the LSP starter are injected, so every outcome is driven
  * by a test without an IDE.

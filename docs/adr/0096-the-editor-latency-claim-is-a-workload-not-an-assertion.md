@@ -6,7 +6,7 @@
 
 ## Context
 
-ADR-0091 and ADR-0095 both ended with a measurement they could not make. The
+ADR-0090 and ADR-0090 both ended with a measurement they could not make. The
 responsiveness they exist for was one assertion inside a correctness test: a single
 completion, sent behind two queued validations, asserted to answer in under 1000 ms. That
 is a hundred times the latency an editor needs and one sample wide, so it could not tell a
@@ -65,7 +65,7 @@ gating a cold start at all.
 The numbers it first reported, on an Apple M3: a cold session reaches its first diagnostics
 in 2.3 s over one application and 4.0 s over ten, of which 0.7 s and 1.3 s are
 `initialize`. A cold host-expression completion is 9 ms, which answers the question
-ADR-0095 left open — the surviving main-thread program build is not what a completion waits
+ADR-0090 left open — the surviving main-thread program build is not what a completion waits
 for. Warm interactive requests are 0.7–1.2 ms median and 4.3–5.3 ms p95 against a 100 ms
 target, and project scale moves them by nothing measurable.
 

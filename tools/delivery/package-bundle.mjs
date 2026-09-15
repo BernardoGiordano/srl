@@ -33,7 +33,7 @@
  * too — that is ADR-0033's guarantee and nothing here weakens it. What each member
  * contributes is now the member's own answer: an export marked `@internal` stays
  * importable by path and leaves the bundle's flat namespace. `cli/package/door.mjs`
- * owns that rule; ADR-0077 is why.
+ * owns that rule; ADR-0066 is why.
  *
  * TEMPLATES
  *
@@ -55,7 +55,7 @@
  * emitted into a relative path — which is arithmetic rather than a second
  * resolution, because the tree mirrors the source and a relative path is the same
  * in both. Each bundle then gets a barrel over its members' declarations, and that
- * barrel is what `exports` points a `types` condition at. ADR-0108.
+ * barrel is what `exports` points a `types` condition at. ADR-0066.
  *
  * The declarations are not rolled up into one file. A rollup has to rename every
  * colliding local type and reproduce tsc's own emit rules to do it, and nothing is
@@ -167,7 +167,7 @@ async function membersOf(bundle) {
  * anywhere — but each member is now asked which of its exports are part of the
  * door, so a name the source documents as test-only or internal does not become a
  * promise to a registry consumer. `cli/package/door.mjs` owns the rule and the
- * marker; this reads the files for it. ADR-0077.
+ * marker; this reads the files for it. ADR-0066.
  *
  * Read once and used twice, by the JavaScript barrel and by the declaration barrel:
  * one answer, so the bundle's runtime surface and its type surface are the same set

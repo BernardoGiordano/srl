@@ -366,7 +366,7 @@ which binding ran four hundred times, and in this framework those are separate q
 from each other: an element renders when a signal its `render()` read changed or when a
 reactive property was written, and a compiled binding patches its own Lit Part when a
 signal *its* expression read changed, with no render anywhere
-([ADR-0018](../adr/0018-binding-scopes-keep-their-identity.md)). A timer around renders
+([ADR-0014](../adr/0014-compiled-templates-and-scopes-keep-their-identity.md)). A timer around renders
 sees only half of it.
 
 `@core/diagnostics/updates.js` records both, around whatever you want explained:
@@ -414,7 +414,7 @@ Read the causes literally:
 | `signal` | both | the effect behind it re-ran. **Which** signal is not recorded |
 | `properties` | elements | a reactive property was written, or `requestUpdate()` was called. The names follow in brackets |
 | `reconnect` | both | the element re-entered the DOM, or the directive reconnected |
-| `template` | elements | an edit to the element's `.html` file replaced its compiled template ([ADR-0111](../adr/0111-an-edited-template-revises-the-page-rendering-it.md)). Development only |
+| `template` | elements | an edit to the element's `.html` file replaced its compiled template ([ADR-0111](../adr/0111-development-edits-update-the-running-page.md)). Development only |
 | `definition` | elements | an edit to the element's `.js` file replaced its class body ([ADR-0113](../adr/0113-a-tag-keeps-its-class-and-adopts-an-edited-body.md)). Development only |
 | `rerender` | bindings | the scope it reads bumped its version: the host rendered, or its `*for` row got a new item |
 | `rebind` | bindings | the Part now holds a different expression or scope — an `*if` branch that flipped, or a keyed row that moved |

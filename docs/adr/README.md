@@ -1,31 +1,21 @@
 # Decision records
 
-Why the code is shaped the way it is, one decision per file, each with a number that
-never changes.
-
-Source comments say what a line does and why *that line* is the way it is. They do not
-carry the narrative of how a decision was reached — the alternative that was tried, what
-it cost, what changed. That narrative is here, and a comment reaches it by number:
+Each record explains one decision: what forced it, what was chosen and what it costs. Source comments cite records by number.
 
 ```js
-// Deepest-first, so the specific question reaches the user first. ADR-0004.
+// A link click has no caller to reject, so failure is a signal. ADR-0003.
 ```
 
-The number is the whole interface. Files may be renamed and retitled, this directory may
-be reorganised, and the citation still resolves — which is what a README section number
-does not do, and why nothing in `source/` cites one.
+Numbers are permanent and never reused, so the index has gaps.
 
-`npm run docs:adr` checks that every record is well formed and every citation resolves.
-`npm run docs:adr:write` regenerates the table below. Start a new record from
-[the template](0000-template.md).
+`npm run docs:adr` checks that every record is well formed and every citation resolves. `npm run docs:adr:write` regenerates the index. Start a new record from [the template](0000-template.md).
 
 <!-- generated:adr-index -->
 
 | Record | Decision | Status | Affects |
 |---|---|---|---|
-| [ADR-0001](0001-element-defaults-in-their-own-cascade-layer.md) | Framework element defaults ship in their own cascade layer | accepted | `source/lib/core/elements/element-defaults.js`, `source/lib/core/navigation/router.js` |
-| [ADR-0002](0002-a-navigation-is-one-transaction.md) | A navigation is staged and committed as one transaction | accepted | `source/lib/core/navigation/router.js` |
-| [ADR-0003](0003-navigation-failure-is-state.md) | Navigation failure is state, not a rejected promise | accepted | `source/lib/core/navigation/router.js` |
+| [ADR-0002](0002-a-navigation-is-one-transaction.md) | A navigation is one transaction | accepted | `source/lib/core/navigation/router.js` |
+| [ADR-0003](0003-navigation-failure-is-state.md) | Navigation failure is state | accepted | `source/lib/core/navigation/router.js` |
 | [ADR-0004](0004-routes-are-flattened-at-configuration-time.md) | Routes are flattened at configuration time | accepted | `source/lib/core/navigation/router.js` |
 | [ADR-0006](0006-formnode-is-an-interface.md) | FormNode is an interface, not a base class | accepted | `source/lib/core/forms/` |
 | [ADR-0007](0007-a-disabled-field-keeps-its-value.md) | A disabled field keeps its value in the form's payload | accepted | `source/lib/core/forms/field.js`, `source/lib/core/forms/group.js` |
@@ -33,27 +23,24 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0009](0009-a-form-arrays-dirty-baseline-is-its-row-keys.md) | A form array's dirty baseline is its row keys | accepted | `source/lib/core/forms/array.js` |
 | [ADR-0010](0010-manifest-admission-is-one-whole-document-decision.md) | Manifest admission is one whole-document decision | accepted | `source/lib/core/remotes/manifest-policy.js`, `tools/checks/verify-deps.mjs` |
 | [ADR-0011](0011-formcontrol-is-a-duck-typed-contract.md) | FormControl is a duck-typed contract, not a base class | accepted | `source/components/inputs/form-control.js`, `source/components/inputs/ui-field.js` |
-| [ADR-0012](0012-every-manifest-url-is-same-origin.md) | Every manifest URL is a same-origin root-relative path | accepted | `source/lib/core/remotes/manifest-policy.js` |
-| [ADR-0013](0013-one-http-client-with-an-injected-transport.md) | One HTTP client in the library, with the transport as a parameter | accepted | `source/lib/core/http/client.js`, `source/lib/auth/session-fetch.js`, application services |
-| [ADR-0014](0014-compiled-templates-are-cached-per-url.md) | A compiled template is cached per URL and its strings array is never rebuilt | accepted | `source/lib/core/template/template.js` |
-| [ADR-0015](0015-one-synchronous-preference-boundary.md) | One synchronous persistence boundary for non-auth preferences | accepted | `source/lib/core/preferences/persistence.js`, `tools/checks/verify-deps.mjs` |
-| [ADR-0016](0016-a-remote-reaches-the-shell-only-through-its-host-context.md) | A remote reaches the shell only through its mount-scoped host context | accepted | `source/lib/core/remotes/mfe.js`, `source/lib/host/remote-host.js` |
-| [ADR-0017](0017-remotes-share-dependencies-by-url-identity.md) | Remotes share the shell's dependencies by URL identity | accepted | `source/lib/core/remotes/mfe.js`, `app.manifest.json`, `index.html` |
-| [ADR-0018](0018-binding-scopes-keep-their-identity.md) | A binding scope keeps its identity for the life of its host or row | accepted | `source/lib/core/template/template.js` |
+| [ADR-0013](0013-one-http-client-with-an-injected-transport.md) | One HTTP client with an injected transport | accepted | `source/lib/core/http/client.js`, `source/lib/auth/session-fetch.js` |
+| [ADR-0014](0014-compiled-templates-and-scopes-keep-their-identity.md) | Compiled templates and binding scopes keep their identity | accepted | `source/lib/core/template/template.js` |
+| [ADR-0015](0015-one-synchronous-preference-boundary.md) | One synchronous preference boundary | accepted | `source/lib/core/preferences/persistence.js`, `tools/checks/verify-deps.mjs` |
+| [ADR-0016](0016-a-remote-reaches-the-shell-only-through-its-host-context.md) | A remote reaches the shell only through its host context | accepted | `source/lib/core/remotes/mfe.js`, `source/lib/host/remote-host.js` |
+| [ADR-0017](0017-remotes-share-dependencies-by-url-identity.md) | Remotes share dependencies by URL identity | accepted | `source/lib/core/remotes/mfe.js`, `app.manifest.json`, `index.html` |
 | [ADR-0019](0019-a-projecting-component-renders-synchronously.md) | A projecting component renders synchronously on connect | accepted | `source/lib/core/elements/signal-element.js`, `source/lib/core/elements/projection.js` |
 | [ADR-0020](0020-projection-takes-every-node-including-anchors.md) | Projection takes every authored node, anchors and whitespace included | accepted | `source/lib/core/elements/projection.js` |
-| [ADR-0021](0021-a-token-store-authorizes-a-request.md) | A token store authorizes a request and never returns a credential | accepted | `source/lib/auth/session.js`, `source/lib/auth/types.d.ts`, `example/src/auth/` |
+| [ADR-0021](0021-a-token-store-authorizes-a-request.md) | A token store authorizes a request and never returns a credential | accepted | `source/lib/auth/session.js`, `source/lib/auth/session-policy.js`, `source/lib/auth/types.d.ts`, `example/src/auth/` |
 | [ADR-0022](0022-the-refresh-is-single-flight-per-session.md) | The single-flight refresh is per-session state | accepted | `source/lib/auth/session.js` |
-| [ADR-0023](0023-a-token-response-is-rebuilt-not-validated.md) | A token response is rebuilt field by field, or refused | accepted | `source/lib/auth/session-policy.js` |
-| [ADR-0024](0024-auth-failures-are-terminal-or-transient.md) | An authentication failure is either terminal or transient, never both | accepted | `source/lib/auth/session-policy.js`, `source/lib/auth/session.js` |
-| [ADR-0025](0025-dpop-defeats-token-theft-not-xss.md) | DPoP is adopted to defeat token theft, and does not close XSS | accepted | `example/src/auth/dpop-store.js` |
-| [ADR-0026](0026-remote-grants-are-least-privilege-not-a-sandbox.md) | Remote grants are least privilege, not a sandbox | accepted | `source/lib/host/remote-host.js` |
+| [ADR-0024](0024-auth-failures-are-terminal-or-transient.md) | An authentication failure is terminal or transient | accepted | `source/lib/auth/session-policy.js`, `source/lib/auth/session.js` |
+| [ADR-0025](0025-dpop-defeats-token-theft-not-xss.md) | DPoP defeats token theft and leaves XSS open | accepted | `example/src/auth/dpop-store.js` |
+| [ADR-0026](0026-remote-grants-are-least-privilege-not-a-sandbox.md) | Remote grants are least privilege and no sandbox | accepted | `source/lib/host/remote-host.js` |
 | [ADR-0027](0027-default-remote-host-wiring-lives-in-host.md) | The default REMOTE_HOST wiring lives in `host/`, not in `core/` | accepted | `source/lib/host/runtime.js`, `source/lib/core/application/runtime.js` |
 | [ADR-0028](0028-ui-field-projects-the-callers-control.md) | `ui-field` projects the caller's control rather than rendering one | accepted | `source/components/inputs/ui-field.js` |
 | [ADR-0029](0029-the-modal-is-a-native-dialog.md) | The modal is a native `<dialog>` | accepted | `source/components/overlays/ui-dialog.js` |
 | [ADR-0030](0030-a-dialog-asks-rather-than-closes.md) | Escape and a backdrop click ask to close, they do not close | accepted | `source/components/overlays/ui-dialog.js` |
-| [ADR-0032](0032-runtime-dependencies-are-vendored-and-pinned.md) | Runtime dependencies are vendored and integrity-pinned, never fetched from a CDN | accepted | `source/lib/vendor/`, `tools/delivery/vendor.mjs`, `tools/checks/verify-deps.mjs` |
-| [ADR-0033](0033-the-library-publishes-its-own-interface.md) | The library publishes its own interface; the repository keeps only repository facts | accepted | `source/package.json`, `cli/package/interface.mjs`, `cli/layout.mjs` |
+| [ADR-0032](0032-runtime-dependencies-are-vendored-and-pinned.md) | Runtime dependencies are vendored and integrity-pinned | accepted | `source/lib/vendor/`, `tools/delivery/vendor.mjs`, `tools/checks/verify-deps.mjs` |
+| [ADR-0033](0033-the-library-publishes-its-own-interface.md) | The library publishes its own interface | accepted | `source/package.json`, `cli/package/interface.mjs`, `cli/layout.mjs` |
 | [ADR-0037](0037-a-benchmark-result-carries-its-environment.md) | A benchmark result carries the environment that produced it | accepted | `tools/benchmark/` |
 | [ADR-0038](0038-the-project-model-parses-an-ast.md) | One project model, parsed from an AST, that refuses to guess | accepted | `cli/project-model/`, `cli/checks/`, `tools/checks/` |
 | [ADR-0039](0039-the-template-checkers-compiler-is-cached.md) | The template checker keeps one compiler per process | accepted | `cli/checks/template-check.mjs` |
@@ -62,76 +49,54 @@ does not do, and why nothing in `source/` cites one.
 | [ADR-0043](0043-benchmarks-are-normalised-by-reference-workloads.md) | Benchmarks are normalised by two fixed reference workloads | accepted | `tools/benchmark/browser/calibration.js`, `tools/benchmark/measure.mjs` |
 | [ADR-0044](0044-a-regression-must-be-relatively-and-absolutely-large.md) | A regression must be both relatively and absolutely large, and the gate reads the median | accepted | `tools/benchmark/measure.mjs`, `tools/benchmark/budgets.json` |
 | [ADR-0045](0045-the-benchmark-drives-chrome-directly.md) | The benchmark drives Chrome directly and blocks the network without disabling the cache | accepted | `tools/benchmark/browser.mjs`, `tools/benchmark/browser/support.js` |
-| [ADR-0063](0063-a-remote-shares-the-stack-not-the-state.md) | A remote shares the stack, never the shell's state | accepted | `example/remotes/billing/`, `example/remotes/analytics/` |
 | [ADR-0065](0065-the-session-guard-sits-on-one-shell-route.md) | The session guard sits on one shell route; scope guards are affordances | accepted | `example/src/routes.js`, `example/server/api.mjs` |
-| [ADR-0066](0066-the-registry-consumer-gets-bundles.md) | The registry consumer gets bundles; the browser consumer still gets source | accepted | `source/package.json`, `tools/delivery/package-bundle.mjs`, `cli/package/interface.mjs`, `tools/checks/verify-deps.mjs` |
+| [ADR-0066](0066-the-package-serves-two-audiences.md) | The package serves two audiences | accepted | `source/package.json`, `source/tsconfig.base.json`, `source/tsconfig.source.json`, `tools/delivery/package-bundle.mjs`, `cli/package/door.mjs`, `cli/package/interface.mjs`, `tools/checks/verify-deps.mjs`, `tools/checks/pack-check.mjs` |
 | [ADR-0067](0067-the-toolchain-is-a-second-package.md) | The toolchain is a second package, pinned to the first | accepted | `cli/package.json`, `cli/layout.mjs`, `cli/package/interface.mjs`, `source/package.json`, `package.json` |
 | [ADR-0068](0068-the-installed-shape-is-checked-by-installing.md) | The installed shape is checked by installing, and the type table ships with the library | accepted | `tools/checks/pack-check.mjs`, `source/tsconfig.base.json`, `cli/bin/srl.mjs`, `cli/checks/importmap-check.mjs`, `tools/checks/verify-deps.mjs` |
-| [ADR-0069](0069-the-dev-server-proxies-the-backend.md) | The development server proxies the backend, so the application develops on one origin | accepted | `cli/dev/serve.mjs`, `cli/bin/srl.mjs`, `cli/test/serve-proxy.test.mjs` |
 | [ADR-0070](0070-a-production-template-is-minified-and-proved-equivalent.md) | A production template is minified, and the minified bytes are proved equivalent | accepted | `cli/delivery/template-html.mjs`, `cli/delivery/build.mjs` |
-| [ADR-0071](0071-a-built-template-is-fetched-by-the-component-that-needs-it.md) | A built template is fetched by the component that needs it | accepted | `cli/delivery/build.mjs` |
-| [ADR-0072](0072-a-check-returns-diagnostics.md) | A check returns diagnostics, and prints nothing | accepted | `cli/diagnostics/`, `cli/checks/`, `tools/checks/` |
+| [ADR-0072](0072-a-check-returns-diagnostics.md) | A check returns diagnostics and prints nothing | accepted | `cli/diagnostics/`, `cli/checks/`, `tools/checks/` |
 | [ADR-0073](0073-the-application-shape-is-a-module.md) | The application shape is a module, and `srl new` is one of its two adapters | accepted | `cli/scaffold/application.mjs`, `cli/bin/srl.mjs`, `tools/checks/pack-check.mjs`, `cli/README.md` |
 | [ADR-0074](0074-the-artifact-report-is-a-named-shape.md) | The artifact report is a named shape, written and read in one place | accepted | `cli/delivery/artifact-report.mjs`, `cli/delivery/build.mjs`, `cli/delivery/release.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/verify-http.mjs`, `tools/benchmark/run.mjs` |
-| [ADR-0075](0075-one-application-origin-not-four-servers.md) | One application origin, and the four servers are adapters over it | accepted | `cli/origin/`, `cli/dev/serve.mjs`, `cli/test/support/artifact-origin.mjs`, `tools/benchmark/origin.mjs`, `web-test-runner.config.mjs`, `tools/checks/verify-deps.mjs`, `cli/test/origin.test.mjs`, `cli/test/serve-proxy.test.mjs` |
-| [ADR-0076](0076-an-asynchronous-read-is-a-resource.md) | A screen's asynchronous read is a resource, and the latest call wins | accepted | `source/lib/core/foundation/resource.js`, `example/src/pages/` |
-| [ADR-0077](0077-a-module-declares-which-exports-are-the-door.md) | A module declares which of its exports are the door | accepted | `cli/package/door.mjs`, `tools/delivery/package-bundle.mjs`, `source/lib/core/template/dialect.js` |
+| [ADR-0075](0075-one-application-origin-not-four-servers.md) | One application origin, with every server as an adapter | accepted | `cli/origin/`, `cli/dev/serve.mjs`, `cli/test/support/artifact-origin.mjs`, `tools/benchmark/origin.mjs`, `example/server/static.mjs`, `web-test-runner.config.mjs` |
+| [ADR-0076](0076-an-asynchronous-read-is-a-resource.md) | An asynchronous read is a resource, and the latest call wins | accepted | `source/lib/core/foundation/resource.js`, `example/src/pages/` |
 | [ADR-0078](0078-an-open-panel-is-one-module.md) | An open panel is one module, not four habits | accepted | `source/components/internal/open-panel.js`, `source/components/inputs/ui-combobox.js`, `source/components/data/ui-table.js`, `source/components/shell/ui-menu.js` |
-| [ADR-0079](0079-one-settled-one-clock.md) | One `settled`, one clock | accepted | `source/lib/core/elements/settled.js`, `source/lib/core/foundation/clock.js`, `source/lib/test/harness.js`, `source/lib/core/navigation/router.js`, `source/components/data/ui-table.js`, `source/components/data/ui-dynamic-filter.js`, `source/components/shell/ui-sidebar.js` |
+| [ADR-0079](0079-one-settled-one-clock.md) | One `settled`, one clock | accepted | `source/lib/core/elements/settled.js`, `source/lib/core/foundation/clock.js`, `source/lib/test/harness.js`, `source/lib/core/navigation/router.js` |
 | [ADR-0080](0080-the-entry-document-names-the-graph.md) | The entry document names the graph | accepted | `cli/delivery/entry-hints.mjs`, `cli/delivery/build.mjs`, `cli/test/entry-hints.test.mjs` |
-| [ADR-0081](0081-the-manifest-names-every-template.md) | The manifest names every template | accepted | `cli/delivery/build.mjs`, `cli/delivery/artifact-report.mjs`, `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `source/lib/core/remotes/mfe.js`, `source/lib/core/remotes/manifest-policy.js` |
+| [ADR-0081](0081-templates-are-delivered-by-chunk.md) | Templates are delivered by chunk | accepted | `cli/delivery/build.mjs`, `cli/delivery/artifact-report.mjs`, `cli/delivery/source-manifest.mjs`, `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `source/lib/core/remotes/manifest-policy.js` |
 | [ADR-0082](0082-chain-depth-is-the-gated-delivery-fact.md) | Chain depth is the gated delivery fact | accepted | `tools/benchmark/chain.mjs`, `tools/benchmark/browser.mjs`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/budgets.json`, `cli/delivery/artifact-report.mjs` |
 | [ADR-0083](0083-a-locale-bundle-is-hash-named-and-immutable.md) | A locale bundle is hash-named and immutable | accepted | `cli/delivery/build.mjs`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/localization/i18n.js` |
 | [ADR-0084](0084-a-startup-step-publishes-its-own-duration.md) | A startup step publishes its own duration | accepted | `source/lib/core/application/runtime.js`, `source/lib/core/application/types.d.ts`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/origin.mjs`, `example/benchmark.json` |
-| [ADR-0085](0085-source-delivery-announces-its-templates.md) | Source delivery announces its templates, and a reload revalidates | accepted | `cli/delivery/source-manifest.mjs`, `cli/origin/index.mjs`, `cli/origin/types.d.ts`, `cli/dev/serve.mjs`, `example/server/static.mjs`, `example/server/server.mjs`, `cli/test/origin.test.mjs`, `cli/test/serve-templates.test.mjs` |
-| [ADR-0086](0086-the-manifest-groups-templates-by-chunk.md) | The manifest groups templates by chunk | accepted | `cli/delivery/build.mjs`, `cli/delivery/entry-hints.mjs`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/remotes/types.d.ts`, `source/lib/core/application/runtime.js`, `cli/test/artifact.test.mjs`, `cli/test/artifact-browser.test.mjs`, `source/lib/test/application/runtime.test.js`, `source/lib/test/remotes/manifest-policy.test.js`, `tools/benchmark/baseline.json` |
-| [ADR-0087](0087-a-template-group-starts-with-the-chunk-that-names-it.md) | A template group starts with the chunk that names it | accepted | `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `cli/test/artifact-browser.test.mjs`, `source/lib/test/application/runtime.test.js`, `docs/guide/startup.md`, `docs/guide/delivery.md` |
-| [ADR-0088](0088-the-service-worker-is-generated-from-the-artifact-report.md) | The service worker is generated from the artifact report | accepted | `cli/delivery/service-worker.mjs`, `cli/delivery/build.mjs`, `cli/delivery/artifact-report.mjs`, `source/lib/core/application/worker.js`, `cli/test/service-worker.test.mjs` |
-| [ADR-0089](0089-a-tab-learns-its-release-changed-at-a-commit-boundary.md) | A tab learns its release changed at a commit boundary | accepted | `source/lib/core/application/release.js`, `source/lib/core/application/types.d.ts`, `source/lib/test/application/release.test.js` |
-| [ADR-0090](0090-one-language-server-two-editor-clients.md) | One language server, with thin editor clients | accepted | `cli/language-server/`, `editors/vscode/`, `editors/webstorm/`, `cli/checks/template-check.mjs` |
-| [ADR-0091](0091-one-module-decides-what-the-editor-sees-next.md) | One module decides what the editor sees next | accepted | `cli/language-server/analysis.mjs`, `cli/language-server/server.mjs`, `cli/language-server/service.mjs`, `cli/checks/template-check.mjs` |
-| [ADR-0092](0092-one-semantic-snapshot-interprets-an-editing-template.md) | One semantic snapshot interprets an editing template | accepted | `cli/language-server/semantics.mjs`, `cli/language-server/service.mjs`, `cli/checks/template-check.mjs` |
+| [ADR-0088](0088-the-service-worker-is-generated-from-the-artifact-report.md) | The service worker is generated from the artifact report | accepted | `cli/delivery/service-worker.mjs`, `cli/delivery/build.mjs`, `cli/delivery/artifact-report.mjs`, `source/lib/core/application/worker.js` |
+| [ADR-0089](0089-a-tab-learns-its-release-changed-at-a-commit-boundary.md) | A tab learns its release changed at a commit boundary | accepted | `source/lib/core/application/release.js`, `source/lib/core/application/types.d.ts` |
+| [ADR-0090](0090-one-language-server-two-editor-clients.md) | One language server behind thin editor clients | accepted | `cli/language-server/`, `editors/vscode/`, `editors/webstorm/`, `cli/checks/template-check.mjs` |
 | [ADR-0093](0093-one-element-model-preserves-authored-meaning.md) | One Element model preserves authored meaning | accepted | `cli/project-model/`, `cli/checks/template-check.mjs`, `cli/language-server/` |
-| [ADR-0094](0094-an-editor-session-owns-what-it-started.md) | An editor session owns what it started | accepted | `editors/vscode/`, `editors/webstorm/`, `cli/language-server/server.mjs` |
-| [ADR-0095](0095-diagnostics-run-on-a-thread-the-editor-is-not-waiting-on.md) | Diagnostics run on a thread the editor is not waiting on | accepted | `cli/language-server/analysis.mjs`, `cli/language-server/validation.mjs`, `cli/language-server/server.mjs` |
 | [ADR-0096](0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md) | The editor latency claim is a workload, not an assertion | accepted | `tools/benchmark/node/editor.mjs`, `tools/benchmark/budgets.json`, `cli/test/support/language-server-client.mjs`, `cli/test/live-analysis.test.mjs` |
 | [ADR-0097](0097-an-installed-editor-is-proved-by-installing-it.md) | An installed editor is proved by installing it | accepted | `tools/conformance/`, `tools/fixtures/installed-layout.mjs`, `.github/workflows/editors.yml`, `editors/vscode/`, `editors/webstorm/` |
 | [ADR-0098](0098-the-first-application-is-proved-from-its-declarations.md) | The first application is proved from its declared dependencies | accepted | `tools/fixtures/installed-layout.mjs`, `tools/checks/pack-check.mjs`, `tools/conformance/fixture.mjs`, `cli/scaffold/application.mjs`, `cli/delivery/build.mjs`, `cli/README.md` |
 | [ADR-0099](0099-a-performance-claim-carries-its-standing.md) | A performance claim carries its standing | accepted | `tools/benchmark/evidence.mjs`, `tools/benchmark/run.mjs`, `tools/benchmark/report.mjs`, `tools/checks/performance-check.mjs`, `docs/guide/performance.md` |
 | [ADR-0100](0100-a-journey-is-measured-under-stated-network-conditions.md) | A journey is measured under stated network conditions | accepted | `tools/benchmark/browser.mjs`, `tools/benchmark/node/startup.mjs`, `tools/benchmark/types.d.ts`, `docs/guide/performance.md` |
-| [ADR-0101](0101-concurrent-identical-reads-are-one-request.md) | Concurrent identical reads are one request | accepted | `source/lib/core/http/client.js`, `source/lib/test/http/client.test.js`, `example/test/app.smoke.test.js` |
 | [ADR-0102](0102-a-container-rule-has-an-element-of-its-own.md) | A container rule has an element of its own | accepted | `source/lib/core/forms/group.js`, `source/lib/core/forms/array.js`, `source/lib/core/forms/validators.js`, `source/lib/core/forms/types.d.ts`, `source/components/inputs/ui-form-error.js`, `source/components/inputs/ui-field.js`, `example/src/pages/sales/customer-detail-page.js`, `example/src/pages/sales/customer-detail-page.html`, `example/server/api.mjs`, `example/test/customer-form.test.js` |
 | [ADR-0103](0103-a-field-owns-its-asynchronous-check.md) | A field owns its asynchronous check | accepted | `source/lib/core/forms/field.js`, `source/lib/core/forms/settled.js`, `source/lib/core/forms/group.js`, `source/lib/core/forms/array.js`, `source/lib/core/forms/types.d.ts`, `source/components/inputs/ui-field.js`, `example/src/pages/sales/customer-detail-page.js`, `example/src/services/sales-service.js`, `example/server/api.mjs`, `example/test/customer-form.test.js` |
-| [ADR-0104](0104-authored-markup-is-a-value-an-element-renders.md) | Authored markup is a value an element renders | accepted | `source/lib/core/template/dialect.js`, `source/lib/core/template/template.js`, `source/lib/core/template/types.d.ts`, `source/components/data/ui-table-column.js`, `source/components/data/ui-table.js`, `cli/checks/template-check.mjs`, `cli/language-server/semantics.mjs`, `example/src/pages/people/employees-page.html`, `example/src/pages/inventory/products-page.html` |
+| [ADR-0104](0104-authored-markup-is-a-value-an-element-renders.md) | Authored markup is a value an element renders | accepted | `source/lib/core/template/dialect.js`, `source/lib/core/template/template.js`, `source/components/data/ui-table-column.js`, `source/components/data/ui-table.js`, `cli/checks/template-check.mjs`, `cli/language-server/semantics.mjs` |
 | [ADR-0105](0105-a-selection-is-a-set-of-row-keys.md) | A selection is a set of row keys | accepted | `source/components/data/ui-table.js`, `source/components/data/ui-table.html`, `source/components/internal/text.js`, `source/components/test/data/table.test.js`, `source/components/test/standard-text.js`, `example/src/pages/settings/settings-users.js`, `example/src/pages/settings/settings-users.html`, `example/i18n/en.json`, `example/i18n/it.json`, `docs/known-gaps.md` |
 | [ADR-0106](0106-a-watched-order-is-one-retained-record.md) | A watched order is one retained record | accepted | `example/src/state/order-records.js`, `example/src/pages/sales/order-detail-page.js`, `example/src/pages/sales/order-summary-tab.js`, `example/src/main.js`, `example/test/order-records.test.js`, `example/test/app.smoke.test.js` |
 | [ADR-0107](0107-a-window-bounds-what-a-table-renders.md) | A window bounds what a table renders | accepted | `source/components/data/ui-table.js`, `source/components/data/ui-table.html`, `source/components/test/data/table.test.js`, `tools/benchmark/workloads.mjs`, `tools/benchmark/budgets.json`, `docs/position-and-non-goals.md`, `docs/known-gaps.md`, `docs/guide/collection.md` |
-| [ADR-0108](0108-the-bundles-carry-their-own-declarations.md) | The bundles carry their own declarations | accepted | `source/package.json`, `tools/delivery/package-bundle.mjs`, `cli/package/door.mjs`, `cli/package/interface.mjs`, `tools/checks/verify-deps.mjs`, `tools/checks/pack-check.mjs`, `tools/test/package-bundle.test.mjs` |
 | [ADR-0109](0109-an-update-reports-why-it-happened.md) | An update reports why it happened | accepted | `source/lib/core/diagnostics/updates.js`, `source/lib/core/diagnostics/report.js`, `source/lib/core/diagnostics/types.d.ts`, `source/lib/core/elements/signal-element.js`, `source/lib/core/template/template.js`, `source/lib/test/diagnostics/updates.test.js`, `docs/guide/performance.md`, `docs/known-gaps.md`, `docs/reference/source-layout.md` |
-| [ADR-0110](0110-the-lit-adapter-answers-in-lit-syntax.md) | The Lit adapter answers in Lit syntax | accepted | `cli/language-server/authoring.mjs`, `cli/language-server/semantics.mjs`, `cli/language-server/service.mjs`, `cli/test/language-server.test.mjs`, `docs/known-gaps.md` |
-| [ADR-0111](0111-an-edited-template-revises-the-page-rendering-it.md) | An edited template revises the page that is rendering it | accepted | `source/lib/core/template/template.js`, `source/lib/core/elements/signal-element.js`, `source/lib/core/diagnostics/types.d.ts`, `source/lib/test/template/revision.test.js`, `docs/guide/performance.md`, `docs/position-and-non-goals.md`, `docs/reference/source-layout.md` |
-| [ADR-0112](0112-a-development-update-names-what-changed.md) | A development update names what changed | accepted | `cli/dev/updates.mjs`, `cli/dev/update-client.js`, `cli/dev/serve.mjs`, `example/server/static.mjs`, `example/server/server.mjs`, `cli/test/serve-updates.test.mjs`, `tools/benchmark/workloads.mjs`, `docs/guide/delivery.md`, `docs/reference/source-layout.md`, `docs/architecture.md`, `docs/position-and-non-goals.md` |
-| [ADR-0113](0113-a-tag-keeps-its-class-and-adopts-an-edited-body.md) | A tag keeps its class and adopts an edited body | accepted | `source/lib/core/elements/component.js`, `source/lib/core/elements/signal-element.js`, `source/lib/core/diagnostics/types.d.ts`, `cli/dev/update-client.js`, `source/lib/test/elements/revision.test.js`, `source/lib/test/fixtures/revisable-component.js`, `cli/test/serve-updates.test.mjs`, `docs/guide/performance.md`, `docs/position-and-non-goals.md`, `docs/reference/source-layout.md` |
+| [ADR-0111](0111-development-edits-update-the-running-page.md) | Development edits update the running page | accepted | `source/lib/core/template/template.js`, `source/lib/core/elements/signal-element.js`, `cli/dev/updates.mjs`, `cli/dev/update-client.js`, `cli/dev/serve.mjs`, `example/server/static.mjs` |
+| [ADR-0113](0113-a-tag-keeps-its-class-and-adopts-an-edited-body.md) | A tag keeps its class and adopts an edited body | accepted | `source/lib/core/elements/component.js`, `source/lib/core/elements/signal-element.js`, `cli/dev/update-client.js` |
 | [ADR-0114](0114-an-owner-ending-is-terminal-for-a-check.md) | An owner's end is terminal for a field's check | accepted | `source/lib/core/forms/field.js`, `source/lib/test/forms/async-validation.test.js` |
 | [ADR-0115](0115-a-field-may-not-hide-a-method.md) | A field may not hide a method | accepted | `source/lib/core/elements/signal-element.js`, `cli/project-model/parse.mjs`, `cli/project-model/index.mjs`, `cli/project-model/types.d.ts`, `tools/checks/verify-deps.mjs`, `source/lib/test/elements/signal-element.test.js`, `cli/test/project-model.test.mjs`, `cli/test/fixtures/project-model/app-a/src/hidden-member.js` |
 | [ADR-0116](0116-a-browser-claim-names-the-build-that-ran.md) | A browser claim names the build that ran | accepted | `cli/test/support/journey/engines.mjs`, `cli/test/support/journey/observer.mjs`, `cli/test/support/journey/journey.mjs`, `cli/test/support/journey/stage.mjs`, `cli/test/browser-journey.test.mjs`, `tools/browser/record.mjs`, `tools/checks/browser-check.mjs`, `docs/guide/browser-support.md`, `example/src/pages/inventory/movements-page.js`, `.github/workflows/ci.yml` |
 | [ADR-0117](0117-a-message-reference-is-resolved-against-one-catalog.md) | A message reference is resolved against one catalog | accepted | `cli/message-catalog/`, `cli/checks/message-check.mjs`, `cli/project-model/parse.mjs`, `tools/checks/verify-deps.mjs`, `cli/language-server/service.mjs` |
 | [ADR-0118](0118-a-record-keyed-by-outside-data-has-no-prototype.md) | A record keyed by outside data has no prototype | accepted | `source/lib/core/localization/i18n.js`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/http/client.js`, `source/lib/core/forms/group.js`, `source/lib/test/localization/i18n.test.js`, `source/lib/test/remotes/manifest-policy.test.js`, `source/lib/test/http/client.test.js`, `source/lib/test/forms/forms.test.js` |
-| [ADR-0119](0119-an-element-stylesheet-reaches-only-that-element.md) | An Element's stylesheet reaches only that Element | accepted | `source/lib/core/elements/style-scope.js`, `source/lib/core/elements/stylesheet.js`, `source/lib/core/elements/component.js`, `source/lib/core/elements/types.d.ts`, `source/lib/core/template/template.js`, `source/components/style.css`, `source/components/data/ui-table.html`, `source/components/inputs/ui-combobox.html`, `cli/delivery/build.mjs`, `cli/dev/update-client.js`, `cli/project-model/parse.mjs`, `cli/project-model/index.mjs`, `cli/project-model/types.d.ts`, `tools/checks/verify-deps.mjs`, `example/src/ui/`, `source/lib/test/elements/stylesheet.test.js`, `cli/test/project-model.test.mjs` |
-| [ADR-0120](0120-a-source-consumer-type-checks-against-the-declarations.md) | A source consumer type-checks against the declarations | accepted | `source/tsconfig.base.json`, `source/tsconfig.source.json`, `tsconfig.json`, `cli/package/interface.mjs`, `tools/delivery/package-bundle.mjs`, `tools/checks/verify-deps.mjs`, `tools/checks/pack-check.mjs` |
+| [ADR-0119](0119-an-element-stylesheet-reaches-only-that-element.md) | An Element's stylesheet reaches only that Element | accepted | `source/lib/core/elements/style-scope.js`, `source/lib/core/elements/stylesheet.js`, `source/lib/core/elements/element-defaults.js`, `source/lib/core/elements/component.js`, `source/components/style.css`, `cli/delivery/build.mjs`, `cli/project-model/parse.mjs`, `tools/checks/verify-deps.mjs` |
 
 <!-- /generated:adr-index -->
 
-## Writing one
+## Writing a record
 
-State the rejected alternative by name. A record that only says what was chosen leaves
-the next reader to rediscover why the obvious other thing is wrong, which is the work the
-record exists to save.
-
-State what would reopen it. A decision with no reopening condition gets reopened by
-accident, in a review, by someone who cannot tell a settled question from an unexamined
-one.
-
-Supersede rather than delete. A record whose decision no longer holds gets
-`Status: superseded by ADR-NNNN` and stays where it is, because the citations in source
-still point at it and the reasoning is still the reason the successor exists.
+- Write one for a decision a contributor could reasonably reverse without knowing why. A local choice gets a one-line comment instead.
+- Name each rejected alternative and why it lost.
+- Say what would reopen the decision.
+- Describe the decision as it stands today. When it changes, rewrite the record, and git history keeps the old version.
+- When a new decision replaces an old one outright, set the old record to `Status: superseded by ADR-NNNN` and leave the file in place.

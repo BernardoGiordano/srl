@@ -23,7 +23,7 @@
  * rule outranks every layer. Zero specificity settles the rest inside the layer, so
  * an Element's own stylesheet wins over these defaults as well (ADR-0119). The same
  * rules written unlayered would beat a utility class whatever its specificity, which
- * is the trap ADR-0001 describes.
+ * is the trap ADR-0119 describes.
  */
 
 @layer properties, theme, base, components, utilities;

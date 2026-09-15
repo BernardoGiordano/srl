@@ -6,41 +6,20 @@
 
 ## Context
 
-`app.manifest.json` is fetched on every load. It decides where executable code is
-imported from, where credentials are sent, which path each remote owns, and which files
-the locale and template caches are seeded from.
+The browser fetches `app.manifest.json` on every load. The manifest decides where code is imported from, where credentials go, which path each remote owns and which files seed the locale and template caches.
 
-Validating those fields one at a time — the shape most configuration loaders have — cannot
-answer the questions that matter, because every dangerous case is locally valid. A token
-endpoint on another origin is a perfectly good string. Two remotes claiming `/billing` are
-two perfectly good entries. A mount that swallows another remote's subtree misbehaves
-only later, inside the router, where declaration order silently decides whose guard and
-whose grants apply.
+Checking fields one at a time misses the dangerous cases, because each of them is valid on its own. A token endpoint on another origin is a valid string. Two remotes claiming `/billing` are two valid entries. A mount that swallows another remote's subtree only misbehaves later, inside the router.
 
 ## Decision
 
-Cross-field decisions are made once, in `manifest-policy.js`, before anything downstream
-is constructed. Everything after that module reads admitted values — normalized,
-collision-checked and frozen — rather than the parsed document. A consumer that re-reads a
-raw manifest string is re-deciding policy in a place that cannot see the rest of the file,
-and that is the thing this module exists to make impossible.
+`manifest-policy.js` admits the whole document before anything reads it. Code downstream reads the admitted value, which is normalized, checked for collisions and frozen. No other module parses the raw manifest.
 
-The module imports nothing, for the same reason `template/dialect.js` imports nothing:
-`tools/checks/verify-deps.mjs` loads it in Node and admits every checked-in manifest
-against the rules the browser applies at startup. A manifest that would fail in
-production fails in `npm run verify` first. The two adapters differ only in where the
-page's import-map pins come from, which is why those arrive as an argument rather than
-being read from `document`.
+Every URL in the manifest must be a same-origin, root-relative path. Admission rejects anything else and never repairs it, because a repaired URL is a tampered file that loaded anyway. Remote code runs in the shell's realm, the token endpoint receives credentials and the API base receives authorization, so none of them may leave the origin.
+
+The module imports nothing. `npm run verify` loads it in Node and admits every checked-in manifest with the rules the browser applies, so a bad manifest fails in CI before it fails in production.
 
 ## Consequences
 
-The boundary is sharp and has to stay that way: URL shape and trust, cross-field
-collisions and the normalized shape belong here; fetching the document and reading the
-page's import map belong to `remotes/mfe.js`; anything that acts on an admitted manifest
-belongs downstream.
-
-The cost is that a new manifest field has to be admitted here before it can be read
-anywhere, which is one extra edit and the reason a field cannot quietly enter the system.
-
-Reopen only if the manifest stops being fetched at runtime — a compiled-in configuration
-has a different threat model and would not need a runtime admission step at all.
+- A new manifest field needs an admission rule before anything can read it.
+- Cross-origin authentication can't be expressed in the manifest. It belongs to the deployment, with CORS, a token for that audience and a CSP that allows it.
+- A manifest compiled into the build instead of fetched at runtime would reopen this, because it has a different threat model.

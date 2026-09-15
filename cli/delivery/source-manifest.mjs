@@ -26,7 +26,7 @@
  * artifact it just emitted, this reads it off `cli/project-model/`, and
  * `prefetchTemplates` is the same function either way. One list, two producers —
  * which is also what makes a delivery bug show up while editing rather than at
- * build. ADR-0085.
+ * build. ADR-0081.
  *
  * THE REMOTE SPLIT
  *

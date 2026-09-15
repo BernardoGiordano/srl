@@ -8,7 +8,7 @@
  * start and stop: a file watcher created beside the client and disposed only when the
  * client failed to start, a restart that raced its own stop, and a trace setting the
  * client never read because its id did not match the contributed key. Callers now say
- * start, stop or restart, and hold no cleanup knowledge of their own. ADR-0094.
+ * start, stop or restart, and hold no cleanup knowledge of their own. ADR-0090.
  *
  * Everything the editor supplies is injected, so the lifecycle can be driven by a test
  * without VS Code running: `vscode` for windows and configuration, `createClient` for the

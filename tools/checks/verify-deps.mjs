@@ -383,7 +383,7 @@ export async function verifyDependencies() {
    * published and maps each prefix into the declarations built from the directory the
    * import map serves. source/tsconfig.source.json maps it into that directory, for
    * this repository, which edits the modules the declarations are built from.
-   * ADR-0120.
+   * ADR-0066.
    *
    * Package-relative, not repository-relative. Path targets in an extended config
    * resolve against the file that declares them, which is inside the package wherever

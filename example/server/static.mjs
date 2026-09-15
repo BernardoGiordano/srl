@@ -12,7 +12,7 @@
  * mount walk, the traversal refusal, the history fallback and the content type,
  * agreeing with the other four by hand: the copy that mattered most, because it is
  * the server `npm run example:serve` starts and so the one a developer of this
- * application is actually looking at. ADR-0085.
+ * application is actually looking at. ADR-0081.
  *
  * What this adapter states, and nothing else:
  *

@@ -19,7 +19,7 @@ most of the work happens. There are two update paths and they are independent. A
 renders when a signal its `render()` read changed, or when a reactive property was
 written. A compiled binding evaluates inside an effect of its own, and when a signal *that
 expression* read changes it patches its own Lit Part with no render anywhere
-([ADR-0018](0018-binding-scopes-keep-their-identity.md)). A timer around element renders would
+([ADR-0014](0014-compiled-templates-and-scopes-keep-their-identity.md)). A timer around element renders would
 therefore report silence for the update path a fine-grained framework produces the most
 of, and report it confidently.
 

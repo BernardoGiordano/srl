@@ -17,7 +17,7 @@ import org.jetbrains.annotations.NotNull;
 /**
  * The IntelliJ side of one project's srl session: the disk, the notification group, the
  * Node.js the server runs under and the platform's LSP starter. What those are used for is
- * {@link SrlEditorSession}, which this class holds one of per open project. ADR-0094.
+ * {@link SrlEditorSession}, which this class holds one of per open project. ADR-0090.
  */
 public final class SrlProjectSession implements Disposable {
   private final Project project;

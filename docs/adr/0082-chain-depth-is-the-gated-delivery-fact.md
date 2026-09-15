@@ -104,7 +104,7 @@ scoped rather than general — durations still have no absolute limits, and stil
 known target machine and a known target application scale. And a depth budget cannot see a
 chain that gets *wider*: twelve template requests in one round trip is depth 2, the same as
 one, which is exactly why
-[ADR-0071](0071-a-built-template-is-fetched-by-the-component-that-needs-it.md)'s follow-up
+[ADR-0081](0081-templates-are-delivered-by-chunk.md)'s follow-up
 is a separate decision from this one.
 
 What reopens this: a harness that can afford simulated latency. The moment a round trip

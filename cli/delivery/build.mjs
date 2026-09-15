@@ -72,7 +72,7 @@ const HASHED_JAVASCRIPT = /-[A-Za-z0-9_-]{8}\.js$/u;
  *               discovery is done before the first component module evaluates. The
  *               default: it is the wrong trade only at zero latency.
  *   split-lazy  The manifest names none of them and each component fetches its own,
- *               which is ADR-0071 exactly. A visitor downloads the markup of the
+ *               which is ADR-0081 exactly. A visitor downloads the markup of the
  *               routes they open and nothing else, and pays a round trip per
  *               component to find out what that is.
  *   bundle      Additionally emits the single `templates-<hash>.json` the manifest
@@ -80,7 +80,7 @@ const HASHED_JAVASCRIPT = /-[A-Za-z0-9_-]{8}\.js$/u;
  *               fifty separately compressed files share no dictionary — against a
  *               cache entry that any one template's change invalidates whole.
  *
- * ADR-0071, ADR-0081.
+ * ADR-0081, ADR-0081.
  */
 const TEMPLATE_DELIVERY = new Set(['split', 'split-lazy', 'bundle']);
 
@@ -215,7 +215,7 @@ export async function buildArtifact({
     );
     const localeFiles = await emitLocaleFiles(app, publicDir, source.admitted.i18n);
     // The join the manifest used to throw away: which chunk names each template.
-    // Both halves have been in scope since `chunkRelationships` ran. ADR-0086.
+    // Both halves have been in scope since `chunkRelationships` ran. ADR-0081.
     const templateGroups =
       templateOutput.delivery === 'split'
         ? groupTemplates(app, templates.assets(), chunks, entry)
@@ -553,7 +553,7 @@ export async function buildRemoteArtifact({
       // URLs are the discovery a component cannot do before its own module has
       // arrived, and the shell starts them alongside the entry module. Empty under
       // the other two, where the markup is either already on its way or deliberately
-      // left to be discovered. ADR-0071, ADR-0081.
+      // left to be discovered. ADR-0081, ADR-0081.
       templateFiles: remoteTemplates.files,
       ...(remoteTemplates.bundle === null ? {} : { templates: remoteTemplates.bundle }),
     };
@@ -849,8 +849,8 @@ function templateAnnouncement(templates, base = '/') {
  * begins with the templates that matter soonest.
  *
  * A naming module no chunk claims is a build failure. The alternative is a template
- * that belongs to no group and is therefore announced nowhere, which is ADR-0071's
- * serial chain back again on one component and invisible from outside. ADR-0086.
+ * that belongs to no group and is therefore announced nowhere, which is ADR-0081's
+ * serial chain back again on one component and invisible from outside. ADR-0081.
  *
  * @param {BuildApplication} app
  * @param {TemplateAsset[]} assets
@@ -918,11 +918,11 @@ function groupTemplates(app, assets, chunks, entry) {
  *               instead of the browser learning each one from the module that just
  *               arrived. A list of the files, not a copy of them.
  *   split-lazy  Neither. The files are there and nothing announces them, so each is
- *               discovered by the component that needs it — ADR-0071 unchanged.
+ *               discovered by the component that needs it — ADR-0081 unchanged.
  *
  * The branch is on `delivery` rather than on whether a bundle URL came back,
  * because the two split modes emit byte-identical artifacts and differ only here.
- * ADR-0071, ADR-0081.
+ * ADR-0081, ADR-0081.
  *
  * `i18n.bundleFiles` arrives the same way and for the same reason: it names files
  * this build emitted, so a value found in the source document describes some other
@@ -952,7 +952,7 @@ async function emitApplicationManifest(app, publicDir, source, templates, groups
   // Three shapes, one per delivery mode, and the artifact says which by which key it
   // carries. `split` says `templateGroups` and nothing else: the flat list was the
   // same URLs with the shape removed, so emitting both would be one copy of the truth
-  // and one copy of what the runtime is meant to stop doing with it. ADR-0086.
+  // and one copy of what the runtime is meant to stop doing with it. ADR-0081.
   const manifest =
     announced.bundle !== null
       ? { ...localized, remotes, templateBundle: announced.bundle }
@@ -2056,7 +2056,7 @@ async function templateAsset(app, record, base) {
  * The per-template files are the delivery under every mode, not a fallback: a
  * component names its own template URL and fetches it when its chunk loads. What
  * the three modes decide is who says those URLs out loud and when, which is what
- * `emitApplicationManifest` reads this `delivery` back out for. ADR-0071, ADR-0081.
+ * `emitApplicationManifest` reads this `delivery` back out for. ADR-0081, ADR-0081.
  *
  * @param {BuildApplication} app
  * @param {string} stage

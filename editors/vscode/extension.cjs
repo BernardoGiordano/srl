@@ -8,7 +8,7 @@ const { SrlSessions } = require('./session.cjs');
 /**
  * The VS Code half of ADR-0090's thin launcher: it turns editor events into start, stop
  * and restart. Which resources a session owns, when it may run and what it reports are
- * `session.cjs`, so this file holds no cleanup or ordering knowledge. ADR-0094.
+ * `session.cjs`, so this file holds no cleanup or ordering knowledge. ADR-0090.
  */
 const sessions = new SrlSessions({
   vscode,

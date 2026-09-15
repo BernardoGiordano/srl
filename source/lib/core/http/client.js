@@ -298,7 +298,7 @@ export class ApiClient {
  * Not a cache. The entry lives from the send to the settle and no longer, so a
  * second read that starts after the first finished is a second request and reads
  * whatever the server says now. Keying, staleness and revalidation are a store's
- * decisions, and a store is application code. ADR-0076, ADR-0101.
+ * decisions, and a store is application code. ADR-0076, ADR-0013.
  *
  * WHAT IT OWNS
  *

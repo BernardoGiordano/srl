@@ -140,7 +140,7 @@ void test('built example mounts independent Billing and Analytics artifacts', as
       }
 
       // Split delivery, from the browser's side: every template arrives as its own
-      // immutable file and no bundle is fetched (ADR-0071), and the manifest named
+      // immutable file and no bundle is fetched (ADR-0081), and the manifest named
       // all of them so a chunk's markup starts as one batch rather than the browser
       // learning each URL from the component module that just arrived (ADR-0081).
       const shellTemplates = /** @type {{ count: number, files: string[] }} */ (shell.templates);
@@ -154,7 +154,7 @@ void test('built example mounts independent Billing and Analytics artifacts', as
         'a fetched template is not in the artifact report',
       );
       // Which templates the browser fetched is decided by which chunks it loaded,
-      // and that is the whole of ADR-0087: startup starts the `entry` group, and
+      // and that is the whole of ADR-0081: startup starts the `entry` group, and
       // every other group starts on the first `attachTemplate` out of its own
       // chunk. So the set to expect is the entry group plus the group of every
       // chunk this session actually requested — a template outside it is one the
@@ -174,7 +174,7 @@ void test('built example mounts independent Billing and Analytics artifacts', as
       }
       // A group starts inside the module body that defines its first component, so
       // by the time the element it defines is on screen the requests are out. The
-      // poll is for the request events, not for the decision. ADR-0087.
+      // poll is for the request events, not for the decision. ADR-0081.
       const templatesRequested = () =>
         new Set(requests.filter((path) => path.startsWith('/assets/templates/')));
       for (let attempt = 0; attempt < 100 && templatesRequested().size < expected.size; attempt += 1) {
@@ -282,7 +282,7 @@ void test('split-lazy announces nothing, so a visitor fetches only what they ope
       );
       assert.deepEqual(errors, []);
 
-      // The mode's whole purpose, and the property ADR-0071 decided: the shell
+      // The mode's whole purpose, and the property ADR-0081 decided: the shell
       // renders having fetched the markup it needed and none of the rest. Asserting
       // a strict subset rather than an exact count, because which templates the
       // landing route pulls in is the application's business and would make this a

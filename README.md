@@ -50,7 +50,7 @@ import { UiTable } from '@srljs/core/components';
 ```
 
 Why there are two, and what the second costs, is
-[ADR-0066](docs/adr/0066-the-registry-consumer-gets-bundles.md). The package's own README
+[ADR-0066](docs/adr/0066-the-package-serves-two-audiences.md). The package's own README
 is [source/README.md](source/README.md), and what changed between versions is
 [the changelog](CHANGELOG.md).
 

@@ -154,7 +154,7 @@ export async function parseModule(file, prefixes) {
  *
  * Not cached, because the cache is keyed on what the file says and this text is what it
  * will say. The editor asks per keystroke and pays one parse for it, which is the same
- * bargain the template checker makes for an overlay. ADR-0092.
+ * bargain the template checker makes for an overlay. ADR-0090.
  *
  * @param {string} file Absolute path, which the parse uses to resolve relative imports.
  * @param {string} source

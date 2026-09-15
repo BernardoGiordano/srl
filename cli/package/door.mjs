@@ -14,7 +14,7 @@
  * and it stops being part of the door. Per name and declared beside the
  * declaration, the way `srl.bundles.exclude` is per directory and declared in the
  * manifest — so a new layer still reaches everyone by default, while a name written
- * for a test does not. ADR-0077.
+ * for a test does not. ADR-0066.
  *
  * `@internal` is not `private`. The browser consumer loads modules by path and sees
  * every export it always did, `cli/checks/template-check.mjs` still imports the

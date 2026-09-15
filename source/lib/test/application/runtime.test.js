@@ -284,19 +284,19 @@ describe('application startup', () => {
 
       // The whole point of the grouping. Startup started the markup the entry
       // closure needs and nothing else: a flat list could only have started both.
-      // ADR-0086.
+      // ADR-0081.
       assert.sameArray(requested, [entry]);
 
       // And it stays nothing else. A group that startup did not start is not a
       // group startup deferred — nothing in the deferred chunk has been asked for,
       // so a visitor a guard would have turned away has fetched none of it.
-      // ADR-0087.
+      // ADR-0081.
       await new Promise((resolve) => setTimeout(resolve, 0));
       assert.sameArray(requested, [entry]);
 
       // The chunk arrives and its first component is defined, which is where
       // `defineComponent` calls `attachTemplate`. Both of the chunk's templates
-      // start there, so the second component does not pay ADR-0071's round trip
+      // start there, so the second component does not pay ADR-0081's round trip
       // when the module body reaches it.
       await attachTemplate(class DeferredComponent {}, deferred);
       assert.sameArray(requested, [entry, deferred, sibling]);

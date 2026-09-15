@@ -23,7 +23,7 @@
  * groups the artifact's markup by chunk, startup starts the entry group, and every
  * other group starts on the first `attachTemplate` out of its chunk. Markup follows
  * its code, so it is fetched only by a visitor who was allowed to load that code.
- * ADR-0087.
+ * ADR-0081.
  */
 
 import { html, nothing } from 'lit';
@@ -147,13 +147,13 @@ const revisedByUrl = new Map();
  * Which group a template belongs to, for the groups that have not started yet.
  *
  * The manifest partitions an artifact's markup by the chunk whose modules name it
- * (ADR-0086), and the entry group aside, the moment to start a group is the moment
+ * (ADR-0081), and the entry group aside, the moment to start a group is the moment
  * its chunk turns out to be needed. That moment is observable here and nowhere else:
  * `attachTemplate` is called by `defineComponent` while the chunk's own module body
  * is running, which is after whatever imported that chunk was allowed to. So a group
  * starts because a level asked for it rather than because startup finished, and it
  * inherits every guard that stood between the visitor and that chunk without
- * restating one of them. ADR-0087.
+ * restating one of them. ADR-0081.
  *
  * An entry is removed once its group has been started, so this map is also the set
  * of groups still to start and the second component out of the same chunk finds
@@ -276,7 +276,7 @@ export function prefetchTemplates(urls) {
  * travel together, not what the group they travel in is called. A document with no
  * groups — source delivery, which has no chunks to group by, and `split-lazy`, which
  * announces nothing — registers nothing, and every template is started by whoever
- * asks for it exactly as before. ADR-0087.
+ * asks for it exactly as before. ADR-0081.
  *
  * @param {Readonly<Record<string, readonly string[]>>} groups
  * @returns {void}
@@ -296,7 +296,7 @@ export function registerTemplateGroups(groups) {
  * resolves from. What the group adds is the rest of the chunk whose module body is
  * running at this instant — nine components in one file are nine requests in a row
  * when each waits for its own `attachTemplate` to be reached, and one batch when the
- * first of them starts all nine. ADR-0071's round trip, closed per chunk at the point
+ * first of them starts all nine. ADR-0081's round trip, closed per chunk at the point
  * the chunk is known to be wanted.
  *
  * @param {string} href Already resolved against `document.baseURI`.
@@ -344,7 +344,7 @@ export function seedTemplates(sources) {
  * of that chunk's markup is started here before this template is awaited. See
  * `startTemplateGroup`: the call is the whole of the router's leg of template
  * delivery, and it is here rather than in the router because this is the only place
- * that knows which chunk is running. ADR-0087.
+ * that knows which chunk is running. ADR-0081.
  *
  * Called only by `defineComponent` in `@core/elements/component.js`, which owns the order:
  * a template is attached before `customElements.define`, because defining first
@@ -592,7 +592,7 @@ class Chunks {
  *
  * Anything else must cost nothing, which is what `scope.version` is for: the
  * scope keeps its identity for the life of its host or its row, and this
- * directive short-circuits on that identity. ADR-0018.
+ * directive short-circuits on that identity. ADR-0014.
  */
 class ReactiveBindingDirective extends AsyncDirective {
   /** @type {Evaluator | undefined} */
@@ -722,7 +722,7 @@ function renderChunks(chunks, scope) {
  *
  * Locals are updated in place and the version moves only when one of them, or the
  * declaring scope, actually changed. That is `compileFor`'s rule, applied to a
- * position in the DOM rather than an index in a list. ADR-0018, ADR-0104.
+ * position in the DOM rather than an index in a list. ADR-0014, ADR-0104.
  */
 class FragmentDirective extends Directive {
   /** @type {Scope | undefined} */

@@ -4,7 +4,7 @@
  * There are two update paths and they are independent. An element renders when a
  * signal its `render()` read changed, or when a reactive property was written;
  * a compiled binding patches its own Lit Part when a signal *its* expression read
- * changed, and no element renders at all (ADR-0018). A timer around element
+ * changed, and no element renders at all (ADR-0014). A timer around element
  * renders therefore sees half of what happened, and the half it misses is the one
  * a fine-grained framework produces the most of.
  *

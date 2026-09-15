@@ -1,4 +1,4 @@
-# ADR-0003: Navigation failure is state, not a rejected promise
+# ADR-0003: Navigation failure is state
 
 - Status: accepted
 - Date: 2026-08-12
@@ -6,31 +6,17 @@
 
 ## Context
 
-A navigation can fail: a guard refuses, a redirect loops, a lazy module does not load.
-The obvious channel is the promise `navigate()` already returns, rejected.
-
-Most navigations have no caller to reject at. A link click and the back button both start
-one, and neither has a `catch`. A router that only reports code-initiated failures is how
-a broken route becomes a blank page with nothing in the console, on exactly the paths
-users take most.
+A navigation fails when a guard refuses, a redirect loops or a lazy module doesn't load. Rejecting the promise that `navigate()` returns looks like the natural channel, but most navigations have no caller to reject to. Link clicks and the back button start navigations, and neither has a `catch`. A router that only reports failures started from code turns a broken route into a blank page with an empty console.
 
 ## Decision
 
-`navigationError` is a signal, cleared when a navigation succeeds, so it always describes
-the URL currently on screen. Every navigation publishes its failure there whatever
-started it.
+`navigationError` is a signal. Every navigation writes its failure there, whatever started it, and a successful navigation clears it. The signal always describes the URL on screen.
 
-The entry navigation is the exception. It is part of attaching the router, so its failure
-also rejects `attachRouter` — an application that cannot resolve its first URL has a
-caller, and that caller is the startup sequence.
+The entry navigation also rejects `attachRouter`, because startup is a real caller and must not continue.
 
 ## Consequences
 
-A shell can render one error region and cover every failure path, including the ones no
-code initiated. `navigate()` still resolves when the navigation settles, so callers that
-want to wait can, and callers that only wanted to move on do not have to handle a
-rejection they cannot act on.
-
-The cost is that a failure is not thrown, so a caller that wants to branch on it reads a
-signal rather than writing `try`/`catch`. This is reopened if navigation grows a caller
-that must not proceed on failure and cannot read state — none exists today.
+- A shell renders one error region and covers every failure path.
+- `navigate()` resolves when the navigation settles, so a caller can wait without handling a rejection.
+- A caller that wants to branch on failure reads a signal instead of using `try`/`catch`.
+- A caller that must stop on failure and can't read state would reopen this.

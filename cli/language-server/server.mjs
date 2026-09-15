@@ -12,11 +12,11 @@
  * lifetime, staleness, scheduling and the thread a check executes on belong to
  * `analysis.mjs`, so a message handler is a single call with no ordering knowledge in it.
  * This thread does no typechecking, which is what keeps a completion answerable while a
- * template is being validated. ADR-0091, ADR-0095.
+ * template is being validated. ADR-0090, ADR-0090.
  *
  * What it asks of the client it asks once, and only where the client says it can answer:
  * the watchers for this project are registered here rather than also beside each editor
- * adapter, and an unimplemented method is refused rather than answered. ADR-0094.
+ * adapter, and an unimplemented method is refused rather than answered. ADR-0090.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -251,7 +251,7 @@ async function dispatch(method, params, answerable) {
  * twice, and a global glob meant every root in a multi-root window reloaded for every
  * other root's edit. The patterns are rooted at this server's own project when the client
  * supports a relative pattern, which is what keeps one root's edit out of another root's
- * model. ADR-0094.
+ * model. ADR-0090.
  */
 function sourceWatchRegistration() {
   const watched = clientCapabilities.workspace?.didChangeWatchedFiles;

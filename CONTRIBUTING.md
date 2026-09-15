@@ -47,7 +47,7 @@ map, the generated import-map fragment, each application's inline map and the ro
 `tsconfig` paths are all derived from it or checked against it. Adding a layer is one edit
 there, not five: `npm run verify` refuses a prefix that no bundle is a barrel over, so the
 consumer who installs from a registry reaches it for the same reason a browser does
-([ADR-0066](docs/adr/0066-the-registry-consumer-gets-bundles.md)).
+([ADR-0066](docs/adr/0066-the-package-serves-two-audiences.md)).
 
 **Reasoning goes in a record, not a comment.** A source comment says why *that line* is the
 way it is. The narrative — what was tried, what it cost, what would reopen it — is a file
