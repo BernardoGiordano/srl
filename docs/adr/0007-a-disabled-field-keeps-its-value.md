@@ -7,8 +7,8 @@
 ## Context
 
 A disabled field stops being answerable for: its validators do not run, it reports valid,
-and it shows no error. That is Angular's behaviour and it is the useful half — a rule the
-user cannot reach and cannot fix must not be what refuses a submit.
+and it shows no error. That is Angular's behaviour and it is the useful half, because a
+rule the user cannot reach and cannot fix must not be what refuses a submit.
 
 Angular also drops a disabled control's value out of `group.value`. Copying that means a
 form that disables a field for a read-only user quietly turns its `PUT` into a partial
@@ -18,8 +18,9 @@ the payload rather than in the screen, and the screen looks correct while it hap
 ## Decision
 
 Disabling changes what is *asked* of a field, not what the form holds. `group.values`
-still contains a disabled field's value, and `dirty` still counts it — the value is going
-to be sent, so it is still an unsaved change, and an unsaved-changes guard that forgot
+still contains a disabled field's value, and `dirty` still counts it, because the value is
+going to be sent, so it is still an unsaved change and an unsaved-changes guard that
+forgot
 about it would let the user walk away from one.
 
 A payload that really must omit a field omits it in the mapping function that builds the

@@ -16,8 +16,8 @@ value before any validator sees them. For a revenue field that is the difference
 
 ## Decision
 
-A field's value is whatever the control holds — usually a string, `string[]` for a
-multi-select, a boolean for a checkbox. The type parameter follows the initial value and
+A field's value is whatever the control holds, usually a string, `string[]` for a
+multi-select, or a boolean for a checkbox. The type parameter follows the initial value and
 the validators are typed against it. Conversion happens in the mapping function that
 builds the request.
 

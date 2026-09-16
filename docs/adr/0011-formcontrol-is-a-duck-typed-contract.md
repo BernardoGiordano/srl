@@ -26,8 +26,8 @@ the contract somewhere harder to read than a list of seven names.
 An element implements `FormControl` by having the members, not by extending anything.
 `isFormControl` is the whole of the runtime check.
 
-The four wiring members — `focusControl`, `setInvalid`, `setDescribedBy`, `setLabelledBy`,
-`setDisabled` — are methods rather than properties, because the element usually has to
+The wiring members `focusControl`, `setInvalid`, `setDescribedBy`, `setLabelledBy` and
+`setDisabled` are methods rather than properties, because the element usually has to
 forward them to a node it renders rather than to itself, and a property that has to be
 forwarded anyway is a property plus a `willUpdate`.
 

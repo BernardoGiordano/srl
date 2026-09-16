@@ -8,7 +8,7 @@
 
 A native `<dialog>` closes itself on Escape. For a dialog whose `open` state is bound to
 an application signal, that means the element and the screen disagree about whether the
-dialog is open, and the screen — which is the one that knows whether closing is allowed —
+dialog is open, and the screen, which is the one that knows whether closing is allowed,
 finds out afterwards.
 
 The case that forces the issue is a question the application must have an answer to.
@@ -36,4 +36,4 @@ racing over one boolean.
 
 The cost is that a consumer who binds `[.open]` and ignores `close` gets a dialog that
 reopens on the next render. That is the intended failure: it is visible immediately, and
-the alternative failure — a form abandoned because Escape was pressed — is not.
+the alternative failure, a form abandoned because Escape was pressed, is not.

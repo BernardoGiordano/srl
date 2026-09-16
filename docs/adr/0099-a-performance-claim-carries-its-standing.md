@@ -18,7 +18,7 @@ of them survive the run it came from.
 The same assembly happened three times over, and drifted three ways. `run.mjs` printed a
 report. The guide restated a subset of it. A reader who wanted to know what was actually
 held reconstructed it from a baseline file, `budgets.json`, the `PENDING` list and two
-paragraphs of prose — and the reconstruction is the part nobody does, so "the benchmark is
+paragraphs of prose. The reconstruction is the part nobody does, so "the benchmark is
 green" became the whole claim.
 
 Green is a weak claim here, and the harness already knew why without saying so in one
@@ -46,7 +46,7 @@ the conditions that make it worth quoting, or the conditions stop travelling wit
 ## Decision
 
 **`tools/benchmark/evidence.mjs` turns a measured set into claims, and a claim carries a
-standing.** `limited` when an absolute product budget holds it — compared raw, on any
+standing.** `limited` when an absolute product budget holds it, compared raw on any
 machine. `gated` when a later run on the same environment profile fails if it regresses.
 `reported` when nothing fails if it moves. The standing is a field rather than a footnote:
 a caller that wants to print "gated" has to read a value that says so, and an incomparable
@@ -92,7 +92,7 @@ green `npm run check` proves nothing about performance.
 Two limits remain, and neither is hidden any more. The relative gate still depends on one
 machine's baseline, so "gated" means "a matching machine would fail", not "a machine will".
 And the harness still resolves no host, so the delivery facts stay depth and bytes rather
-than latency — the reopening trigger in
+than latency, and the reopening trigger in
 [ADR-0082](0082-chain-depth-is-the-gated-delivery-fact.md) is unchanged by this record.
 What changed is that a reader is told, rather than expected to derive it.
 

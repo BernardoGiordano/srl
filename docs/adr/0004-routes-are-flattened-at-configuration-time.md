@@ -22,8 +22,8 @@ The route tree is flattened when the router is attached. Matching is one pass ov
 list of compiled regular expressions, first match wins, and a parent is unmatchable on
 its own unless it has a child whose path is `''`.
 
-Flattening is also where the two configuration errors are detected — a route a URL could
-never reach, and a duplicate — so they are reported to whoever attached the router, at
+Flattening is also where the two configuration errors are detected, a route a URL could
+never reach and a duplicate, so they are reported to whoever attached the router, at
 startup, rather than at the first navigation that quietly finds nothing.
 
 ## Consequences
@@ -31,8 +31,8 @@ startup, rather than at the first navigation that quietly finds nothing.
 Matching is linear in the number of leaves. Matching the last of 1,000 routes measures
 0.3 ms, so nothing product-visible fails today, and the flattened table is exactly where
 a segment index or a trie would go when a measured budget says so. Because no caller can
-see how a URL was matched — only which route answered — that change costs no caller and
-no test.
+see how a URL was matched, only which route answered, that change costs no caller and no
+test.
 
 Duplicate parameter names across levels resolve to the deepest one, which is the level
 whose URL segment the reader is looking at.

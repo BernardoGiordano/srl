@@ -14,8 +14,8 @@ A gate that fails on that is a gate that gets switched off within a week.
 
 One reference workload is not enough, and that was measured too. With only an arithmetic
 loop, two back-to-back `--ci` runs on one machine disagreed by 45–75% on every render
-workload — table render, sticky columns, route cycles — while the arithmetic loop reported
-the machine unchanged at 1.01x. The cause was an interactive desktop: a compositor at 40%
+workload, covering table render, sticky columns and route cycles, while the arithmetic loop
+reported the machine unchanged at 1.01x. The cause was an interactive desktop: a compositor at 40%
 of a core, a second browser, an editor. That load costs a page building and laying out DOM
 enormously and costs a register-only loop nothing.
 
@@ -25,9 +25,9 @@ Each run measures fixed work that no change to this repository can affect, and c
 are scaled by how much faster or slower that work got. A reference can only normalise work
 of its own kind, so there are two:
 
-- **`reference`** — integer and float arithmetic, no allocation, no DOM. The CPU clock and
-  nothing else.
-- **`layoutReference`** — build a few thousand styled elements and force one layout. The
+- **`reference`** is integer and float arithmetic, with no allocation and no DOM. The CPU
+  clock and nothing else.
+- **`layoutReference`** builds a few thousand styled elements and forces one layout. The
   renderer's throughput: allocation, style, layout, and whatever else is competing for the
   machine.
 
@@ -46,6 +46,6 @@ to the machine* still does.
 
 The known limits are stated rather than papered over. Neither reference is a proxy for
 disk or network, so a run made slow by a busy disk is not normalised. Neither is a proxy
-for a child process either — `tsc` and `eslint` start a process, read hundreds of files
-and are subject to page-cache state no page-side loop can observe — which is why the
-tooling suite carries a much wider threshold instead (ADR-0044).
+for a child process either. `tsc` and `eslint` start a process, read hundreds of files and
+are subject to page-cache state no page-side loop can observe, which is why the tooling
+suite carries a much wider threshold instead (ADR-0044).

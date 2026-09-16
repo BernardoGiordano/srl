@@ -17,8 +17,8 @@ pays for a build the CLI already did once. And it rules out the Content-Security
 the shipped policy was validated with `app.css` linked and the JIT off, the JIT may need
 `'unsafe-eval'`, and shipping the two together trades a fixed blank page for a new one.
 
-The file itself says to make the swap by hand — comment out the script, uncomment the
-link. Done by hand it is a change that must be made before every deploy and reverted
+The file itself says to make the swap by hand, commenting out the script and uncommenting
+the link. Done by hand it is a change that must be made before every deploy and reverted
 after it, which is a change that will one day be committed by accident in one direction or
 forgotten in the other.
 
@@ -29,8 +29,8 @@ development mode, the server always gets production mode, and neither state depe
 remembering.
 
 Both edits are required and a miss is fatal: dropping the JIT without linking `app.css`
-produces a page with no stylesheet, which renders — so a smoke test asking for HTTP 200
-passes — and is unusable. Each substitution is asserted and the tool exits non-zero if
+produces a page with no stylesheet, which renders, so a smoke test asking for HTTP 200
+passes, and is unusable. Each substitution is asserted and the tool exits non-zero if
 either fails.
 
 ## Consequences
@@ -39,5 +39,5 @@ Editing the `<head>` of an application breaks the deploy loudly rather than depl
 unstyled page.
 
 The import map is deliberately not touched. Its exact text is hashed into the CSP of the
-deployed server config, so a transform that reformatted it — even by one space — would
-block the map and take module resolution down with it.
+deployed server config, so a transform that reformatted it, even by one space, would block
+the map and take module resolution down with it.

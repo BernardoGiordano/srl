@@ -25,8 +25,8 @@ baseline by more than the threshold. A *product* budget is absolute, comes from 
 application rather than from a previous run, and applies only to metrics that declare one.
 
 A regression must be over the threshold **and** over a minimum meaningful delta for its
-unit. Thresholds are per suite. Everything is still reported — the slack only decides what
-can fail a build. The baseline is additionally scaled by the machine's current speed
+unit. Thresholds are per suite. Everything is still reported, and the slack only decides
+what can fail a build. The baseline is additionally scaled by the machine's current speed
 (ADR-0043).
 
 The gate reads the median, not the p95. Both are reported, because a growing tail is worth

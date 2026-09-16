@@ -20,8 +20,8 @@ proxy and the duration becomes the fact to gate."
 
 The gap that leaves is not academic. Everything measured here is one page, one action,
 zero latency: a cold start to first routed view, a navigation to one lazy route, a table
-sort. A person deciding whether to adopt this framework asks a different question — what
-does opening the deployed application and getting to a working screen cost — and the
+sort. A person deciding whether to adopt this framework asks a different question, which is
+what opening the deployed application and getting to a working screen costs, and the
 repository had no measurement of that at all. The startup workloads are the closest thing,
 and they end at the first view of an unauthenticated shell.
 
@@ -41,8 +41,8 @@ before.
 **One journey workload uses it.** `delivery/journey-40ms` opens the built artifact cold,
 waits for the real session restore and route guard to settle, then navigates to the first
 declared lazy route and waits for its view. The reported duration is one number on the
-page's own clock — document start to the destination view on screen — because that is the
-thing a user experiences. `signedIn` and `navigation` split it, and `requests`,
+page's own clock, from document start to the destination view on screen, because that is
+what a user experiences. `signedIn` and `navigation` split it, and `requests`,
 `chainDepth`, `encodedBytes` and `latency` say what it was made of and under what.
 
 **The conditions are stated in the workload's own title,** not only in a comment: 40 ms of
@@ -71,11 +71,11 @@ the machine. This record does not reopen ADR-0082; it removes the reason that re
 not be reopened, and the gate follows only when a journey baseline exists.
 
 Emulation is not a network. There is no packet loss, no congestion, no TLS handshake, no
-DNS, and the server is on the same host — so the number is a floor, and a real deployment
+DNS, and the server is on the same host, so the number is a floor and a real deployment
 over a real link will be worse. It is stated as conditions rather than as an experience for
 exactly that reason.
 
 The cost is about 9 seconds of the local profile and three samples of the ci profile, which
-the ceiling in `budgets.json` absorbs. If a second profile is ever wanted — a slow one — it
-is another entry with its own stated numbers rather than a parameter somebody forgets to
+the ceiling in `budgets.json` absorbs. A second profile, say a slow one, is another entry
+with its own stated numbers rather than a parameter somebody forgets to
 report.

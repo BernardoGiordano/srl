@@ -12,14 +12,14 @@ injector's `REMOTE_HOST` token, which is what keeps `core/` free of any import f
 
 The cost landed on every application that mounts a remote: one line of ceremony declaring
 a library-internal token, knowing which module implements it, and ordering it after the
-manifest and before the route table — for a choice with one sensible answer. An
+manifest and before the route table, all for a choice with one sensible answer. An
 application that forgot it booted fine and failed on the first navigation into a remote.
 
 Two other placements were considered. Installing the default in
 `@core/application/runtime.js` would make `core/` import `auth/` transitively, through
 `createRemoteHostProvider`'s read of the session, and collapse the seam the arrangement
 exists to hold open. A field on `ApplicationSpec` would keep the direction correct and
-still leave the application naming an adapter it has no reason to choose between — a
+still leave the application naming an adapter it has no reason to choose between, and a
 default that has to be passed is not a default.
 
 ## Decision

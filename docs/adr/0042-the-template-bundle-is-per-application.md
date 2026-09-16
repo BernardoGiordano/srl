@@ -11,8 +11,8 @@ Twelve templates over HTTP/2 on a fast connection is not worth optimising; twelv
 high-latency link, or a hundred in a real application, is.
 
 Two things about the bundle are easy to get wrong. Its keys are the URLs the browser will
-ask for, and those depend on where each file is *mounted* — a page's own template is
-`/src/…`, a shared component's is `/components/…`. And which templates ship is a project
+ask for, and those depend on where each file is mounted. A page's own template is `/src/…`
+and a shared component's is `/components/…`. And which templates ship is a project
 fact rather than a directory listing: this tool used to walk `src/`, `remotes/`, the
 collection and the library and skip anything under a `test/` directory, while the
 verifier's staleness check derived its own set. The two disagreed over
@@ -32,10 +32,10 @@ the dev server and the deployment use, so a shared component's template is keyed
 
 ## Consequences
 
-The step stays genuinely optional and behaviour-preserving. It compiles nothing — the
-runtime compiler is the only compiler, in development and in production, over the same
-bytes either way — so an absent `templates.json` means each `.html` is fetched
-individually and the application behaves identically.
+The step stays genuinely optional and behaviour-preserving. It compiles nothing, because
+the runtime compiler is the only compiler, in development and in production, over the same
+bytes either way. An absent `templates.json` means each `.html` is fetched individually and
+the application behaves identically.
 
 Re-running it after a template changes is required, and the verifier fails when the
 committed bundle is stale, which is what stops the optional step from becoming a silent

@@ -9,9 +9,9 @@
 A field wrapper can either render the control itself, configured through properties, or
 accept the control as projected content and wire it.
 
-Rendering it means a property for every attribute an input has — `type`, `autocomplete`,
-`min`, `step`, `inputmode`, `placeholder`, `rows` — and still missing the twentieth the
-day someone needs it. Every one of those properties is a name the caller has to learn for
+Rendering it means a property for every attribute an input has, such as `type`,
+`autocomplete`, `min`, `step`, `inputmode`, `placeholder` and `rows`, and still missing the
+twentieth the day someone needs it. Every one of those properties is a name the caller has to learn for
 something they already know how to write in HTML.
 
 ## Decision
@@ -29,8 +29,9 @@ every update, since a control behind an `*if` in the caller's markup is a differ
 element after it comes back.
 
 Disabled state is not an attribute on this element. It lives on the `FormField`, because
-the questions that decide it — is the form saving, may this user edit this — are answered
-where the form is (ADR-0007), and a second copy on the element would be a second copy to
+the questions that decide it, whether the form is saving and whether this user may edit
+this, are answered where the form is (ADR-0007), and a second copy on the element would be a
+second copy to
 keep in step.
 
 ## Consequences

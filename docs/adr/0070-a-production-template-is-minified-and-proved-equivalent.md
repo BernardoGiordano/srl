@@ -17,7 +17,7 @@ next reader. Minified they are 47,500 bytes: 12.9 KiB to 7.8 KiB Brotli, a third
 markup gone with nothing rendered differently.
 
 What stood in the way was an invariant worth taking seriously. The optional template bundle
-is behaviour-preserving because it compiles nothing — the same compiler runs over the same
+is behaviour-preserving because it compiles nothing. The same compiler runs over the same
 bytes in development and in production, so a bundling bug cannot change how a template
 renders ([ADR-0042](0042-the-template-bundle-is-per-application.md)). Minification breaks
 exactly that: production would serve bytes no developer ever looked at, and a greedy
@@ -37,8 +37,8 @@ matters there: `pre`, `textarea`, `script`, `style`, an inline
 syntax, as it does for `index.html` ([ADR-0041](0041-production-html-is-a-transform-not-an-edit.md)).
 
 The proof replaces the invariant it breaks. `templateShape` reduces markup to the token
-stream the compiler cares about — every element with its attributes, every text run with
-its whitespace normalised, text inside a preserving element byte for byte — and
+stream the compiler cares about, which is every element with its attributes, every text run
+with its whitespace normalised, and text inside a preserving element byte for byte.
 `minifyTemplate` throws when source and output disagree, naming the node that differs. The
 verification is inside the transform rather than beside it, so no caller can take the bytes
 without the proof.

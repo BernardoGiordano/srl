@@ -22,9 +22,9 @@ unrelated classes through `@implements`. A container asks the contract's questio
 prefixes the answers with the member's name or index; it never checks which kind it is
 holding.
 
-The contract's half of each class is the untyped half — `snapshot` is `value.value`,
-`fill` is `setValue` — because a parent reading a node it cannot name needs a signature
-that does not mention the node's type parameter.
+The contract's half of each class is the untyped half, so `snapshot` is `value.value` and
+`fill` is `setValue`, because a parent reading a node it cannot name needs a signature that
+does not mention the node's type parameter.
 
 ## Consequences
 
@@ -37,5 +37,5 @@ implementation to inherit. Both were measured against the alternative when the r
 row was built (ADR-0009) and neither grew.
 
 Reopen if a fourth or fifth node kind appears and the untyped half turns out to be
-identical in all of them — at which point a mixin, not a base class, is the shape to
+identical in all of them, at which point a mixin rather than a base class is the shape to
 compare against.

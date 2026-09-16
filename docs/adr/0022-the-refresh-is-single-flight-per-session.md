@@ -14,7 +14,7 @@ scope, or nowhere.
 The single-flight refresh is the clearest case of what that costs. It was a module-level
 `refreshInFlight` variable in a separate `authorized-fetch.js`, which made it shared by
 every `AuthSession` in the process rather than by every caller of one. Two applications on
-a page, or two suites in one test run, deduplicated against each other's sessions — one
+a page, or two suites in one test run, deduplicated against each other's sessions. One
 session's refresh satisfied another session's 401, and the second application proceeded
 with a token that was never minted for it.
 

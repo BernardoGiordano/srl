@@ -13,7 +13,7 @@ asynchronously, so until the next microtask the children sit in no document at a
 That window is visible to ordinary application code. A parent's `firstUpdated` runs before
 any child it just created has rendered, so a shell that does `this.querySelector('main')`
 finds nothing when its `<main>` sits inside a projecting layout. The symptom is a router
-that never attaches — not an error anybody can read.
+that never attaches, rather than an error anybody can read.
 
 ## Decision
 

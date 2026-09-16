@@ -8,15 +8,16 @@
 
 `@core/forms` had validators on fields and nowhere else. The reason recorded in
 [position-and-non-goals.md](../position-and-non-goals.md) was never that the computation was
-hard — a rule over a group's value is a function from an object to a code, and the group
-already builds that object for `values`. It was that the answer had nowhere to go. Every
+hard, because a rule over a group's value is a function from an object to a code and the
+group already builds that object for `values`. It was that the answer had nowhere to go. Every
 error the library could produce was shown by `ui-field`, `ui-field` is a label and a
 projected control, and "the end day may not precede the start day" is under neither of the
 two controls it is about.
 
 The example server states the same problem from the other side. `validateContacts` reports
 its over-the-limit rule as `contacts`, and the comment beside it says a code against the
-array itself is "true and useless — there is no control on the screen for 'the contacts'".
+array itself is "true and useless, because there is no control on the screen for 'the
+contacts'".
 `FormGroup.applyErrors` agrees and hands such a path back as unmatched.
 
 So the missing piece was a place, not a computation.
@@ -57,8 +58,9 @@ this is it: three small implementations, and a typecheck error rather than a sil
 one drifts.
 
 **Rejected: teaching `ui-field` to take a container.** Almost all of `ui-field` is control
-wiring — the projection query, the blur listener, the value write-back, the disabled
-property, `aria-describedby`. Every line of it would be dead for a group, and the element
+wiring, covering the projection query, the blur listener, the value write-back, the
+disabled property and `aria-describedby`. Every line of it would be dead for a group, and
+the element
 that already carries [ADR-0028](0028-ui-field-projects-the-callers-control.md)'s
 responsibilities would carry a second shape as well.
 
@@ -68,7 +70,8 @@ existing display path and works for `ordered('start', 'end')`. It has no answer 
 
 **Rejected: a path-qualified return type.** Letting a validator answer
 `{ path: 'contacts.1.email', code: 'duplicated' }` would put a client-side duplicate under
-the row that repeats — the same address a 422 carries. It also needs a third error source on
+the row that repeats, at the same address a 422 carries. It also needs a third error source
+on
 `FormField`, a path each leaf knows about itself, and a re-push on every array reshuffle,
 because a row's path changes when the row above it is removed. `applyErrors` already places
 a code by path, already clears it on edit, and is already the call a 422 goes through. A
@@ -107,8 +110,8 @@ client and clash at the server, which places its answer under `contacts.1.email`
 client-side rule is a courtesy that saves a round trip when it fires; the server stays the
 authority, and a screen whose two rules must agree exactly has to write the folding itself.
 
-**What would reopen it:** a screen whose client-side rule is about one row of a set —
-"this contact repeats the one above" answered without a round trip. `applyErrors` places it
+**What would reopen it:** a screen whose client-side rule is about one row of a set, so
+that "this contact repeats the one above" is answered without a round trip. `applyErrors` places it
 under the right control and the edit that answers it clears it, but nothing re-runs the rule
 while the user types, so a duplicate created against a *different* row goes unreported until
 the next submit.

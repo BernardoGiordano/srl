@@ -61,9 +61,9 @@ not resolve, in keeping with the explicit unknown states of
 **Every member, not a list of lifecycle names.** Hiding a callable member behind a value
 breaks whichever member it is, and a list of blessed names would go stale the first time a
 base class grew a method. The one list that exists is `ROOT_METHODS` in `index.mjs`: the
-methods a class inherits from a root the walk stops at — `HTMLElement`, `LitElement`,
-`ReactiveElement` — which this model does not parse and which are published, stable
-interfaces. A method an element declares itself is read from its source.
+methods a class inherits from a root the walk stops at, which is `HTMLElement`,
+`LitElement` and `ReactiveElement`. This model does not parse them, and they are published,
+stable interfaces. A method an element declares itself is read from its source.
 
 **A callable field is not a collision.** `render = () => ...` covers the method and works,
 so it is accepted by both tools.
@@ -93,8 +93,8 @@ covers and the two ways out, and gets the static one before the page ever loads.
 
 The runtime check costs one pass over the own keys of one instance per class, in
 production as well as development. A page defining eighty components pays eighty short
-loops, once, at the connect of each first instance — not per element, which is what a
-windowed table with a thousand rows would have made expensive.
+loops, once, at the connect of each first instance, rather than per element, which is what
+a windowed table with a thousand rows would have made expensive.
 
 `ProjectDiagnostic` now carries an optional `line` and `column`, and the JSON projection
 emits them as null when absent. Every existing diagnostic keeps the shape it had.

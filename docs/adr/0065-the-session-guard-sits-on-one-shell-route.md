@@ -12,8 +12,8 @@ somebody signs out.
 
 Separately, a screen a user is not entitled to see can be handled three ways: hide the
 control, guard the route, or let the server refuse. Hiding the control is not a boundary at
-all — the URL is still reachable — and letting the server refuse produces a screen full of
-failed requests with no explanation.
+all, because the URL is still reachable, and letting the server refuse produces a screen
+full of failed requests with no explanation.
 
 ## Decision
 
@@ -35,6 +35,6 @@ The route table stays the place where "who may be here" is answered once, and th
 stays the place where it is enforced. Neither is a substitute for the other, and the suite
 asserts the entitlement rather than asserting that a control is hidden.
 
-Two routes are deliberately eager rather than lazy — the login screen and the not-found
-page — because a route table that needs a network request to tell you a URL is wrong is
-worse than one that costs two kilobytes.
+Two routes are deliberately eager rather than lazy, the login screen and the not-found
+page, because a route table that needs a network request to tell you a URL is wrong is worse
+than one that costs two kilobytes.

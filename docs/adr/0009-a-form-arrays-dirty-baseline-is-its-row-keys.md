@@ -7,14 +7,14 @@
 ## Context
 
 Nested groups and field arrays were a non-goal with a stated trigger: a screen that needs
-a repeating row. One did — a customer's contacts, three fields per row, up to five rows,
+a repeating row. One did, a customer's contacts, three fields per row, up to five rows,
 with a uniqueness rule across the rows that only the server can answer.
 
 Unlike the flat form that came before it, the alternative was not built first. The frictions were
 already known from the nine-field version, and rebuilding them at one more level of depth
 would have measured the same seven things again. So this is a cost, not a comparison, and
-it is recorded as one. Counted as non-blank, non-comment lines — a shade stricter than the
-counting used for the flat form, so compare within this table and not across it:
+it is recorded as one. Counted as non-blank, non-comment lines, a shade stricter than the
+counting used for the flat form, so compare within this table and not across it.
 
 | | Before | After |
 |---|---|---|
@@ -48,7 +48,7 @@ to prevent; the next submit marks it like everything else.
 
 ## Consequences
 
-`FormNode` came out of this unchanged (ADR-0006) — the third node kind cost nothing but
+`FormNode` came out of this unchanged (ADR-0006). The third node kind cost nothing but
 answering the same questions, which was the check on whether the interface was the right
 shape.
 

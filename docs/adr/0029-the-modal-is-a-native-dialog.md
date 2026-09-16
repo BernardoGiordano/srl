@@ -28,8 +28,8 @@ A hand-built overlay re-implements four of those badly and the fifth not at all.
 announced as modal already, and the attribute is the version of that claim which can be
 wrong.
 
-The element claims one piece of layout — the full-viewport, centred, transparent layer —
-in the collection's stylesheet. That is the only place this collection claims layout, and
+The element claims one piece of layout in the collection's stylesheet, the full-viewport,
+centred, transparent layer. That is the only place this collection claims layout, and
 it is claimed because the alternative is every consumer restating six utilities for a box
 they never see.
 

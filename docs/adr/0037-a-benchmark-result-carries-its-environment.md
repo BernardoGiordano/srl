@@ -7,8 +7,8 @@
 ## Context
 
 The measurements that started this work were one headless-Chrome run on one laptop. The
-figures were real — around 398,000 DOM nodes for a full 10,000-row render, 170 MB of heap
-while it was mounted and 4 MB once it was released — and none of them can be used as an
+figures were real, at around 398,000 DOM nodes for a full 10,000-row render, 170 MB of heap
+while it was mounted and 4 MB once it was released. None of them can be used as an
 acceptance budget, because nothing recorded what produced them.
 
 A number without its environment is an anecdote. Two of them compared against each other
@@ -24,7 +24,8 @@ eventually be used to justify the wrong conclusion.
 
 Benchmarks address the collection's public interface rather than its internals, so a
 change behind a projection or a visible-row window does not require rewriting the
-benchmark alongside it — which is how a before/after comparison stops being a comparison.
+benchmark alongside it, which is how a before-and-after comparison stops being a
+comparison.
 
 ## Consequences
 

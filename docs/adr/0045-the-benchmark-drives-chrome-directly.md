@@ -17,8 +17,9 @@ and a warm start measured with no cache is not a warm start.
 
 ## Decision
 
-The harness drives Chrome directly over the DevTools protocol. Both halves — tests and
-benchmarks — still run the same source over one origin, which is the property that matters.
+The harness drives Chrome directly over the DevTools protocol. Both halves, tests and
+benchmarks, still run the same source over one origin, which is the property that
+matters.
 
 The network is blocked at the network stack rather than by interception, with two flags
 that leave caching untouched: `--host-resolver-rules`, so every host but the loopback
@@ -41,5 +42,5 @@ Every sample gets a fresh scope whose Lit root is explicitly cleared, because cl
 root is what releases the signal effects a standalone `render()` owns. Without it each
 sample is measured against a slightly larger program than the last.
 
-Correctness is enforced twice — per sample in the page, and again in Node, where
-aggregation refuses a workload with any failed sample. Fast and wrong is not a result.
+Correctness is enforced twice, per sample in the page and again in Node, where aggregation
+refuses a workload with any failed sample. Fast and wrong is not a result.
