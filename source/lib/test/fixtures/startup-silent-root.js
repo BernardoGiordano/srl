@@ -1,6 +1,6 @@
 /**
- * A root module that forgot to register its element: the blank-page failure
- * `startApplication` turns into a message. Exports something so the import is not
+ * A root module that forgot to register its element, which is the blank-page failure
+ * `startApplication` turns into a message. It exports something so the import is not
  * optimised away by a reader.
  */
 

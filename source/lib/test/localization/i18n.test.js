@@ -18,25 +18,22 @@ import {
 import { assert, present } from '../harness.js';
 
 /**
- * Internationalisation, tested against real message files over real HTTP.
- * Nothing is stubbed; the bundles are fetched and merged exactly as they are in
- * production.
+ * Internationalisation, tested against real message files over real HTTP. Nothing is
+ * stubbed, and the bundles are fetched and merged exactly as they are in production.
  *
- * They are this suite's own fixtures, though, and that was a correction. The
- * bundles used to be `/i18n/{locale}.json`, which the test runner mounts to
- * whichever application is under test — so the framework's suite was asserting
- * the content of one application's message files, and pointing `APP` at another
- * failed eight tests in a layer that had not changed. A library test that needs one
- * application to pass is the boundary leaking, which is the thing
- * source/lib/test says about itself in the config's header.
+ * They are this suite's own fixtures. Pointed at `/i18n/{locale}.json`, which the test
+ * runner mounts to whichever application is under test, the framework's suite would
+ * assert the content of one application's message files, and pointing `APP` at another
+ * would fail eight tests in a layer that had not changed. A library test that needs one
+ * application to pass is the boundary leaking, which is what source/lib/test says about
+ * itself in the config's header.
  *
- * The pattern is built by hand rather than with `new URL`, because the URL
- * parser percent-encodes the braces in `{locale}` and the substitution would
- * then never match.
+ * The pattern is built by hand rather than with `new URL`, because the URL parser
+ * percent-encodes the braces in `{locale}` and the substitution would then never match.
  *
- * The one test that carries the architectural claim is "changes every reader when
- * the locale changes". Everything else is behaviour; that one is the reason this
- * approach was chosen over a build-time substitution.
+ * The test that carries the architectural claim is "changes every reader when the locale
+ * changes". Everything else is behaviour, and that one is why this approach was chosen
+ * over a build-time substitution.
  */
 
 const FIXTURES = `${new URL('../fixtures/i18n/', import.meta.url).href}{locale}.json`;
@@ -44,8 +41,8 @@ const LATE_BUNDLE = `${new URL('../fixtures/late/', import.meta.url).href}{local
 
 /**
  * A pattern with nothing behind it, and the file a build would have emitted for it.
- * Nothing resolves the second from the first, which is the point: only the mapping
- * can produce the message. ADR-0083.
+ * Nothing resolves the second from the first, so only the mapping can produce the
+ * message. ADR-0083.
  */
 const MAPPED = `${new URL('../fixtures/hashed/', import.meta.url).href}{locale}.json`;
 const EMITTED = new URL('../fixtures/hashed/en-0123456789abcdef.json', import.meta.url).href;
@@ -74,10 +71,10 @@ describe('i18n', () => {
   });
 
   it('skips $-prefixed translator notes instead of making them messages', () => {
-    // JSON has no comments, so the bundles carry `$comment` — here an array of
-    // lines. Walking into it produced `$comment.0`, `$comment.1` … as messages,
-    // while `verify-deps.mjs` skipped them and said it flattened exactly as the
-    // runtime does. Both sides skip them now; this is what keeps that true.
+    // JSON has no comments, so the bundles carry `$comment`, here an array of lines.
+    // Walking into it yields `$comment.0`, `$comment.1` and so on as messages, while
+    // `verify-deps.mjs` skips them and claims to flatten exactly as the runtime does.
+    // Both sides skip them, and this is what keeps that true.
     assert.equal(t('$comment'), '$comment');
     assert.equal(t('$comment.0'), '$comment.0');
   });
@@ -185,11 +182,11 @@ describe('i18n', () => {
   });
 
   it('fetches the file the manifest maps a bundle URL to', async () => {
-    // A content hash cannot live in a `{locale}` pattern, so a build that
-    // hash-names its locale bundles — which is what lets them be served immutable
-    // rather than revalidated on every load — maps each resolved URL to the file
-    // that answers for it. The declared URL stays the identity: it is what the
-    // pattern resolves to and what the cache is keyed on. ADR-0083.
+    // A content hash cannot live in a `{locale}` pattern, so a build that hash-names
+    // its locale bundles, which is what lets them be served immutable rather than
+    // revalidated on every load, maps each resolved URL to the file that answers for
+    // it. The declared URL stays the identity, because it is what the pattern resolves
+    // to and what the cache is keyed on. ADR-0083.
     assert.equal(t('hashed.only'), 'hashed.only', 'not configured yet');
     await configureI18n({
       defaultLocale: 'en',
@@ -222,11 +219,11 @@ describe('i18n', () => {
   });
 
   /**
-   * The chosen language is a UI preference, so it goes through the module that owns them
-   * and not through a `localStorage` slot of its own. Asserted through that interface for
-   * the same reason the theme's is: an application that configures a memory store or an
-   * encrypted wrapper has to get the language too, and a test reading storage directly
-   * would keep passing on the day it stopped.
+   * The chosen language is a UI preference, so it goes through the module that owns
+   * them rather than through a `localStorage` slot of its own. Asserted through that
+   * interface for the same reason the theme's is. An application that configures a
+   * memory store or an encrypted wrapper has to get the language too, and a test
+   * reading storage directly would keep passing on the day it stopped.
    */
   describe('persistence', () => {
     /** @type {ReturnType<typeof createMemoryStorage>} */
@@ -264,8 +261,8 @@ describe('i18n', () => {
 
     /**
      * The assertion is "not the stored one" rather than a named locale, because what
-     * wins instead is `navigator.languages` — which is a property of whoever is running
-     * the suite, not of this repository.
+     * wins instead is `navigator.languages`, a property of whoever is running the suite
+     * rather than of this repository.
      */
     it('ignores a stored locale this build does not support', async () => {
       storage.setItem('ui.locale', 'ja');

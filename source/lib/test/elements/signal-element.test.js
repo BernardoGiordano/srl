@@ -75,15 +75,15 @@ customElements.define('fine-grained-element', FineGrainedElement);
  */
 
 class HiddenRenderElement extends SignalElement {
-  // Deliberately invalid, and tsc says so too — see the note in the suite below.
+  // Deliberately invalid, and tsc says so too. The note in the suite below explains.
   // @ts-expect-error a field may not cover a method
   render = 'state';
 }
 customElements.define('hidden-render-element', HiddenRenderElement);
 
 class HiddenHookElement extends SignalElement {
-  // `onMount` is SignalElement's, not Lit's: the rule is every callable member, not a
-  // list of lifecycle names.
+  // `onMount` is SignalElement's rather than Lit's, because the rule is every callable
+  // member rather than a list of lifecycle names.
   // @ts-expect-error a field may not cover a method
   onMount = true;
 
@@ -135,8 +135,8 @@ customElements.define('callable-field-element', CallableFieldElement);
 class ShadowedPropertyElement extends SignalElement {
   static properties = { limit: { type: Number } };
 
-  // The supported shape: a field over a reactive accessor, which `#adoptShadowedFields`
-  // hands back rather than refusing.
+  // The supported shape, a field over a reactive accessor, which
+  // `#adoptShadowedFields` hands back rather than refusing.
   limit = 7;
 
   render() {

@@ -4,11 +4,10 @@ import { assert, instrumentedAbort, present } from '../harness.js';
 /**
  * The HTTP client, against a recorded transport.
  *
- * These assertions used to be untestable in the library, because the client was
- * written twice inside two applications and each copy could only be reached
- * through a running application and a fake server. Everything here is about the
- * request the client builds and the failure it reports, which is the whole of
- * what an application depends on.
+ * Written twice inside two applications, the client can only be reached through a
+ * running application and a fake server, and these assertions cannot live in the
+ * library at all. Everything here is about the request the client builds and the failure
+ * it reports, which is the whole of what an application depends on.
  */
 
 /** @typedef {{ url: string, init: RequestInit }} Call */
@@ -35,7 +34,7 @@ function transport(answer) {
 
 /**
  * A transport that hands every call to the test unanswered, and rejects one whose
- * signal aborts — which is the half of `fetch` these assertions are about.
+ * signal aborts, which is the half of `fetch` these assertions are about.
  *
  * @returns {{ fetch: import('@core/http/client.js').HttpTransport, calls: Pending[] }}
  */
@@ -149,8 +148,8 @@ describe('ApiClient', () => {
         controller.signal,
       );
 
-      // Not the caller's signal: the request is shared, and one caller leaving may
-      // not cancel what the others are waiting for. It aborts when the last does.
+      // Not the caller's signal, because the request is shared and one caller leaving
+      // may not cancel what the others are waiting for. It aborts when the last does.
       const call = present(sent.calls[0]);
       assert.notOk(call.signal === controller.signal, 'the request carries its own signal');
 

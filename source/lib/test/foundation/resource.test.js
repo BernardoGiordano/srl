@@ -142,8 +142,8 @@ describe('resource', () => {
     const first = read.reload();
     const second = read.reload();
 
-    // `fetch` rejects with AbortError when its signal aborts. That is not a
-    // failure a screen should show: somebody asked a newer question.
+    // `fetch` rejects with AbortError when its signal aborts. That is not a failure a
+    // screen should show, because somebody asked a newer question.
     calls[0]?.reject(new DOMException('Aborted', 'AbortError'));
     calls[1]?.resolve('rows');
 

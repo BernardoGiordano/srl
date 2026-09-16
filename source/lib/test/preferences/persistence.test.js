@@ -13,10 +13,10 @@ import {
  * The one interface every non-auth UI preference crosses.
  *
  * Everything here is asserted through the module rather than against a storage key,
- * because the key layout is implementation: the table, the filters, the sidebar, the
- * theme and the locale are all supposed to be replaceable by one
- * `configurePreferences` call, and a test that reads `localStorage` itself would
- * still pass on the day one of them stopped honouring it.
+ * because the key layout is implementation. The table, the filters, the sidebar, the
+ * theme and the locale are all supposed to be replaceable by one `configurePreferences`
+ * call, and a test that reads `localStorage` itself would still pass on the day one of
+ * them stopped honouring it.
  */
 
 describe('component state', () => {
@@ -72,9 +72,10 @@ describe('component state', () => {
 
   /**
    * The whole failure policy in one case, because every caller depends on it and none
-   * of them may implement its own: a store that throws on every call — Safari in a
-   * blocked third-party frame, storage disabled by enterprise policy — has to read as
-   * "no state" and write as "did not persist", never as an exception on a render path.
+   * of them may implement its own. A store that throws on every call, such as Safari in
+   * a blocked third-party frame or storage disabled by enterprise policy, has to read
+   * as "no state" and write as "did not persist", never as an exception on a render
+   * path.
    */
   it('treats a storage that throws as missing state rather than an error', () => {
     configurePreferences({
@@ -123,7 +124,8 @@ describe('component state', () => {
     assert.equal(storage.getItem('ui.theme'), null, 'the legacy key is not read twice');
     assert.equal(loadPreference('theme', 'ui.theme'), 'forest', 'stored as an envelope');
 
-    // Second call: the envelope answers, and there is no legacy value left to weigh.
+    // Second call, where the envelope answers and there is no legacy value left to
+    // weigh.
     assert.equal(
       migrateLegacyKey('theme', 'ui.theme', 'ui.theme', {
         accept: () => {

@@ -2,19 +2,18 @@ import { signal } from '@core/foundation/reactive.js';
 import { compileExpression } from '@core/template/expression.js';
 import { assert } from '../harness.js';
 
-// Side effect: i18n registers `t`, `num`, `dt` and the rest as template globals.
-// Imported explicitly here because expression.js on its own has none — in the
-// application, template.js does this import for the same reason.
+// A side effect, because i18n registers `t`, `num`, `dt` and the rest as template
+// globals. Imported explicitly here because expression.js on its own has none, and in
+// the application template.js does this import for the same reason.
 import '@core/localization/i18n.js';
 
 /**
  * The template expression language.
  *
- * Two groups of tests matter more than the rest. The signal-unwrapping ones,
- * because that behaviour is what lets a template read `users` instead of
- * `users.value` and is therefore load-bearing for every component. And the
- * refusal tests, because the value of throwing on an unknown name is entirely in
- * the fact that it happens rather than silently rendering nothing.
+ * Two groups of tests matter more than the rest. The signal-unwrapping ones, because
+ * that behaviour is what lets a template read `users` instead of `users.value` and every
+ * component depends on it. And the refusal tests, because throwing on an unknown name is
+ * worth doing only if it happens rather than silently rendering nothing.
  */
 
 /**
@@ -154,7 +153,7 @@ describe('expression language', () => {
   it('does not unwrap behind &', () => {
     const count = signal(2);
     assert.equal(evaluate('&count', { count }), count);
-    // The `&` applies to the outermost resolution only: `service` is still
+    // The `&` applies to the outermost resolution only, so `service` is still
     // unwrapped on the way through.
     const service = { panel: signal('p') };
     assert.equal(evaluate('&service.panel', { service }), service.panel);
@@ -188,9 +187,9 @@ describe('expression language', () => {
   /* ── Refusals ──────────────────────────────────────────────────────────── */
 
   it('resolves an unknown name to undefined, leaving the report to the checker', () => {
-    // Not a throw: the evaluator has no development mode to be loud in, and
-    // `npm run templates:check` types every expression against the component
-    // class, so a name the component does not have never reaches a browser.
+    // Not a throw, because the evaluator has no development mode to be loud in and
+    // `npm run templates:check` types every expression against the component class, so
+    // a name the component does not have never reaches a browser.
     assert.equal(evaluate('nope', {}), undefined);
   });
 
@@ -207,8 +206,8 @@ describe('expression language', () => {
   });
 
   it('refuses a reserved member however it is written to', () => {
-    // The read path always refused these names, so the write path reading as
-    // safe was the whole defect: each of these changed a prototype.
+    // The read path refuses these names, so a write path that read as safe would be
+    // the defect, because each of these changes a prototype.
     for (const source of [
       'x.__proto__ = y',
       'x.constructor = y',

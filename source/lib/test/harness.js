@@ -70,10 +70,10 @@ export function unmountAll() {
 /**
  * Assert a value exists and return it narrowed.
  *
- * A method on an object literal cannot serve as a TypeScript assertion function
- * (assertions require the call target to carry an explicit type annotation), so
- * `assert.ok(x)` does not narrow `x`. Returning the value does the same job with
- * no declaration gymnastics: `const el = present(root.querySelector('.x'))`.
+ * A method on an object literal cannot serve as a TypeScript assertion function,
+ * because assertions require the call target to carry an explicit type annotation, so
+ * `assert.ok(x)` does not narrow `x`. Returning the value does the same job with no
+ * declaration gymnastics, as in `const el = present(root.querySelector('.x'))`.
  *
  * @template T
  * @param {T | null | undefined} value

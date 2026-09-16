@@ -16,9 +16,9 @@ import {
 
 /**
  * The theme is a UI preference, so what it persists is asserted through the preference
- * module rather than against `localStorage`. That is the point of the seam: this suite
- * runs entirely against a memory store, leaves nothing in the browser, and would fail if
- * the theme ever went back to keeping a slot of its own.
+ * module rather than against `localStorage`. That is what the seam buys. This suite runs
+ * entirely against a memory store, leaves nothing in the browser, and fails if the theme
+ * ever keeps a slot of its own.
  */
 
 describe('theme', () => {

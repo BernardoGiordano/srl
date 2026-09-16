@@ -241,11 +241,11 @@ describe('template revisions', () => {
 /**
  * The edit that arrives while the template is still on its way.
  *
- * The request resolves after the revision has been published, and what it carries
- * is the file as it was before the save. Compiling those bytes would attach markup
- * the developer has already replaced, and — worse, because it outlives the edit —
- * hand one URL a second strings array, so two hosts of one template would render
- * from different parsed templates for the rest of the session. ADR-0014.
+ * The request resolves after the revision has been published, and what it carries is
+ * the file as it was before the save. Compiling those bytes would attach markup the
+ * developer has already replaced. Worse, because it outlives the edit, it would hand one
+ * URL a second strings array, so two hosts of one template would render from different
+ * parsed templates for the rest of the session. ADR-0014.
  */
 describe('a revision that races the first request', () => {
   /** @type {typeof globalThis.fetch} */
@@ -276,9 +276,9 @@ describe('a revision that races the first request', () => {
     const url = `/lib/test/revision/racing-${String(serial)}.html`;
     const tag = `revision-racing-${String(serial)}`;
 
-    // Not awaited yet: the definition is waiting on the request, which is the
-    // window an edit can land in. `attachTemplate` starts the request before its
-    // first await, so the URL is in the source cache by the time this returns.
+    // Not awaited yet, because the definition is waiting on the request, which is the
+    // window an edit can land in. `attachTemplate` starts the request before its first
+    // await, so the URL is in the source cache by the time this returns.
     const defining = defineComponent({
       tag,
       element: class extends SignalElement {},

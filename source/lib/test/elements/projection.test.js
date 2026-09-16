@@ -19,9 +19,8 @@ class SlottedCard extends SignalElement {
 customElements.define('slotted-card', SlottedCard);
 
 /**
- * A caller whose projected content is a lit binding rather than a fixed element —
- * which is what every `*if`, `*else` and `*for` in an application's markup
- * compiles to.
+ * A caller whose projected content is a lit binding rather than a fixed element, which
+ * is what every `*if`, `*else` and `*for` in an application's markup compiles to.
  */
 const branch = signal(false);
 const rows = signal(/** @type {readonly string[]} */ (['a']));
@@ -164,9 +163,9 @@ describe('light-DOM content projection', () => {
 
   it('lets a layered utility override the marker default', async () => {
     // Tailwind emits every utility inside `@layer utilities`, and a layered
-    // declaration loses to an unlayered one no matter how specific it is. So the
-    // marker default has to be layered too, and declared first — otherwise
-    // `class="block"` on a marker or a route outlet is silently ignored.
+    // declaration loses to an unlayered one no matter how specific it is. The marker
+    // default therefore has to be layered too, and declared first, or `class="block"`
+    // on a marker or a route outlet is silently ignored.
     const utilities = document.createElement('style');
     utilities.textContent = '@layer utilities{.block{display:block}}';
     document.head.append(utilities);

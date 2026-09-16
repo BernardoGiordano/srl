@@ -6,9 +6,9 @@ import { assert, present } from '../harness.js';
 /**
  * The adapter that binds the HTTP client to the session.
  *
- * One assertion carries the whole reason this is a function rather than a value:
- * the session is resolved per call. A transport that captured it once would keep
- * authorizing against a session a re-bootstrap has already disposed.
+ * One assertion carries the reason this is a function rather than a value. The session
+ * is resolved per call, and a transport that captured it once would keep authorizing
+ * against a session a re-bootstrap has already disposed.
  */
 
 /**

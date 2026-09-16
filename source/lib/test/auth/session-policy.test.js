@@ -14,20 +14,19 @@ import { assert } from '../harness.js';
 /**
  * Session admission, tested as the trust boundary it is.
  *
- * The case that motivates the whole module is a token endpoint answering HTTP 200
- * with a body missing the fields a session needs. Before admission, that produced
- * a client session whose every field was `undefined`, an `isAuthenticated` signal
- * reading true, and an `Authorization: Bearer undefined` on the next request. The
- * server still refused that request — this was never a server bypass — but the
- * client had already let the user past its guards and had no way back.
+ * The case that motivates the whole module is a token endpoint answering HTTP 200 with
+ * a body missing the fields a session needs. Without admission that produces a client
+ * session whose every field is `undefined`, an `isAuthenticated` signal reading true,
+ * and an `Authorization: Bearer undefined` on the next request. The server still refuses
+ * that request, so it is never a server bypass, but the client has already let the user
+ * past its guards and has no way back.
  *
- * What is NOT tested here is any endpoint's payload shape, because the library no
- * longer has one: a store maps its own backend's fields and calls `sessionFrom`,
- * and the stores under `example/src/auth/` are tested against their own server.
- * What this file owns is the last step every store funnels through, and the
- * classification — which is not decoration: `AuthSession` schedules refreshes
- * without a human present, and needs "the grant is refused" apart from "nobody
- * answered".
+ * No endpoint's payload shape is tested here, because the library has none. A store maps
+ * its own backend's fields and calls `sessionFrom`, and the stores under
+ * `example/src/auth/` are tested against their own server. This file owns the last step
+ * every store funnels through, and the classification. That classification is not
+ * decoration, because `AuthSession` schedules refreshes without a human present and
+ * needs "the grant is refused" apart from "nobody answered".
  */
 
 const GOOD_FIELDS = {
@@ -61,8 +60,8 @@ describe('auth payload admission', () => {
     });
 
     it('refuses the 200 whose body carried no subject', () => {
-      // The finding this module exists for, in one assertion: a store that read a
-      // field the server did not send cannot build a session out of `undefined`.
+      // What this module exists for, in one assertion. A store that read a field the
+      // server did not send cannot build a session out of `undefined`.
       assert.throws(
         () => sessionFrom({ ...GOOD_FIELDS, subject: undefined }, 'The token endpoint /auth/token'),
         'The token endpoint /auth/token: subject must be a non-empty string',
@@ -162,8 +161,8 @@ describe('auth payload admission', () => {
 
   describe('failure classification', () => {
     it('calls a 4xx terminal and a 5xx transient', async () => {
-      // The distinction the refresh timer acts on: a refused grant ends the
-      // session, an unavailable server does not.
+      // The distinction the refresh timer acts on. A refused grant ends the session,
+      // and an unavailable server does not.
       assert.ok(
         (await failureFor(jsonResponse({}, 400), 'endpoint')) instanceof AuthRejected,
         '400 is terminal',
@@ -196,7 +195,7 @@ describe('auth payload admission', () => {
     });
 
     it('refuses a success body that is not JSON', async () => {
-      // The most common misconfiguration here: a history fallback in front of a
+      // The most common misconfiguration here, a history fallback in front of a
       // missing route, answering 200 with the application shell.
       await assert.rejects(
         () => readPayload(new Response('<!doctype html>', { status: 200 }), 'The token endpoint'),

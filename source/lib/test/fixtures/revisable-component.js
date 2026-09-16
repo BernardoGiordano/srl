@@ -5,14 +5,14 @@ import { defineComponent } from '@core/elements/component.js';
  * A component module that declares a different class each time it is evaluated.
  *
  * Replacing a component means running its module again, so the subject cannot be a
- * class written inside a test file: it has to be a real file the browser imports
- * twice. This is that file, and `?case=` picks which edit it stands for — the
- * one edit a live page can adopt, and one of each it must refuse.
+ * class written inside a test file. It has to be a real file the browser imports twice.
+ * This is that file, and `?case=` picks which edit it stands for, covering the one edit
+ * a live page can adopt and one of each it must refuse.
  *
  * The revision query is read rather than the file rewritten. `reviseComponentModule`
- * appends `?srl-revision=<n>` to get past the module map, which is exactly the
- * signal "this evaluation is the edited one", so the class body can branch on it and
- * the second evaluation genuinely differs from the first.
+ * appends `?srl-revision=<n>` to get past the module map, which is the signal that this
+ * evaluation is the edited one, so the class body can branch on it and the second
+ * evaluation genuinely differs from the first.
  */
 
 const here = new URL(import.meta.url);
@@ -89,8 +89,8 @@ function classFor() {
             }
           };
 
-    // A field whose initialiser changed. Same reason, and quieter: the page would
-    // keep showing the old value with nothing to say it had been edited.
+    // A field whose initialiser changed. Same reason, and quieter, because the page
+    // would keep showing the old value with nothing to say it had been edited.
     case 'initialiser':
       return edited
         ? class extends SignalElement {
@@ -108,7 +108,7 @@ function classFor() {
             }
           };
 
-    // A reactive property the edit added: an accessor pair and an observed
+    // A reactive property the edit added, meaning an accessor pair and an observed
     // attribute, both fixed when the tag was defined.
     case 'property':
       return edited
@@ -156,8 +156,8 @@ function classFor() {
 }
 
 // The markup is named rather than derived, because the tag this module declares is
-// computed and static discovery cannot read it: a sibling `.html` here would be
-// markup no definition claims, which is what `orphanTemplates` exists to catch.
+// computed and static discovery cannot read it. A sibling `.html` here would be markup
+// no definition claims, which is what `orphanTemplates` exists to catch.
 await defineComponent({
   tag: `revisable-${shape}`,
   element: classFor(),

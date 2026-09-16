@@ -5,11 +5,11 @@ import { DerivedHost } from '../fixtures/derived-host.js';
 import { assert, mount, present, settled, unmountAll } from '../harness.js';
 
 /**
- * The interface every component module crosses, and the one a route, an outlet
- * target, a remote entry and startup all read back through. Identity used to be
- * stated in four places per component — a static template URL, a `defineComponent`
- * call, a side-effect import, and a tag string in whatever mounted it — and
- * nothing could check that the four agreed.
+ * The interface every component module crosses, and the one a route, an outlet target,
+ * a remote entry and startup all read back through. Stated in four places per component,
+ * as a static template URL, a `defineComponent` call, a side-effect import and a tag
+ * string in whatever mounted it, identity is something nothing can check for
+ * agreement.
  */
 
 /** A component with no markup of its own, the `template: false` case. */
@@ -142,7 +142,7 @@ describe('defineComponent', () => {
   });
 
   it('refuses `uses` given as a tag string', async () => {
-    // The point of `uses` is the import: a string names an element without
+    // `uses` exists for the import, because a string names an element without
     // creating the dependency that makes it exist.
     await assert.rejects(
       () =>
@@ -178,7 +178,7 @@ describe('tagOf', () => {
 
 describe('resolveTag', () => {
   it('names nothing for a value that is not a component', async () => {
-    // What a `load` that resolves a module namespace hands back. Legal: the
+    // What a `load` that resolves a module namespace hands back. Legal, because the
     // caller's own `tag` names what to mount in that case.
     const namespace = await import('../fixtures/derived-host.js');
 

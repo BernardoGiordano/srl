@@ -5,14 +5,13 @@ import { email, maxRows, minRows, ordered, required, sameAs, uniqueBy } from '@c
 import { assert } from '../harness.js';
 
 /**
- * Rules about a *set* of values: two members that must be in order, a list that
- * must hold at least one row, two rows that may not collide.
+ * Rules about a set of values. Two members that must be in order, a list that must hold
+ * at least one row, two rows that may not collide.
  *
- * What these tests are really pinning is where the answer goes. A container's
- * code belongs to the container — `invalidPath` says `''`, and the element that
- * shows it is `ui-form-error` rather than any field — and it never outranks a
- * member that is itself invalid. `source/components/test/inputs/form-error.test.js`
- * is the one that mounts.
+ * What these tests pin is where the answer goes. A container's code belongs to the
+ * container, so `invalidPath` says `''` and the element that shows it is `ui-form-error`
+ * rather than any field. It never outranks a member that is itself invalid.
+ * `source/components/test/inputs/form-error.test.js` is the one that mounts.
  */
 describe('a rule over a group', () => {
   const period = () =>
@@ -39,7 +38,7 @@ describe('a rule over a group', () => {
     const form = period();
     form.fields.start.setValue('2026-03-07');
 
-    // Both are true: `end` is empty and the pair is not in order. A specific
+    // Both are true, since `end` is empty and the pair is not in order. A specific
     // control is a better place to send someone than a sentence about the form.
     assert.equal(form.invalidPath.value, 'end');
   });

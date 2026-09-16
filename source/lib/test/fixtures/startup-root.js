@@ -1,6 +1,6 @@
 /**
- * A root module that behaves: it defines its element before the module resolves,
- * the way a component module ending in `await defineComponent(...)` does.
+ * A root module that behaves. It defines its element before the module resolves, the
+ * way a component module ending in `await defineComponent(...)` does.
  */
 
 export const rootTag = 'startup-fixture-root';

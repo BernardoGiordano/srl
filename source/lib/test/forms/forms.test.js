@@ -19,17 +19,17 @@ import { assert } from '../harness.js';
 /**
  * The form primitives, with no DOM in sight.
  *
- * That is the point of them being in `core`: validity, the timing rule for showing
- * an error, dirtiness and the server's answers are decisions about state, and a
- * suite that had to mount an element to test them would be testing `ui-field` as
- * well. `source/components/test/inputs/field.test.js` is the one that mounts.
+ * That is why they are in `core`. Validity, the timing rule for showing an error,
+ * dirtiness and the server's answers are decisions about state, and a suite that had to
+ * mount an element to test them would be testing `ui-field` as well.
+ * `source/components/test/inputs/field.test.js` is the one that mounts.
  */
 describe('form field', () => {
   it('reports the first failing rule, in declaration order', () => {
     const name = field('', [required(), minLength(2), maxLength(4)]);
 
-    // Empty says "required", not "too short": a field reporting both would show
-    // two sentences for one mistake, and the wrong one first.
+    // Empty says "required" rather than "too short", because a field reporting both
+    // would show two sentences for one mistake, and the wrong one first.
     assert.equal(name.error.value, 'required');
 
     name.setValue('a');
@@ -400,9 +400,9 @@ describe('field arrays', () => {
   });
 
   it('does not call a removed row replaced by a new one clean', () => {
-    // The case a length comparison gets wrong. Remove the one contact, add
-    // another, and there is one row either way — but not the same one, and a
-    // guard that let the user walk away here would lose the deletion.
+    // The case a length comparison gets wrong. Remove the one contact, add another,
+    // and there is one row either way, but not the same one, and a guard that let the
+    // user walk away here would lose the deletion.
     const form = group({
       contacts: fieldArray(contact, [filled({ name: 'Ada', email: 'ada@example.com' })]),
     });

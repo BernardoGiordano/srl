@@ -79,11 +79,11 @@ function marks(path, mark) {
 }
 
 /**
- * A shell whose outlet does not exist yet when its `onMount` runs, because Lit
- * only schedules the render that creates it. The real shells are worse — one of
- * them keeps its `<main>` inside a component that projects content, so the
- * element arrives a further turn later — and both are why waiting for it is the
- * attachment's job rather than every shell's.
+ * A shell whose outlet does not exist yet when its `onMount` runs, because Lit only
+ * schedules the render that creates it. The real shells are worse, since one of them
+ * keeps its `<main>` inside a component that projects content and the element arrives a
+ * further turn later. Both are why waiting for it is the attachment's job rather than
+ * every shell's.
  */
 class ShellHost extends SignalElement {
   render() {
@@ -153,10 +153,10 @@ class TeamView extends SignalElement {
 customElements.define('test-team-view', TeamView);
 
 /**
- * A layout whose markup comes from an `.html` file, like every real one: the
- * outlet then arrives through the template compiler and a fetch, which is the
- * path an application actually takes, rather than from a lit template written
- * inline in this file.
+ * A layout whose markup comes from an `.html` file, like every real one. The outlet
+ * then arrives through the template compiler and a fetch, which is the path an
+ * application actually takes, rather than from a lit template written inline in this
+ * file.
  */
 // Exported because cli/checks/template-check.mjs discovers this pair like any other
 // and type-checks the fixture template against the class, which is worth having.
@@ -263,9 +263,9 @@ describe('router attachment', () => {
       '/',
     );
 
-    // Resolves rather than rejects: the same navigation could have come from a
-    // link click, and a failure channel that only exists for callers is how a
-    // broken route becomes a blank page nobody hears about.
+    // Resolves rather than rejects, because the same navigation could have come from
+    // a link click and a failure channel that only exists for callers is how a broken
+    // route becomes a blank page nobody hears about.
     await navigate('/broken');
 
     assert.includes(present(navigationError.value).message, 'test-never-defined-view');
@@ -303,7 +303,7 @@ describe('router attachment', () => {
     const attachment = present(app);
 
     attachment.stop();
-    // Teardown is in flight like a navigation, so one settle covers it: the
+    // Teardown is in flight like a navigation, so one settle covers it and the
     // `unmount` hooks of the chain are awaited before this returns.
     await attachment.settled();
 
@@ -445,9 +445,9 @@ describe('router attachment', () => {
   });
 
   it('mounts a route that names its component as a class', async () => {
-    // What an application's route table looks like now: an eager route holds the
-    // class it imported, a lazy one resolves the class from its `load`, and
-    // neither writes a tag down for the two of them to disagree about.
+    // What an application's route table looks like. An eager route holds the class it
+    // imported, a lazy one resolves the class from its `load`, and neither writes a tag
+    // down for the two of them to disagree about.
     class EagerView extends SignalElement {
       render() {
         return html`<span class="view">eager</span>`;
@@ -557,12 +557,12 @@ describe('router attachment', () => {
   /**
    * A navigation that does not arrive must leave nothing of itself behind.
    *
-   * The view that stays on screen was already covered; what these assert is the
-   * rest of the same fact — the URL, `currentPath`, `routeParams` and
-   * `queryParams` all still describe the screen the user is looking at. A router
-   * that publishes a destination it could not render makes every reader of those
-   * signals wrong at once: an active link, a breadcrumb, a page title, and any
-   * code that reloads data from `routeParams`.
+   * The view that stays on screen is covered elsewhere. These assert the rest of the
+   * same fact, that the URL, `currentPath`, `routeParams` and `queryParams` all still
+   * describe the screen the user is looking at. A router that publishes a destination
+   * it could not render makes every reader of those signals wrong at once, including an
+   * active link, a breadcrumb, a page title and any code that reloads data from
+   * `routeParams`.
    */
   describe('a failed navigation', () => {
     /** A route whose `load` resolves without defining the element it names. */
@@ -737,9 +737,9 @@ describe('router attachment', () => {
       );
 
       // The levels are staged together, so the child's rejection lands while the
-      // parent is still being built. What must not happen is the failure being
-      // published before the parent finishes: an element built after nobody is
-      // waiting for it is an element nothing releases.
+      // parent is still being built. The failure must not be published before the
+      // parent finishes, because an element built after nobody is waiting for it is an
+      // element nothing releases.
       const navigation = navigate('/managed/inner');
       await new Promise((resolve) => setTimeout(resolve, 0));
       parent.release();
@@ -765,10 +765,10 @@ describe('router attachment', () => {
       await navigate('/broken');
       assert.equal(location.pathname, '/users/1');
 
-      // The entry `navigate` pushed for `/broken` is still there — putting the URL
-      // back is a `replaceState`, because `history.go(1)` races the popstate it
-      // triggers — but it holds the URL that is on screen, so going back cannot
-      // land on a route that failed.
+      // The entry `navigate` pushed for `/broken` is still there, because putting the
+      // URL back is a `replaceState` and `history.go(1)` races the popstate it
+      // triggers. It holds the URL that is on screen, so going back cannot land on a
+      // route that failed.
       const popped = new Promise((resolve) => {
         window.addEventListener('popstate', () => resolve(undefined), { once: true });
       });
@@ -784,13 +784,13 @@ describe('router attachment', () => {
     /*
      * Past the point of no return.
      *
-     * Everything a level needs is built before the outgoing chain is released, so
-     * these are the two failures left that can only happen afterwards: a layout
-     * that renders no outlet, which cannot be discovered until that layout is on
-     * screen, and an `unmount` hook that throws while the previous view is being
-     * released. Neither can be undone — the screen the URL would go back to no
-     * longer exists — so the state describes the destination and
-     * `navigationError` says it did not finish arriving.
+     * Everything a level needs is built before the outgoing chain is released, so two
+     * failures are left that can only happen afterwards. A layout that renders no
+     * outlet, which cannot be discovered until that layout is on screen, and an
+     * `unmount` hook that throws while the previous view is being released. Neither can
+     * be undone, because the screen the URL would go back to is gone, so the state
+     * describes the destination and `navigationError` says it did not finish
+     * arriving.
      */
     it('reports a layout with no outlet against the destination it could not finish', async () => {
       const outlet = await startAt(
@@ -984,8 +984,8 @@ describe('router attachment', () => {
         '/edit',
       );
 
-      // `stop()` is a teardown, not a navigation: there is nowhere to stay, and a
-      // guard that refused would leak the element it was protecting.
+      // `stop()` is a teardown rather than a navigation. There is nowhere to stay,
+      // and a guard that refused would leak the element it was protecting.
       app?.stop();
       await app?.settled();
       app = null;
@@ -1018,9 +1018,9 @@ describe('router attachment', () => {
     link.href = '/users/9';
     document.body.append(link);
 
-    // Insurance, not part of what is asserted: the router is expected to claim this
-    // click, and if it ever stopped doing so the browser would load /users/9 for
-    // real and this file would lose its results instead of reporting one failure.
+    // Insurance rather than part of what is asserted. The router is expected to claim
+    // this click, and if it stopped doing so the browser would load /users/9 for real
+    // and this file would lose its results instead of reporting one failure.
     /** @param {Event} event */
     const blockDefault = (event) => event.preventDefault();
     window.addEventListener('click', blockDefault);
@@ -1043,12 +1043,11 @@ describe('router attachment', () => {
     await startAt([{ path: '/', component: 'test-home-view' }], '/');
 
     /**
-     * What the browser would do with a link the router declines is exactly the
-     * problem: a real page load, a popup or a download, any of which takes the
-     * test page with it and loses every result this file has produced. The
-     * router's listener is on `document`, so this one goes on `window`: it reads
-     * the verdict after the router has had its say, then stops the browser from
-     * acting on it.
+     * What the browser would do with a link the router declines is the problem. A real
+     * page load, a popup or a download, any of which takes the test page with it and
+     * loses every result this file has produced. The router's listener is on
+     * `document`, so this one goes on `window`, where it reads the verdict after the
+     * router has had its say and then stops the browser from acting on it.
      *
      * @type {boolean[]}
      */
@@ -1085,16 +1084,15 @@ describe('router attachment', () => {
   /**
    * Path patterns, asserted the way an application meets them.
    *
-   * Matching used to be tested by compiling a pattern and probing the regular
-   * expression it produced, which pinned an implementation rather than a
-   * behaviour: every case below would have had to be rewritten to move matching
-   * behind an index, and none of them would have caught the move being wrong. A
-   * navigation answers the same questions — which route matched, with which
-   * parameters — through the interface a shell crosses.
+   * Compiling a pattern and probing the regular expression it produced would pin an
+   * implementation rather than a behaviour. Every case below would have to be rewritten
+   * to move matching behind an index, and none of them would catch the move being
+   * wrong. A navigation answers the same questions, which route matched and with which
+   * parameters, through the interface a shell crosses.
    */
   describe('path matching', () => {
     /**
-     * Navigate to `at` and report which route answered: its mark, or the tag of
+     * Navigate to `at` and report which route answered, as its mark, the tag of
      * whatever is mounted, or `'none'` when nothing is.
      *
      * The marker is looked for anywhere under the outlet, so a nested leaf reports
@@ -1174,8 +1172,8 @@ describe('router attachment', () => {
       );
       assert.equal(await matchAt(declared, '/users/new'), 'param');
 
-      // The same two routes, the same URL, the other order. Declaration order is
-      // the whole rule: a literal that must win goes above the parameter.
+      // The same two routes, the same URL, the other order. Declaration order is the
+      // rule, so a literal that must win goes above the parameter.
       const reversed = await startAt(
         [marks('/users/new', 'literal'), marks('/users/:id', 'param')],
         '/users/new',

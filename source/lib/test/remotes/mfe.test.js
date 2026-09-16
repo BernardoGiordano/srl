@@ -50,10 +50,10 @@ describe('remote mount lifecycle', () => {
     };
     provide(REMOTE_HOST, () => provider);
 
-    // Installed directly rather than through loadManifest(): the fixture remote's
-    // digest is deliberately not in the test page's import map, which the manifest
-    // validator would refuse — and rightly, since that pin is what governs which
-    // bytes may execute.
+    // Installed directly rather than through loadManifest(), because the fixture
+    // remote's digest is deliberately not in the test page's import map and the
+    // manifest validator would refuse it. Rightly so, since that pin is what governs
+    // which bytes may execute.
     useManifest(/** @type {AppManifest} */ ({
       remotes: [
         {

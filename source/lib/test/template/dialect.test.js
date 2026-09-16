@@ -33,8 +33,8 @@ describe('template dialect', () => {
     assert.equal(shape('disabled'), 'boolean:disabled');
     assert.equal(shape('?hidden'), 'boolean:hidden');
     assert.equal(shape('.max-rows'), 'property:maxRows');
-    // A property binding is a property first: it is refused later by name, with
-    // a message about event properties rather than inline attributes.
+    // A property binding is a property first, so it is refused later by name, with a
+    // message about event properties rather than inline attributes.
     assert.equal(shape('.onclick'), 'property:onclick');
     assert.equal(shape('onclick'), 'inline-handler:onclick');
     assert.equal(shape(''), 'empty-attribute:');

@@ -37,11 +37,11 @@ function identity(commit, rest = {}) {
 /**
  * Let the read a commit boundary started run to its conclusion.
  *
- * A read `watchRelease` starts is a promise nothing hands back — the whole point of
- * the interface is that the application binds a signal rather than awaiting a call.
- * Microtasks are enough to drain it because the fake below answers with a body
- * already in memory: every step between the request and the signal is a `then`
- * rather than a task, so this is a bounded drain and not a sleep.
+ * A read `watchRelease` starts is a promise nothing hands back, because the interface
+ * has the application bind a signal rather than await a call. Microtasks are enough to
+ * drain it because the fake below answers with a body already in memory, so every step
+ * between the request and the signal is a `then` rather than a task and this is a
+ * bounded drain rather than a sleep.
  */
 async function settleRead() {
   for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
@@ -74,9 +74,9 @@ describe('release watch', () => {
     const answer = answers.length > 1 ? answers.shift() : answers[0];
     if (answer === undefined) return Promise.reject(new Error('offline'));
     const response = new Response(null, { status: 200 });
-    // A real `Response` — its status, its `ok`, its headers — whose body is already
-    // parsed. Reading one through the stream would make settling a question of how
-    // many tasks Chrome takes to drain a `ReadableStream`, which is a number no
+    // A real `Response`, with its status, its `ok` and its headers, whose body is
+    // already parsed. Reading one through the stream would make settling a question of
+    // how many tasks Chrome takes to drain a `ReadableStream`, which is a number no
     // assertion here should depend on.
     Object.defineProperty(response, 'json', { value: () => Promise.resolve(answer) });
     return Promise.resolve(response);

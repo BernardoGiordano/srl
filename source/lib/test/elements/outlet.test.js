@@ -1,9 +1,9 @@
 import { html } from 'lit';
 import { signal } from '@core/foundation/reactive.js';
 import { SignalElement } from '@core/elements/signal-element.js';
-// Side-effect import: defines <x-outlet>. The class itself is only needed as a
-// type here, and a value import used solely in JSDoc reads as unused to ESLint,
-// which does not parse JSDoc comments. `@import` below is the type-only form.
+// A side-effect import, which defines <x-outlet>. The class itself is only needed as a
+// type here, and a value import used solely in JSDoc reads as unused to ESLint, which
+// does not parse JSDoc comments. `@import` below is the type-only form.
 import '@core/elements/outlet.js';
 import { assert, mount, settled, unmountAll } from '../harness.js';
 
@@ -31,9 +31,9 @@ customElements.define('panel-b', PanelB);
  * Wait for one swap to land.
  *
  * The outlet is an adapter over `@core/elements/mount.js`, so a swap is a chain of
- * microtasks — definition, instantiation, the staleness check — rather than a
- * single turn. One macrotask drains the whole chain regardless of its length,
- * which is what keeps these tests off the outlet's internal await count.
+ * microtasks covering definition, instantiation and the staleness check, rather than a
+ * single turn. One macrotask drains the whole chain regardless of its length, which is
+ * what keeps these tests off the outlet's internal await count.
  */
 function swapped() {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -139,8 +139,8 @@ describe('ComponentOutlet', () => {
   });
 
   it('keeps working after being moved, and keeps the element it already mounted', async () => {
-    // What a projecting parent does to an outlet written inside its slot: capture
-    // removes the node, the next render appends it into the content marker. The
+    // What a projecting parent does to an outlet written inside its slot. Capture
+    // removes the node, and the next render appends it into the content marker. The
     // property binding that set `target` does not run again, so the outlet has to
     // re-establish its own subscription.
     const target = signal(/** @type {OutletTarget | null} */ ({ tag: 'panel-a' }));
@@ -165,8 +165,8 @@ describe('ComponentOutlet', () => {
 
   it('mounts the target it was given while detached once it is connected', async () => {
     // The order a capture produces when the outlet is created and bound in the same
-    // render the parent projects: the swap is cancelled mid-flight by the removal,
-    // and only the reconnection can finish it.
+    // render the parent projects. The swap is cancelled mid-flight by the removal, and
+    // only the reconnection can finish it.
     const target = signal(/** @type {OutletTarget | null} */ ({ tag: 'panel-a' }));
     const parent = /** @type {Element} */ (outlet.parentElement);
     outlet.target = target;

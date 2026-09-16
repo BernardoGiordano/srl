@@ -377,11 +377,11 @@ describe('template compiler', () => {
   });
 
   it('re-records what the new branch reads when a host render flips it', async () => {
-    // The reason a host render must reach the binding at all: a ternary on an
-    // ordinary Lit property reads a different signal on each side, and a
-    // dependency set captured once would keep tracking the abandoned one. The
-    // render bumps `scope.version`, the binding evaluates again inside a fresh
-    // effect, and that is what re-records. ADR-0014.
+    // Why a host render must reach the binding at all. A ternary on an ordinary Lit
+    // property reads a different signal on each side, and a dependency set captured
+    // once would keep tracking the abandoned one. The render bumps `scope.version`, the
+    // binding evaluates again inside a fresh effect, and that is what re-records.
+    // ADR-0014.
     const left = signal('left');
     const right = signal('right');
     const model = { pick: true, left, right };
@@ -435,7 +435,8 @@ describe('template compiler', () => {
     items.value = [...items.value];
     assert.equal(evaluations, 2, 'unchanged rows were not re-evaluated');
 
-    // Growing the list does re-evaluate the existing rows, and should: `$count`
+    // Growing the list does re-evaluate the existing rows, and should, because
+    // `$count`
     // and `$last` are in every row's scope, and both just changed.
     items.value = [...items.value, { id: '3' }];
     assert.sameArray(
@@ -509,13 +510,12 @@ describe('template compiler', () => {
 });
 
 /**
- * The registry in front of the compiler: which requests a set of URLs costs.
+ * The registry in front of the compiler, and which requests a set of URLs costs.
  *
- * `fetch` is stubbed rather than pointed at fixtures, because the assertion is a
- * *count*. A prefetch that quietly issued a second request per template would
- * render every page correctly and be invisible in any test that only checks the
- * markup — which is the whole failure mode the shared-promise cache exists to
- * prevent. ADR-0014, ADR-0081.
+ * `fetch` is stubbed rather than pointed at fixtures, because the assertion is a count.
+ * A prefetch that quietly issued a second request per template would render every page
+ * correctly and be invisible in any test that only checks the markup, which is the
+ * failure mode the shared-promise cache exists to prevent. ADR-0014, ADR-0081.
  */
 describe('template prefetching', () => {
   /** @type {typeof globalThis.fetch} */
@@ -538,9 +538,9 @@ describe('template prefetching', () => {
         const href =
           typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         asked.push(new URL(href, document.baseURI).pathname);
-        // `uncompilable` is markup the fetch is happy to hand over and the
-        // compiler refuses: an empty `[]` binding. It is what separates "the
-        // bytes arrived" from "the template was compiled".
+        // `uncompilable` is markup the fetch is happy to hand over and the compiler
+        // refuses, an empty `[]` binding. It separates "the bytes arrived" from "the
+        // template was compiled".
         const body = href.includes('uncompilable') ? '<p []="">no</p>' : '<p>ok</p>';
         return Promise.resolve(
           href.includes('missing')
@@ -559,9 +559,9 @@ describe('template prefetching', () => {
     const urls = [url('one'), url('two'), url('three')];
     prefetchTemplates(urls);
 
-    // The point of the whole record: nine components in one chunk are nine awaits
-    // in sequence, and they cost one round trip between them only if the request
-    // was already started and is shared rather than repeated.
+    // What the whole record is for. Nine components in one chunk are nine awaits in
+    // sequence, and they cost one round trip between them only if the request was
+    // already started and is shared rather than repeated.
     const compiled = await Promise.all(urls.map((each) => loadTemplate(each)));
     assert.equal(compiled.length, 3);
     assert.sameArray(asked, urls);
@@ -588,8 +588,8 @@ describe('template prefetching', () => {
       const bad = url('uncompilable');
       prefetchTemplates([bad]);
       // The bytes are what the prefetch buys. Compiling them here would raise the
-      // template's own error at startup, for a component nobody has mounted — and
-      // would spend the compiler on every other template in the list besides.
+      // template's own error at startup, for a component nobody has mounted, and would
+      // spend the compiler on every other template in the list besides.
       await new Promise((resolve) => setTimeout(resolve, 0));
       assert.sameArray(asked, [bad]);
       assert.sameArray(unhandled, []);
@@ -604,7 +604,8 @@ describe('template prefetching', () => {
         raised.includes('empty [] binding'),
         `the compile must happen at the load that needs it, got ${raised}`,
       );
-      // Still one request: the compile read the source the prefetch cached.
+      // Still one request, because the compile read the source the prefetch
+      // cached.
       assert.sameArray(asked, [bad]);
     } finally {
       removeEventListener('unhandledrejection', record);
@@ -623,9 +624,9 @@ describe('template prefetching', () => {
     try {
       const gone = url('missing');
       prefetchTemplates([gone]);
-      // Two turns of the loop: an unhandled rejection is reported after the
-      // microtask queue drains, so asserting on the same tick would pass whatever
-      // the prefetch did with the rejection.
+      // Two turns of the loop, because an unhandled rejection is reported after the
+      // microtask queue drains and asserting on the same tick would pass whatever the
+      // prefetch did with the rejection.
       await new Promise((resolve) => setTimeout(resolve, 0));
       assert.sameArray(unhandled, []);
 
@@ -644,11 +645,11 @@ describe('template prefetching', () => {
   /* ── Fragments ─────────────────────────────────────────────────────────── */
 
   /**
-   * A `*fragment` is markup a page writes and another element renders, so these
-   * tests do what a consumer does: read the property off the element, call it, and
-   * render what comes back. The identity assertions are the ones that matter, for
-   * the same reason they matter for a whole template — a fragment that rebuilt its
-   * DOM per call would still show the right text.
+   * A `*fragment` is markup a page writes and another element renders, so these tests
+   * do what a consumer does. Read the property off the element, call it, and render what
+   * comes back. The identity assertions are the ones that matter, for the same reason
+   * they matter for a whole template, because a fragment that rebuilt its DOM per call
+   * would still show the right text.
    */
 
   /** @param {Element | null} element @returns {(...args: unknown[]) => unknown} */

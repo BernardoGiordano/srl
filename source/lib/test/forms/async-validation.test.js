@@ -7,10 +7,10 @@ import { assert, instrumentedAbort } from '../harness.js';
 /**
  * A rule whose answer is somewhere else.
  *
- * Everything here is about the four things the field owns and an application
- * would otherwise write per screen: the debounce, the supersession, the value it
- * already has an answer for, and the lifetime the request is bound to. The rule
- * itself is a function from a value to a code, which is the whole point.
+ * Everything here is about the four things the field owns and an application would
+ * otherwise write per screen. The debounce, the supersession, the value it already has
+ * an answer for, and the lifetime the request is bound to. The rule itself is a function
+ * from a value to a code, which is what makes that possible.
  */
 
 /** One macrotask, which is what a zero-millisecond debounce waits for. */
@@ -362,7 +362,7 @@ describe('an owner that ends while a check is out', () => {
     owner.abort();
     assert.equal(asked, 1);
 
-    // Re-attached: a new lifetime, and a value nobody ever got an answer for.
+    // Re-attached, so a new lifetime and a value nobody ever got an answer for.
     owner = new AbortController();
     address.setValue('a');
     await address.whenSettled();

@@ -7,12 +7,11 @@ import { assert, mount, present, settled, unmountAll } from '../harness.js';
 /**
  * Replacing a component's JavaScript in a page that is already running it.
  *
- * `customElements.define` is permanent, so the tag keeps the class it was
- * registered with and the edit moves into that class instead. What each test here
- * is really about is the line between the two: a method body is behaviour and can
- * move, while a field, a base class and a reactive property are identity and cannot
- * — and identity is checked before anything is written, so a refused edit leaves the
- * page exactly as it was. ADR-0113.
+ * `customElements.define` is permanent, so the tag keeps the class it was registered
+ * with and the edit moves into that class instead. Each test here is about the line
+ * between the two. A method body is behaviour and can move, while a field, a base class
+ * and a reactive property are identity and cannot. Identity is checked before anything
+ * is written, so a refused edit leaves the page exactly as it was. ADR-0113.
  *
  * The subject is a real module, imported twice. `revisable-component.js` branches on
  * the revision query the replacement path adds, which is what makes the second

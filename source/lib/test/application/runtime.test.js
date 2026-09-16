@@ -8,11 +8,10 @@ import { assert, present } from '../harness.js';
 /**
  * Startup, tested through the interface an application calls.
  *
- * This is the test that could not be written while the boot sequence lived in
- * each application's main.js: verifying the order meant booting an application in a
- * browser and asserting on rendered output, so a reordering bug surfaced as a
- * failing smoke test somewhere else. Here the order, the skipped steps and the
- * failure messages are all assertions of the library's own.
+ * With the boot sequence in each application's main.js, verifying the order would mean
+ * booting an application in a browser and asserting on rendered output, so a reordering
+ * bug would surface as a failing smoke test somewhere else. Here the order, the skipped
+ * steps and the failure messages are all assertions of the library's own.
  */
 
 const MANIFEST = new URL('../fixtures/startup-manifest.json', import.meta.url).href;
@@ -23,9 +22,9 @@ const SPLIT = new URL('../fixtures/startup-split-manifest.json', import.meta.url
 const GROUPED = new URL('../fixtures/startup-grouped-manifest.json', import.meta.url).href;
 
 /**
- * The names of the steps that ran. Each entry carries its duration too, so the
- * order — which is what most of these cases are about — reads through here rather
- * than through an assertion on objects whose timings are never the same twice.
+ * The names of the steps that ran. Each entry carries its duration too, so the order,
+ * which is what most of these cases are about, reads through here rather than through
+ * an assertion on objects whose timings are never the same twice.
  *
  * @param {import('@core/application/types.js').StartedApplication} started
  * @returns {string[]}
@@ -40,8 +39,9 @@ describe('application startup', () => {
   it('runs only the steps the application declares', async () => {
     const started = await startApplication({ manifestUrl: MANIFEST });
 
-    // No theme, no providers, no session: a minimal application's shape. The skipped steps are absent rather than run with a default, which
-    // is what keeps an optional feature optional.
+    // No theme, no providers and no session, which is a minimal application's shape.
+    // The skipped steps are absent rather than run with a default, which is what keeps
+    // an optional feature optional.
     assert.sameArray(names(started), ['manifest', 'locale']);
     assert.equal(started.manifest.auth.apiBaseUrl, '/api/');
     assert.equal(manifest(), started.manifest, 'startup must install what it validated');
@@ -60,8 +60,8 @@ describe('application startup', () => {
       // runtime configuration from the argument rather than from a global.
       //
       // Deliberately slow. A runtime that fired the hooks without awaiting them
-      // would record this one after `ready`, which is exactly the class of bug
-      // that used to be invisible until a guard raced a session restore.
+      // would record this one after `ready`, which is the class of bug that stays
+      // invisible until a guard races a session restore.
       providers: async (received) => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         order.push(`providers:${received.auth.apiBaseUrl}`);
@@ -93,8 +93,9 @@ describe('application startup', () => {
   it('reports what each step cost, on the result and as a User Timing measure', async () => {
     const started = await startApplication({
       manifestUrl: MANIFEST,
-      // Deliberately slow, and the only slow step: a per-step duration that came from
-      // a shared stopwatch would spread this wait across the steps around it.
+      // Deliberately slow, and the only slow step, because a per-step duration that
+      // came from a shared stopwatch would spread this wait across the steps around
+      // it.
       providers: () => new Promise((resolve) => setTimeout(resolve, 20)),
     });
 
@@ -110,9 +111,9 @@ describe('application startup', () => {
     const locale = present(started.steps.find((run) => run.name === 'locale'));
     assert.ok(locale.duration < providers.duration, 'each step is timed on its own');
 
-    // The measure is what a profiler and the benchmark harness read: neither of them
-    // holds this return value, and the harness only looks at the page long after
-    // startup resolved.
+    // The measure is what a profiler and the benchmark harness read. Neither holds
+    // this return value, and the harness only looks at the page long after startup
+    // resolved.
     const measure = present(
       performance.getEntriesByName('srl:startup:providers', 'measure').at(-1),
       'the step must emit a srl:startup: measure',
@@ -191,9 +192,9 @@ describe('application startup', () => {
   });
 
   it('refuses a root module that defines no element', async () => {
-    // The message is `@core/elements/mount.js`'s, which is the point: the root element is
-    // checked by the same rule as an outlet target, a route level and a remote
-    // root, so all four report a module that defined nothing the same way.
+    // The message is `@core/elements/mount.js`'s, which is what matters here. The root
+    // element is checked by the same rule as an outlet target, a route level and a
+    // remote root, so all four report a module that defined nothing the same way.
     await assert.rejects(
       () =>
         startApplication({
@@ -220,9 +221,9 @@ describe('application startup', () => {
   it('starts anyway when the configured template bundle is missing', async () => {
     const started = await startApplication({ manifestUrl: MISSING_BUNDLE });
 
-    // A bundle is an optimisation: absent, every template costs its own request
-    // and the page still works. Failing startup over it would trade a slower boot
-    // for no boot.
+    // A bundle is an optimisation. Absent, every template costs its own request and
+    // the page still works, so failing startup over it would trade a slower boot for
+    // no boot.
     assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
   });
 
@@ -241,8 +242,8 @@ describe('application startup', () => {
           typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         if (href.endsWith(url)) {
           // Held open for the whole of startup. A step that awaited the prefetch
-          // would never reach `locale`, which is the property under test: the
-          // ordering matters, the completion does not.
+          // would never reach `locale`, which is the property under test. The ordering
+          // matters and the completion does not.
           await blocked;
         }
         return realFetch(input, init);
@@ -282,15 +283,13 @@ describe('application startup', () => {
       const started = await startApplication({ manifestUrl: GROUPED });
       assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
 
-      // The whole point of the grouping. Startup started the markup the entry
-      // closure needs and nothing else: a flat list could only have started both.
-      // ADR-0081.
+      // What the grouping is for. Startup started the markup the entry closure needs
+      // and nothing else, where a flat list could only have started both. ADR-0081.
       assert.sameArray(requested, [entry]);
 
-      // And it stays nothing else. A group that startup did not start is not a
-      // group startup deferred — nothing in the deferred chunk has been asked for,
-      // so a visitor a guard would have turned away has fetched none of it.
-      // ADR-0081.
+      // And it stays nothing else. A group startup did not start is not a group
+      // startup deferred, because nothing in the deferred chunk has been asked for, so
+      // a visitor a guard would have turned away has fetched none of it. ADR-0081.
       await new Promise((resolve) => setTimeout(resolve, 0));
       assert.sameArray(requested, [entry]);
 
@@ -301,7 +300,7 @@ describe('application startup', () => {
       await attachTemplate(class DeferredComponent {}, deferred);
       assert.sameArray(requested, [entry, deferred, sibling]);
 
-      // Derived, entry first: a caller that wants every template this artifact
+      // Derived, entry first, so a caller that wants every template this artifact
       // holds does not have to know how the document was partitioned.
       assert.sameArray([...started.manifest.templateFiles], [entry, deferred, sibling]);
       assert.sameArray([...(started.manifest.templateGroups.entry ?? [])], [entry]);

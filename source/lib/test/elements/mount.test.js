@@ -93,8 +93,8 @@ describe('defineTag', () => {
   it('reads the component its load resolved', async () => {
     const tag = await defineTag({
       where: 'Route "/late"',
-      // The shape a lazy route needs: the caller learns what it is mounting from
-      // the module it just loaded, so no route table repeats a tag string.
+      // The shape a lazy route needs. The caller learns what it is mounting from the
+      // module it just loaded, so no route table repeats a tag string.
       load: () => {
         class Discovered extends HTMLElement {}
         return defineComponent({
@@ -138,8 +138,8 @@ describe('createElement', () => {
   });
 
   it('returns null when the request names nothing to mount', async () => {
-    // The router's componentless level: a parent contributing a prefix and a
-    // guard and rendering nothing at all.
+    // The router's componentless level, a parent contributing a prefix and a guard
+    // and rendering nothing at all.
     assert.equal(await createElement({ where: 'Route "/area"' }), null);
   });
 

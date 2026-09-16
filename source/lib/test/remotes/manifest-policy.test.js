@@ -4,16 +4,16 @@ import { assert, present } from '../harness.js';
 /**
  * Manifest admission, tested as policy rather than as field validation.
  *
- * Every case here is a document whose fields are individually well-formed and
- * whose *combination* is not: a token endpoint that is a valid string pointing at
- * somebody else's origin, two remotes that each declare a legal mount, a locale
- * list that turns a legal bundle pattern into a path outside the application.
- * Those are the failures a per-field check cannot see, and they are why the whole
- * document is admitted in one place before anything downstream is built.
+ * Every case here is a document whose fields are individually well-formed and whose
+ * combination is not. A token endpoint that is a valid string pointing at somebody
+ * else's origin, two remotes that each declare a legal mount, a locale list that turns a
+ * legal bundle pattern into a path outside the application. Those are the failures a
+ * per-field check cannot see, and they are why the whole document is admitted in one
+ * place before anything downstream is built.
  *
- * The pins come from a literal here rather than from the page: this suite is the
- * policy's, and `remotes/mfe.test.js` covers the browser adapter that reads the
- * real import map. Both go through this module.
+ * The pins come from a literal here rather than from the page, because this suite is the
+ * policy's and `remotes/mfe.test.js` covers the browser adapter that reads the real
+ * import map. Both go through this module.
  */
 
 const PIN = 'sha384-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -27,10 +27,10 @@ const PINS = {
 describe('manifest admission', () => {
   describe('destination trust', () => {
     it('refuses an auth destination on another origin', () => {
-      // The exact shape review 3 demonstrated: every field is a valid string, the
-      // remotes are pinned, and the document sends the user's credentials to
-      // somebody else. `connect-src 'self'` stops it in the hardened deployment
-      // and nowhere else, so the refusal belongs at admission.
+      // Every field is a valid string, the remotes are pinned, and the document
+      // sends the user's credentials to somebody else. `connect-src 'self'` stops it
+      // in the hardened deployment and nowhere else, so the refusal belongs at
+      // admission.
       assert.throws(
         () => admit({ auth: authWith({ apiBaseUrl: 'https://attacker.example/api' }) }),
         'auth.apiBaseUrl must be same-origin',
@@ -124,9 +124,9 @@ describe('manifest admission', () => {
         'templateGroups.entry must be an array',
       );
 
-      // Across the record, not within a group. A template is named by one module,
-      // which lives in one chunk, so the same URL in two groups is a join that went
-      // wrong — and it would be paid twice, once per group that starts.
+      // Across the record rather than within a group. A template is named by one
+      // module, which lives in one chunk, so the same URL in two groups is a join that
+      // went wrong, and it would be paid twice, once per group that starts.
       assert.throws(
         () =>
           admit({
@@ -168,7 +168,7 @@ describe('manifest admission', () => {
     it('refuses a document that names its templates both ways', () => {
       // A generator that could not decide. One document cannot say both which chunk
       // needs what and that everything is needed at once, and the runtime would have
-      // to pick — quietly, and differently from the next reader. ADR-0081.
+      // to pick quietly, and differently from the next reader. ADR-0081.
       assert.throws(
         () =>
           admit({
@@ -225,8 +225,8 @@ describe('manifest admission', () => {
     });
 
     it('gives a document that maps nothing an empty mapping rather than nothing', () => {
-      // Development has no mapping: the declared URL is the file. The consumer is
-      // one optional read on the fetch path, and it stays one.
+      // Development has no mapping, because the declared URL is the file. The
+      // consumer is one optional read on the fetch path, and it stays one.
       assert.equal(Object.keys(present(admit({}).i18n.bundleFiles)).length, 0);
     });
   });
@@ -352,8 +352,8 @@ describe('manifest admission', () => {
 
     it('refuses a mount that contains another, in either declaration order', () => {
       // A mount is `${mount}/*`, matched first-declared-first, so this is the case
-      // where the order of the array — not the policy written in it — decides
-      // whose guard runs and whose grants bound the context.
+      // where the order of the array decides whose guard runs and whose grants bound
+      // the context, rather than the policy written in it.
       const outer = remote({ mount: '/shop' });
       const inner = remote({
         name: 'two',
@@ -459,8 +459,9 @@ function manifestDocument(overrides) {
 function admit(overrides) {
   return admitManifest(manifestDocument(overrides), {
     url: '/app.manifest.json',
-    // A deep base on purpose: the page's URL is whatever route the user deep-linked
-    // to, and a manifest path may not mean two different files because of it.
+    // A deep base on purpose, because the page's URL is whatever route the user
+    // deep-linked to and a manifest path may not mean two different files because of
+    // it.
     base: 'https://app.example/deep/route',
     pins: () => PINS,
   });

@@ -5,22 +5,20 @@ import { assert, present } from '../harness.js';
 /** @import { Session, TokenStore } from '@auth/types.js' */
 
 /**
- * The authenticated request lifecycle: one refresh shared by every caller, a
- * scheduled refresh that acts without a human present, and a disposal that
- * actually stops.
+ * The authenticated request lifecycle. One refresh shared by every caller, a scheduled
+ * refresh that acts without a human present, and a disposal that actually stops.
  *
- * These are the invariants that used to live between files. The single-flight
- * refresh was a module-level variable in `authorized-fetch.js`, shared by every
- * session in the process rather than by every caller of one; the refresh timer
- * had no failure behaviour at all, so a rejected refresh became an unhandled
- * rejection and left `isAuthenticated` true against a token that was already
- * dead; and nothing closed the BroadcastChannel or cleared the timer, so a
- * disposed session went on refreshing.
+ * These are the invariants that fall between files. A module-level single-flight refresh
+ * is shared by every session in the process rather than by every caller of one. A
+ * refresh timer with no failure behaviour turns a rejected refresh into an unhandled
+ * rejection and leaves `isAuthenticated` true against a token that is already dead. A
+ * BroadcastChannel nothing closes and a timer nothing clears leave a disposed session
+ * refreshing.
  *
- * Timings here are deliberate rather than arbitrary. `AuthSession` refreshes a
- * minute before expiry, so a session expiring inside that margin schedules its
- * refresh immediately — which is how these tests reach the scheduled path
- * without waiting a minute for it.
+ * Timings here are deliberate rather than arbitrary. `AuthSession` refreshes a minute
+ * before expiry, so a session expiring inside that margin schedules its refresh
+ * immediately, which is how these tests reach the scheduled path without waiting a
+ * minute for it.
  */
 
 /** Far enough out that no scheduled refresh fires during a test. */
@@ -43,10 +41,10 @@ function session(overrides) {
 /**
  * A store that records what was asked of it and answers as the test directs.
  *
- * The recording wraps the answers rather than being one of them, so a test that
- * supplies its own `refresh` is still counted. An earlier version merged the
- * overrides over the recording implementations, which made every assertion about
- * call counts silently pass with zero.
+ * The recording wraps the answers rather than being one of them, so a test that supplies
+ * its own `refresh` is still counted. Merging the overrides over the recording
+ * implementations instead makes every assertion about call counts silently pass with
+ * zero.
  *
  * @param {Partial<Omit<TokenStore, 'strategy'>>} [overrides]
  * @returns {TokenStore & { calls: string[] }}
@@ -146,8 +144,8 @@ describe('auth session lifecycle', () => {
    * A session restored through `init()`, which is what schedules its refresh.
    *
    * Assigning `session.value` directly, as the request-path tests do, deliberately
-   * does not: the signal is what screens read, and the timer belongs to the
-   * lifecycle that applied it.
+   * does not. The signal is what screens read, and the timer belongs to the lifecycle
+   * that applied it.
    *
    * @param {number} expiresIn milliseconds from now
    * @param {Partial<TokenStore>} [overrides]
@@ -311,8 +309,8 @@ describe('auth session lifecycle', () => {
   });
 
   it('ends the session when an unadmissible payload comes back', async () => {
-    // Admission failure is terminal on purpose: a token endpoint answering 200
-    // with a body the client cannot read does not get better on the third try.
+    // Admission failure is terminal on purpose, because a token endpoint answering
+    // 200 with a body the client cannot read does not get better on the third try.
     const { auth } = await startRestored(1_000, {
       refresh: () => Promise.reject(new AuthRejected('access_token must be a non-empty string')),
     });

@@ -8,10 +8,10 @@ import { assert, present } from '../harness.js';
 /**
  * Startup for an application that mounts micro-frontends.
  *
- * What is worth asserting here is not that a wrapper calls a function. It is that
- * an application which declares no providers at all can still mount a remote —
- * previously the one thing every such application had to wire by hand, and the one
- * whose omission booted cleanly and failed on the first navigation into a remote.
+ * What is worth asserting here is that an application which declares no providers at
+ * all can still mount a remote, rather than that a wrapper calls a function. Wired by
+ * hand, that is the one thing whose omission boots cleanly and fails on the first
+ * navigation into a remote.
  */
 
 /**
@@ -19,7 +19,7 @@ import { assert, present } from '../harness.js';
  * @returns {AppManifest}
  */
 function manifestWith(overrides) {
-  // Installed as a literal rather than fetched: a manifest that goes through
+  // Installed as a literal rather than fetched, because a manifest that goes through
   // `loadManifest` has to name a remote whose digest is pinned in the test page's
   // import map, and nothing here loads a remote's code.
   return /** @type {AppManifest} */ ({
@@ -55,8 +55,8 @@ describe('hosted application startup', () => {
   it('installs the remote host adapter for an application that declares no providers', async () => {
     const started = await startHostedApplication({ manifest: manifestWith() });
 
-    // The step ran even though the application supplied no hook: mounting remotes
-    // is a provider installation, and this is the application saying it does.
+    // The step ran even though the application supplied no hook, because mounting
+    // remotes is a provider installation and this is the application saying it does.
     assert.sameArray(
       started.steps.map((run) => run.name),
       ['manifest', 'locale', 'providers'],
@@ -69,7 +69,7 @@ describe('hosted application startup', () => {
     assert.equal(route.path, '/analytics/*');
     assert.ok(route.canActivate !== undefined, 'a remote with requirements must be guarded');
 
-    // The real adapter rather than a stand-in: it reports the contract version and
+    // The real adapter rather than a stand-in, so it reports the contract version and
     // the mount path the manifest gave this remote.
     const { context } = inject(REMOTE_HOST).connect(present(manifestWith().remotes[0]));
     assert.equal(context.contract, 2);

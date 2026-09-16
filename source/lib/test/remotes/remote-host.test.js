@@ -2,13 +2,14 @@
  * Bare specifiers, not relative paths, and this is not a style choice.
  *
  * Module identity is URL identity. The code under test imports
- * `@core/foundation/inject.js`, which the import map resolves to /lib/core/foundation/inject.js;
- * reaching the same file from here as '../core/foundation/inject.js' would resolve to
- * /source/lib/core/foundation/inject.js and evaluate a SECOND copy of the module, with its
- * own injector. The test then provides AuthSession into one registry while
- * remote-host.js reads from the other, and every assertion fails with
- * "No provider for AuthSession" — a failure that looks like a missing beforeEach
- * and is really two modules with the same source and different identities.
+ * `@core/foundation/inject.js`, which the import map resolves to
+ * /lib/core/foundation/inject.js. Reaching the same file from here as
+ * '../core/foundation/inject.js' resolves to /source/lib/core/foundation/inject.js and
+ * evaluates a second copy of the module, with its own injector. The test then provides
+ * AuthSession into one registry while remote-host.js reads from the other, and every
+ * assertion fails with "No provider for AuthSession", a failure that looks like a
+ * missing beforeEach and is really two modules with the same source and different
+ * identities.
  */
 import { provide, resetInjector } from '@core/foundation/inject.js';
 import { locale, setLocale } from '@core/localization/i18n.js';
@@ -151,7 +152,7 @@ describe('remote host contract', () => {
     assert.sameArray([...context.auth.permissions()], ['analytics:read']);
     assert.ok(context.auth.can('analytics:read'));
 
-    // Held by the session, never granted to this remote: it must not be visible
+    // Held by the session and never granted to this remote, so it must not be visible
     // and must not be answerable.
     assert.notOk(context.auth.can('payments:approve'), 'an ungranted scope must read as absent');
     assert.notOk(context.auth.can('users:read'));
@@ -312,8 +313,8 @@ describe('remote host contract', () => {
       // expected under strict mode
     }
 
-    // Asserted by behaviour rather than by identity: had the replacement taken,
-    // this would resolve instead of rejecting, and the grant check would be gone.
+    // Asserted by behaviour rather than by identity. Had the replacement taken, this
+    // would resolve instead of rejecting and the grant check would be gone.
     await assert.rejects(() => context.auth.fetch('/api/users'), 'is not granted');
   });
 
@@ -366,7 +367,7 @@ describe('remote host contract', () => {
     assert.equal(await guard(match), '/login', 'no session means sign in');
 
     // Signed in, but without the scope the manifest requires. Sending this user to
-    // /login is the classic loop: they sign in successfully and land right back
+    // /login is the classic loop, where they sign in successfully and land right back
     // here.
     auth.session.value = session(['users:read']);
     assert.equal(await guard(match), '/forbidden');

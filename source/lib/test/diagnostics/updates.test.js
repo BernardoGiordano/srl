@@ -9,10 +9,9 @@ import { assert, mount, present, settled, unmountAll } from '../harness.js';
 /** @import { BindingUpdate, ElementUpdate, StopRecording, UpdateRecord } from '@core/diagnostics/types.js' */
 
 /**
- * The two update paths have to be visible separately, because that separation is
- * the whole reason this module exists: an element render and a binding patch are
- * different events, and a recorder that saw only the first would report silence
- * for half of what a fine-grained framework does.
+ * The two update paths have to be visible separately, which is why this module exists.
+ * An element render and a binding patch are different events, and a recorder that saw
+ * only the first would report silence for half of what a fine-grained framework does.
  */
 
 const label = signal('start');
