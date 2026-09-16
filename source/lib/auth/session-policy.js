@@ -3,12 +3,12 @@ import { readJson } from '@core/foundation/json.js';
 /** @import { Session } from '@auth/types.js' */
 
 /**
- * Session admission: how an untrusted authentication payload becomes session
- * state, and the one place a failed exchange is classified.
+ * Session admission. How an untrusted authentication payload becomes session state,
+ * and the one place a failed exchange is classified.
  *
  * A store reads its own payload and calls `sessionFrom()` with the values it
- * found. The validators below are exported for that: a store gets the same
- * refusals and the same never-print-the-value messages without restating them.
+ * found. The validators below are exported for that, so a store gets the same refusals
+ * and the same never-print-the-value messages without restating them.
  *
  *     const payload = asRecord(await readPayload(response, where), where);
  *     return sessionFrom(
@@ -21,11 +21,9 @@ import { readJson } from '@core/foundation/json.js';
  *       where,
  *     );
  *
- * ## Two failures, and why the difference is load-bearing
- *
- * The refresh timer acts on the result with no human present, so "the server says
- * this session is over" and "the server did not answer" cannot be one error type.
- * ADR-0024.
+ * There are two failures, and the difference matters. The refresh timer acts on the
+ * result with no human present, so "the server says this session is over" and "the
+ * server did not answer" cannot be one error type. ADR-0024.
  *
  *   `AuthRejected`     terminal. The grant was refused (4xx) or the payload could
  *                      not be admitted. Retrying sends the same credentials to the
@@ -35,10 +33,10 @@ import { readJson } from '@core/foundation/json.js';
  *                      state is "not yet known" and the caller may retry until it
  *                      does.
  *
- * What belongs here: the `Session` shape, error classification and normalization.
- * What does not: performing the exchange and reading a payload (a store, which the
- * application owns), and deciding what a failure does to session state
- * (`session.js`).
+ * What belongs here is the `Session` shape, error classification and normalization.
+ * Performing the exchange and reading a payload belong to a store, which the
+ * application owns, and deciding what a failure does to session state belongs to
+ * `session.js`.
  */
 
 /** Scope lists are space-delimited per RFC 6749; any run of whitespace is one separator. */
@@ -47,10 +45,10 @@ const SCOPE_SEPARATOR = /\s+/u;
 /**
  * The session cannot continue, and no retry will change that.
  *
- * Carries no payload beyond its message deliberately: everything a screen may
- * show a user is already in the message, and everything else in an auth error
- * response is either a credential, a hint about one, or a server-side detail
- * that belongs in the server's log rather than in the browser's.
+ * Carries no payload beyond its message, deliberately. Everything a screen may show a
+ * user is already in the message, and everything else in an auth error response is
+ * either a credential, a hint about one, or a server-side detail that belongs in the
+ * server's log rather than in the browser's.
  */
 export class AuthRejected extends Error {
   /**
@@ -142,8 +140,8 @@ async function readErrorCode(response) {
 /**
  * Read a successful response's body as an unadmitted value.
  *
- * A token endpoint that answers 200 with HTML is the single most common
- * misconfiguration here — a history fallback in front of a missing route — and
+ * A token endpoint that answers 200 with HTML is the most common misconfiguration
+ * here, usually a history fallback in front of a missing route, and
  * `SyntaxError: Unexpected token '<'` names neither the endpoint nor the reason.
  *
  * @param {Response} response
@@ -164,16 +162,15 @@ export async function readPayload(response, where) {
  * Build a `Session` from values a store has read out of its own payload.
  *
  * Every field is re-validated here even though a store will usually have used the
- * validators below on the way in. That is deliberate: this is the only way to
- * obtain a `Session`, so it is the only place that has to be right, and a store
- * that mapped a field by hand cannot produce one the rest of the library then
- * trusts.
+ * validators below on the way in. That is deliberate, because this is the only way to
+ * obtain a `Session`, so it is the only place that has to be right, and a store that
+ * mapped a field by hand cannot produce one the rest of the library then trusts.
  *
- * Note what the signature does not take: an access token. A `Session` is read by
- * guards, screens and the remote host contract, and a credential on it would
- * eventually be logged, serialised into a diagnostic, or handed to a
- * micro-frontend by an `onChange` listener that copies the object. A store keeps
- * its credential in a private field; nothing else ever sees one. ADR-0021.
+ * The signature does not take an access token. A `Session` is read by guards, screens
+ * and the remote host contract, and a credential on it would eventually be logged,
+ * serialised into a diagnostic, or handed to a micro-frontend by an `onChange` listener
+ * that copies the object. A store keeps its credential in a private field, and nothing
+ * else ever sees one. ADR-0021.
  *
  * @param {{ subject: unknown, name: unknown, scopes?: unknown, expiresAt: unknown }} fields
  * @param {string} where

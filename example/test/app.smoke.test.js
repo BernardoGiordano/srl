@@ -8,10 +8,10 @@ import { expireAccessToken, installFakeEventSource, installFakeServer, requested
 /**
  * End-to-end smoke test for the operations application.
  *
- * It boots the real entry point in a real browser: the real manifest fetch, the real import
- * map, the real router with its three levels of layout route, the real session over the
- * `bff` token store, the real components. Nothing is stubbed except HTTP and `EventSource`;
- * see `fake-server.js` for why those two and nothing more.
+ * It boots the real entry point in a real browser, with the real manifest fetch, the
+ * real import map, the real router with its three levels of layout route, the real
+ * session over the `bff` token store and the real components. Nothing is stubbed except
+ * HTTP and `EventSource`, and `fake-server.js` says why those two and nothing more.
  *
  * This is the test that proves the wiring, rather than that the pieces work. If the startup
  * order in `main.js` is wrong, if the manifest fails validation, if a lazy route points at a
@@ -30,9 +30,9 @@ let restoreEventSource;
 /**
  * Navigate and wait for the view to be on screen.
  *
- * `navigate` resolves when the navigation has settled — guards, lazy imports and all — so
- * nothing here polls. What is left is the mounted element's own first render, which is a
- * promise too.
+ * `navigate` resolves when the navigation has settled, guards and lazy imports
+ * included, so nothing here polls. What is left is the mounted element's own first
+ * render, which is a promise too.
  *
  * @param {string} path
  */
@@ -109,7 +109,8 @@ describe('operations application', () => {
     // the developer's browser is set to.
     history.replaceState(null, '', '/login?lang=en');
 
-    // The real entry point: manifest, providers, session restore, then <app-root>.
+    // The real entry point, in order: manifest, providers, session restore, then
+    // <app-root>.
     await import('../src/main.js');
 
     shell = document.createElement('app-root');
@@ -144,8 +145,9 @@ describe('operations application', () => {
     assert.equal(location.pathname, '/login');
 
     // The stronger half. The manifest's `requires` block becomes a route guard and the
-    // router runs guards before `load`, so the remote's module is never fetched — hiding a
-    // remote's UI while shipping its bytes leaks it to anyone reading the network tab.
+    // router runs guards before `load`, so the remote's module is never fetched. Hiding
+    // a remote's UI while shipping its bytes leaks it to anyone reading the network
+    // tab.
     assert.notOk(
       requested.some((entry) => entry.includes('/remotes/analytics/')),
       `no analytics artifact may be fetched; saw ${requested.join(', ')}`,
@@ -161,8 +163,9 @@ describe('operations application', () => {
     assert.ok(chrome.querySelector('ui-topbar'), 'the header must render');
     assert.equal(chrome.shadowRoot, null, 'the shell must render in light DOM');
 
-    // Nothing in the sign-in exchange carries a credential this application can read: the
-    // suite asserts the shape of what was called rather than the absence of a string.
+    // Nothing in the sign-in exchange carries a credential this application can read,
+    // so the suite asserts the shape of what was called rather than the absence of a
+    // string.
     assert.ok(requested.includes('POST /auth/login'), 'the store must post to /auth/login');
   });
 
@@ -344,8 +347,8 @@ describe('operations application', () => {
    * The bulk write, end to end.
    *
    * The table owns which accounts are chosen and the screen owns what choosing them
-   * means, so this is the case that proves the two halves meet: two checkboxes, one
-   * button, two PATCHes and no third one for the row nobody chose.
+   * means, so this is the case that proves the two halves meet. Two checkboxes, one
+   * button, two PATCHes, and no third one for the row nobody chose.
    */
   it('suspends the accounts chosen in the table', async () => {
     await signOut();

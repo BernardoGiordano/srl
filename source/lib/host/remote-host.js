@@ -12,22 +12,21 @@ import { AUTH_SESSION } from '@auth/session.js';
 /**
  * The shell's side of the micro-frontend host contract.
  *
- * The one module in the library above both `core` and `auth`: it knows a session
- * exists, so that an application does not reimplement the grant enforcement
- * below. `core/remotes/mfe.js` asks the injector for a REMOTE_HOST provider and
- * this is the one installed for it, from `host/runtime.js`. An application with a
- * different policy provides its own and imports nothing from here.
+ * The one module in the library above both `core` and `auth`. It knows a session
+ * exists, so that an application does not reimplement the grant enforcement below.
+ * `core/remotes/mfe.js` asks the injector for a REMOTE_HOST provider and this is the
+ * one installed for it, from `host/runtime.js`. An application with a different policy
+ * provides its own and imports nothing from here.
  *
- * What crosses the boundary is a capability, not a credential: the remote
- * receives a function that performs an authorized request, not the means to
- * authorize one. Each remote gets its own object, bounded by its own grants, and
- * the shell can take it back. ADR-0016.
+ * What crosses the boundary is a capability rather than a credential. The remote
+ * receives a function that performs an authorized request rather than the means to
+ * authorize one. Each remote gets its own object, bounded by its own grants, and the
+ * shell can take it back. ADR-0016.
  *
- * THIS IS NOT A SANDBOX. A remote runs in the shell's realm, on the shell's
- * origin, and hostile remote code can reach `document` and patch `fetch`. The
- * grants are least privilege against mistakes and scope creep between trusted
- * teams, plus an audit point; the API allowlist is defence in depth for the same
- * reason. ADR-0026.
+ * This is not a sandbox. A remote runs in the shell's realm, on the shell's origin, and
+ * hostile remote code can reach `document` and patch `fetch`. The grants are least
+ * privilege against mistakes and scope creep between trusted teams, plus an audit
+ * point, and the API allowlist is defence in depth for the same reason. ADR-0026.
  */
 
 /**
@@ -40,9 +39,9 @@ export function createRemoteHostProvider() {
 /**
  * Access control on the mount path, from the manifest's `requires` block.
  *
- * Returning `undefined` rather than a permissive guard matters: the router skips
- * the await entirely for an unguarded route, and "no guard" reads differently in
- * a debugger from "a guard that always allows".
+ * Returning `undefined` rather than a permissive guard matters. The router skips the
+ * await entirely for an unguarded route, and "no guard" reads differently in a debugger
+ * from "a guard that always allows".
  *
  * @param {RemoteDescriptor} remote
  * @returns {RouteGuard | undefined}
@@ -58,8 +57,8 @@ function guardFor(remote) {
   // authenticated user round a login loop.
   //
   // Synchronous, because main.js awaits `AuthSession.init()` before the router
-  // resolves its first route: the session is settled by the time any guard runs.
-  // Same reasoning as @auth/guard.js, and the same payoff — a deep link into a
+  // resolves its first route, so the session is settled by the time any guard runs.
+  // Same reasoning as @auth/guard.js, and the same payoff, because a deep link into a
   // remote does not race the session restore and bounce to /login.
   return () => {
     const auth = inject(AUTH_SESSION);
@@ -96,9 +95,9 @@ function connect(remote) {
    * Adapt a signal to a callback, which is the whole of the reactive boundary.
    *
    * `effect` runs its body immediately to collect dependencies, and that first run
-   * is not a change: calling the listener during `mount` would have every
-   * remote render twice on load and would make a "reload on change" handler fire
-   * once before there was anything to reload.
+   * is not a change. Calling the listener during `mount` would have every remote
+   * render twice on load and would make a "reload on change" handler fire once before
+   * there was anything to reload.
    *
    * A listener that throws is contained. It belongs to the remote, it runs inside
    * the shell's effect, and letting it propagate would dispose that effect and
@@ -135,9 +134,9 @@ function connect(remote) {
   /**
    * Resolve a request target against the remote's API grants.
    *
-   * Rejecting rather than returning a 403 is deliberate: an ungranted call is a
-   * bug in the remote, not a runtime condition to handle, and a thrown error
-   * names the remote, the path and the grants it does have.
+   * Rejecting rather than returning a 403 is deliberate. An ungranted call is a bug in
+   * the remote rather than a runtime condition to handle, and a thrown error names the
+   * remote, the path and the grants it does have.
    *
    * @param {string} path
    * @returns {URL}
@@ -184,8 +183,8 @@ function connect(remote) {
       user() {
         alive();
         const session = inject(AUTH_SESSION).session.value;
-        // Rebuilt rather than passed through: `Session` also carries `scopes` and
-        // `expiresAt`, and the second of those is a hint about token lifetime that
+        // Rebuilt rather than passed through, because `Session` also carries
+        // `scopes` and `expiresAt`, and the second is a hint about token lifetime that
         // a remote has no use for and might start scheduling against.
         return session === null ? null : { subject: session.subject, name: session.name };
       },
@@ -239,11 +238,11 @@ function connect(remote) {
       navigate(to) {
         alive();
         // Not restricted to the remote's own mount path. A URL change is not a
-        // privilege: a remote can already render an <a href> to anywhere, and the
-        // guards decide what the destination is allowed to show.
+        // privilege, because a remote can already render an <a href> to anywhere and
+        // the guards decide what the destination is allowed to show.
         //
-        // The completion is dropped rather than handed across the seam: a remote
-        // that could await the shell's navigation would learn when a guard
+        // The completion is dropped rather than handed across the seam, because a
+        // remote that could await the shell's navigation would learn when a guard
         // redirected it somewhere else.
         void navigate(to);
       },
@@ -279,7 +278,8 @@ function connect(remote) {
 
   return {
     // Frozen so a remote cannot swap `auth.fetch` for its own and leave the next
-    // remote using it. Shallow is enough: the nested objects are frozen too.
+    // remote using it. Shallow is enough, because the nested objects are frozen
+    // too.
     context: deepFreeze(context),
 
     revoke() {

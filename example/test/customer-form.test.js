@@ -7,35 +7,30 @@ import { installFakeEventSource, installFakeServer, requested } from './fake-ser
 /**
  * The customer form: the application's write path, end to end in a real browser.
  *
- * This suite exists for the same reason the screen does: form primitives were a non-goal
- * on the grounds that no screen had needed them, and the way to find out whether that
- * still holds is to build one and see what it costs. What is asserted here is
- * therefore not "the framework works" but "this is what a form written with no forms
- * layer actually does":
+ * What is asserted here is what a form actually does, rather than that the framework
+ * works.
  *
- *   - errors stay quiet until a field is left, and appear everywhere on submit;
- *   - a rule only the server can check comes back as a 422 and lands under its field;
- *   - the same rule asked while the user types is a debounced check the field owns,
- *     and a submit fired through one waits rather than sending an unchecked value;
- *   - a rule about a set of rows is answered against the array and shown by an
- *     element with no control under it;
- *   - editing that field clears the server's answer about the previous value;
- *   - leaving with unsaved work is refusable, and refusing it keeps the URL honest;
- *   - the entitlement is enforced by the route where there is one, and by the screen
- *     where the mode is a query parameter — never by hiding the control.
+ *   - Errors stay quiet until a field is left, and appear everywhere on submit.
+ *   - A rule only the server can check comes back as a 422 and lands under its field.
+ *   - The same rule asked while the user types is a debounced check the field owns, and
+ *     a submit fired through one waits rather than sending an unchecked value.
+ *   - A rule about a set of rows is answered against the array and shown by an element
+ *     with no control under it.
+ *   - Editing that field clears the server's answer about the previous value.
+ *   - Leaving with unsaved work is refusable, and refusing it keeps the URL honest.
+ *   - The entitlement is enforced by the route where there is one, and by the screen
+ *     where the mode is a query parameter, never by hiding the control.
  *
- * The screen reads as well as writes: `/sales/customers/:id` is view mode and
+ * The screen reads as well as writes. `/sales/customers/:id` is view mode and
  * `?edit=true` is edit mode, which is one form with `group.setDisabled()` rather than
  * two renderings of nine fields. The last block asserts that switch from both ends.
  *
- * The screen was rewritten on `@core/forms` and `<ui-field>` after the first version
- * was measured, and this file barely changed: the assertions are about what the user
- * sees, so they were the check on whether the extraction preserved it. The two that
- * did change are marked, and both changed because the friction they described is gone.
+ * The assertions are about what the user sees, which is what makes them the check on
+ * whether a rewrite of the screen preserved its behaviour.
  *
- * Everything is real except HTTP: the router, the guards, the session, the components
- * and the compiled templates. `fake-server.js` explains why HTTP is the one boundary
- * that is stubbed.
+ * Everything is real except HTTP, including the router, the guards, the session, the
+ * components and the compiled templates. `fake-server.js` explains why HTTP is the one
+ * boundary that is stubbed.
  */
 
 /** @type {HTMLElement | null} */
@@ -56,11 +51,10 @@ async function tick() {
 /**
  * Navigate, discarding unsaved work if the form asks.
  *
- * The navigation is not awaited first: with a dirty form the route's
- * `canDeactivate` is holding a promise open until the prompt is answered, so
- * awaiting before answering deadlocks. That is not a quirk of the test — it is
- * what the guard *is*, and every case below that starts by leaving a dirty form
- * goes through here.
+ * The navigation is not awaited first. With a dirty form the route's `canDeactivate`
+ * is holding a promise open until the prompt is answered, so awaiting before answering
+ * deadlocks. That is what the guard is rather than a quirk of the test, and every case
+ * below that starts by leaving a dirty form goes through here.
  *
  * @param {string} path
  */
@@ -123,7 +117,7 @@ function form() {
 }
 
 /**
- * Type into a field the way a user does: set the value, then dispatch the event the
+ * Type into a field the way a user does. Set the value, then dispatch the event the
  * binding listens for. Assigning `.value` alone changes the DOM and tells the component
  * nothing, which is exactly the bug this helper exists not to hide.
  *
@@ -172,11 +166,11 @@ async function choose(name, label) {
 /**
  * The error text under one field, or the empty string.
  *
- * One lookup for every field, including the two comboboxes. Before `ui-field` and
- * the form-control contract this needed a second branch: a combobox generates the
- * node that takes focus, so nothing could carry the error's id and nothing could
+ * One lookup for every field, including the two comboboxes. Without `ui-field` and the
+ * form-control contract this would need a second branch, because a combobox generates
+ * the node that takes focus, so nothing could carry the error's id and nothing could
  * point `aria-describedby` at it. The single branch here is the assertion that it
- * now can.
+ * can.
  *
  * @param {string} name
  */
@@ -204,12 +198,12 @@ function saveButton() {
 
 /* ── Contacts, the repeating row ────────────────────────────────────────────
  *
- * Reached by path rather than by id. The nine fields above each have a written
- * `#cf-*` id, which is exactly what a repeating row cannot have: the second row
- * would carry the same one. What identifies a row's field instead is the path it
- * occupies — `contacts.1.email` — which is the string the array produces, the
- * string a 422 carries, and the string `<ui-field name>` is bound to. These
- * helpers look it up the same way `focusInvalidField` does.
+ * Reached by path rather than by id. The nine fields above each have a written `#cf-*`
+ * id, which is exactly what a repeating row cannot have, because the second row would
+ * carry the same one. What identifies a row's field instead is the path it occupies,
+ * such as `contacts.1.email`, which is the string the array produces, the string a 422
+ * carries, and the string `<ui-field name>` is bound to. These helpers look it up the
+ * same way `focusInvalidField` does.
  */
 
 /** @param {string} path */
@@ -244,9 +238,9 @@ function errorOfContact(path) {
 /**
  * The contacts array's own error, which belongs to no row and has no control.
  *
- * A rule about the set of rows has nothing to sit under, so what shows it is
- * `<ui-form-error>` — a paragraph and a name, where a field would be a label, a
- * control and an error.
+ * A rule about the set of rows has nothing to sit under, so `<ui-form-error>` shows
+ * it, as a paragraph and a name, where a field would be a label, a control and an
+ * error.
  */
 function errorOfContacts() {
   const paragraph = form().querySelector('ui-form-error[name="contacts"] p[role="alert"]');
@@ -278,11 +272,11 @@ async function clickButton(label) {
 /**
  * A create form nothing has touched.
  *
- * Going straight to `/sales/customers/new` is not enough when the previous case
- * left the screen there: navigating to the URL that is already matched is a
- * re-render rather than a navigation, which is the behaviour `?edit=true` relies
- * on — the element is not replaced and neither is the form inside it. Leaving the
- * route first is what makes the next arrival a fresh mount.
+ * Going straight to `/sales/customers/new` is not enough when the previous case left
+ * the screen there. Navigating to the URL that is already matched is a re-render rather
+ * than a navigation, which is the behaviour `?edit=true` relies on, so the element is
+ * not replaced and neither is the form inside it. Leaving the route first is what makes
+ * the next arrival a fresh mount.
  */
 async function newCustomerForm() {
   await goto('/sales/customers');
@@ -305,10 +299,10 @@ let filled = 0;
 /**
  * Fill every required field with something acceptable, and settle what that starts.
  *
- * The address is checked against the server, so a form filled in this way is
- * pending for the length of the debounce plus the request. A case that submitted
- * before that would be testing the wait rather than its own subject — and one case
- * below does exactly that, deliberately.
+ * The address is checked against the server, so a form filled in this way is pending
+ * for the length of the debounce plus the request. A case that submitted before that
+ * would be testing the wait rather than its own subject, and one case below does
+ * exactly that, deliberately.
  *
  * The name and the address are numbered, because a case that saves leaves a
  * customer behind and the next case's form would then be told its own suite's
@@ -357,8 +351,9 @@ describe('customer form', () => {
 
     assert.equal(errorOf('name'), '', 'an untouched field must not be marked wrong');
 
-    // Touched and empty is the case an error belongs to: the user has been there and
-    // left it blank, which is a decision rather than a field they have not reached.
+    // Touched and empty is the case an error belongs to, because the user has been
+    // there and left it blank, which is a decision rather than a field they have not
+    // reached.
     await blur('name');
     assert.equal(errorOf('name'), 'This field is required.');
     assert.equal(errorOf('email'), '', 'a field the user has not reached stays quiet');
@@ -474,8 +469,9 @@ describe('customer form', () => {
   it('puts a server-only rule under the field that broke it', async () => {
     await goto('/sales/customers/new');
     await fillValid();
-    // Uniqueness is the rule this side cannot check: the name belongs to a customer the
-    // client has never fetched. The form believes it is valid and posts it.
+    // Uniqueness is the rule this side cannot check, because the name belongs to a
+    // customer the client has never fetched. The form believes it is valid and posts
+    // it.
     await type('name', 'Aurora Utilities');
 
     submit();
@@ -672,8 +668,8 @@ describe('customer form', () => {
     await goto('/sales/customers/CU-0001?edit=true');
     await type('city', 'Genova');
 
-    // Not awaited: the guard is holding this navigation open until the prompt is
-    // answered, which is the whole behaviour under test.
+    // Not awaited, because the guard is holding this navigation open until the prompt
+    // is answered, which is the behaviour under test.
     const leaving = navigate('/sales/customers');
     await tick();
 
@@ -736,7 +732,7 @@ describe('customer form', () => {
   });
 
   it('leaves a required field with no error while it is read-only', async () => {
-    // The rules still fail — `revenue` is the only optional one — and saying so
+    // The rules still fail, since `revenue` is the only optional one, and saying so
     // would be telling the user to fix a form they cannot touch.
     await goto('/sales/customers/CU-0001');
 
@@ -775,7 +771,7 @@ describe('customer form', () => {
   it('keeps an edit that was only backed out of, and still asks about it on the way out', async () => {
     // Leaving edit mode is a query change, which this router does not consider a
     // navigation, so nothing can prompt about it. Discarding silently would be the
-    // wrong answer to that: the work stays, and the guard that does run catches it.
+    // wrong answer, so the work stays and the guard that does run catches it.
     await goto('/sales/customers/CU-0001?edit=true');
     await type('city', 'Trieste');
     await goto('/sales/customers/CU-0001');
@@ -803,8 +799,9 @@ describe('customer form', () => {
       'the edit control is rendered and disabled: a missing button reads as a broken one',
     );
 
-    // A query parameter cannot be a route guard, so the screen is what refuses.
-    // The server refuses the write itself — see the header of `example/server/api.mjs`.
+    // A query parameter cannot be a route guard, so the screen is what refuses. The
+    // server refuses the write itself, as the header of `example/server/api.mjs`
+    // says.
     await goto('/sales/customers/CU-0001?edit=true');
     assert.ok(
       /** @type {HTMLInputElement} */ (present(form().querySelector('#cf-name'))).disabled,

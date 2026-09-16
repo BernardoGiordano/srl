@@ -8,32 +8,28 @@ import { AuthUnavailable } from '@auth/session-policy.js';
 /**
  * The authenticated request lifecycle, whole.
  *
- * WHAT THIS MODULE OWNS
+ * This module owns one session, from restore to disposal, and every outbound request
+ * that carries it. Callers get `login`, `logout`, `fetch`, `json` and three signals.
+ * They do not get the ordering rules, because those are the part that keeps escaping. A
+ * refresh has to be shared across concurrent 401s, coordinated across tabs, scheduled
+ * before expiry, retried when the network is down but not when the grant is refused,
+ * and abandoned on disposal. Spread across files, module scope and nowhere, those five
+ * rules do not hold together.
  *
- * One session, from restore to disposal, and every outbound request that carries
- * it. Callers get `login`, `logout`, `fetch`, `json` and three signals; they do
- * not get the ordering rules, because the ordering rules were the part that kept
- * escaping. A refresh has to be shared across concurrent 401s, coordinated across
- * tabs, scheduled before expiry, retried when the network is down but not when
- * the grant is refused, and abandoned on disposal — and each of those lived in a
- * different file, or in module scope, or nowhere.
+ * The single-flight refresh is a private field rather than module state, so two sessions
+ * on one page do not deduplicate against each other. ADR-0022.
  *
- * The single-flight refresh is a private field rather than module state, so two
- * sessions on one page do not deduplicate against each other. ADR-0022.
+ * No token lives in this file, and that is what makes the seam an interface. A
+ * `TokenStore` is supplied by the application, and it owns the endpoints, the request
+ * bodies, the response field names and the headers, because those are its backend's
+ * facts rather than the library's. `@auth/session-policy.js` has the errors and the
+ * `Session` builder a store is written against. ADR-0021 says why the seam is shaped
+ * this way, and the applications in this repository each carry a worked implementation.
  *
- * WHERE TOKENS LIVE, AND WHY THAT IS AN INTERFACE
- *
- * Nowhere in this file, and that is the point. A `TokenStore` is supplied by the
- * application: it owns the endpoints, the request bodies, the response field names
- * and the headers, because those are its backend's facts and not the library's.
- * `@auth/session-policy.js` has the errors and the `Session` builder a store is
- * written against. ADR-0021 says why the seam is shaped this way, and the
- * applications in this repository each carry a worked implementation.
- *
- * Note what the interface does NOT expose: any way to get a raw token. Stores
- * authorize a `Request`; they never hand out a credential, and neither does this
- * class. They stay adapters behind that seam — they perform an exchange and admit
- * its payload, and decide nothing about session state, retries or scheduling.
+ * The interface exposes no way to get a raw token. Stores authorize a `Request`, never
+ * hand out a credential, and neither does this class. They stay adapters behind that
+ * seam, performing an exchange and admitting its payload, and deciding nothing about
+ * session state, retries or scheduling.
  */
 
 /** @type {import('@core/foundation/types.js').InjectionToken<AuthSession>} */
@@ -43,9 +39,9 @@ export const AUTH_SESSION = token('AuthSession');
 const REFRESH_MARGIN_MS = 60_000;
 
 /**
- * Backoff for a refresh that could not reach an answer, in order; the last delay
- * repeats. Bounded by the token's own expiry in every case, so the sequence never
- * decides how long a dead session survives — the token does.
+ * Backoff for a refresh that could not reach an answer, in order, and the last delay
+ * repeats. Bounded by the token's own expiry in every case, so the token decides how
+ * long a dead session survives rather than the sequence.
  */
 const RETRY_DELAYS_MS = [1_000, 5_000, 15_000, 60_000];
 
@@ -76,14 +72,14 @@ export class AuthSession {
   #refreshInFlight;
 
   /**
-   * Bumped whenever something other than a refresh decides what the session is:
-   * a login, a logout, a broadcast from another tab, disposal.
+   * Bumped whenever something other than a refresh decides what the session is, such
+   * as a login, a logout, a broadcast from another tab, or disposal.
    *
-   * An exchange that started before one of those must not apply its answer after
-   * it. Without this, signing out while a refresh is in flight signs you back in
-   * a moment later — the exchange resolves, applies a valid session, and the
-   * screen the user just left comes back. The generation is captured when the
-   * exchange starts and compared when it settles.
+   * An exchange that started before one of those must not apply its answer after it.
+   * Without this, signing out while a refresh is in flight signs you back in a moment
+   * later, because the exchange resolves, applies a valid session, and the screen the
+   * user just left comes back. The generation is captured when the exchange starts and
+   * compared when it settles.
    */
   #generation = 0;
 
@@ -103,12 +99,12 @@ export class AuthSession {
    * the router resolves its first route, so guards see a settled state rather
    * than racing the restore.
    *
-   * Resolves null for "nobody is signed in", which is the ordinary first-visit
-   * path and not a failure. It rejects when the token endpoint could not be
-   * reached or refused the exchange for any other reason: startup owns failure
-   * containment, and an application that booted to a login screen because the
-   * authorization server was down would be indistinguishable, to the user, from
-   * one that had signed them out.
+   * Resolves null for "nobody is signed in", which is the ordinary first-visit path
+   * rather than a failure. It rejects when the token endpoint could not be reached or
+   * refused the exchange for any other reason, because startup owns failure containment
+   * and an application that booted to a login screen because the authorization server
+   * was down would be indistinguishable, to the user, from one that had signed them
+   * out.
    *
    * @returns {Promise<Session | null>}
    */
@@ -125,10 +121,11 @@ export class AuthSession {
           this.#apply(null);
           break;
         case 'changed': {
-          // Another tab signed in or refreshed. Read our own store rather than
-          // trusting the message: a session is not something a postMessage may
-          // introduce. A failure here leaves this tab's state as it was — the
-          // tab that actually performed the exchange is the one that reports it.
+          // Another tab signed in or refreshed. Read this tab's own store rather
+          // than trusting the message, because a session is not something a
+          // postMessage may introduce. A failure here leaves this tab's state as it
+          // was, and the tab that performed the exchange is the one that reports
+          // it.
           this.#generation += 1;
           const generation = this.#generation;
           void this.#store
@@ -228,8 +225,9 @@ export class AuthSession {
     if (response.status !== 401) return response;
 
     // The access token may simply have aged out between the scheduled refresh and
-    // this call. Refresh once, then retry exactly once. Never loop: a server that
-    // keeps returning 401 on a fresh token is telling us the session is over.
+    // this call. Refresh once, then retry exactly once, and never loop, because a
+    // server that keeps returning 401 on a fresh token is saying the session is
+    // over.
     /** @type {Session | null} */
     let renewed;
     try {
@@ -266,15 +264,15 @@ export class AuthSession {
   }
 
   /**
-   * Stop the machinery: no scheduled refresh fires, no broadcast is applied, no
-   * in-flight refresh is shared with a later caller.
+   * Stop the machinery, so no scheduled refresh fires, no broadcast is applied, and
+   * no in-flight refresh is shared with a later caller.
    *
-   * The session signal is deliberately left as it was. Disposal happens while a
-   * page is being torn down, and clearing it there would push one last render
-   * through every screen currently reading it, on its way out.
+   * The session signal is deliberately left as it was. Disposal happens while a page is
+   * being torn down, and clearing it there would push one last render through every
+   * screen currently reading it, on its way out.
    *
-   * Not the same as `logout()`, which ends a session on the server as well and
-   * leaves this object usable.
+   * Not the same as `logout()`, which ends a session on the server as well and leaves
+   * this object usable.
    */
   dispose() {
     this.#disposed = true;
@@ -319,9 +317,9 @@ export class AuthSession {
 
   /**
    * A scheduled refresh reached no answer. Retry on the backoff, bounded by the
-   * token's own expiry: once the instant the server named has passed, the session
-   * is over whatever the network is doing, because every request it could
-   * authorize would now be refused.
+   * token's own expiry. Once the instant the server named has passed, the session is
+   * over whatever the network is doing, because every request it could authorize would
+   * now be refused.
    *
    * @param {number} attempt
    */
@@ -343,8 +341,8 @@ export class AuthSession {
   }
 
   /**
-   * The timer's entry point. Swallows nothing: a transient failure becomes a
-   * retry and a terminal one has already ended the session inside `refresh()`.
+   * The timer's entry point. It swallows nothing, because a transient failure becomes
+   * a retry and a terminal one has already ended the session inside `refresh()`.
    *
    * @param {number} attempt
    */
@@ -380,8 +378,8 @@ export class AuthSession {
     this.session.value = next;
     if (next === null) return;
 
-    // Clamp to zero: a session restored from storage may already be inside the
-    // margin, and a negative delay would silently never fire in some engines.
+    // Clamp to zero, because a session restored from storage may already be inside
+    // the margin and a negative delay would silently never fire in some engines.
     const delay = Math.max(0, next.expiresAt - Date.now() - REFRESH_MARGIN_MS);
     this.#timer = setTimeout(() => {
       this.#refreshOnSchedule(0);
