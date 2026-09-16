@@ -1,7 +1,7 @@
 /**
  * What the editor ends up seeing.
  *
- * These drive the scheduler rather than the checker: the failure they exist for is a
+ * These drive the scheduler rather than the checker. The failure they exist for is a
  * correct diagnostic that is never published, or published about text the buffer no
  * longer holds. Every assertion is about the queue's outcome, so each test drains it
  * instead of sleeping for longer than the debounce and hoping.
@@ -180,8 +180,9 @@ void test('the stdio server answers a request before the validation it queued', 
       }),
     ]);
 
-    // Ordering, not a duration: the completion is asked for after two documents were
-    // queued for validation and has to come back before their diagnostics do. What that
+    // Ordering rather than a duration. The completion is asked for after two
+    // documents were queued for validation and has to come back before their
+    // diagnostics do. What that
     // costs in milliseconds is the editor workload's question, measured against a fixture
     // over a hundred samples rather than asserted once here. ADR-0096.
     const completion = await client.request('textDocument/completion', {

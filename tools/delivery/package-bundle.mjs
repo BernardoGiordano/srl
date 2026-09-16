@@ -1,66 +1,57 @@
 /**
- * The registry half of the package: the files a consumer with a bundler installs.
+ * The registry half of the package, which is the files a consumer with a bundler
+ * installs.
  *
  *   node tools/delivery/package-bundle.mjs            build source/dist/
  *   node tools/delivery/package-bundle.mjs --check    fail if it is absent or stale
  *
- * WHY THIS EXISTS AT ALL, GIVEN THE PREMISE
+ * The library is written against bare prefixes, `@core/`, `@auth/`, `@host/` and
+ * `@components/`, that a browser resolves through the import map the package
+ * publishes. That is the whole delivery story for the consumer this framework is for,
+ * and nothing here changes it. `lib/` and `components/` still ship as source, still
+ * carry `importmap.json`, and an application that pastes the fragment gets the
+ * library's own bytes with no build.
  *
- * The library is written against bare prefixes — `@core/`, `@auth/`, `@host/`,
- * `@components/` — that a browser resolves through the import map the package
- * publishes. That is the whole delivery story for the consumer this framework is
- * for, and nothing here changes it: `lib/` and `components/` still ship as source,
- * still carry `importmap.json`, and an application that pastes the fragment gets
- * the library's own bytes with no build.
+ * A consumer who resolves through Node or a bundler has no import map, so those same
+ * prefixes are unresolvable specifiers and the `exports` map would advertise a surface
+ * that throws on first import. This module resolves every internal prefix at build
+ * time, so the emitted file imports nothing but its declared dependencies. ADR-0066.
  *
- * A consumer who resolves through Node or a bundler has no import map. For them
- * those same prefixes are unresolvable specifiers, so the `exports` map used to
- * advertise a surface that threw on first import. This module is the answer:
- * every internal prefix is resolved at build time, so the emitted file imports
- * nothing but its declared dependencies. ADR-0066.
- *
- * TWO FILES, NOT ONE, AND WHY THE SECOND IMPORTS THE FIRST
- *
+ * There are two files rather than one, and the second imports the first.
  * `srl-components.js` treats the framework as external and imports it from
- * `./srl-core.js`. Inlining core into both would put two copies of the custom
- * element registry, the injector and the template cache in one page, and the
- * second `defineComponent` for a tag would throw against a registry the first
- * one filled. One copy is a correctness requirement, not a size optimisation.
+ * `./srl-core.js`. Inlining core into both would put two copies of the custom element
+ * registry, the injector and the template cache in one page, and the second
+ * `defineComponent` for a tag would throw against a registry the first one filled. One
+ * copy is a correctness requirement rather than a size optimisation.
  *
- * WHAT THE BARREL SAYS
- *
- * The members are walked, never listed, so a layer added once reaches this consumer
- * too — that is ADR-0033's guarantee and nothing here weakens it. What each member
- * contributes is now the member's own answer: an export marked `@internal` stays
- * importable by path and leaves the bundle's flat namespace. `cli/package/door.mjs`
- * owns that rule; ADR-0066 is why.
- *
- * TEMPLATES
+ * The members are walked rather than listed, so a layer added once reaches this
+ * consumer too, which is ADR-0033's guarantee and nothing here weakens it. What each
+ * member contributes is the member's own answer, and an export marked `@internal`
+ * stays importable by path while leaving the bundle's flat namespace.
+ * `cli/package/door.mjs` owns that rule, and ADR-0066 says why.
  *
  * A component is a `.js` and a sibling `.html`, and `defineComponent` derives the
  * second from `import.meta.url`. Inside a bundle every module shares one
  * `import.meta.url`, so the derivation collapses onto one file name and fifteen
  * components would fight over it. The transform below gives each declaration an
- * explicit `template` path and seeds the compiler with that file's bytes under
- * the URL the same expression produces at runtime, so the seeded key and the
- * looked-up key are computed identically and cannot drift.
+ * explicit `template` path and seeds the compiler with that file's bytes under the URL
+ * the same expression produces at runtime, so the seeded key and the looked-up key are
+ * computed identically and cannot drift.
  *
- * TYPES, AND WHY THEY ARE A TREE PLUS A BARREL
- *
- * The prefixes are a resolution problem for the type layer too: tsc ignores an
- * import map, and a declaration that still said `@core/…` would fail for a bundler
- * consumer one import down exactly as the JavaScript did. So the same answer is
- * applied twice. `emitDeclarations` writes one declaration per module into
- * `dist/types/`, mirroring the package's own layout, and rewrites every prefix it
- * emitted into a relative path — which is arithmetic rather than a second
- * resolution, because the tree mirrors the source and a relative path is the same
- * in both. Each bundle then gets a barrel over its members' declarations, and that
- * barrel is what `exports` points a `types` condition at. ADR-0066.
+ * The prefixes are a resolution problem for the type layer too, because tsc ignores an
+ * import map and a declaration that still said `@core/…` would fail for a bundler
+ * consumer one import down exactly as the JavaScript did. The same answer is applied
+ * twice. `emitDeclarations` writes one declaration per module into `dist/types/`,
+ * mirroring the package's own layout, and rewrites every prefix it emitted into a
+ * relative path. That is arithmetic rather than a second resolution, because the tree
+ * mirrors the source and a relative path is the same in both. Each bundle then gets a
+ * barrel over its members' declarations, and that barrel is what `exports` points a
+ * `types` condition at. ADR-0066.
  *
  * The declarations are not rolled up into one file. A rollup has to rename every
  * colliding local type and reproduce tsc's own emit rules to do it, and nothing is
- * bought: a resolver reads the barrel, and the tree beside it is the same set of
- * facts a browser consumer already gets from the JSDoc in `lib/`.
+ * bought. A resolver reads the barrel, and the tree beside it is the same set of facts
+ * a browser consumer already gets from the JSDoc in `lib/`.
  */
 
 import { createHash } from 'node:crypto';
@@ -85,11 +76,11 @@ import {
  * Where the four files land by default. Generated, so `dist/` is ignored and never
  * committed.
  *
- * A default rather than the only answer: the build empties its output directory
+ * A default rather than the only answer. The build empties its output directory
  * before writing, and `tools/test/package-bundle.test.mjs` reads the emitted bytes
  * rather than the location, so the suite builds into a directory of its own. The
  * dependency gate refuses a package whose `exports` names a file that is not there,
- * and a suite that deleted `dist/` while that gate was reading it failed on a rule
+ * and a suite that deleted `dist/` while that gate was reading it would fail on a rule
  * the repository satisfies.
  */
 export const DIST = join(PACKAGE, 'dist');
@@ -101,9 +92,9 @@ const TARGET = 'es2022';
 const TYPES = relative(DIST, join(PACKAGE, DECLARATION_TREE));
 
 /**
- * The options this repository type-checks the library's source under: the published
- * base, with the prefixes resolved into the source rather than into the tree this
- * build writes.
+ * The options this repository type-checks the library's source under, which is the
+ * published base with the prefixes resolved into the source rather than into the tree
+ * this build writes.
  *
  * Read rather than restated, so the declarations are emitted under the same `lib`,
  * `target` and module settings a consumer extending the base checks them under.
@@ -126,13 +117,14 @@ const PREFIXES = Object.entries(SPECIFIER_DIRS).sort(
  * under, which is what a bundler matches on.
  */
 const EXTERNAL = Object.keys(/** @type {Record<string, string>} */ (MANIFEST.srl.vendor)).filter(
-  // Development-only, imported by nothing: it is a <script> in an index.html.
+  // Development-only and imported by nothing, because it is a <script> in an
+  // index.html.
   (specifier) => specifier !== '@tailwindcss/browser',
 );
 
 /**
- * Test source, decided on the path relative to the package rather than the
- * absolute one — the same rule the project model learned, for the same reason: a
+ * Test source, decided on the path relative to the package rather than the absolute
+ * one. It is the same rule the project model follows, for the same reason, because a
  * checkout that happens to sit under a directory called `test` is not a suite.
  *
  * @param {string} path
@@ -163,15 +155,15 @@ async function membersOf(bundle) {
 /**
  * What each member offers, read out of the members rather than written.
  *
- * Still derived — the list of members is the walk above, and no name is typed
- * anywhere — but each member is now asked which of its exports are part of the
- * door, so a name the source documents as test-only or internal does not become a
- * promise to a registry consumer. `cli/package/door.mjs` owns the rule and the
- * marker; this reads the files for it. ADR-0066.
+ * Still derived, because the list of members is the walk above and no name is typed
+ * anywhere. Each member is asked which of its exports are part of the door, so a name
+ * the source documents as test-only or internal does not become a promise to a
+ * registry consumer. `cli/package/door.mjs` owns the rule and the marker, and this
+ * reads the files for it. ADR-0066.
  *
- * Read once and used twice, by the JavaScript barrel and by the declaration barrel:
- * one answer, so the bundle's runtime surface and its type surface are the same set
- * of names by construction.
+ * Read once and used twice, by the JavaScript barrel and by the declaration barrel, so
+ * the bundle's runtime surface and its type surface are the same set of names by
+ * construction.
  *
  * @param {string[]} members
  * @returns {Promise<Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>>}
@@ -189,7 +181,7 @@ async function doorsOf(members) {
  * Resolve the library's own prefixes to files on disk.
  *
  * The table is the manifest's, through interface.mjs, so this cannot disagree with
- * what the browser resolves: one authority, two resolvers.
+ * what the browser resolves. One authority, two resolvers.
  *
  * @param {string[]} external Specifier prefixes another bundle owns.
  * @param {string} inherited The sibling file those prefixes resolve to.
@@ -203,9 +195,9 @@ function resolvePackageSpecifiers(external, inherited) {
       for (const [prefix, dir] of PREFIXES) {
         if (!source.startsWith(prefix)) continue;
         // A prefix the extended bundle owns leaves this one as a single import of
-        // that file. Minified pairs with minified: a consumer who loaded
-        // srl-components.min.js and got the unminified framework beside it would be
-        // shipping both copies of every comment in the library.
+        // that file. Minified pairs with minified, because a consumer who loaded
+        // srl-components.min.js and got the unminified framework beside it would
+        // ship both copies of every comment in the library.
         if (external.includes(prefix)) return { id: inherited, external: true };
         return join(dir, source.slice(prefix.length));
       }
@@ -218,9 +210,9 @@ function resolvePackageSpecifiers(external, inherited) {
  * Give every `defineComponent` in the bundle an explicit template path, and seed
  * the compiler with that template's bytes.
  *
- * The rewrite is an AST edit rather than a regular expression for the same reason
- * the production build's is: `defineComponent` is a call whose argument is an
- * object literal, and finding the `template` key in text means reimplementing a
+ * The rewrite is an AST edit rather than a regular expression for the same reason the
+ * production build's is. `defineComponent` is a call whose argument is an object
+ * literal, and finding the `template` key in text means reimplementing a
  * parser that is already in the toolchain.
  *
  * @param {string} bundleName
@@ -284,7 +276,7 @@ function inlineTemplates(bundleName, roots) {
           const authored = await siblingTemplate(module, existing);
           if (authored === null) continue;
 
-          // Minified, for the same reason the artifact build minifies: comments and
+          // Minified, for the same reason the artifact build minifies. Comments and
           // indentation are bytes the runtime compiler discards on arrival, and here
           // they would sit inside a published bundle's string literals forever.
           // `minifyTemplate` proves the result parses to the same tree first
@@ -319,9 +311,9 @@ function inlineTemplates(bundleName, roots) {
 
         // The seed key is `new URL(path, import.meta.url).href`, which is character
         // for character what `defineComponent` computes from the same `path` and the
-        // same module. Anything else — a root-relative URL, a literal string — would
-        // resolve against document.baseURI in one place and the bundle's own URL in
-        // the other, and match only when the page happens to sit at the root.
+        // same module. A root-relative URL or a literal string would resolve against
+        // document.baseURI in one place and the bundle's own URL in the other, and
+        // match only when the page happens to sit at the root.
         const seeding = seeds
           .map(
             ([path, source]) =>
@@ -342,12 +334,12 @@ function inlineTemplates(bundleName, roots) {
 }
 
 /**
- * The markup a declaration renders: its module's sibling `.html`, or the path the
- * declaration named instead.
+ * The markup a declaration renders, which is its module's sibling `.html` or the path
+ * the declaration named instead.
  *
- * A declared template that does not exist is an error rather than a skip — it is a
- * component that renders nothing, and finding that out in a consumer's browser is
- * the outcome this whole file exists to prevent.
+ * A declared template that does not exist is an error rather than a skip. It is a
+ * component that renders nothing, and finding that out in a consumer's browser is the
+ * outcome this whole file exists to prevent.
  *
  * @param {string} module
  * @param {ts.ObjectLiteralElementLike | undefined} declared
@@ -489,11 +481,11 @@ function assertSelfContained(fileName, text, inherited) {
 /**
  * Refuse a bundle whose sibling no longer offers a name it imports.
  *
- * This is the failure the curated door introduces. `@internal` on a name in `lib/`
- * is invisible to a component that imports it: inside `srl-components` that import
- * resolves to `./srl-core.js`, and a core bundle that no longer exports the name
- * ships a pair of files that throws on the consumer's first import, in a file they
- * never wrote. Nothing else here would see it — the browser suites resolve the same
+ * This is the failure the curated door introduces. `@internal` on a name in `lib/` is
+ * invisible to a component that imports it. Inside `srl-components` that import
+ * resolves to `./srl-core.js`, and a core bundle that does not export the name ships a
+ * pair of files that throws on the consumer's first import, in a file they never
+ * wrote. Nothing else here would see it, because the browser suites resolve the same
  * import through the import map, where every export is still reachable by path.
  *
  * Read out of the sibling's emitted bytes rather than from the door tables, so a
@@ -568,12 +560,12 @@ function bundleExports(text, fileName) {
 /* ── The type layer ───────────────────────────────────────────────────────── */
 
 /**
- * The options the declarations are emitted under: the source's, plus emit.
+ * The options the declarations are emitted under, which are the source's plus emit.
  *
  * `tsconfig.source.json` is the authority rather than a table copied here. It extends
  * the base a consumer extends and changes only `paths`, which have to name the source
- * because the source is what this program compiles. Emit is the only override — the
- * base says `noEmit`, because a consumer never compiles this library and only this
+ * because the source is what this program compiles. Emit is the only override, because
+ * the base says `noEmit`, since a consumer never compiles this library and only this
  * build ever does.
  *
  * @param {string} out Where the tree is written.
@@ -587,10 +579,10 @@ function declarationOptions(out) {
     );
   }
 
-  // `fileNames` is ignored: the inputs are the walk below rather than this file's
-  // include globs, which cover the whole package and are the source consumer's
-  // question. What is wanted here is `options`, with `paths` already resolved
-  // against the directory that declares them.
+  // `fileNames` is ignored, because the inputs are the walk below rather than this
+  // file's include globs, which cover the whole package and are the source consumer's
+  // question. What is wanted here is `options`, with `paths` already resolved against
+  // the directory that declares them.
   const parsed = ts.parseJsonConfigFileContent(config, ts.sys, PACKAGE, undefined, SOURCE_TSCONFIG);
   refuseDiagnostics(parsed.errors, relative(REPO, SOURCE_TSCONFIG));
 
@@ -607,16 +599,16 @@ function declarationOptions(out) {
 }
 
 /**
- * Every module the declarations cover: the specifier prefixes' own trees, minus the
- * suites.
+ * Every module the declarations cover, which is the specifier prefixes' own trees
+ * minus the suites.
  *
- * The prefixes rather than the bundles' roots, and without the per-bundle
- * exclusions, because this is the tree the barrels resolve *through*. A component
- * excluded from the collection's door still appears in another component's declared
- * type, and a member of `srl-components` refers to types declared in `lib/`.
+ * The prefixes rather than the bundles' roots, and without the per-bundle exclusions,
+ * because this is the tree the barrels resolve through. A component excluded from the
+ * collection's door still appears in another component's declared type, and a member
+ * of `srl-components` refers to types declared in `lib/`.
  *
- * Hand-written `.d.ts` files come along: a module's JSDoc names them, so a tree
- * without them declares types that resolve nowhere.
+ * Hand-written `.d.ts` files come along, because a module's JSDoc names them and a
+ * tree without them declares types that resolve nowhere.
  *
  * @returns {Promise<string[]>}
  */
@@ -633,29 +625,29 @@ async function declarationInputs() {
  * A package that declares a type, mapped to the dependency that re-exports it.
  *
  * TypeScript writes an inferred type as `import('…').Thing`, and the module it names
- * is the one that *declares* the thing rather than the one the source imported it
- * from: `nothing` comes into the library from `lit` and is declared in `lit-html`.
- * A consumer installs what `dependencies` says, so a declaration naming the second
+ * is the one that declares the thing rather than the one the source imported it from.
+ * `nothing` comes into the library from `lit` and is declared in `lit-html`. A
+ * consumer installs what `dependencies` says, so a declaration naming the second
  * resolves only where a flat `node_modules` happens to hoist it, and fails on the
  * install layout that does not.
  *
- * Sound only where the dependency really does re-export the name, which is the one
- * thing that cannot be assumed and does not have to be: the suite type-checks the
- * emitted tree against the declared dependencies alone, so a rewrite to a package
- * that does not offer the name fails there.
+ * Sound only where the dependency really does re-export the name, which does not have
+ * to be assumed. The suite type-checks the emitted tree against the declared
+ * dependencies alone, so a rewrite to a package that does not offer the name fails
+ * there.
  */
 const REDECLARED_BY = /** @type {Record<string, string>} */ ({ 'lit-html': 'lit' });
 
 /**
  * A specifier as the emitted tree has to say it, or null for one already correct.
  *
- * Two rewrites, and the first is the reason this file exists. A library prefix
- * becomes a path relative to the file that names it, which is arithmetic rather than
- * resolution — sound because the emitted tree mirrors the package's own layout, so
- * the step from one file to another is the same in both trees. The `.js` extension
- * is kept as written: a resolver reading a declaration tries `.d.ts` for the `.js` it
- * was given, and that is what makes a hand-written `types.d.ts` reachable under the
- * name its importer typed.
+ * Two rewrites, and the first is why this file exists. A library prefix becomes a
+ * path relative to the file that names it, which is arithmetic rather than resolution.
+ * It is sound because the emitted tree mirrors the package's own layout, so the step
+ * from one file to another is the same in both trees. The `.js` extension is kept as
+ * written, because a resolver reading a declaration tries `.d.ts` for the `.js` it was
+ * given, and that is what makes a hand-written `types.d.ts` reachable under the name
+ * its importer typed.
  *
  * @param {string} specifier
  * @param {string} from The directory of the file the specifier is written in.
@@ -715,19 +707,20 @@ function importedFrom(node) {
 /**
  * One declaration with the library's prefixes rewritten to paths.
  *
- * Spliced into the text rather than reprinted, so the emitted comments — which are
- * the library's own JSDoc, and half the reason a consumer wants these files — reach
- * the tarball as they were written.
+ * Spliced into the text rather than reprinted, so the emitted comments reach the
+ * tarball as they were written. They are the library's own JSDoc, and half the reason
+ * a consumer wants these files.
  *
- * Which is also why the JSDoc is walked as syntax rather than searched as text. A
- * comment that *mentions* `@core/elements/mount.js` in a sentence is prose about the
- * library and stays that way; a `@type` tag that names an `import('…')` of it is a
+ * That is also why the JSDoc is walked as syntax rather than searched as text. A
+ * comment that mentions `@core/elements/mount.js` in a sentence is prose about the
+ * library and stays that way. A `@type` tag that names an `import('…')` of it is a
  * specifier, and in a tree where nothing resolves an import map it has to become a
  * path.
  *
  * A source module's `@import` tags survive into the emitted declaration as comments
- * and are left as written: declaration emit has already turned each one into a real
- * `import type` statement, and a declaration file's JSDoc is not read for imports.
+ * and are left as written, because declaration emit has already turned each one into a
+ * real `import type` statement and a declaration file's JSDoc is not read for
+ * imports.
  * The suite type-checks the emitted tree with `skipLibCheck` off, so a TypeScript
  * that began reading them would fail there rather than in a consumer's install.
  *
@@ -780,11 +773,11 @@ function rewriteSpecifiers(text, fileName, from) {
 /**
  * Refuse a declaration that names a package this one does not depend on.
  *
- * The same rule `assertSelfContained` applies to the JavaScript, on the layer where
- * it is easier to break: a type can reach a package the runtime never imports, and
- * the resulting declaration resolves on a flat `node_modules` and fails on a strict
- * one. Read out of what was written rather than from the rewrite table, so a
- * specifier nothing rewrote is caught by the same check.
+ * The same rule `assertSelfContained` applies to the JavaScript, on the layer where it
+ * is easier to break. A type can reach a package the runtime never imports, and the
+ * resulting declaration resolves on a flat `node_modules` and fails on a strict one.
+ * Read out of what was written rather than from the rewrite table, so a specifier
+ * nothing rewrote is caught by the same check.
  *
  * @param {string} file
  * @param {Set<string>} specifiers
@@ -793,7 +786,8 @@ function assertDeclaredDependencies(file, specifiers) {
   const declared = new Set(Object.keys(/** @type {Record<string, string>} */ (MANIFEST.dependencies ?? {})));
   const foreign = [...specifiers]
     .filter((specifier) => !specifier.startsWith('.'))
-    // `lit/directives/repeat.js` is a subpath: the install that satisfies it is `lit`.
+    // `lit/directives/repeat.js` is a subpath, and the install that satisfies it is
+    // `lit`.
     .filter((specifier) => {
       const owner = specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
       return !declared.has(owner);
@@ -827,9 +821,9 @@ async function writeDeclaration(file, out, text) {
 /**
  * Emit the declaration tree both barrels resolve through.
  *
- * One program for the whole package rather than one per bundle: a component's
- * declared type names a type declared in `lib/`, and two trees would give a consumer
- * two declarations of it and a mismatch between the framework they imported and the
+ * One program for the whole package rather than one per bundle, because a component's
+ * declared type names a type declared in `lib/`. Two trees would give a consumer two
+ * declarations of it and a mismatch between the framework they imported and the
  * framework their components were built on.
  *
  * @param {string} into
@@ -863,9 +857,9 @@ async function emitDeclarations(into) {
  * The declaration a bundle's `types` condition points at, and the one beside its
  * minified file.
  *
- * The minified declaration forwards rather than repeating: minification changes the
- * bytes a browser runs and nothing a type checker reads, and two barrels over one
- * tree would be two chances to disagree.
+ * The minified declaration forwards rather than repeating, because minification
+ * changes the bytes a browser runs and nothing a type checker reads, and two barrels
+ * over one tree would be two chances to disagree.
  *
  * @param {import('../../cli/package/interface.mjs').PackageBundle} bundle
  * @param {Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>} doors
@@ -913,10 +907,10 @@ function refuseDiagnostics(diagnostics, what) {
 /**
  * Build every bundle the manifest declares.
  *
- * The output directory is emptied first, so a rename in `lib/` cannot leave a file
- * nothing builds any more sitting in the published set. That is also why `into`
- * exists: a caller that only wants the bytes — the suite — passes a directory of its
- * own rather than deleting the one the dependency gate is checking.
+ * The output directory is emptied first, so a rename in `lib/` cannot leave a stale
+ * file sitting in the published set. That is also why `into` exists. A caller that
+ * only wants the bytes, such as the suite, passes a directory of its own rather than
+ * deleting the one the dependency gate is checking.
  *
  * @param {{ into?: string }} [options]
  * @returns {Promise<string[]>}
@@ -933,7 +927,8 @@ export async function buildPackageBundles({ into = DIST } = {}) {
   for (const bundle of BUNDLES) {
     const members = await membersOf(bundle);
     if (members.length === 0) throw new Error(`${bundle.name} has no members; the roots are wrong.`);
-    // Built once and reused for both minification settings: reading and parsing
+    // Built once and reused for both minification settings, because reading and
+  // parsing
     // every member is the cost, and it does not change with the minifier.
     const doors = await doorsOf(members);
     const entrySource = barrelSource(doors);

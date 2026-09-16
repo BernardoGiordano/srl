@@ -1,7 +1,7 @@
 /**
  * What an application's messages are, in one declaration.
  *
- * The model is a value: a check turns it into diagnostics, an editor turns one file's
+ * The model is a value. A check turns it into diagnostics, an editor turns one file's
  * references into underlines, and an extraction turns the unanswered ones into catalog
  * entries. None of the three interprets a catalog itself. ADR-0117.
  */
@@ -29,11 +29,12 @@ export interface MessageCatalog {
 }
 
 /**
- * One registered bundle: the application's own, or a remote's.
+ * One registered bundle, either the application's own or a remote's.
  *
  * `scope` is the directory whose sources this bundle answers for, and null means every
- * source. A remote's bundle answers for the remote; the application's answers for
- * everything, because the shell's translations are in the table before any remote loads.
+ * source. A remote's bundle answers for the remote, and the application's answers for
+ * everything, because the shell's translations are in the table before any remote
+ * loads.
  */
 export interface MessageBundle {
   name: string;

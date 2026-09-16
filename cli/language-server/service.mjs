@@ -166,9 +166,10 @@ export class SrlLanguageService {
   }
 
   /**
-   * The component a document belongs to: the one whose template it is, or — for a
-   * JavaScript module — the one it declares, which is where its inline Lit markup, its
-   * `uses` list and its property surface all live.
+   * The component a document belongs to. For a template that is the component whose
+   * template it is, and for a JavaScript module it is the component the module
+   * declares, which is where its inline Lit markup, its `uses` list and its property
+   * surface all live.
    *
    * @param {ProjectModel} model @param {string} path @returns {ElementRecord | undefined}
    */
@@ -383,9 +384,9 @@ export class SrlLanguageService {
    *
    * An external srl template is read through the shared semantic snapshot, so a name
    * written in a comment or inside `<script>` text is not a use. A handwritten Lit
-   * component writes its markup in `html` templates in JavaScript instead, and a scan
-   * that visited template files alone reported no uses for markup that is really there
-   * — which made rename edit half a project and call it done.
+   * component writes its markup in `html` templates in JavaScript instead. A scan
+   * that visited template files alone would report no uses for markup that is really
+   * there, which makes rename edit half a project and call it done.
    *
    * A file whose text never contains the name cannot contain a span of it, so it is
    * skipped before it is parsed. Callers receive the text each span was measured in,

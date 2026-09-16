@@ -2,7 +2,7 @@ import { t } from '@core/localization/i18n.js';
 import { standardText } from '@components/internal/text.js';
 
 export class Page extends HTMLElement {
-  // A typo: written down, never declared, and a raw key in the page.
+  // A typo, written down and never declared, so a raw key in the page.
   missing() {
     return t('orders.titel');
   }

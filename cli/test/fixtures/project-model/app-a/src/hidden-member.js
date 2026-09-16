@@ -7,7 +7,8 @@ export class MemberBase extends HTMLElement {
   }
 }
 
-// The authored case: `refresh` is a method on the base class, and a value here covers it.
+// The authored case. `refresh` is a method on the base class, and a value here covers
+// it.
 export class HiddenAuthored extends MemberBase {
   refresh = 'soon';
 }
@@ -19,7 +20,7 @@ await defineComponent({
   template: false,
 });
 
-// The inherited case: `render` comes from a root this model does not parse.
+// The inherited case. `render` comes from a root this model does not parse.
 export class HiddenRender extends LitElement {
   render = 'state';
 }

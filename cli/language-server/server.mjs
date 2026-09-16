@@ -233,10 +233,10 @@ async function dispatch(method, params, answerable) {
     case 'workspace/didChangeConfiguration':
       return null;
     default:
-      // A notification is ignored, as the protocol requires; a request is answered with
-      // the code that says so. `params.id` was read here, and a request carries its id
-      // on the message rather than in its parameters, so every unknown method was
-      // answered `null` — a client cannot negotiate against a server that pretends.
+      // A notification is ignored, as the protocol requires, and a request is
+      // answered with the code that says so. The id is on the message rather than in
+      // its parameters, and reading `params.id` would answer every unknown method
+      // `null`, which a client cannot negotiate against.
       if (answerable) throw new RpcError(-32601, `Method not found: ${method}`);
       return null;
   }
@@ -246,12 +246,12 @@ async function dispatch(method, params, answerable) {
  * The files this server reads, as a watch registration the client owns, or null when the
  * client cannot take one.
  *
- * Watching is asked for once, here, rather than also being set up beside each client: the
- * VS Code adapter used to add a folder watcher of its own, so one edit reloaded a project
- * twice, and a global glob meant every root in a multi-root window reloaded for every
- * other root's edit. The patterns are rooted at this server's own project when the client
- * supports a relative pattern, which is what keeps one root's edit out of another root's
- * model. ADR-0090.
+ * Watching is asked for once, here, rather than also beside each client. A second
+ * folder watcher in the VS Code adapter would reload a project twice for one edit, and
+ * a global glob would reload every root in a multi-root window for every other root's
+ * edit. The patterns are rooted at this server's own project when the client supports a
+ * relative pattern, which keeps one root's edit out of another root's model.
+ * ADR-0090.
  */
 function sourceWatchRegistration() {
   const watched = clientCapabilities.workspace?.didChangeWatchedFiles;

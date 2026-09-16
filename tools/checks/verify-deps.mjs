@@ -1,8 +1,8 @@
 /**
  * The guard that keeps a buildless app honest.
  *
- * Fifteen failure modes are invisible without it, and each either breaks
- * production silently or opens a hole:
+ * Sixteen failure modes are invisible without it, and each either breaks production
+ * silently or opens a hole:
  *
  *  1. An unpinned or unhashed remote URL. The import maps currently point only at
  *     /lib/vendor, but this check stays because re-adding a CDN entry is one line
@@ -12,69 +12,73 @@
  *     source/lib/vendor a control rather than a copy. ADR-0032.
  *  3. Type drift. node_modules holds a different version than /lib/vendor serves,
  *     so tsc validates against an API the browser will not have. This is the
- *     sharpest edge of the whole architecture: the type checker and the runtime
+ *     sharpest edge of the whole architecture. The type checker and the runtime
  *     read from two different places, and nothing but this check ties them
  *     together.
  *  4. Undeclared runtime dependencies. A source file imports a bare specifier the
  *     import map does not declare. It resolves to nothing, and only on the route
  *     that happens to import it.
  *  5. A CSP that blocks the import map. An import map is an inline script, so
- *     `script-src 'self'` alone leaves every bare specifier unresolvable: a blank
- *     page whose error names module resolution rather than the header that caused
- *     it. The hash to allow is computed on every run, per application and as the
- *     whole set a deployment has to carry.
- *  6. A layering violation: something under source/lib importing @app/, or an
- *     import map whose library prefixes do not resolve to source/lib. Either one
+ *     `script-src 'self'` alone leaves every bare specifier unresolvable, which is
+ *     a blank page whose error names module resolution rather than the header that
+ *     caused it. The hash to allow is computed on every run, per application and as
+ *     the whole set a deployment has to carry.
+ *  6. A layering violation, such as something under source/lib importing @app/, or
+ *     an import map whose library prefixes do not resolve to source/lib. Either one
  *     turns "the library is a package you build on" back into "the library is
- *     whatever the application happens to contain", which is the thing this
- *     directory structure exists to prevent.
+ *     whatever the application happens to contain", which is what this directory
+ *     structure exists to prevent.
  *  7. A missing template. A component's markup is the sibling `.html` of its
  *     module, resolved at runtime, so a renamed or deleted file is a 404 on one
  *     route and nothing anywhere else.
  *  8. A template no component definition claims. Always a leftover from a rename,
- *     and invisible: the old markup keeps being served and renders nowhere.
+ *     and invisible, because the old markup keeps being served and renders
+ *     nowhere.
  *  9. A message the source asks for and no bundle declares. It renders as its own
- *     key, in every language. The rule is cli/message-catalog/'s and so are 10 and
- *     11 — this sweep runs it and reports what it found, because a repository-wide
+ *     key, in every language. The rule is cli/message-catalog/'s, and so are 10 and
+ *     11. This sweep runs it and reports what it found, because a repository-wide
  *     gate is where a raw key in the page should stop a merge. ADR-0117.
  * 10. A message key present in a translation but absent from the default locale, or
  *     a missing default-locale bundle. The first still renders in the one locale
- *     that has it; the second makes every partial translation show raw keys.
+ *     that has it, and the second makes every partial translation show raw keys.
  * 11. A remote with no navigation label. `ui-nav` builds its remote links from the
  *     manifest and asks for `nav.<name>`, so a mounted remote whose name has no
  *     message key puts a raw key in the header of every locale. No source names
  *     that key, which is why it is checked here and not with the others.
- * 12. A manifest the runtime would refuse: a cross-origin or unpinned remote, a
- *     cross-origin auth destination, two remotes claiming one mount, a locale
- *     bundle outside this origin. The document is admitted here by
- *     `@core/remotes/manifest-policy.js` — the same module the browser runs at
- *     startup — so a manifest that would fail in production fails in the build
- *     instead, and neither side can drift into a policy the other does not have.
- *     What stays local to this check is the part only a filesystem can see: every
- *     JS artifact in a remote's folder must be covered by the integrity map.
- * 13. A component declaration static analysis cannot read: a computed tag, an
- *     `element` that is not a class, a `uses` entry naming a class nothing defines,
- *     two modules claiming one tag. Such a declaration may work in the browser, and
- *     every tool here is blind to it — this one, the template checker and the
- *     template bundler alike. cli/project-model/ finds them; this fails on them.
+ * 12. A manifest the runtime would refuse, such as a cross-origin or unpinned
+ *     remote, a cross-origin auth destination, two remotes claiming one mount, or a
+ *     locale bundle outside this origin. The document is admitted here by
+ *     `@core/remotes/manifest-policy.js`, the same module the browser runs at
+ *     startup, so a manifest that would fail in production fails in the build
+ *     instead and neither side can drift into a policy the other does not have.
+ *     What stays local to this check is the part only a filesystem can see, which
+ *     is that every JS artifact in a remote's folder must be covered by the
+ *     integrity map.
+ * 13. A component declaration static analysis cannot read, such as a computed tag,
+ *     an `element` that is not a class, a `uses` entry naming a class nothing
+ *     defines, or two modules claiming one tag. Such a declaration may work in the
+ *     browser, and every tool here is blind to it, this one, the template checker
+ *     and the template bundler alike. cli/project-model/ finds them, and this fails
+ *     on them.
  * 14. A library or shared-collection module reaching for `localStorage` or
  *     `sessionStorage` itself instead of going through @core/preferences/persistence.js.
- *     Invisible until an application configures its own store — a memory store under
- *     test, an encrypted wrapper, a synchronously hydrated backend cache — and gets it
- *     for the table and the filters but not for the theme, because that one kept its
- *     own slot. Theme and locale both did until the preference module took them.
- *     `source/lib/auth/` is exempt by path: credentials are a different seam.
+ *     Invisible until an application configures its own store, such as a memory
+ *     store under test, an encrypted wrapper or a synchronously hydrated backend
+ *     cache, and gets it for the table and the filters but not for the theme,
+ *     because that one kept its own slot. `source/lib/auth/` is exempt by path,
+ *     because credentials are a different seam.
  *
- * 15. A documentation surface under source/. The durable ones are README.md and docs/,
- *     and the contract tables in docs/reference/ are generated from the
- *     project model; a nested README goes stale in the directory somebody edits first.
+ * 15. A documentation surface under source/. The durable ones are README.md and
+ *     docs/, and the contract tables in docs/reference/ are generated from the
+ *     project model. A nested README goes stale in the directory somebody edits
+ *     first.
  * 16. Four descriptions of one published interface disagreeing. source/package.json
- *     declares the library's surface; the generated import-map fragment, the `exports`
- *     map, the tsconfig paths and every application's inline map are supposed to
- *     restate it. Nothing at runtime notices when one of them stops: the browser
- *     follows the map, tsc follows the paths, npm follows exports, and each resolves a
- *     different set of files. This is the check that makes the manifest the source
- *     rather than the fourth opinion.
+ *     declares the library's surface, and the generated import-map fragment, the
+ *     `exports` map, the tsconfig paths and every application's inline map are
+ *     supposed to restate it. Nothing at runtime notices when one of them stops.
+ *     The browser follows the map, tsc follows the paths, npm follows exports, and
+ *     each resolves a different set of files. This check makes the manifest the
+ *     source rather than the fourth opinion.
  *
  * Untranslated keys are counted and reported, not failed. Shipping a locale at
  * 60% is a normal state and the fallback handles it key by key.
@@ -82,7 +86,7 @@
  * Every check runs for every application in the repository, because "it works in
  * example" says nothing about the one deployed next week.
  *
- * `verifyDependencies()` returns every finding as a `Diagnostic` and prints nothing:
+ * `verifyDependencies()` returns every finding as a `Diagnostic` and prints nothing.
  * cli/diagnostics/index.mjs owns the report, so `--json` is free, and this file has an
  * interface a suite can assert against instead of a process to run and a terminal to
  * scrape. ADR-0072.
@@ -144,9 +148,9 @@ const MANIFEST_FILE = join(PACKAGE, 'package.json');
 const ROOT_TSCONFIG = join(REPO, 'tsconfig.json');
 
 /**
- * A path as this file's *prose* spells it, for the sentences that name one. Where a
+ * A path as this file's prose spells it, for the sentences that name one. Where a
  * path is the location of a finding it goes on the diagnostic instead, and
- * cli/diagnostics spells it — once, for every check.
+ * cli/diagnostics spells it once, for every check.
  *
  * @param {string} path
  */
@@ -155,10 +159,10 @@ function show(path) {
 }
 
 /**
- * A suite or a fixture, decided on the path relative to the repository rather than the
- * absolute one. The project model learned this the hard way: matching `/test/` anywhere
- * in an absolute path makes every file test source for anyone whose checkout happens to
- * sit under a directory called `test`.
+ * A suite or a fixture, decided on the path relative to the repository rather than
+ * the absolute one. Matching `/test/` anywhere in an absolute path makes every file
+ * test source for anyone whose checkout happens to sit under a directory called
+ * `test`.
  *
  * @param {string} path
  * @returns {boolean}
@@ -171,11 +175,11 @@ function isTestSource(path) {
 /**
  * Every rule this file knows, checked, as findings.
  *
- * One list, in the order the checks run, because that order is what a reader follows:
- * the library first, then each application, then the two published packages. The
- * severities are the exit-code rule — an `error` refuses the run, a `warning` is a
- * locale at 60% or a coverage gap said out loud — and cli/diagnostics/index.mjs is
- * what turns any of it into output.
+ * One list, in the order the checks run, because that order is what a reader follows.
+ * The library first, then each application, then the two published packages. The
+ * severities are the exit-code rule, where an `error` refuses the run and a `warning`
+ * is a locale at 60% or a coverage gap said out loud. cli/diagnostics/index.mjs turns
+ * any of it into output.
  *
  * @returns {Promise<Diagnostic[]>}
  */
@@ -198,20 +202,19 @@ export async function verifyDependencies() {
   }
 
   /**
-   * The library's own prefixes, and the directory each must resolve into — read
-   * from source/package.json rather than restated here. A layer the library adds
-   * is a layer this check knows about the same day.
+   * The library's own prefixes, and the directory each must resolve into, read from
+   * source/package.json rather than restated here. A layer the library adds is a layer
+   * this check knows about the same day.
    */
   const LIBRARY_PREFIXES = SPECIFIER_DIRS;
 
   /* ── 0. The library does not depend on any application ─────────────────── */
 
   /**
-   * The one rule that makes source/lib a library rather than a folder: everything
-   * in it may be read by an application, and nothing in it may read one back. A
-   * single `@app/` import here would make the framework undeployable without
-   * example, and it would do it silently, because in this repository example is
-   * always present.
+   * The one rule that makes source/lib a library rather than a folder. Everything in
+   * it may be read by an application, and nothing in it may read one back. A single
+   * `@app/` import here would make the framework undeployable without example, and it
+   * would do it silently, because in this repository example is always present.
    */
   const libFiles = await walk(LIB, /\.(js|d\.ts)$/u);
   const componentFiles = await walk(COMPONENTS, /\.(js|d\.ts)$/u);
@@ -247,15 +250,15 @@ export async function verifyDependencies() {
 
   /**
    * source/package.json declares the library's surface once, and three other files
-   * are supposed to say the same thing: the generated import-map fragment a
-   * consumer pastes or fetches, the `exports` map npm reads, and the tsconfig
-   * paths tsc resolves. Nothing at runtime notices when they drift — the browser
-   * follows the map, tsc follows the paths, and a registry consumer follows
-   * exports, each happily resolving a different set of files.
+   * are supposed to say the same thing. Those are the generated import-map fragment
+   * a consumer pastes or fetches, the `exports` map npm reads, and the tsconfig paths
+   * tsc resolves. Nothing at runtime notices when they drift, because the browser
+   * follows the map, tsc follows the paths, and a registry consumer follows exports,
+   * each happily resolving a different set of files.
    *
-   * The fragment is compared as bytes because it is committed: a buildless
-   * consumer reads it from the repository without running anything here, so
-   * "regenerate it and it would change" is a stale artifact, not a warning.
+   * The fragment is compared as bytes because it is committed. A buildless consumer
+   * reads it from the repository without running anything here, so "regenerate it and
+   * it would change" is a stale artifact rather than a warning.
    */
   const fragment = await importMapFragment();
   const fragmentOnDisk = await readText(IMPORT_MAP_FILE).catch(() => null);
@@ -311,12 +314,12 @@ export async function verifyDependencies() {
   /**
    * An `exports` target as the paths it can resolve to.
    *
-   * A target is a string or a conditional object, and both shapes are in use here:
-   * the tooling entry points are plain strings, the three declaration-only subpaths
+   * A target is a string or a conditional object, and both shapes are in use here.
+   * The tooling entry points are plain strings, the three declaration-only subpaths
    * are `{ "types": "./…d.ts" }` so that the type checker resolves them and Node
    * refuses to, and each bundle carries a declaration beside its JavaScript. Every
-   * branch of a conditional has to exist — a condition nobody's resolver selects is
-   * still a promise this package made.
+   * branch of a conditional has to exist, because a condition nobody's resolver
+   * selects is still a promise this package made.
    *
    * @param {string | Record<string, unknown>} target
    * @returns {string[]}
@@ -334,10 +337,10 @@ export async function verifyDependencies() {
     MANIFEST.exports ?? {}
   );
   for (const [subpath, target] of Object.entries(packageExports())) {
-    // Compared as written rather than by value: a bundle's target is conditional, and
-    // conditions are matched in the order they appear, so `{ default, types }` and
-    // `{ types, default }` are two different maps and only one of them answers a type
-    // question with a declaration.
+    // Compared as written rather than by value, because a bundle's target is
+    // conditional and conditions are matched in the order they appear. `{ default,
+    // types }` and `{ types, default }` are two different maps, and only one of them
+    // answers a type question with a declaration.
     if (JSON.stringify(declaredExports[subpath]) !== JSON.stringify(target)) {
       refuse(
         'deps/exports-disagree-with-bundles',
@@ -374,10 +377,10 @@ export async function verifyDependencies() {
 
   /**
    * tsconfig paths are the type checker's copy of the same table, and they live in
-   * the package for the same reason the import-map fragment does: a consumer extends
+   * the package for the same reason the import-map fragment does. A consumer extends
    * one file instead of copying four mappings that are then free to drift. ADR-0068.
-   * They stay literals because tsc reads those files and not this one, so what this
-   * can do is refuse to let a copy differ.
+   * They stay literals because tsc reads those files and not this one, so all this can
+   * do is refuse to let a copy differ.
    *
    * There are two tables, and they differ in one way. source/tsconfig.base.json is
    * published and maps each prefix into the declarations built from the directory the
@@ -385,9 +388,9 @@ export async function verifyDependencies() {
    * this repository, which edits the modules the declarations are built from.
    * ADR-0066.
    *
-   * Package-relative, not repository-relative. Path targets in an extended config
-   * resolve against the file that declares them, which is inside the package wherever
-   * it was installed — the whole point of publishing it.
+   * Package-relative rather than repository-relative. Path targets in an extended
+   * config resolve against the file that declares them, which is inside the package
+   * wherever it was installed, and that is what publishing it buys.
    */
   const baseTsconfigFile = join(PACKAGE, 'tsconfig.base.json');
   const sourceTsconfigFile = join(PACKAGE, 'tsconfig.source.json');
@@ -486,9 +489,9 @@ export async function verifyDependencies() {
   /**
    * And this repository extends the source table rather than keeping its own copy.
    *
-   * `paths` does not merge: a block here would replace the inherited one wholesale
+   * `paths` does not merge. A block here would replace the inherited one wholesale
    * and be free to drift, which is exactly what moving the table into the package
-   * was meant to end.
+   * prevents.
    */
   const rootTsconfig =
     /** @type {{ extends?: string, compilerOptions?: { paths?: Record<string, string[]> } }} */ (
@@ -521,18 +524,19 @@ export async function verifyDependencies() {
 
   /**
    * The script-src hash each application's import map needs allowed, filled in by
-   * check 5b and reported after the loop. This repository ships no server config,
-   * so nothing here compares the hashes against one: the deployment owns its CSP,
-   * and what it needs from this check is the value to put in it.
+   * check 5b and reported after the loop. This repository ships no server config, so
+   * nothing here compares the hashes against one. The deployment owns its CSP, and
+   * what it needs from this check is the value to put in it.
    *
    * @type {Map<string, string>}
    */
   const importMapHashes = new Map();
 
   /**
-   * Check 14's state, at this scope because the answer is about the library rather than
-   * about one application: both models scan the same `source/lib` and `source/components`
-   * files, and a violation there must be reported once, not once per application.
+   * Check 14's state, at this scope because the answer is about the library rather
+   * than about one application. Both models scan the same `source/lib` and
+   * `source/components` files, and a violation there must be reported once rather than
+   * once per application.
    */
   const PREFERENCE_OWNER = join(LIB, 'core', 'preferences', 'persistence.js');
   const AUTH_SOURCE = join(LIB, 'auth') + sep;
@@ -771,13 +775,13 @@ export async function verifyDependencies() {
     /* ── 6b. The map carries the library's published fragment verbatim ───── */
 
     /**
-     * Check 6 says each prefix an application declares points at the library.
-     * This says the application declares what the library publishes, entry for
-     * entry and hash for hash: the fragment is the interface, and an application
-     * that hand-edits one line of it is running a map the library does not.
+     * Check 6 says each prefix an application declares points at the library. This
+     * says the application declares what the library publishes, entry for entry and
+     * hash for hash. The fragment is the interface, and an application that
+     * hand-edits one line of it is running a map the library does not.
      *
-     * The application's own entries — its remotes, its `/src/` — are untouched
-     * here. What is compared is only what the fragment claims.
+     * The application's own entries, such as its remotes and its `/src/`, are
+     * untouched here. What is compared is only what the fragment claims.
      */
     for (const [specifier, url] of Object.entries(fragment.imports)) {
       if (imports[specifier] === undefined) {
@@ -824,10 +828,10 @@ export async function verifyDependencies() {
 
     for (const file of checkedFiles) {
       // Comments stripped first. The specifier pattern is loose enough to match
-      // ordinary English — a doc comment reading `differently ... from "a guard that
-      // always allows"` was reported as an undeclared bare specifier — and a check
-      // that fires on prose is a check people start ignoring. A commented-out import
-      // is not a runtime problem, so nothing is lost.
+      // ordinary English, so a doc comment reading `differently ... from "a guard
+      // that always allows"` reads as an undeclared bare specifier, and a check that
+      // fires on prose is a check people start ignoring. A commented-out import is
+      // not a runtime problem, so nothing is lost.
       const source = withoutComments(await readFile(file, 'utf8'));
       const specifiers = [
         ...source.matchAll(/(?:^|[\s{(,;])(?:import|from)\s*\(?\s*["']([^"']+)["']/gmu),
@@ -878,12 +882,12 @@ export async function verifyDependencies() {
     /* ── 7. Templates, and the declarations the model could not read ──────── */
 
     /**
-     * One question, one answer. Which elements exist, which markup each renders and which
-     * template files are claimed all come from cli/project-model/, which reads the same
-     * `defineComponent` declaration the browser reads. This check used to match
-     * `/^await defineComponent\(\{...\}\);$/gm` and therefore agreed with the template
-     * checker only by luck: a definition indented inside a block, or a `template` key on a
-     * continuation line, was invisible to it and visible to the checker.
+     * One question, one answer. Which elements exist, which markup each renders and
+     * which template files are claimed all come from cli/project-model/, which reads
+     * the same `defineComponent` declaration the browser reads. A regular expression
+     * over the source would agree with the template checker only by luck, because a
+     * definition indented inside a block, or a `template` key on a continuation line,
+     * is invisible to one and visible to the other.
      */
     const model = await readProject(app);
 
@@ -946,8 +950,9 @@ export async function verifyDependencies() {
 
     /**
      * A `.html` file beside a component module that no definition claims. Always a
-     * leftover from a rename or a deletion, and invisible: the old markup keeps being
-     * served, keeps passing every check that reads it, and renders nowhere.
+     * leftover from a rename or a deletion, and invisible, because the old markup
+     * keeps being served, keeps passing every check that reads it, and renders
+     * nowhere.
      */
     for (const template of orphanTemplates(model)) {
       refuse(
@@ -961,25 +966,26 @@ export async function verifyDependencies() {
     /* ── 14. UI preference storage has one owner ─────────────────────────── */
 
     /**
-     * `source/lib/core/preferences/persistence.js` owns synchronous non-auth preference storage:
-     * the keying, the schema versions, the migrations and one failure policy. ADR-0015.
-     * A second module reaching for `localStorage` itself is what this check makes
-     * impossible; theme and locale both used to do it.
+     * `source/lib/core/preferences/persistence.js` owns synchronous non-auth
+     * preference storage, meaning the keying, the schema versions, the migrations and
+     * one failure policy. ADR-0015. This check makes a second module reaching for
+     * `localStorage` itself impossible.
      *
-     * Exempt, deliberately and by path:
+     * Three things are exempt, deliberately and by path.
      *
-     *  - the owning module, which is where the one `globalThis.localStorage` lives;
-     *  - `source/lib/auth/`, because tokens are a different seam with a different threat
-     *    model. Its stores hold nothing in web storage today — memory, an HttpOnly cookie,
-     *    or a non-extractable IndexedDB key — and the day one needs to, it must not have to
-     *    ask the preference module for permission. The exemption is enforced in both
-     *    directions: auth may not import the preference store either, because an application
-     *    supplies that adapter and a credential must never be handed to it;
-     *  - test source, which legitimately asserts what did and did not reach the real
+     *  - The owning module, which is where the one `globalThis.localStorage` lives.
+     *  - `source/lib/auth/`, because tokens are a different seam with a different
+     *    threat model. Its stores hold nothing in web storage today, using memory, an
+     *    HttpOnly cookie or a non-extractable IndexedDB key, and the day one needs to
+     *    it must not have to ask the preference module for permission. The exemption
+     *    runs in both directions, so auth may not import the preference store either,
+     *    because an application supplies that adapter and a credential must never be
+     *    handed to it.
+     *  - Test source, which legitimately asserts what did and did not reach the real
      *    browser store.
      *
      * The references come from the project model's AST rather than a text search, so a
-     * module explaining why it does *not* use `localStorage` is not a violation, and
+     * module explaining why it does not use `localStorage` is not a violation, and
      * `globalThis.localStorage` is.
      */
     for (const record of model.modules.values()) {
@@ -989,11 +995,11 @@ export async function verifyDependencies() {
       storageReported.add(record.path);
       storageChecked += 1;
 
-      // The exemption runs both ways. Auth may keep its own storage decisions, and it may
-      // not borrow this one: an application configures the preference store, so a token
-      // written through it would be handed to whatever that application supplied. The auth
-      // stores' whole interface exists to never expose a credential, and this keeps a
-      // convenient import from going around it.
+      // The exemption runs both ways. Auth may keep its own storage decisions, and it
+      // may not borrow this one. An application configures the preference store, so a
+      // token written through it would be handed to whatever that application
+      // supplied. The auth stores' interface exists to never expose a credential, and
+      // this keeps a convenient import from going around it.
       if (record.path.startsWith(AUTH_SOURCE)) {
         if ([...record.imports.values()].includes(PREFERENCE_OWNER) && !isTestSource(record.path)) {
           refuse(
@@ -1041,16 +1047,16 @@ export async function verifyDependencies() {
           manifestAt,
         );
       } else {
-        // Staleness is the whole risk of pre-bundling, and it is silent: the page
-        // renders yesterday's markup and nothing reports it. Comparing bytes is
-        // cheap and turns that into a failed build.
+        // Staleness is the risk of pre-bundling, and it is silent, because the page
+        // renders yesterday's markup and nothing reports it. Comparing bytes is cheap
+        // and turns that into a failed build.
         //
-        // The set compared is the one the bundler ships — `shippedTemplates`, from the
-        // project model — and that is a fix, not a refactor. This check used to walk the
-        // four template directories itself and included `source/lib/test/fixtures/*.html`,
-        // which cli/delivery/bundle-templates.mjs deliberately leaves out of an application's
-        // bundle. Any application that enabled templateBundle would have failed
-        // verification with a fixture it was right not to ship.
+        // The set compared is the one the bundler ships, `shippedTemplates` from the
+        // project model. Walking the four template directories here instead would
+        // include `source/lib/test/fixtures/*.html`, which
+        // cli/delivery/bundle-templates.mjs deliberately leaves out of an
+        // application's bundle, so any application that enabled templateBundle would
+        // fail verification with a fixture it was right not to ship.
         const bundle = JSON.parse(await readFile(bundlePath, 'utf8'));
         const templates = shippedTemplates(model);
 
@@ -1093,26 +1099,26 @@ export async function verifyDependencies() {
     /* ── 9/10/11. Messages ───────────────────────────────────────────────── */
 
     /**
-     * Locale files used to be compared with each other here, which finds a key renamed in
-     * one language and cannot find the failure that reaches a user: a reference no key
-     * answers. `t('orders.titel')` satisfied every rule in this file and rendered
+     * Comparing locale files with each other finds a key renamed in one language and
+     * cannot find the failure that reaches a user, a reference no key answers.
+     * `t('orders.titel')` satisfies every rule of that kind and renders
      * `orders.titel` in the page, in every language.
      *
-     * cli/message-catalog/ owns what a key is, which bundle answers for a file and what a
-     * reference resolves to — the same module `srl check messages` runs in an installed
-     * application and the editor runs on the file being typed. Its findings keep their own
-     * `messages/` codes, because the rule belongs to that module and a filter or a
-     * suppression should name it where it lives. ADR-0117.
+     * cli/message-catalog/ owns what a key is, which bundle answers for a file and
+     * what a reference resolves to. It is the same module `srl check messages` runs
+     * in an installed application and the editor runs on the file being typed. Its
+     * findings keep their own `messages/` codes, because the rule belongs to that
+     * module and a filter or a suppression should name it where it lives. ADR-0117.
      */
     const messages = await readMessages(app, model);
     found.push(...messageFindings(messages));
 
     /**
-     * What a catalog cannot know: `ui-nav` derives its remote links from the manifest and
-     * asks for `nav.<remote name>`, which is what removes the shell edit from mounting a
-     * remote. The cost of that is a silent failure — a remote whose name has no message key
-     * renders the raw key `nav.whatever` in the header, in every locale — and no source
-     * names the key, so nothing else reports it.
+     * What a catalog cannot know. `ui-nav` derives its remote links from the manifest
+     * and asks for `nav.<remote name>`, which is what removes the shell edit from
+     * mounting a remote. The cost is a silent failure, because a remote whose name has
+     * no message key renders the raw key `nav.whatever` in the header, in every locale,
+     * and no source names the key, so nothing else reports it.
      */
     const shell = messages.bundles.find((bundle) => bundle.scope === null);
     const shellKeys = shell?.locales.get(shell.defaultLocale)?.keys;
@@ -1149,7 +1155,8 @@ export async function verifyDependencies() {
   /* ── 15. One documentation surface (repository-wide) ───────────────────── */
 
   /**
-   * A README under source/ is how a manual starts disagreeing with itself: the one nobody
+   * A README under source/ is how a manual starts disagreeing with itself. The one
+   * nobody
    * is reading goes stale, and it goes stale in the directory somebody edits first. The
    * root README and docs/ own durable documentation, and the contract tables under
    * docs/reference/ are generated from the project model rather than typed. Everything
@@ -1175,14 +1182,13 @@ export async function verifyDependencies() {
 
   /**
    * The two files a registry page is made of, per published package, which the rule
-   * above deliberately does not forbid: they sit at a package root rather than inside
-   * `lib/` or `components/`, and they address the consumer who is reading npm rather
-   * than this repository. README.md is a package's landing page and has to exist or the
-   * listing is blank; LICENSE has to be a copy rather than a link, because a tarball
-   * carries no repository around it — so the copy is checked byte for byte instead of
-   * trusted.
+   * above deliberately does not forbid. They sit at a package root rather than inside
+   * `lib/` or `components/`, and they address the consumer reading npm rather than this
+   * repository. README.md is a package's landing page and has to exist or the listing
+   * is blank. LICENSE has to be a copy rather than a link, because a tarball carries no
+   * repository around it, so the copy is checked byte for byte instead of trusted.
    *
-   * Two packages, so two of each: source/ is @srljs/core and cli/ is @srljs/cli. The
+   * Two packages, so two of each. source/ is @srljs/core and cli/ is @srljs/cli. The
    * second is spelled out rather than discovered, because `workspaces` in the root
    * manifest is a list of directories and this check is about which of them a stranger
    * installs.
@@ -1446,14 +1452,13 @@ export async function verifyDependencies() {
 /**
  * Strip comments before matching source patterns.
  *
- * Needed for two checks, for the same reason both times: this file's patterns
- * describe code and a doc comment is prose that can look like code.
- * component.js and signal-element.js both document what a definition looks like, so
- * without this the template check reports templates that were never meant to
- * exist — and the definition pattern is anchored to the start of a line for the
- * same reason, since an error message quotes the call too; remote-host.js contains
- * the words `from "a guard that always allows"`, which the specifier check read as
- * an undeclared dependency. Both were found by running it.
+ * Needed for two checks, for the same reason both times. This file's patterns
+ * describe code, and a doc comment is prose that can look like code. component.js and
+ * signal-element.js both document what a definition looks like, so without this the
+ * template check reports templates that were never meant to exist. The definition
+ * pattern is anchored to the start of a line for the same reason, since an error
+ * message quotes the call too. remote-host.js contains the words `from "a guard that
+ * always allows"`, which the specifier check reads as an undeclared dependency.
  *
  * @param {string} source
  * @returns {string}
@@ -1465,10 +1470,10 @@ function withoutComments(source) {
 /**
  * tsconfig.json is JSONC, and JSON.parse is not.
  *
- * Not `withoutComments` above: a glob is a string containing `/**`, so the
- * regex that is right for JavaScript eats `"source/**\/*.d.ts"` and leaves
- * invalid JSON behind. Tracking string state is the difference between the two,
- * and it is why this is a scanner rather than a third regex.
+ * Not `withoutComments` above, because a glob is a string containing `/**`, so the
+ * regex that is right for JavaScript eats `"source/**\/*.d.ts"` and leaves invalid
+ * JSON behind. Tracking string state is the difference between the two, and it is why
+ * this is a scanner rather than a third regex.
  *
  * @param {string} text
  * @returns {unknown}
@@ -1522,12 +1527,12 @@ function parseJsonc(text) {
 
 /* ── As a command ──────────────────────────────────────────────────────────
  *
- * Guarded, like every other check here, so importing this module stays free of
- * output and exit codes. It was not, and the cost was a suite that could not import
- * `verifyDependencies` without also running it: the sweep ran twice per test process,
- * printed its whole report into the TAP stream, and — because the run is a release
- * gate that refuses a `dist/` that has not been built — set a failing exit code on the
- * importing process before that process had run a line.
+ * Guarded, like every other check here, so importing this module stays free of output
+ * and exit codes. Unguarded, a suite could not import `verifyDependencies` without
+ * also running it. The sweep would run twice per test process, print its whole report
+ * into the TAP stream, and set a failing exit code on the importing process before
+ * that process had run a line, because the run is a release gate that refuses a
+ * `dist/` that has not been built.
  */
 
 if (import.meta.url === `file://${process.argv[1]}`) {

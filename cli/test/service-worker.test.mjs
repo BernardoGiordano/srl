@@ -6,8 +6,8 @@
  * else, so asserting it needs no Vite, no browser and no artifact on disk.
  *
  * Deletion is the exception, and `activated()` is why. Which caches survive an
- * activation is not a property of the source text — it is what the handler does when
- * an origin hands it a list of names — so that one rule is asserted by running the
+ * activation is not a property of the source text. It is what the handler does when
+ * an origin hands it a list of names, so that one rule is asserted by running the
  * generated handler against a `CacheStorage` stand-in rather than by matching a
  * regular expression against the file.
  */
@@ -40,10 +40,10 @@ function chunk(path, rest = {}) {
 }
 
 /**
- * The shape every application built by this toolchain has: an entry that statically
+ * The shape every application built by this toolchain has. An entry that statically
  * needs two chunks, one of them transitively, and dynamically imports a root module
- * that brings a third. `orders` is a route chunk — a dynamic import of the *root* —
- * and is the one the entry document does not preload.
+ * that brings a third. `orders` is a route chunk, a dynamic import of the root, and
+ * is the one the entry document does not preload.
  */
 function facts() {
   return {
@@ -162,7 +162,7 @@ void test('it never claims a Remote, an API call or a write', () => {
 
   // The three conditions that return without responding. Asserted on the source
   // because the alternative is a service worker integration test for a rule that is
-  // a property of the text: what this file must not do is answer for bytes it did
+  // a property of the text. What this file must not do is answer for bytes it did
   // not build. ADR-0016, ADR-0017, ADR-0026.
   assert.match(source, /request\.method !== 'GET'/u);
   assert.match(source, /url\.origin !== self\.location\.origin/u);
@@ -228,11 +228,11 @@ void test('activation claims the tabs it controls once the retirement is done', 
 /**
  * The generated worker, activated against a seeded origin.
  *
- * Enough of a worker global to load the script and fire one lifecycle event: the
- * handlers it registers, a `CacheStorage` holding `seeded`, and a `clients.claim()`
- * that records it was called. The event's `waitUntil` collects the work, which is
- * how an activation is awaited anywhere — the browser keeps the worker alive until
- * that promise settles, and so does this.
+ * Enough of a worker global to load the script and fire one lifecycle event. It holds
+ * the handlers the script registers, a `CacheStorage` holding `seeded`, and a
+ * `clients.claim()` that records it was called. The event's `waitUntil` collects the
+ * work, which is how an activation is awaited anywhere. The browser keeps the worker
+ * alive until that promise settles, and so does this.
  *
  * @param {string} source
  * @param {readonly string[]} seeded

@@ -1,4 +1,4 @@
-// Imported for the side effect alone, which is the whole declaration: running the
+// Imported for the side effect alone, which is the whole declaration. Running the
 // module is what defines <fx-plain>, and `uses` below cannot name it.
 import './side-effect-element.js';
 

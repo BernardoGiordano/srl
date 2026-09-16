@@ -13,11 +13,10 @@ import { serveOrigin } from '../origin/index.mjs';
 /**
  * What the development server tells a browser when a file changes.
  *
- * The old message was the word "reload", and every assertion here is about
- * something that message could not carry. The watcher knew which file an editor had
- * written and put it in a log line; the debounce that made three writes one event
- * threw away which files were in it; and a browser that missed an event while
- * reconnecting had no way to ask what it had missed.
+ * Every assertion here is about something the word "reload" cannot carry. The watcher
+ * knows which file an editor wrote, a debounce that makes three writes one event can
+ * throw away which files were in it, and a browser that misses an event while
+ * reconnecting needs a way to ask what it missed.
  *
  * Each case is one way delivery can be wrong while still looking like it works:
  *
@@ -33,9 +32,9 @@ import { serveOrigin } from '../origin/index.mjs';
  *                       before it, which numbers its batches from 1 as well
  *   a watch that outlives its server
  *
- * Real files, real notifications and a real socket throughout: the whole subject is
- * what the filesystem reports and what arrives over the wire, and a stubbed watcher
- * would assert the stub.
+ * Real files, real notifications and a real socket throughout. The subject is what
+ * the filesystem reports and what arrives over the wire, and a stubbed watcher would
+ * assert the stub.
  */
 
 /** The coalescing window these cases state rather than race. */
@@ -46,7 +45,7 @@ const ARRIVAL_MS = 5000;
 
 /**
  * A temporary application and a temporary library mounted beside it, served by an
- * origin with an update session in front of it — the arrangement both adapters
+ * origin with an update session in front of it. That is the arrangement both adapters
  * build, without the repository's own mounts, which are hundreds of files this has
  * nothing to say about.
  *
@@ -141,7 +140,7 @@ async function stream(base, lastEventId) {
   return {
     /**
      * The next update, or a failure naming what was being waited for. A timeout here
-     * is the assertion: an update that never arrives is the bug.
+     * is the assertion, because an update that never arrives is the bug.
      *
      * @param {string} what
      * @returns {Promise<{ id: string | undefined, update: { changed?: string[], reload?: boolean } }>}
@@ -204,7 +203,7 @@ void test('an atomic save announces the file, not the scratch name', async () =>
   await withUpdates(async ({ base, app }) => {
     const events = await stream(base);
 
-    // What an editor that saves atomically does: write beside the file, then rename
+    // What an editor that saves atomically does. Write beside the file, then rename
     // onto it. Only the rename is the edit.
     const scratch = join(app, 'src', 'page.html.tmp');
     await writeFile(scratch, '<p>edited</p>');
@@ -226,7 +225,8 @@ void test('a reconnecting browser is told what it missed', async () => {
     assert.ok(seen.id !== undefined, 'an update carries no id to reconnect against');
     await first.close();
 
-    // The gap: two edits with nothing listening, which is a browser reconnecting.
+    // The gap, meaning two edits with nothing listening, which is a browser
+    // reconnecting.
     await writeFile(join(app, 'src', 'missed.html'), '<p>missed</p>');
     await new Promise((resolve) => {
       setTimeout(resolve, BATCH_MS * 2).unref();
@@ -329,8 +329,9 @@ void test('the client turns changed URLs into what the page should do', () => {
     modules: ['/src/page.js'],
   });
 
-  // Anything else is still a reload, and it decides the whole batch: revising a
-  // template and then reloading the page spends the revision on a render nobody sees.
+  // Anything else is still a reload, and it decides the whole batch, because
+  // revising a template and then reloading the page spends the revision on a render
+  // nobody sees.
   assert.deepEqual(planUpdate({ changed: ['/src/page.html', '/app.manifest.json'] }), {
     reload: true,
     templates: [],

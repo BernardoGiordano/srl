@@ -1,6 +1,6 @@
 /**
- * The production template transform: what it removes, what it refuses to touch,
- * and the equivalence it proves before returning bytes.
+ * The production template transform. What it removes, what it refuses to touch, and
+ * the equivalence it proves before returning bytes.
  *
  * Every case here is a rendering that would change if the transform were one step
  * greedier, which is the only interesting property a minifier has.
@@ -111,9 +111,9 @@ void test('the shape of a template is the shape of its minified form', () => {
 });
 
 void test('an equivalence failure is a thrown error, not silent bytes', () => {
-  // The proof is the reason this transform is allowed to change what production
-  // serves, so it has to be a proof of something: a shape that lost a node must
-  // not compare equal to one that kept it.
+  // The proof is why this transform is allowed to change what production serves, so
+  // it has to be a proof of something. A shape that lost a node must not compare
+  // equal to one that kept it.
   assert.notDeepEqual(templateShape('<p>a</p><p>b</p>'), templateShape('<p>a</p>'));
   assert.notDeepEqual(templateShape('<p>a b</p>'), templateShape('<p>ab</p>'));
   assert.notDeepEqual(templateShape('<p class="x">a</p>'), templateShape('<p>a</p>'));

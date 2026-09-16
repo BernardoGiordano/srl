@@ -247,8 +247,8 @@ export function outputFormat(argv = process.argv) {
 /**
  * Print a run and answer with its exit code.
  *
- * The only thing in this module that writes. A command block is then one line,
- * and the exit-code rule — errors fail, warnings do not — is stated once.
+ * The only thing in this module that writes. A command block is then one line, and
+ * the exit-code rule is stated once. Errors fail, warnings do not.
  *
  * @param {readonly Diagnostic[]} diagnostics
  * @param {{

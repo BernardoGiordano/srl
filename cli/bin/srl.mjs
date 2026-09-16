@@ -11,7 +11,7 @@
  *
  * The dispatch is an `import()` rather than a spawn, so there is one process, no
  * second Node startup, and an error keeps the stack of the tool that threw. The line
- * below rewriting `process.argv` is what makes that work. Each tool decides whether
+ * below rewriting `process.argv` is what lets that work. Each tool decides whether
  * to run its command block by comparing `process.argv[1]` against its own path, the
  * standard "am I the program?" test, and under this dispatcher the answer is yes.
  * Nothing is being fooled, because the target module is the program being run, and

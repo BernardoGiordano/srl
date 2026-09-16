@@ -275,8 +275,8 @@ async function facts(root, name) {
  * Refuses rather than overwrites. The directory is refused whole, because a scaffold
  * that merged into an existing application would leave a repository in a state neither
  * this module nor its author described. `tsconfig.json` is the one file that may already
- * exist for a good reason — a repository adding its second application has one — so it
- * is reported rather than replaced.
+ * exist for a good reason, because a repository adding its second application has one,
+ * so it is reported rather than replaced.
  *
  * @param {string} root the repository root
  * @param {{ name?: string }} [options]

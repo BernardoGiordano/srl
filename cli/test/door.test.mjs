@@ -1,8 +1,8 @@
 /**
- * The door rule: which exports a marker removes, and which forms it refuses.
+ * The door rule, meaning which exports a marker removes and which forms it refuses.
  *
  * Every case is a string rather than a file, because the rule is a function of one
- * module's text and nothing else — no manifest, no resolution, no build. The
+ * module's text and nothing else, with no manifest, no resolution and no build. The
  * emitted bundles are checked separately, against their own bytes, in
  * `tools/test/package-bundle.test.mjs`.
  */
@@ -100,8 +100,8 @@ void test('a member that keeps everything back is still imported for its side ef
 });
 
 void test('the library marks the names its own comments call internal', () => {
-  // A tripwire on the rule reaching real source, not a list to keep in step: the
-  // door of the whole package is asserted against the emitted bundle.
+  // A tripwire on the rule reaching real source rather than a list to keep in step.
+  // The door of the whole package is asserted against the emitted bundle.
   const dialect = new URL('../../source/lib/core/template/dialect.js', import.meta.url);
   const door = moduleDoor(readFileSync(dialect, 'utf8'), 'dialect.js');
 
