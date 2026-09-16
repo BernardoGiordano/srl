@@ -1,14 +1,13 @@
 /**
  * What "serve one srl application" is, in one declaration.
  *
- * Four servers in this repository answered that question separately — the
- * development server, the benchmark origin, the artifact test origin and the test
- * runner's mount middleware — and the parts they had in common were copied rather
- * than shared: the same `toFilePath`, the same traversal refusal, the same
- * directory index, the same history fallback, drifting one commit at a time.
+ * Four servers in this repository need that answer, the development server, the
+ * benchmark origin, the artifact test origin and the test runner's mount middleware.
+ * Copied rather than shared, the same `toFilePath`, traversal refusal, directory
+ * index and history fallback drift one commit at a time.
  *
- * `cli/origin/index.mjs` owns those rules. What is left for a caller to state is
- * the part that genuinely differs, and it is the four fields of `OriginOptions`.
+ * `cli/origin/index.mjs` owns those rules. What is left for a caller to state is the
+ * part that genuinely differs, and it is the four fields of `OriginOptions`.
  * ADR-0075.
  */
 
@@ -16,13 +15,13 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Stats } from 'node:fs';
 
 /**
- * URL prefix -> where it resolves. A file mount's target is an absolute
- * directory; the test runner's is another URL prefix, which is why this is a pair
- * of strings and not a pair of directories.
+ * URL prefix to where it resolves. A file mount's target is an absolute directory
+ * and the test runner's is another URL prefix, which is why this is a pair of strings
+ * rather than a pair of directories.
  *
- * Order is the caller's and it matters: resolution takes the first prefix that
+ * Order is the caller's and it matters. Resolution takes the first prefix that
  * matches, so a mount nested inside another must be declared before it, and `/`
- * — which matches everything — must be declared last.
+ * matches everything and must be declared last.
  */
 export type Mount = readonly [string, string];
 
@@ -45,15 +44,15 @@ export interface TransformContext {
 
 /**
  * A body to send instead of the file on disk, plus whatever headers describe it
- * being different — `Content-Encoding: gzip` for the benchmark, nothing at all
- * for an injected script tag. `Content-Length` is the origin's to set.
+ * being different, such as `Content-Encoding: gzip` for the benchmark or nothing at
+ * all for an injected script tag. `Content-Length` is the origin's to set.
  *
  * A transformed body carries no `ETag` unless one is stated here. The origin's own
  * validator is built from the file's size and mtime, and those describe the file
- * rather than what a transform made of it: a body that also depends on the
- * adapter's configuration would be revalidated against something that
- * configuration does not change. A transform that knows its bytes are a pure
- * function of the file it was handed may say so by setting `ETag` itself.
+ * rather than what a transform made of it. A body that also depends on the adapter's
+ * configuration would be revalidated against something that configuration does not
+ * change. A transform that knows its bytes are a pure function of the file it was
+ * handed may say so by setting `ETag` itself.
  */
 export interface Representation {
   body: Buffer;
@@ -64,19 +63,19 @@ export interface Representation {
 export interface OriginOptions {
   mounts: ReadonlyArray<Mount>;
   /**
-   * The document a navigation to a path with no file gets: an application's
-   * `index.html`, absolute. Null serves 404 instead, which is what a mount table
-   * with no application under it wants.
+   * The document a navigation to a path with no file gets, which is an
+   * application's `index.html`, absolute. Null serves 404 instead, which is what a
+   * mount table with no application under it wants.
    */
   fallback?: string | null;
   /**
-   * Extra response headers for a static hit — a cache policy, a
+   * Extra response headers for a static hit, such as a cache policy or a
    * Content-Security-Policy on the entry document. `Cache-Control: no-store` and
    * the file's own `Content-Type` are the defaults this replaces.
    *
-   * This is where a 304 is bought. The origin already sends an `ETag` for a
-   * streamed file and already answers `If-None-Match`; a policy of `no-store`
-   * means no browser ever sends one, and `no-cache` means every reload does.
+   * This is where a 304 is bought. The origin already sends an `ETag` for a streamed
+   * file and already answers `If-None-Match`. A policy of `no-store` means no
+   * browser ever sends one, and `no-cache` means every reload does.
    */
   headers?: (pathname: string, file: string) => Record<string, string>;
   /**
@@ -89,14 +88,14 @@ export interface OriginOptions {
     context: TransformContext,
   ) => Promise<Representation | null> | Representation | null;
   /**
-   * An adapter's own routes, consulted before anything static — before the method
-   * check and before the mounts, because both are rules about files.
+   * An adapter's own routes, consulted before anything static, which means before
+   * the method check and before the mounts, because both are rules about files.
    *
    * `true` means the request was answered here. This is where the development
    * server's proxy and live-reload stream live, where the benchmark's harness page
    * and backend live, and where the artifact suite's injected modules live. It is
-   * deliberately the only extension point of that kind: ADR-0075's proxy must stay
-   * one adapter's concern rather than an option every origin carries.
+   * deliberately the only extension point of that kind, because ADR-0075's proxy
+   * must stay one adapter's concern rather than an option every origin carries.
    */
   route?: (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean> | boolean;
 }
@@ -114,7 +113,7 @@ export interface ListenOptions {
   host?: string | null;
   /**
    * Called when a request handler throws. Return a body to send with the 500, or
-   * nothing for the default — a benchmark wants the cause in the response, a
+   * nothing for the default. A benchmark wants the cause in the response, and a
    * development server wants it on its own stdout.
    */
   failed?: (cause: unknown, request: IncomingMessage) => string | void;

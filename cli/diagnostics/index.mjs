@@ -1,12 +1,11 @@
 /**
  * One finding, one shape, two adapters.
  *
- * Every check here returns `Diagnostic[]` and prints nothing. This module is what
- * turns that list into output: a terminal report for a person, and a JSON
- * document for CI, an editor or an agent. A check that formatted its own findings
- * would be a second copy of the wording, the indentation and the exit-code rule,
- * and — the reason this exists at all — a finding nothing but a terminal could
- * read. ADR-0072.
+ * Every check here returns `Diagnostic[]` and prints nothing. This module turns that
+ * list into output, either a terminal report for a person or a JSON document for CI,
+ * an editor or an agent. A check that formatted its own findings would be a second
+ * copy of the wording, the indentation and the exit-code rule, and would leave a
+ * finding nothing but a terminal could read. ADR-0072.
  *
  * The text adapter writes progress to stdout and refusals to stderr, because that
  * split is what lets a CI log be read for the failures alone. The JSON adapter
@@ -23,9 +22,9 @@ import { repoPath } from '../layout.mjs';
 /**
  * The terminal label for each severity, and the width they are padded to.
  *
- * The vocabulary is the one this repository's checks already printed by hand —
- * `ok`, `note`, `FAIL` — so the report reads the same after the findings became
- * values as it did before.
+ * The vocabulary is `ok`, `note` and `FAIL`, which is what this repository's checks
+ * print, so a report reads the same whether a check formats it or this module
+ * does.
  */
 const LABELS = /** @type {Record<Severity, string>} */ ({
   error: 'FAIL',
@@ -39,10 +38,9 @@ const LABEL_WIDTH = 5;
  * A path as a diagnostic states it: repository-relative and `/`-separated, or
  * absolute when the file is outside the repository.
  *
- * A check that has an absolute path should hand it over as-is rather than
- * shortening it first. Doing it here is what keeps one answer to "how is a path
- * spelled in a report" instead of one `show()` helper per check, which is what
- * this repository had.
+ * A check that has an absolute path should hand it over as-is rather than shortening
+ * it first. Doing it here keeps one answer to how a path is spelled in a report,
+ * rather than one `show()` helper per check.
  *
  * @param {string | null | undefined} file
  * @returns {string | null}
@@ -83,8 +81,8 @@ export function error(code, message, where) {
 }
 
 /**
- * Reported, and not a refusal: a locale at 60%, a coverage gap the run should say
- * out loud rather than let a reader assume away.
+ * Reported rather than refused, such as a locale at 60% or a coverage gap the run
+ * should say out loud rather than let a reader assume away.
  *
  * @param {string} code @param {string} message @param {Where} [where] @returns {Diagnostic}
  */
@@ -141,7 +139,7 @@ function position(diagnostic) {
 }
 
 /**
- * Where a refusal happened, for a block that carries no headings: the file, or the
+ * Where a refusal happened, for a block that carries no headings. The file, or the
  * group when the finding names no file.
  *
  * @param {Diagnostic} diagnostic
@@ -168,16 +166,16 @@ function line(diagnostic) {
 /**
  * The terminal report, as the two streams it belongs on.
  *
- * Progress — everything that passed and everything worth saying that is not a
- * refusal — goes to stdout in the order it was found, under a heading whenever
- * the group changes. Refusals are repeated to stderr as one block at the end,
- * because a run that reported the first failure where it happened and nothing
- * afterwards is a run somebody has to repeat once per failure.
+ * Progress goes to stdout in the order it was found, under a heading whenever the
+ * group changes. That is everything that passed and everything worth saying that is
+ * not a refusal. Refusals are repeated to stderr as one block at the end, because a
+ * run that reported the first failure where it happened and nothing afterwards is a
+ * run somebody has to repeat once per failure.
  *
  * @param {readonly Diagnostic[]} diagnostics
  * @param {{ title?: string, summary?: string }} [options]
- *   `title` heads the report; `summary` is the one line printed when nothing
- *   failed, and is the check's to word because it says what was covered.
+ *   `title` heads the report. `summary` is the one line printed when nothing failed,
+ *   and is the check's to word because it says what was covered.
  * @returns {TextReport}
  */
 export function formatText(diagnostics, options = {}) {
@@ -236,8 +234,8 @@ export function formatJson(diagnostics) {
 /**
  * Which adapter a command line asked for.
  *
- * One flag, and it is the same flag on every check, which is the point of the
- * findings being values: `--json` costs each check nothing.
+ * One flag, and it is the same flag on every check, which is what findings-as-values
+ * buys. `--json` costs each check nothing.
  *
  * @param {readonly string[]} [argv]
  * @returns {'text' | 'json'}

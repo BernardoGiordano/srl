@@ -1,5 +1,5 @@
 /**
- * The browser half of a development update: what each changed URL means.
+ * The browser half of a development update, deciding what each changed URL means.
  *
  * Served at `/__updates/client.js` by `cli/dev/updates.mjs` and imported by the tag
  * that server injects into the entry document. It is never written into the file on
@@ -11,28 +11,28 @@
  *   .html   a template revision. `reviseTemplate` recompiles the file and renders it
  *           into the hosts already showing it, so their fields, signals and
  *           subscriptions survive the edit (ADR-0111).
- *   .css    an Element's own stylesheet has its rules replaced in place (ADR-0119);
- *           any other linked stylesheet is fetched again and swapped in place.
+ *   .css    an Element's own stylesheet has its rules replaced in place (ADR-0119),
+ *           and any other linked stylesheet is fetched again and swapped in place.
  *   .js     a component revision. `reviseComponentModule` runs the edited module
  *           again and installs its class body on the class the registry holds, or
  *           refuses and names what changed (ADR-0113).
- *   else    a reload, which is what this server did for everything until now.
+ *   else    a reload.
  *
  * A fallback is always a reload rather than nothing. A `.css` file no `<link>` names
  * is reachable through an `@import` or a build step this cannot see, a template URL
- * that 404s has been deleted or renamed, a `.js` file that declares no component
- * has importers holding the bindings it exported, and an application served without
- * an import map cannot be reached through `@core/` at all. In each case the page is
- * stale, and the reload the developer would have got anyway is the honest answer.
+ * that 404s has been deleted or renamed, a `.js` file that declares no component has
+ * importers holding the bindings it exported, and an application served without an
+ * import map cannot be reached through `@core/` at all. In each case the page is
+ * stale, and a reload is the honest answer.
  *
  * `planUpdate` is separate from `applyUpdate` so the decision can be asserted
  * without a browser.
  */
 
 /**
- * What the server sends: the URLs that changed, or a standing instruction to start
- * the page again — which is what a browser gets when it reconnects across a gap the
- * server can no longer describe.
+ * What the server sends, which is the URLs that changed, or a standing instruction
+ * to start the page again. A browser gets the second when it reconnects across a gap
+ * the server cannot describe.
  *
  * @typedef {{ changed?: string[], reload?: boolean }} Update
  */
@@ -96,8 +96,9 @@ export async function applyUpdate(update) {
     }
   }
 
-  // Markup before code: a batch that carries both is one edit to one component, and
-  // the render its class revision asks for should already be against the new markup.
+  // Markup before code, because a batch that carries both is one edit to one
+  // component and the render its class revision asks for should already be against
+  // the new markup.
   if (plan.templates.length > 0) await reviseTemplates(plan.templates);
   if (plan.modules.length > 0) await reviseModules(plan.modules);
 }
@@ -107,12 +108,12 @@ export async function applyUpdate(update) {
  *
  * The module is imported by the specifier the application's own source uses, so the
  * page's import map answers it and this file holds no second copy of the mount
- * table. An application served without that map — a bundle, or a clone that has not
- * run `npm run importmap` — gets a reload instead.
+ * table. An application served without that map, such as a bundle or a clone that
+ * has not run `npm run importmap`, gets a reload instead.
  *
  * A file caught half-written throws inside `reviseTemplate` and changes nothing, so
- * the screen keeps the markup it had. That is worth a line in the console and not a
- * reload: the next save is a few seconds away and it will compile.
+ * the screen keeps the markup it had. That is worth a line in the console rather
+ * than a reload, because the next save is a few seconds away and it will compile.
  *
  * @param {string[]} urls
  * @returns {Promise<void>}
@@ -148,10 +149,10 @@ async function reviseTemplates(urls) {
  * Run edited component modules again, in the page already running them.
  *
  * Every answer but "adopted" is a reload. A module that declares no component has
- * importers holding the bindings it exported, and nothing can hand them new ones; a
- * refusal names a change to the component's identity — its fields, its base class,
- * its reactive properties — that an element already on screen cannot take. Both are
- * a stale page, and the console line is what says which it was.
+ * importers holding the bindings it exported, and nothing can hand them new ones. A
+ * refusal names a change to the component's identity, such as its fields, its base
+ * class or its reactive properties, that an element already on screen cannot take.
+ * Both leave a stale page, and the console line says which it was.
  *
  * @param {string[]} urls
  * @returns {Promise<void>}
@@ -213,12 +214,12 @@ async function reviseElementStylesheet(url) {
  * Swap every `<link>` that names a changed stylesheet, or report that none does.
  *
  * The fresh link is inserted beside the old one and the old one removed once the new
- * bytes have loaded, which keeps both the cascade order and the styles on screen —
- * removing first is a frame of unstyled page.
+ * bytes have loaded, which keeps both the cascade order and the styles on screen.
+ * Removing first is a frame of unstyled page.
  *
- * A pinned link is refused rather than swapped: `integrity` is a runtime control
- * here, and a URL with a revision query on it has no declared hash, so the swap
- * would fail the check and leave the page with no stylesheet at all.
+ * A pinned link is refused rather than swapped. `integrity` is a runtime control
+ * here, and a URL with a revision query on it has no declared hash, so the swap would
+ * fail the check and leave the page with no stylesheet at all.
  *
  * @param {string} url
  * @returns {boolean} Whether this page had it linked.

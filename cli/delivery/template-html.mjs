@@ -2,57 +2,53 @@
  * Minify one component template, and prove the minified bytes parse to the same
  * thing the source did.
  *
- * A template is authored HTML: indented to be read, commented to be understood.
- * The runtime compiler reads it with `innerHTML` and a tree walk that skips
- * comments outright, so every byte of that indentation and every comment is paid
- * for over the wire and thrown away on arrival. In this repository's own
- * applications it is a third of the markup.
+ * A template is authored HTML, indented to be read and commented to be understood.
+ * The runtime compiler reads it with `innerHTML` and a tree walk that skips comments
+ * outright, so every byte of that indentation and every comment is paid for over the
+ * wire and thrown away on arrival. In this repository's own applications it is a
+ * third of the markup.
  *
- * WHAT MAKES THIS SAFE, GIVEN THE INVARIANT IT BREAKS
+ * Development serves the authored bytes and production serves these, so the "same
+ * compiler over the same bytes" property that makes the optional bundle
+ * behaviour-preserving (ADR-0042) does not hold for the artifact build. A proof
+ * carried out on every template on every build replaces it. `templateShape` reduces
+ * source and output to the same token stream the compiler cares about, meaning
+ * elements, their attributes, and text with runs of whitespace normalised, and
+ * `minifyTemplate` throws when the two disagree. A transform that deletes a node,
+ * reorders one, drops an attribute, or eats the one space between two words fails
+ * the build rather than the page. ADR-0070.
  *
- * Development serves the authored bytes and production serves these, so the
- * "same compiler over the same bytes" property that made the optional bundle
- * behaviour-preserving (ADR-0042) no longer holds for the artifact build. What
- * replaces it is a proof carried out on every template, every build:
- * `templateShape` reduces source and output to the same token stream the
- * compiler cares about — elements, their attributes, and text with runs of
- * whitespace normalised — and `minifyTemplate` throws when the two disagree.
- * A transform that deletes a node, reorders one, drops an attribute, or eats the
- * one space between two words fails the build rather than the page. ADR-0070.
- *
- * WHAT IT DOES
+ * What it does:
  *
  *   - Drops comments, which the compiler skips anyway
  *     (`source/lib/core/template/template.js`, `COMMENT_NODE`).
  *   - Collapses each run of ASCII whitespace in text to one space. Conservative
- *     on purpose: a run is never removed, because `a<span> </span>b` and
- *     `a<span></span>b` are two different renderings and only the author knows
+ *     on purpose, because a run is never removed. `a<span> </span>b` and
+ *     `a<span></span>b` are two different renderings, and only the author knows
  *     which was meant.
  *   - Collapses whitespace in `class`, which is a token list.
  *   - Trims the template's own leading and trailing whitespace.
  *
- * WHAT IT LEAVES ALONE
- *
- * Everything inside an element whose whitespace is significant: `pre`,
- * `textarea`, `script`, `style`, and any element that says so in markup the build
- * can actually read — `style="white-space: pre-wrap"`, or a Tailwind
- * `whitespace-pre`, `whitespace-pre-line`, `whitespace-pre-wrap`,
+ * It leaves alone everything inside an element whose whitespace is significant,
+ * which is `pre`, `textarea`, `script`, `style`, and any element that says so in
+ * markup the build can read, such as `style="white-space: pre-wrap"` or a
+ * Tailwind `whitespace-pre`, `whitespace-pre-line`, `whitespace-pre-wrap` or
  * `whitespace-break-spaces` class. Preservation inherits, so the whole subtree is
  * left verbatim, comments included.
  *
- * The one thing it cannot see is a stylesheet: an element made preformatted by a
- * class of the application's own, with no such token in it, would have its
- * literal whitespace collapsed. Both escape hatches above are markup the author
- * writes on the element, and `<pre>` is the one to reach for first.
+ * The one thing it cannot see is a stylesheet. An element made preformatted by a
+ * class of the application's own, with no such token in it, has its literal
+ * whitespace collapsed. Both escape hatches above are markup the author writes on
+ * the element, and `<pre>` is the one to reach for first.
  *
  * `{{ ... }}` bodies are lifted out before parsing and put back after, exactly as
- * the runtime compiler does and for the same reason: `{{ a < b }}` in text would
- * otherwise be parsed as a tag.
+ * the runtime compiler does and for the same reason, because `{{ a < b }}` in text
+ * would otherwise be parsed as a tag.
  *
  * parse5 owns HTML syntax here, as it does for `index.html` (ADR-0041). Its
- * normalisations — an implied `<tbody>`, lowercased attribute names, `selected`
- * becoming `selected=""` — are the ones a browser's own parser performs on the
- * same bytes, which is what makes a re-serialised tree a safe thing to ship.
+ * normalisations, such as an implied `<tbody>`, lowercased attribute names and
+ * `selected` becoming `selected=""`, are the ones a browser's own parser performs on
+ * the same bytes, which makes a re-serialised tree safe to ship.
  */
 
 import { parseFragment, serialize } from 'parse5';
@@ -61,8 +57,8 @@ import { INTERPOLATION } from '@srljs/core/lib/core/template/dialect.js';
 
 /**
  * The subset of a parse5 tree this module reads, spelled out for the same reason
- * `build.mjs` spells out its own: parse5 6 ships no declarations, and a structural
- * typedef is the honest description of what is touched.
+ * `build.mjs` spells out its own. parse5 6 ships no declarations, and a structural
+ * typedef describes exactly what is touched.
  *
  * @typedef {{
  *   nodeName: string,
@@ -75,8 +71,8 @@ import { INTERPOLATION } from '@srljs/core/lib/core/template/dialect.js';
  */
 
 /**
- * ASCII whitespace, which is what HTML collapses. Deliberately not `\s`: that
- * matches U+00A0, and collapsing a non-breaking space would change the rendering
+ * ASCII whitespace, which is what HTML collapses. Deliberately not `\s`, which
+ * matches U+00A0, because collapsing a non-breaking space would change the rendering
  * of every `&nbsp;` in the repository.
  */
 const ASCII_WHITESPACE = /[\t\n\f\r ]+/gu;
@@ -120,15 +116,15 @@ export function minifyTemplate(source) {
 }
 
 /**
- * What the compiler will see, as a token stream: every element with its
- * attributes, and every text run with its whitespace normalised.
+ * What the compiler will see, as a token stream of every element with its
+ * attributes and every text run with its whitespace normalised.
  *
  * The one thing this is not allowed to be is a description of the transform.
- * Adjacent text nodes are joined because the DOM renders them as one; runs of
- * whitespace are normalised because that is the change under test; a run that
+ * Adjacent text nodes are joined because the DOM renders them as one. Runs of
+ * whitespace are normalised because that is the change under test. A run that
  * existed still has to exist, which is what makes "collapse, never delete"
- * checkable. Anything else — an element, an attribute, a word — has to survive
- * byte for byte, and text inside a verbatim element has to survive exactly.
+ * checkable. An element, an attribute or a word has to survive byte for byte, and
+ * text inside a verbatim element has to survive exactly.
  *
  * @param {string} source
  * @returns {string[]}
@@ -136,7 +132,7 @@ export function minifyTemplate(source) {
 export function templateShape(source) {
   const { prepared } = liftInterpolations(source);
   const tokens = shapeOf(parseFragment(prepared), false, []);
-  // The template's own edges: `trim()` is part of the transform, so leading and
+  // The template's own edges. `trim()` is part of the transform, so leading and
   // trailing whitespace at the top level is not a difference.
   while (tokens[0] === 'text: ') tokens.shift();
   while (tokens.at(-1) === 'text: ') tokens.pop();
@@ -299,7 +295,7 @@ function contentOf(element) {
 /**
  * Park every `{{ ... }}` body in a placeholder before the HTML parser sees it.
  *
- * The same pre-pass the runtime compiler runs, for the same reason: `{{ a < b }}`
+ * The same pre-pass the runtime compiler runs, for the same reason. `{{ a < b }}`
  * in text content would be parsed as the start of a tag named `b`, and the
  * expression would be silently mangled into markup.
  *
