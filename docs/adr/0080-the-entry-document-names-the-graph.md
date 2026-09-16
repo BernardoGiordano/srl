@@ -12,8 +12,8 @@ at a time.
 The measured chain on a deployed artifact: the document arrives, the browser fetches
 `assets/entry-*.js`, evaluates it, and only then does startup step 2 learn that it wants
 `app.manifest.json`. That lands, step 4 asks for a locale bundle, step 6 restores a
-session, and step 7 finally issues the dynamic import of the root module — whose own
-static imports are themselves discovered on arrival. Six to eight of the round trips
+session, and step 7 finally issues the dynamic import of the root module, whose own static
+imports are themselves discovered on arrival. Six to eight of the round trips
 before the first routed view exist for no reason other than that nobody had told the
 browser what was coming. In one case the hop bought nothing at all: `assets/entry-*.js`
 was a facade chunk of 0.00 KiB, a whole round trip for no bytes.
@@ -27,10 +27,10 @@ ignored.
 
 The reason is an ordering one. The production document is made by `productionHtml`, a
 `transformIndexHtml` registered with `order: 'pre'`. That phase runs before Rolldown has
-emitted a chunk, so the transform structurally cannot name one: it is subtractive — it
-removes the Tailwind browser JIT, the source-delivery stylesheets and the development
-import map, per [ADR-0041](0041-production-html-is-a-transform-not-an-edit.md) — and the
-only tag it adds is a favicon. By the time the graph exists, the document is finished.
+emitted a chunk, so the transform structurally cannot name one. It is subtractive. It
+removes the Tailwind browser JIT, the source-delivery stylesheets and the development import
+map, per [ADR-0041](0041-production-html-is-a-transform-not-an-edit.md), and the only tag it
+adds is a favicon. By the time the graph exists, the document is finished.
 
 Meanwhile `modulePreload: false` was set at two places in the Vite configuration with no
 record behind it, and no ADR mentioned preloading at all. The engine's preload helper was
@@ -49,8 +49,8 @@ document's contents a function of engine version, which is the coupling this rep
 keeps out of the artifact.
 
 Making `productionHtml` a `post` transform was rejected because it would put the whole
-document — the subtractive half included — behind the build, and the subtractive half is
-what proves an application's `index.html` has the shape the artifact expects. Those checks
+document behind the build, the subtractive half included, and the subtractive half is what
+proves an application's `index.html` has the shape the artifact expects. Those checks
 are worth failing early, before a bundle is produced. Two phases with two jobs is the
 honest shape: one prunes a source file, the other projects a graph.
 
@@ -61,7 +61,7 @@ pure functions. `entryHints(facts)` takes the `entry`, `chunks` and `security` f
 report and returns an ordered hint list; `withEntryHints(html, facts)` writes that list
 into the document, immediately before the module script that starts the application.
 
-Pure, so the contract is asserted without running Vite over an application — the same
+Pure, so the contract is asserted without running Vite over an application, which is the
 property `parseReport` has and for the same reason. The parameter is a `Pick` of
 `ShellArtifactReport` rather than the whole report, so a test satisfies it with a literal.
 
@@ -102,7 +102,8 @@ ones taken unconditionally.
 **Locale bundles are absent, for a different reason.** `configureI18n` loads the locale
 `preferredLocale()` negotiates, from a stored preference and `navigator.languages`. A
 document that named one would be right for some visitors and would cost the others a bundle
-they never read — 17 KB in the example application, which ships three. That hop closes when
+they never read, 17 KB in the example application, which ships three. That hop closes
+when
 locale bundles become addressable as a build fact, which is a separate decision.
 
 `modulePreload: false` stays, now with a comment at each of the two sites saying why and
@@ -111,8 +112,8 @@ citing this record.
 ## Consequences
 
 An entry document is no longer a pruned copy of a source file; it is that, plus a
-projection of the artifact report. The seam moved from the `'pre'` phase — which cannot see
-a chunk — to after the graph exists, and the two halves are separately assertable.
+projection of the artifact report. The seam moved from the `'pre'` phase, which cannot see a
+chunk, to after the graph exists, and the two halves are separately assertable.
 
 The hops removed are the ones between the document and the root module: the entry chunk's
 static closure and the root module now transfer in parallel with each other and with the
@@ -131,7 +132,7 @@ right trade at any realistic latency and the wrong one at zero, which is the sha
 where that shows up.
 
 Two things this record does not do. Templates are still fetched one per component, so a
-chunk holding nine components still costs nine serial requests once it arrives — the hint
+chunk holding nine components still costs nine serial requests once it arrives. The hint
 list stops at the module graph because the template graph is owned by
 [ADR-0081](0081-templates-are-delivered-by-chunk.md) and reopening
 it is a decision of its own. And nothing yet gates chain depth, so a future change that adds

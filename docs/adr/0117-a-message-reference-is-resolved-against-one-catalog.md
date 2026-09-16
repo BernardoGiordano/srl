@@ -11,8 +11,8 @@ locale file an application shipped, flattened each one, and asked whether the tr
 agreed with the default locale: a key present in Italian and absent from English was a
 refusal, and the untranslated count was reported per file.
 
-That finds a real failure — a key renamed in one language renders correctly in exactly
-that language — and it cannot find the failure that actually reaches a user. `t('orders.titel')`
+That finds a real failure, where a key renamed in one language renders correctly in exactly
+that language, and it cannot find the failure that actually reaches a user. `t('orders.titel')`
 satisfied every rule in the repository. The catalogs agreed with each other perfectly,
 none of them had the key, and the page rendered `orders.titel` in every language. The
 source side of the question was never asked, because the strings in the source were
@@ -34,7 +34,8 @@ open the right file, guess where it goes.
 **One module owns what a message is.** `cli/message-catalog/` reads an application's
 manifest for the bundles it registers, flattens each locale file the way the runtime
 flattens it, keeps the position of every key, and resolves a reference by the runtime's own
-rule — the key, or a plural variant when the call passes `count`. Nothing else interprets a
+rule, which is the key or a plural variant when the call passes `count`. Nothing else
+interprets a
 catalog. The verifier, `srl check messages` and the language server are adapters over it,
 so they cannot disagree about what a key is.
 
@@ -48,7 +49,7 @@ reading of the same source.
 **The strong rule reads calls; the weak rule reads strings.** A reference no bundle answers
 is an error, because it reaches a user as a raw key in every language. A catalog entry no
 source names is a warning, and any dotted string anywhere in the source is enough to
-answer for it — a key held in a property, a lookup table, or the head of a template
+answer for it, whether a key held in a property, a lookup table, or the head of a template
 literal. The two questions have different costs when wrong, so they read different
 evidence.
 
@@ -69,8 +70,8 @@ already holds its siblings, with the key as its own message. Ordering, blank lin
 
 **Rejected: a catalog format with its own extractor.** A `.po` file or a flat dictionary
 per screen would make extraction trivial and would replace the one thing the bundles
-already get right — a translator opens a nested JSON file with comments in it and reads
-sentences.
+already get right, which is that a translator opens a nested JSON file with comments in it
+and reads sentences.
 
 **Rejected: a translator-provider seam.** The collection already has one for standard text,
 and a second interface between the checker and the catalog would be a seam with one
@@ -91,13 +92,13 @@ remote's link from the manifest and asks for `nav.<name>`, so that key is requir
 manifest entry rather than by any source.
 
 An installed application gets the check it did not have. `srl check messages` reads the
-same model from the same three roots — the library, the collection and the application — so
-a consumer's bundles are checked the way this repository's are.
+same model from the same three roots, the library, the collection and the application, so a
+consumer's bundles are checked the way this repository's are.
 
 The editor answers per keystroke. A reference is read from the buffer rather than the file,
 resolved against the bundles as saved, and reported with the span of the key literal. The
-whole-project question — is this entry still named anywhere — is not asked of one file,
-because one file cannot answer it.
+The whole-project question, whether this entry is still named anywhere, is not asked of one
+file, because one file cannot answer it.
 
 Two grammars are stated twice, deliberately. `{name}` interpolation lives in
 `source/lib/core/localization/i18n.js`, which reaches for signals and the import map and so
@@ -108,8 +109,9 @@ A suite's references are skipped. `configureI18n` takes whatever a test hands it
 suite about fallback asks for a key it has deliberately not declared. Vendored bytes are
 skipped for the same reason from the other end: a minified module's `t` is not this one.
 
-**What would reopen it:** a message whose key is genuinely unknowable until runtime — a
-server-sent code with no prefix in the source, or a bundle fetched from a service instead
+**What would reopen it:** a message whose key is genuinely unknowable until runtime, such
+as a server-sent code with no prefix in the source, or a bundle fetched from a service
+instead
 of shipped. Both are reported as computed today, which is the honest answer and not a
 useful one; the next step would be a declaration in the manifest naming the families an
 application resolves dynamically, and that is a new interface rather than a rule.

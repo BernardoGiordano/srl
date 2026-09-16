@@ -11,7 +11,8 @@
 a consumer has is not the arrangement this repository runs, and nothing here could tell.
 
 That was not hypothetical when it was written. Splitting the packages broke the build,
-because the import-map resolver skipped every importer under `node_modules` — right while
+because the import-map resolver skipped every importer under `node_modules`, which is right
+while
 the library was a sibling directory, wrong the moment it was installed. It was found by
 packing both tarballs into a scratch directory and building, by hand.
 
@@ -19,7 +20,7 @@ Three more gaps had the same root.
 
 **The type table was a copy.** The four `paths` mappings that make `@core/` resolve for tsc
 lived in this repository's `tsconfig.json`. A consumer had to write their own, which is a
-second table nothing compares to the import map — exactly what
+second table nothing compares to the import map, which is exactly what
 [ADR-0033](0033-the-library-publishes-its-own-interface.md) removed for the browser and
 left standing for the type checker. `srl check templates` in a consumer read a
 `tsconfig.json` that may not exist, and reported its absence as one TypeScript diagnostic
@@ -27,7 +28,7 @@ per template, counted in "N template type error(s)". A repository with no tsconf
 its templates had type errors.
 
 **The import-map drift check was not shippable.** The one thing that catches a hand-edited
-map or a stale integrity hash — a blank page in both cases — was a slice of
+map or a stale integrity hash, a blank page in both cases, was a slice of
 `verify-deps.mjs`, which also checks this repository's layering, its translations and its
 own vendored bytes. A consumer could not run it, and
 [santella.dev](https://santella.dev) had written its own 78-line version.
@@ -45,7 +46,8 @@ mappings point into the package wherever it was installed and need no editing pe
 consumer.
 
 This repository extends the same file, and `verify-deps.mjs` fails if its `tsconfig.json`
-stops extending it or grows a `paths` block of its own — `paths` replaces rather than
+stops extending it or grows a `paths` block of its own, because `paths` replaces rather
+than
 merges, so a local copy would be free to drift, which is the thing being ended.
 
 The base also sets `maxNodeModuleJsDepth: 1`. This is not a style preference. The package
@@ -85,7 +87,8 @@ part of `npm run check`.
 
 Two details in it are load-bearing. The `@srljs` directories are extracted, never
 symlinked: Node resolves realpaths, so a symlink would resolve to this checkout and every
-"am I installed?" test would answer no — the whole point lost. And the library's runtime
+"am I installed?" test would answer no, losing the whole point. And the library's
+runtime
 dependencies are real copies rather than symlinks, because a production bundle inlines them
 from npm and the artifact records every module's path relative to the repository; a symlink
 resolves outside the probe, and the build refuses a module it cannot place.
@@ -103,7 +106,8 @@ The gap ADR-0067 left open is closed. A packaging change that works in the check
 fails once installed now fails in `npm run check`, roughly forty seconds after it is made,
 instead of in a consumer's CI.
 
-`npm run check` packs the workspaces, so it depends on `source/dist/` existing — it runs
+`npm run check` packs the workspaces, so it depends on `source/dist/` existing, and it
+runs
 after `npm run package`, which builds it. It also shells out to `npm pack` and `tar`, which
 is two more assumptions about the machine than any other check makes.
 
@@ -111,8 +115,9 @@ The probe is not a real install. It has no lockfile, resolves nothing from the n
 borrows every third-party dependency from this repository by symlink. What it faithfully
 reproduces is the one thing that matters here: two real package directories under
 `node_modules`, and a repository that is the working directory. A packaging bug that needs
-a true `npm install` to appear — a peer range npm refuses, a file `files` omits that only
-matters transitively — is still not covered, though the tarballs themselves are, because
+a true `npm install` to appear, such as a peer range npm refuses or a file `files` omits
+that only matters transitively, is still not covered, though the tarballs themselves are,
+because
 they are what gets extracted.
 
 The fixture application is a fifth description of what an `index.html` has to contain. It
@@ -122,7 +127,8 @@ more place to edit, and it is also the only place that would have caught the con
 being unsatisfiable from outside this repository.
 
 `maxNodeModuleJsDepth: 1` is inherited by this repository as well, where it does nothing
-useful — the library is not under `node_modules` here. It is not free anywhere: other
+useful, because the library is not under `node_modules` here. It is not free anywhere, and
+other
 packages' JavaScript enters the program. Nothing has surfaced from it yet, and if something
 does, the answer is for the base to stop setting it and for the library to publish
 declarations instead, which is the ADR-0066 conversation.

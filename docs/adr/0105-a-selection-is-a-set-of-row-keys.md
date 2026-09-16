@@ -15,7 +15,7 @@ those is a rule the caller has to get right, and each of them is decided inside 
 
 The reason no selection existed was not oversight. `docs/known-gaps.md` recorded it as
 deliberately unbuilt, because the word "selection" hides a question the table cannot
-answer on its own — whether choosing rows means the current page, the rows loaded so far,
+answer on its own. Does choosing rows mean the current page, the rows loaded so far,
 or every record matching the query, including the ones on the server that this browser has
 never seen. Building the checkbox before answering that question produces an interface that
 means something different in each of the four pagination modes.
@@ -27,8 +27,9 @@ the selection has to mean.
 ## Decision
 
 **A selection is a set of row keys.** Not positions, not row objects. Keys survive the
-transitions the table performs — sorting reorders, paging slices, filtering removes — so
-none of them needs code to preserve the selection, and none of them can silently move it
+transitions the table performs, where sorting reorders, paging slices and filtering
+removes, so none of them needs code to preserve the selection and none of them can silently
+move it
 onto a different record.
 
 **The scope is the rows the table has been given, and it says so.** `selection-change`
@@ -39,15 +40,15 @@ to do it with; the table never claims it.
 
 **A row the table cannot name cannot be chosen.** Selection reads identity through
 `rowKey` and refuses a row that resolves to `null` or `undefined`, rendering a disabled
-checkbox. This is deliberately not `keyFor`, whose positional fallback — `page:index` —
+checkbox. This is deliberately not `keyFor`, whose positional fallback of `page:index`
 exists to keep a `*for` keyed when rows carry no id. A position is a fine render key and a
 worthless identity: after a sort it names a different record, so a selection built on it
 would follow the slot.
 
 **The header acts on the page.** The select-all checkbox chooses every selectable row the
 user can currently see, clears them when all are chosen, and reads indeterminate when the
-page is mixed. A wider action — every loaded row, every matching record — is a screen's
-button, because only the screen knows what it costs.
+page is mixed. A wider action, such as every loaded row or every matching record, is a
+screen's button, because only the screen knows what it costs.
 
 **Keys are pruned only where the table holds the whole collection.** In `client`, `none`
 and `infinite` modes, `rows` is everything, so a key with no row is a row that is gone and
@@ -55,8 +56,8 @@ is dropped with a `selection-change`. In `server` mode `rows` is one page, so an
 means "on another page" and pruning it would empty the selection on every page change,
 which is the one thing keying it exists to prevent.
 
-**Selection is not persisted.** The stored table state holds page, sort and column layout —
-configuration the user chose for the screen. A selection is a step inside one workflow, and
+**Selection is not persisted.** The stored table state holds page, sort and column layout,
+which is configuration the user chose for the screen. A selection is a step inside one workflow, and
 restoring six checked rows from last week onto a list that has since changed is worse than
 restoring nothing.
 
@@ -71,14 +72,15 @@ list, and comparing them would need an equality rule the table has no basis to p
 `rowKey` is that rule, declared once, already used for rendering.
 
 **Rejected: a `select-all-matching` affordance.** It reads as one checkbox and is a
-server-side authorization question — how many records, under whose scopes, retrieved how.
+server-side authorization question about how many records, under whose scopes, retrieved
+how.
 The same reasoning defers export in `docs/position-and-non-goals.md`.
 
 ## Consequences
 
 `ui-table` gains `selectable`, `selectedKeys`, `rowSelectable`, the `selection-change`
 event, and `selectedRows` / `selectionCount` / `clearSelection()` for the screen driving it.
-Two standard-text keys — `ui.table.selectAll` and `ui.table.selectRow` — name the two
+Two standard-text keys, `ui.table.selectAll` and `ui.table.selectRow`, name the two
 controls, so the collection still ships no prose.
 
 Shift-click extends from the last row clicked to this one, applying the state that row is
@@ -102,6 +104,7 @@ depends on the session's scopes and on a write being in flight, and the table on
 a property whose identity moved.
 
 **What would reopen it:** a screen that must act on every record matching a query rather
-than on the ones it holds. That is not a wider checkbox — it is a server operation with its
-own authorization and its own progress, and the table would be reporting a selection it
+than on the ones it holds. That is a server operation with its own authorization and its
+own progress rather than a wider checkbox, and the table would be reporting a selection
+it
 cannot enumerate.

@@ -25,7 +25,7 @@ because a value changed and holds a code.
 ## Decision
 
 **`field(initial, validators, { async, debounce, lifetime })`.** An `AsyncValidator<T>` is
-`(value, signal) => Promise<string>` — a `Validator` that takes the abort signal and answers
+`(value, signal) => Promise<string>`, a `Validator` that takes the abort signal and answers
 later. Nothing else about writing one differs, and the library ships none of them, because
 every such rule needs a service, an endpoint and a payload that belong to an application.
 
@@ -33,8 +33,8 @@ every such rule needs a service, an endpoint and a payload that belong to an app
 quiet by default. The next keystroke aborts the check in flight and a superseded answer is
 dropped rather than written. The value a settled answer describes is remembered, so a
 control re-emitting an unchanged value costs nothing. `lifetime: () => this.lifetime` binds
-the request to its owner, and the abort listener is dropped on every terminal path — the
-listener rule ADR-0076 exists for, with a second holder here.
+the request to its owner, and the abort listener is dropped on every terminal path. That is
+the listener rule ADR-0076 exists for, with a second holder here.
 
 **A check runs only once every synchronous rule has passed.** A malformed address is not
 worth a round trip, and "already taken" under a value the user has not finished typing is
@@ -50,8 +50,8 @@ the field reports no code and the write decides. Same refusal as `resource()`'s,
 not turn a rejection into a value either.
 
 **`pending` is a third state and it is not valid.** A pending node is not known to be
-acceptable, and the alternative — reporting it valid — is precisely how an unchecked value
-reaches the server. It is true through the debounce window as well as the request, so a
+acceptable, and reporting it valid is precisely how an unchecked value reaches the
+server. It is true through the debounce window as well as the request, so a
 submit that waits on it does not slip through the quiet gap between a keystroke and the call
 it causes. It is false while the field is disabled, whichever switch turned it off, because a
 form that disables itself to save must not be held up by an answer it would ignore.
@@ -68,13 +68,13 @@ the docs. The synchronous answer is also still the right one for a form with no 
 rule, which is most of them.
 
 **Rejected: pending counts as valid, and the screen disables its submit control.** No new
-method, no await, nothing existing to change — and a submit fired during a check goes
+method, no await and nothing existing to change, and a submit fired during a check goes
 through with a value nobody has verified. The failure is silent and lands on the server.
 
 **Rejected: the validator debounces itself.** The field would only supersede. Every
 application-written check would then repeat the timer and the abort wiring, which is the
-duplication `@core/forms` exists to absorb — the same argument the nine-field measurement in
-`known-gaps.md` makes for the rest of the layer.
+duplication `@core/forms` exists to absorb, which is the same argument the nine-field
+measurement in `known-gaps.md` makes for the rest of the layer.
 
 **Rejected: reusing `resource()`.** It re-runs on demand and holds a settled value, where a
 check re-runs because a value changed and holds a code; `pending` there starts true and
@@ -113,6 +113,6 @@ starts, and the values it writes are numbered, because a case that saves leaves 
 behind and the next case would be told its own suite's record is the clash. A screen that
 asks the server about a value makes every test that fills that value asynchronous.
 
-**What would reopen it:** a rule that is asynchronous and about a *set* of values — an
+**What would reopen it:** a rule that is asynchronous and about a set of values, such as an
 availability check over a whole field array. Container validators are synchronous, and
 nothing here extends `pending` to a rule a container owns.

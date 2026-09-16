@@ -32,8 +32,8 @@ should mean.
 **Both paths report, and one module reconstructs.** `@core/diagnostics/updates.js` takes
 an event from the element render path and an event from the binding path and builds a
 tree, because the relationship between them is the answer. A binding patch recorded while
-an element render is open is a child of that render — the component re-rendered and its
-bindings followed. A binding patch with no render open is a top-level record — one
+an element render is open is a child of that render, because the component re-rendered and
+its bindings followed. A binding patch with no render open is a top-level record, one
 expression updated on its own. That distinction is the whole diagnosis, and leaving it to
 whoever reads a log is what makes logging hooks useless.
 
@@ -42,7 +42,7 @@ whoever reads a log is what makes logging hooks useless.
 effect sets `signal` when it re-runs, and `connectedCallback` sets `reconnect` when the
 element comes back. Everything else that reaches `requestUpdate()` is a property write,
 which is the default. The binding directive reads its cause off the state its
-short-circuit already compares — a different evaluator or scope object is a `rebind`, a
+short-circuit already compares. A different evaluator or scope object is a `rebind`, a
 bumped version on the same pair is a `rerender`, and any later run of its own effect is
 `signal`. Nothing is derived from timestamps or from guessing.
 
@@ -63,8 +63,8 @@ the first.
 **The limit bounds the tree, not the counts.** A recording left running across a long
 session would otherwise retain one record per binding evaluation and change the thing it
 was measuring. Past 5,000 retained records the tree stops growing and `dropped` says by
-how much, while the two summaries stay exact — they cost one map entry per distinct tag or
-binding however many updates arrive. A dropped record takes its children with it, so the
+how much, while the two summaries stay exact, because they cost one map entry per distinct
+tag or binding however many updates arrive. A dropped record takes its children with it, so the
 tree never holds a child whose context is missing.
 
 **Text is the adapter.** `formatUpdateReport` renders the two summaries and the timeline
@@ -118,7 +118,7 @@ bundle all reach it with no interface edit; the `@internal` instrumentation entr
 stay out of the generated barrel and only `recordUpdates`, `isRecordingUpdates` and
 `formatUpdateReport` are published.
 
-**What would reopen it:** a second consumer for the records — a panel, an editor, a field
-beacon — which is when the text adapter becomes one adapter of several rather than the
-presentation layer. Or a reactive library that reports a dependency by name, at which
+**What would reopen it:** a second consumer for the records, such as a panel, an editor or
+a field beacon, at which point the text adapter becomes one adapter of several rather than
+the presentation layer. Or a reactive library that reports a dependency by name, at which
 point `cause: 'signal'` can carry the signal it means.

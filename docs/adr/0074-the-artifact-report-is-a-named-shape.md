@@ -14,8 +14,8 @@ Six tools, one document.
 It was declared `Promise<Readonly<Record<string, unknown>>>`, which is to say it was not
 declared. Three consequences followed.
 
-The build re-read its own output. `cli/delivery/build.mjs` carried five helpers —
-`recordValue`, `arrayValue`, `stringValue`, `stringArray`, `artifactRecord` — whose only
+The build re-read its own output. `cli/delivery/build.mjs` carried five helpers,
+`recordValue`, `arrayValue`, `stringValue`, `stringArray` and `artifactRecord`, whose only
 purpose was to poke at an object the same file had just constructed, because the type it
 returned said nothing about what was in it. `composeArtifact` then parsed a report the
 build had written and re-derived its shape by hand.
@@ -35,21 +35,22 @@ application and corrupting the output.
 ## Decision
 
 `cli/delivery/artifact-report.mjs` owns the shape. `writeReport` is the only thing that
-writes one and `readReport` the only thing that reads one; `parseReport` is the pure
-middle — bytes in, `ArtifactReport` out — and it is what makes the contract assertable
-in a suite that never starts a bundler.
+writes one and `readReport` the only thing that reads one. `parseReport` is the pure middle,
+taking bytes in and giving an `ArtifactReport` out, and it is what makes the contract
+assertable in a suite that never starts a bundler.
 
 The type is a discriminated union. A shell report carries `shared`, `remotes` and
 `security`; a Remote report carries `kind: 'remote'`, its `name`, its publication `base`
 and its transport descriptor. `isRemoteReport` is the narrowing, and `RemoteTransport` is
-`Omit<RemoteDescriptor, 'mount' | 'requires' | 'grants'>` — the runtime's own declaration
+`Omit<RemoteDescriptor, 'mount' | 'requires' | 'grants'>`, the runtime's own declaration
 minus the three fields that are the shell's business, rather than a second copy of it.
 
 Admission happens on the way in *and* on the way out. `writeReport` validates before the
 bytes reach disk, so a build cannot publish a report its own readers would reject, and
-the internal consistency of the document — a CSP that admits the import map hash it was
-generated for, a `templates.count` that matches the file list, an inventory that does not
-list `artifact.json` itself — is checked once, here, instead of partially, six times.
+the internal consistency of the document is checked once, here, instead of partially, six
+times. That covers a CSP that admits the import map hash it was generated for, a
+`templates.count` that matches the file list, and an inventory that does not list
+`artifact.json` itself.
 
 What is *not* here is release policy. A build may legitimately produce an artifact with
 no commit behind it; a release may not ship one. So `release.commit` is `string | null` in
@@ -66,7 +67,7 @@ alone was tried and did not hold.
 ## Consequences
 
 Adding a field to the report is one edit. Every consumer sees it as a typed property, and
-the six casts that used to stand in for the declaration are gone —
+the six casts that stood in for the declaration are gone.
 `cli/test/artifact.test.mjs` asserted on `shell.remotes` through a hand-written structural
 type, and now asserts on it directly.
 
@@ -86,7 +87,7 @@ declaration, and a field only the benchmark reads belongs to the benchmark. If
 record should be reopened.
 
 This does not touch `release.json`. The retained release report is a different document
-with a different writer — `release.mjs` and `remote-release.mjs` — and `verify-release.mjs`
+with a different writer, `release.mjs` and `remote-release.mjs`, and `verify-release.mjs`
 still admits it by hand. Naming that one is the same move again, and it is worth doing
 separately rather than folding two shapes into one module because they happen to be
 adjacent.

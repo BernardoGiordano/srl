@@ -13,7 +13,7 @@ The document must carry exactly one of each of the eight facts the production HT
 transform requires ([ADR-0041](0041-production-html-is-a-transform-not-an-edit.md)) or the
 build refuses it. Its inline import map must carry the library's published fragment entry
 for entry and hash for hash, because the map is the resolver and a hand-edited one is a
-blank page — which is why `srl check importmap` exists at all
+blank page, which is why `srl check importmap` exists at all
 ([ADR-0068](0068-the-installed-shape-is-checked-by-installing.md)). The vendored Tailwind
 script is a classic script, so its `sha384` is an attribute rather than an integrity-map
 entry. There must be at least two JavaScript chunks, because an application with nothing
@@ -58,8 +58,8 @@ scaffolded from.
 **Two adapters cross it the day it lands.** `srl new <name>` is the consumer's, and the
 packaged-install probe is this repository's: `pack-check.mjs` no longer writes a fixture,
 it runs `srl new app` through the published bin. So the thing an adopter is given is the
-thing `npm run check` drives end to end — import-map check, template checker, build,
-artifact assertions — every run.
+thing `npm run check` drives end to end on every run, through the import-map check, the
+template checker, the build and the artifact assertions.
 
 The probe goes through the bin rather than importing the module, and that is load-bearing.
 Imported here, the scaffold would find the library beside `cli/` in this checkout and paste
@@ -69,7 +69,7 @@ it resolves the installed package and the fixture is made of the bytes under tes
 **It refuses rather than overwrites.** An existing application directory is refused whole:
 a scaffold that merged into one would leave a repository in a shape neither the command nor
 its author described. `tsconfig.json` is the exception, because a repository adding its
-second application already has one and it is theirs — it is reported, with the `include`
+second application already has one and it is theirs. It is reported, with the `include`
 entry to add, and left alone. A name must be one lowercase kebab-case segment, and must not
 be a directory `cli/layout.mjs` never reads as an application, because writing an
 application into `dist/` produces one nothing will ever build.
@@ -90,8 +90,8 @@ tsconfig base now breaks one module, and it breaks it inside `npm run check` rat
 a consumer's first afternoon. ADR-0068's "one more place to edit" is closed: the place is
 the module, and the probe is a caller.
 
-The emitted application is deliberately the smallest thing that runs — a component, a
-template, a signal and a lazy chunk — not the shape a real application takes. An
+The emitted application is deliberately the smallest thing that runs, a component, a
+template, a signal and a lazy chunk, rather than the shape a real application takes. An
 application with routes, a manifest-driven startup and a session replaces `main.js` with
 one call to `startHostedApplication` and keeps every other file as written. That is a
 choice worth naming: a scaffold that emitted the hosted-runtime shape would be a second,

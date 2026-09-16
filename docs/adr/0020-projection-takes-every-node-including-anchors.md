@@ -10,13 +10,13 @@ Content projection is done in light DOM, because shadow DOM would put Tailwind's
 classes out of reach. So the projected nodes have to be physically moved from the host
 into the `<x-content>` marker that renders them, and the question is which nodes travel.
 
-Taking only the elements looks right and is wrong. A `${…}` in the caller's template —
-which is what every `*if`, `*for` and `{{ }}` in projected content compiles to — is a
-lit `ChildPart`, and a ChildPart is a *range*: a comment node marks where it starts, the
+Taking only the elements looks right and is wrong. A `${…}` in the caller's template, which
+is what every `*if`, `*for` and `{{ }}` in projected content compiles to, is a lit
+`ChildPart`, and a ChildPart is a range. A comment node marks where it starts, the
 following node marks where it ends, and every update inserts and removes strictly between
 the two. Leave those two behind and the range still points at the host while its output
 has moved into the marker. The first render is correct and every render after it writes
-to the wrong parent — the stale branch survives inside the component and the new one
+to the wrong parent, so the stale branch survives inside the component and the new one
 appears outside it.
 
 Whitespace has the same problem for the same reason: a text node is frequently a part's
@@ -24,8 +24,8 @@ end anchor, and a range whose two ends sit in different parents throws on the ne
 
 ## Decision
 
-Capture removes *every* authored child node in document order — elements, comments and
-whitespace — so anchors travel with the content they anchor. Nodes are moved, never
+Capture removes every authored child node in document order, including elements, comments
+and whitespace, so anchors travel with the content they anchor. Nodes are moved, never
 cloned, so identity and event listeners survive.
 
 Non-elements go to the default bucket, because a comment carries no `slot` attribute to
@@ -38,8 +38,8 @@ render, which would make the whole mechanism order-dependent on lit internals.
 
 ## Consequences
 
-Projecting into a *named* slot requires a whole element — a bare `*if` cannot be given a
-slot name. That constraint is visible at the call site rather than silent, and
+Projecting into a named slot requires a whole element, because a bare `*if` cannot be given
+a slot name. That constraint is visible at the call site rather than silent, and
 `ui-sidebar-group.js` carries the note explaining it.
 
 Because the host is emptied before the first render, the authored children are in no

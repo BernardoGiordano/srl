@@ -18,7 +18,7 @@ Firefox or WebKit.
 That left two different gaps, and only one of them was about browsers.
 
 The first is composition. Each of those suites proves its own component in isolation, and
-the behaviour a user meets is all of them at once — a window that moves while a row is
+the behaviour a user meets is all of them at once. A window that moves while a row is
 selected and focus sits on it, an error that arrives after the user has already tabbed
 away from the field that earned it, a modal raised by a route guard that has to give focus
 back to whatever the user was in. No isolated case can fail when those interact, because
@@ -27,7 +27,7 @@ none of them is present when the others run.
 The second is the support claim itself. A repository that says nothing about browsers is
 at least not wrong; this one said nothing and shipped a component collection, which reads
 as "the usual ones". "The usual ones" is a claim with no owner, and the way it is usually
-repaired — naming engines in a configuration file — repairs the sentence rather than the
+repaired, by naming engines in a configuration file, repairs the sentence rather than the
 evidence. An engine in a config is a name. A recorded run is a fact about a build.
 
 Accessibility sat across both gaps. The components carry real ARIA and the suites assert
@@ -50,15 +50,15 @@ of a support claim is the bytes that ship.
 judgement about what a page looks like is in `observer.mjs`, evaluated inside the page and
 typed in `types.d.ts`; every judgement about what the application should do is in
 `journey.mjs`. A driver with a `selectRow()` on it would be the browser-compatibility
-module this arrangement exists to avoid — the same expectation written three times, free
-to mean three things.
+module this arrangement exists to avoid, with the same expectation written three times and
+free to mean three things.
 
 **Readings are taken through the accessibility surface.** Focus is `document.activeElement`
 and the name it carries. A field's error is the `role="alert"` paragraph its control points
 `aria-describedby` at. A combobox's highlight is `aria-activedescendant`. A window's
 position is `aria-rowindex` against `aria-rowcount`, and its selection is the count the
-page announces rather than the checked boxes it rendered — a window renders a slice, so
-counting boxes answers a different question. An assertion on a private field would pass on
+page announces rather than the checked boxes it rendered, because a window renders a slice
+and counting boxes answers a different question. An assertion on a private field would pass on
 an engine where a screen reader is told nothing, which is the failure this is for.
 
 **One per-engine fact is declared rather than hidden.** WebKit ships with full keyboard
@@ -68,8 +68,8 @@ a Safari user with default settings presses. `nextControl` names it, the journey
 engine needed.
 
 **The matrix is generated from a recorded run.** `npm run journey:record` runs the same
-journey and writes `tools/browser/journeys.json` — the engine builds, the machine, the
-date, the policy, and every step's own readings. `tools/checks/browser-check.mjs` turns
+journey and writes `tools/browser/journeys.json`, carrying the engine builds, the machine,
+the date, the policy, and every step's own readings. `tools/checks/browser-check.mjs` turns
 that into `docs/guide/browser-support.md` on the marker grammar the project index and the
 performance guide already use ([ADR-0099](0099-a-performance-claim-carries-its-standing.md)
 for the same argument about numbers), and `npm run docs:browsers` fails when the page
@@ -93,7 +93,7 @@ for and the one a window can get wrong.
 
 Three engines run in CI, so the claim decays the day one of them breaks rather than the
 day somebody checks. That costs a browser download step in `.github/workflows/ci.yml` and
-`playwright` in devDependencies — by a distance the largest thing in there, pinned exactly
+`playwright` in devDependencies, by a distance the largest thing in there, pinned exactly
 because the matrix quotes the build numbers its browsers report.
 
 The published page is longer and less flattering than a list of names. It prints the build
@@ -103,14 +103,14 @@ other screen in the application is proved on Chrome alone.
 
 Two limits are now written down rather than discovered. Keyboard focus in a windowed table
 can only reach rows the window rendered, so moving backwards stops at the first rendered
-row instead of pulling earlier rows in — inherent to
+row instead of pulling earlier rows in, which is inherent to
 [ADR-0107](0107-a-window-bounds-what-a-table-renders.md), and the journey moves forward and
 claims nothing else. And a passing engine is the build named in the matrix, not every
 version of it.
 
 One defect was found by writing this. `MovementsPage.rows` was a getter that built a new
 array on every read, which a window reads as a different list and answers by putting the
-scroll position back at the top — so ticking a checkbox sent the reader to row one and took
+scroll position back at the top, so ticking a checkbox sent the reader to row one and took
 focus with it. It is a `computed` now. Under pagination the same getter cost only a
 recompute, which is why nothing had noticed.
 

@@ -16,10 +16,10 @@ what they cover, and neither can fail when an installed extension does not activ
 when a contributed setting is spelled wrong, or when an editor's own provider never
 reaches the server.
 
-The behaviour docs/guide/editor-support.md promises — one server per folder, a project
-that is not srl left in silence, a restart that picks up an installed toolchain, watchers
-scoped to a project — was therefore knowledge held in two unrelated CI workflows and a
-manual page, and its only interaction test was a person trying it.
+The behaviour docs/guide/editor-support.md promises was therefore knowledge held in two
+unrelated CI workflows and a manual page, and its only interaction test was a person trying
+it. That behaviour is one server per folder, a project that is not srl left in silence, a
+restart that picks up an installed toolchain, and watchers scoped to a project.
 
 Rejected: `@vscode/test-electron` as the harness. It is the standard way to run one VS
 Code extension's tests, and this is not that: it is one description of what *every* srl
@@ -28,7 +28,7 @@ a version and spawning an editor is about sixty lines here; a per-editor harness
 have put the scenario list in whichever editor's test framework was written first, which
 is the arrangement being removed.
 
-Rejected: a headless entry point in the shipped WebStorm plugin — a
+Rejected: a headless entry point in the shipped WebStorm plugin, meaning a
 `com.intellij.appStarter` that opens the project, drives `LspServerManager` and prints
 answers. It would give WebStorm the language scenarios too. It also puts a test-only
 command inside the artifact every user installs, to buy coverage of a server that is
@@ -46,8 +46,8 @@ adapters over it.
 
 `scenarios.mjs` is the list, as data: an `ask`, the document and anchor it is made at, and
 what the answer must contain. Anchors are found by searching the fixture's own text, so a
-scaffold that gains a line does not move them. `fixture.mjs` builds four projects — two
-installed, one that declares srl without installing it, one that never asked — from the
+scaffold that gains a line does not move them. `fixture.mjs` builds four projects, two
+installed, one that declares srl without installing it and one that never asked, from the
 tarballs this repository would publish and the published `srl new`, sharing
 `tools/fixtures/installed-layout.mjs` with the packaged-install probe.
 
@@ -109,6 +109,6 @@ reports itself unavailable rather than failing when no such file is found.
 
 This reopens if the platform gains a way to ask an installed IntelliJ IDE for a completion
 from outside it, or if WebStorm language coverage becomes worth a headless starter in the
-shipped plugin — at which point the scenario list is already the thing that starter would
-be driven by. It also reopens if the fixture stops resembling what `srl new` writes, which
+shipped plugin, at which point the scenario list is already the thing that starter would be
+driven by. It also reopens if the fixture stops resembling what `srl new` writes, which
 would make the run prove an application nobody has.

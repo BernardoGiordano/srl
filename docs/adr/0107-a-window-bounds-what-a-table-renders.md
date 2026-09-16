@@ -9,7 +9,8 @@
 `ui-table` rendered one `<tr>` per row it was given, in every mode. `pagination="client"`
 and `"server"` bounded that with a page size, but `"none"` and `"infinite"` did not:
 `visibleRows` returned everything supplied and the template rendered all of it. Infinite
-loading is the one that reads like virtualisation and is not — it accumulates rows into a
+loading is the one that reads like virtualisation and is not, because it accumulates rows
+into a
 list that only grows, so the DOM grows with the dataset and the scroll gets heavier the
 longer the user reads.
 
@@ -36,8 +37,8 @@ written down rather than assumed, which is the part that was missing.
 
 The two windowed workloads measured 2.60 ms and 1.70 ms on a local run of the same machine
 the baseline came from, with 38 of the 10,000 rows in the DOM. That run is reported rather
-than gated — Chrome had moved from 151 to 152, so its environment profile is not the
-baseline's — which is exactly the standing
+than gated, because Chrome had moved from 151 to 152 so its environment profile is not the
+baseline's. That is exactly the standing
 [ADR-0099](0099-a-performance-claim-carries-its-standing.md) asks a claim to carry. What it
 shows is a limit with room in it: 2.60 ms against 16 ms leaves a machine six times slower
 still passing, and the 468.9 ms it replaces failing either way.
@@ -45,16 +46,16 @@ still passing, and the 468.9 ms it replaces failing either way.
 **The window decides what is rendered and nothing else.** `visibleRows` still means the
 rows on this page, and it is what the selection, the status line, `aria-rowcount` and the
 query are all measured against. `renderedRows` is the slice of it the DOM holds. Every
-question the row template asks — the key, whether the row is selected, which record to
-activate — is asked with `rowIndexAt(offset)` rather than with the loop index, because a
+question the row template asks, whether the key, the selected state or the record to
+activate, is asked with `rowIndexAt(offset)` rather than with the loop index, because a
 window renders row 8,412 in slot 3. Nothing about a windowed table's public behaviour
 differs from an unwindowed one except how much DOM exists.
 
 **It is opt-in, because it makes three promises the table cannot check.** `virtualized`
 asserts that the rows are uniform in height, that the table is its own scroller, and that
 fixed column layout is acceptable. A table that guessed at these would be wrong on the
-screens that wrap a cell to two lines, and wrong invisibly — the scrollbar would simply
-stop agreeing with the content.
+screens that wrap a cell to two lines, and wrong invisibly, because the scrollbar would
+simply stop agreeing with the content.
 
 **Two rows hold the scroll extent.** A spacer `<tr>` above and below carries the height the
 unrendered rows would have occupied, so the scrollbar describes the whole page rather than
@@ -91,7 +92,7 @@ scroller at 500 rows would change how a screen looks because its data grew, whic
 worse surprise than an attribute nobody set.
 
 **Rejected: a scroll helper beside the table.** Windowing is not separable from row
-identity, selection scope, focus, the header and the column widths — every one of those
+identity, selection scope, focus, the header and the column widths, and every one of those
 had to change. A helper that owned the viewport arithmetic and left the table to
 coordinate the rest would be the shallow module this decision exists to avoid.
 
