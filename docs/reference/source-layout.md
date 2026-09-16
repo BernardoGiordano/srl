@@ -245,7 +245,7 @@ tools/                      THIS REPOSITORY'S OWN TOOLS, published nowhere: the 
     package-bundle.mjs      source/dist/: the bundles a consumer with a bundler
                             installs and the declarations beside them, both resolved
                             out of the prefixes source is written against
-                            (ADR-0066, ADR-0066)
+                            (ADR-0066)
   benchmark/                the performance gate: workloads, baseline, budgets
   test/                     the Node-side suites for everything above
 

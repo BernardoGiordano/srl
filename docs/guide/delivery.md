@@ -327,11 +327,9 @@ only one of them exists in a browser:
 `dist/` is generated and not committed, exactly like an application's `app.css`. It has to
 exist before `npm publish`, and `npm run verify` fails naming the command when `exports`
 points at a file that is not there, so a release cannot ship a map that reaches outside its
-own tarball. Why the second shape exists at all is
-[ADR-0066](../adr/0066-the-package-serves-two-audiences.md); how it came to carry
-TypeScript declarations, emitted from the same JSDoc the first shape is typed by, is
-[ADR-0066](../adr/0066-the-package-serves-two-audiences.md). What a version bump
-means is [the changelog](../../CHANGELOG.md).
+own tarball. [ADR-0066](../adr/0066-the-package-serves-two-audiences.md) covers why the
+second shape exists and why it carries TypeScript declarations, emitted from the same
+JSDoc the first shape is typed by.
 
 ### Keeping a name out of the bundle
 

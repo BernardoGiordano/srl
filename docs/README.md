@@ -1,8 +1,8 @@
 # Documentation
 
-`README.md` is the interface: what this is, how to run it, one working component. This
-directory is the manual behind it. One subject per page, and the page that owns a subject
-owns all of it.
+`README.md` is the interface. It says what this is, how to run it, and shows one working
+component. This directory is the manual behind it, one subject per page, and the page that
+owns a subject owns all of it.
 
 ## Start here
 
@@ -42,4 +42,4 @@ owns all of it.
 ## Decision records
 
 [`adr/`](adr/) holds one decision per file, each with a number that never changes. Source
-comments cite them by number: `ADR-0003`, never a section or a path.
+comments cite them by number, so `ADR-0003` and never a section or a path.
