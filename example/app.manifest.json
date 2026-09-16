@@ -32,7 +32,7 @@
       "$comment": "Built on the shell's own stack: imports lit, the signal library and two elements from the shared collection by the specifiers index.html declares. Public, granted nothing, routed through the host context like every other remote.",
       "name": "billing",
       "url": "/remotes/billing/remote-entry.js",
-      "integrity": "sha384-HLqnaLov5aGmpi9pIJrYqry6OKZktl4L14V6QsdX2WDBgPWtgEORGo3NnFakHqg0",
+      "integrity": "sha384-XLq/ucrJO4xd00F/oUEHSak2OJTqag8j2aX7+fgs3Ez73mPayACfLGLiHXqFW6yC",
       "shared": [
         "@core/elements/component.js",
         "@core/elements/signal-element.js",
