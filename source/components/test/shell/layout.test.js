@@ -16,8 +16,8 @@ import '@components/shell/ui-menu.js';
  * The layout collection, in real Chrome, against the real files.
  *
  * The harness comes from the library's own suite by relative path rather than
- * through a specifier: it is a test utility, not part of the framework's
- * public surface, and the dependency direction (components -> lib) is the
+ * through a specifier, because it is a test utility rather than part of the
+ * framework's public surface. The dependency direction, components to lib, is the
  * allowed one either way.
  *
  * `currentPath` is written to directly instead of driving the router. These
@@ -92,7 +92,7 @@ describe('ui-sidebar', () => {
     await settled(sidebar);
 
     assert.ok(sidebar.collapsed, 'the toggle must reach the sidebar above it');
-    // The toggle owns no state: it re-renders because the sidebar's collapsed
+    // The toggle owns no state. It re-renders because the sidebar's collapsed
     // state is a signal, which its render reads.
     assert.equal(
       present(sidebar.querySelector('ui-sidebar-toggle button')).getAttribute('aria-expanded'),
@@ -122,8 +122,8 @@ describe('ui-sidebar-item', () => {
     await settled(item);
 
     assert.notOk(item.hasAttribute('data-active'));
-    // Absent, not "false": aria-current="false" announces the element as a
-    // current item in some screen readers.
+    // Absent rather than "false", because aria-current="false" announces the
+    // element as a current item in some screen readers.
     assert.notOk(present(item.querySelector('a')).hasAttribute('aria-current'));
   });
 
@@ -299,8 +299,9 @@ describe('ui-menu', () => {
       present(menu.querySelector('div[id]')).getAttribute('data-ui-part'),
       'menu-panel',
     );
-    // The component's own panel element, not the consumer's projected `.panel`
-    // inside it: aria-controls has to name the region the trigger owns.
+    // The component's own panel element rather than the consumer's projected
+    // `.panel` inside it, because aria-controls has to name the region the trigger
+    // owns.
     assert.equal(
       present(menu.querySelector('button')).getAttribute('aria-controls'),
       present(menu.querySelector('div[id]')).id,
@@ -408,12 +409,11 @@ describe('ui-app-shell', () => {
   });
 
   it('hands the parent a queryable outlet before the parent has mounted', async () => {
-    // The regression that made this rule exist. A projecting component captures
-    // and removes its children on connect and puts them back on its first
-    // render; if that render were asynchronous, the parent's own firstUpdated
-    // would run against a subtree that is briefly in no document, and
-    // `querySelector('main')` — how a shell finds its router outlet — would
-    // return null with no error to explain it.
+    // Why this rule exists. A projecting component captures and removes its
+    // children on connect and puts them back on its first render. If that render
+    // were asynchronous, the parent's own firstUpdated would run against a subtree
+    // briefly in no document, and `querySelector('main')`, which is how a shell
+    // finds its router outlet, would return null with no error to explain it.
     const shell = mount(`
       <ui-app-shell>
         <ui-sidebar slot="sidebar"><span>menu</span></ui-sidebar>

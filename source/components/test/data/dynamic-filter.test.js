@@ -177,7 +177,7 @@ describe('ui-dynamic-filter', () => {
     assert.ok(present(state.predicate)({ name: 'Milano srl' }, 'milan', 0));
     assert.notOk(present(state.predicate)({ name: 'Roma spa' }, 'milan', 0));
 
-    // One free entry at a time: the add-tag row is gone while one is held.
+    // One free entry at a time, so the add-tag row is gone while one is held.
     await type(filter, 'turin');
     assert.equal(filter.querySelector('[data-ui-part="combobox-add-tag"]'), null);
 

@@ -12,7 +12,7 @@ import '@components/data/ui-table.js';
 import '@components/data/ui-dynamic-filter.js';
 
 /**
- * Standard text: the interface that replaced forty label properties.
+ * Standard text, the interface that stands in for forty label properties.
  *
  * The claims worth holding on to are that an element resolves what it says about
  * itself, that a locale change re-resolves it in place, that a caller can still
@@ -79,7 +79,7 @@ describe('collection standard text', () => {
     configureCollectionText({ resolve: () => undefined });
 
     // Every standard string, so that no element can be carrying an English
-    // fallback of its own: with a resolver that answers nothing, each one is its
+    // fallback of its own. With a resolver that answers nothing, each one is its
     // own key.
     for (const [namespace, { names }] of Object.entries(STANDARD_TEXT)) {
       for (const name of names) {
@@ -196,7 +196,7 @@ describe('collection standard text', () => {
 
   it('follows a locale change through the default resolver, in place', async () => {
     // The default resolver is the message table, and this is the only case that
-    // exercises it: everything else here injects one.
+    // exercises it. Everything else here injects one.
     restoreStandardText();
     await configureI18n({
       defaultLocale: 'en',

@@ -1,17 +1,17 @@
 /**
  * The standard interaction text of the shared collection.
  *
- * One key per standard string, named by the collection and resolved here: an
- * element asks for `empty`, this module asks the resolver for `ui.table.empty`.
- * The application still owns the language — the key names a message in *its*
- * bundle, and nothing here ships prose in any language — but it owns it once per
- * application instead of once per element per screen. A property per string meant
- * two screens carrying forty label bindings, and a twenty-first affordance could
- * not be added without editing every caller.
+ * One key per standard string, named by the collection and resolved here. An
+ * element asks for `empty`, and this module asks the resolver for `ui.table.empty`.
+ * The application still owns the language, because the key names a message in its
+ * own bundle and nothing here ships prose in any language. It owns it once per
+ * application rather than once per element per screen. A property per string would
+ * mean two screens carrying forty label bindings, and no twenty-first affordance
+ * without editing every caller.
  *
  * Per-instance properties survive only where the wording names the data rather
- * than the interaction: `ui-table.emptyLabel`, `ui-combobox.notFoundLabel` and
- * `ui-combobox.addTagLabel`. "No employees yet" belongs to a screen; "Sort
+ * than the interaction, which is `ui-table.emptyLabel`, `ui-combobox.notFoundLabel`
+ * and `ui-combobox.addTagLabel`. "No employees yet" belongs to a screen, and "Sort
  * ascending by" belongs to a table.
  *
  * The resolver is a signal holding a function, and resolution happens inside the
@@ -20,8 +20,8 @@
  * invalidates the same way, because assigning one writes the signal.
  *
  * `undefined` from the resolver is a missing message and the key renders in its
- * place. The empty string is *not* missing — it is a deliberate "no words here",
- * which is what lets a range chip read `3/3 – 3/7` instead of `from 3/3 to 3/7`.
+ * place. The empty string is a deliberate "no words here" rather than a miss, which
+ * is what lets a range chip read `3/3 – 3/7` instead of `from 3/3 to 3/7`.
  */
 
 import { messageTable } from '@core/localization/i18n.js';
@@ -38,7 +38,7 @@ import { signal } from '@core/foundation/reactive.js';
  * Every standard string the collection asks for, and the element that asks.
  *
  * The inventory is here rather than written down somewhere, so it cannot drift
- * from the call sites: a name absent from this table resolves to the key itself
+ * from the call sites. A name absent from this table resolves to the key itself
  * rather than to a message, and never reaches the application's bundle.
  *
  * Nothing outside these four elements has standard text. `ui-table-column`
@@ -85,14 +85,14 @@ export const STANDARD_TEXT = {
     names: ['title', 'since', 'until', 'confirm', 'cancel', 'invalid'],
   },
   /**
-   * Error codes, not interaction labels, and the one namespace whose inventory is
-   * a *vocabulary*: every code `@core/forms/validators.js` can return, and nothing
-   * else. A code an application's server invents belongs to that application, and
-   * reaches the field through `ui-field.messages` rather than through here — see
-   * the note on that property for why the collection does not own it.
+   * Error codes rather than interaction labels, and the one namespace whose
+   * inventory is a vocabulary. It holds every code `@core/forms/validators.js` can
+   * return and nothing else. A code an application's server invents belongs to that
+   * application and reaches the field through `ui-field.messages`, and the note on
+   * that property says why the collection does not own it.
    *
-   * Shared by `ui-form-error`, which resolves a container's code the same way: one
-   * vocabulary, whether the rule was about a value or about a set of them.
+   * `ui-form-error` shares it and resolves a container's code the same way, so one
+   * vocabulary covers a rule about a value and a rule about a set of them.
    */
   field: {
     element: 'ui-field',
@@ -138,9 +138,9 @@ const resolver = signal(fromMessages);
 /**
  * Resolve standard text through something other than the message table.
  *
- * For an application whose copy lives elsewhere — a design-system service, a
- * server-rendered dictionary, a suite that must not depend on a fetched bundle.
- * Calling with no argument restores the message table.
+ * For an application whose copy lives elsewhere, such as a design-system service,
+ * a server-rendered dictionary, or a suite that must not depend on a fetched
+ * bundle. Calling with no argument restores the message table.
  *
  * A resolver that reads a signal of its own stays reactive for free. One that
  * does not is re-read whenever this is called again, which is the invalidation

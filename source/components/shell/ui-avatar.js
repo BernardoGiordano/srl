@@ -2,16 +2,16 @@ import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 
 /**
- * A user avatar: the picture when there is one, the initials when there is not,
- * and the initials again when the picture 404s.
+ * A user avatar. It shows the picture when there is one, the initials when there
+ * is not, and the initials again when the picture 404s.
  *
  *     <ui-avatar name="Name Surname" src="/avatars/7.png"
  *                image-class="…" fallback-class="…"></ui-avatar>
  *
  * The third case is the one worth having a component for. An `<img>` whose src
- * fails renders as a broken-image glyph inside a carefully styled circle, and
- * it happens in exactly the situation nobody tests: a real deployment where an
- * upload was deleted.
+ * fails renders as a broken-image glyph inside a carefully styled circle, and it
+ * happens in the situation nobody tests, a real deployment where an upload was
+ * deleted.
  */
 export class UiAvatar extends SignalElement {
   static properties = {

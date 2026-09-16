@@ -127,7 +127,7 @@ describe('ui-combobox', () => {
     await settled(combobox);
     assert.equal(combobox.value.length, 0);
 
-    // Four options, the last disabled: arrowing down four times wraps past it.
+    // Four options, the last disabled, so arrowing down four times wraps past it.
     for (let step = 0; step < 4; step += 1) await press(combobox, 'ArrowDown');
     await press(combobox, 'Enter');
 
@@ -160,7 +160,7 @@ describe('ui-combobox', () => {
     assert.notOk(combobox.open);
     assert.equal(input.getAttribute('aria-activedescendant'), null);
     assert.equal(input.getAttribute('aria-expanded'), 'false');
-    // The panel is gone, so the id it had is gone: a closed combobox that still
+    // The panel is gone, so the id it had is gone. A closed combobox that still
     // controls something names an element no screen reader can reach. ADR-0078.
     assert.equal(input.getAttribute('aria-controls'), null);
   });
@@ -244,9 +244,9 @@ describe('ui-combobox', () => {
   });
 
   /*
-   * A chip is a removable one of several. One answer is not several, so it is the
-   * input's text — what a `<select>` shows — and the clear button is the only way to
-   * unset it rather than the second of two.
+   * A chip is a removable one of several. One answer is not several, so it goes in
+   * the input's text, the way a `<select>` shows it, and the clear button is the
+   * only way to unset it rather than the second of two.
    */
   it('shows a single choice as text, not as a chip', async () => {
     const combobox = comboboxFixture();
@@ -262,7 +262,7 @@ describe('ui-combobox', () => {
     assert.equal(input.value, 'Grace Hopper');
     assert.notOk(input.getAttribute('placeholder'), 'a filled control does not prompt');
 
-    // Open, and the same box is the search field: the label would otherwise be
+    // Open, and the same box is the search field, so the label would otherwise be
     // typed into and become half a term.
     pointerDown(present(combobox.querySelector('[data-ui-part="combobox-control"]')));
     await settled(combobox);

@@ -4,14 +4,13 @@ import { effect } from '@core/foundation/reactive.js';
 import { currentPath } from '@core/navigation/router.js';
 
 /**
- * The outermost region of an enterprise layout: a sidebar beside everything
- * else, plus the one piece of behaviour that region always needs and nobody
- * enjoys rewriting — an off-canvas drawer on small screens.
+ * The outermost region of an enterprise layout, with a sidebar beside everything
+ * else and an off-canvas drawer on small screens.
  *
  * It renders no wrapper of its own. The host is the flex (or grid) container,
  * the application puts the classes on it, and the two `<x-content>` markers are
  * `display: contents`, so the projected sidebar and the projected main column
- * are the direct flex items:
+ * are the direct flex items.
  *
  *     <ui-app-shell class="flex min-h-screen" backdrop-class="fixed inset-0 z-20 bg-black/40">
  *       <ui-sidebar slot="sidebar" class="...">…</ui-sidebar>
@@ -20,9 +19,9 @@ import { currentPath } from '@core/navigation/router.js';
  *
  * What it owns:
  *
- *  - `data-drawer-open` on the host, so the sidebar's off-canvas position is a
- *    CSS concern (`group-data-drawer-open:translate-x-0`) rather than a class
- *    list this component would have to know about.
+ *  - `data-drawer-open` on the host, so the sidebar's off-canvas position stays a
+ *    CSS concern through `group-data-drawer-open:translate-x-0`, rather than a
+ *    class list this component would have to know about.
  *  - Escape closes the drawer.
  *  - A navigation closes the drawer, because a menu that stays over the page
  *    the user just navigated to is the single most common bug in this layout.

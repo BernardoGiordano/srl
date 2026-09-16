@@ -2,15 +2,14 @@
  * What "filtered" means, in the one place both sides of a filter can read it.
  *
  * `ui-dynamic-filter` produces filter descriptors and `ui-table` applies them, and
- * the two deliberately do not import each other: a screen wires them together with
+ * the two deliberately do not import each other. A screen wires them together with
  * one assignment, and either can be replaced without touching the other.
  *
- * The vocabulary is here — `ANY_COLUMN`, the three match modes, and the row
- * comparison itself — because a contract private to the table is a contract a rule
- * cannot express. With it inside the table, `'*'` was a string screens had to
- * know, `equals` could not be asked for so choosing *Sales* also selected
- * *Pre-Sales*, and a `daterange` rule matched nothing unless the screen wrote a
- * predicate by hand.
+ * The vocabulary lives here, meaning `ANY_COLUMN`, the three match modes and the
+ * row comparison itself. A contract private to the table is a contract a rule
+ * cannot express. Inside the table, `'*'` would be a string screens have to know,
+ * `equals` could not be asked for, and a `daterange` rule would match nothing
+ * unless the screen wrote a predicate by hand.
  *
  * It imports nothing and touches no DOM, so a third filter surface gets the same
  * meaning of "matches" for free, and testing it needs no render pass.
@@ -52,11 +51,10 @@ const DEFAULT_MATCH = 'contains';
 /**
  * The match each rule type means when the rule does not say.
  *
- * This is the table that was missing. A listed choice is an identity: the option
- * carries the value the field holds, so `equals` is what picking it means, and
- * substring matching there is a bug that looks like a feature until two of your
- * values share a prefix. Free text is the opposite — a person typing `mil` wants
- * `Milano` — and a range is neither.
+ * A listed choice is an identity. The option carries the value the field holds, so
+ * `equals` is what picking it means, and substring matching there is a bug that
+ * looks like a feature until two of your values share a prefix. Free text runs the
+ * other way, since a person typing `mil` wants `Milano`. A range is neither.
  *
  * @type {Readonly<Record<string, FilterMatch>>}
  */
@@ -98,8 +96,9 @@ export function readPath(source, path) {
 }
 
 /**
- * A value as comparable text: lower-cased, `Date` as its ISO form, anything with
- * no sensible text form as empty rather than `[object Object]`.
+ * A value as comparable text. It is lower-cased, a `Date` becomes its ISO form,
+ * and anything with no sensible text form becomes empty rather than
+ * `[object Object]`.
  *
  * @param {unknown} value
  * @returns {string}
@@ -121,9 +120,9 @@ export function normalizeText(value) {
 /**
  * Does this row satisfy this descriptor?
  *
- * An empty value matches everything: a filter the user has not filled in is not a
- * filter that excludes every row. A `predicate` wins over `match`, because a rule
- * that brought its own comparison meant it.
+ * An empty value matches everything, because a filter the user has not filled in
+ * is not a filter that excludes every row. A `predicate` wins over `match`, because
+ * a rule that brought its own comparison meant it.
  *
  * @param {unknown} row
  * @param {number} index
@@ -154,9 +153,9 @@ export function matchesRow(row, index, descriptor, columns) {
 }
 
 /**
- * The value a column filters on: its own `filterValue` if it declares one — a
- * formatted cell is what the user sees and therefore what they expect to search —
- * and otherwise the raw field.
+ * The value a column filters on, which is its own `filterValue` when it declares
+ * one and otherwise the raw field. A formatted cell is what the user sees, and
+ * therefore what they expect to search.
  *
  * @param {unknown} row
  * @param {number} index

@@ -12,19 +12,19 @@ import { defineComponent } from '@core/elements/component.js';
  *
  *     <ui-breadcrumb [.items]="trail" label="{{ t('app.breadcrumb') }}"></ui-breadcrumb>
  *
- * Data rather than slots because a trail is derived — from the route, from a
- * navigation model, from a record's ancestors — and expressing that as markup
- * means an `*for` at every call site plus the same three mistakes each time:
- * the last step linking to the page you are already on, the separator being a
- * real character a screen reader reads out, and `aria-current` missing.
+ * Data rather than slots, because a trail is derived from the route, a navigation
+ * model or a record's ancestors. Expressing that as markup means an `*for` at every
+ * call site plus the same three mistakes each time, which are the last step linking
+ * to the page you are already on, a separator that is a real character a screen
+ * reader reads out, and a missing `aria-current`.
  *
  * The last item is never a link, whatever the data says, because that is what
  * makes it the current page rather than an option.
  */
 export class UiBreadcrumb extends SignalElement {
   static properties = {
-    // A property, not an attribute: an array does not survive being stringified
-    // into one, and `[.items]` is the binding that exists for exactly this.
+    // A property rather than an attribute, because an array does not survive
+    // being stringified into one. `[.items]` exists for exactly this.
     items: { attribute: false },
     separator: { type: String },
     label: { type: String },
@@ -54,7 +54,7 @@ export class UiBreadcrumb extends SignalElement {
     const last = this.items.length - 1;
     return this.items.map((item, index) => ({
       // Index is part of the key because two steps may legitimately share a
-      // label — /accounts/acme/contacts/acme is not a contrived path.
+      // label, and /accounts/acme/contacts/acme is not a contrived path.
       key: `${String(index)}:${item.label}`,
       label: item.label,
       href: index === last ? undefined : item.href,

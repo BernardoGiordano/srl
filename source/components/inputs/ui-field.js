@@ -17,41 +17,33 @@ import { isFormControl, isNativeControl } from './form-control.js';
  *       <input id="cf-email" type="email" class="…" />
  *     </ui-field>
  *
- * WHAT IT REPLACES
+ * It replaces the label, the error paragraph, the three ARIA attributes tying
+ * them together, and the three bindings that wire a control to its state. That is
+ * 21 lines of markup per field, measured. The screen writes the control and the
+ * label.
  *
- * The label, the error paragraph, the three ARIA attributes tying them together,
- * and the three bindings that wire a control to its state — 21 lines of markup per
- * field, measured. The screen writes the control and the label.
- *
- * THE CONTROL STAYS THE CALLER'S
- *
- * It is projected, not generated, so the caller writes the element they already
- * know how to write and Tailwind reaches it. ADR-0028. A native `<input>`,
- * `<textarea>` or `<select>` needs nothing; anything else must implement
- * `FormControl` — see `form-control.js` — which is how `ui-combobox` becomes usable
- * as a form field despite holding options rather than a code.
- *
- * WHY IT BINDS IMPERATIVELY
+ * The control stays the caller's. It is projected rather than generated, so the
+ * caller writes the element they already know how to write and Tailwind reaches
+ * it. ADR-0028. A native `<input>`, `<textarea>` or `<select>` needs nothing, and
+ * anything else implements `FormControl` from `form-control.js`. That is how
+ * `ui-combobox` becomes usable as a form field despite holding options rather than
+ * a code.
  *
  * The wiring is an `effect` and two listeners rather than template bindings,
- * because the control is a node this element did not render. That is also why it
- * is idempotent and re-runs after every update: a control behind an `*if` in the
- * caller's markup is a different element after it comes back.
+ * because the control is a node this element did not render. It is idempotent and
+ * re-runs after every update, since a control behind an `*if` in the caller's
+ * markup is a different element after it comes back.
  *
- * DISABLED COMES FROM THE FIELD
+ * Disabled comes from the field, so this element has no `disabled` attribute.
+ * ADR-0007. A native control gets its `disabled` property set, a custom one gets
+ * `setDisabled`, and the host publishes `data-disabled` so the label and the error
+ * can be dimmed with it.
  *
- * There is no `disabled` attribute on this element; the state lives on the
- * `FormField`. ADR-0007. A native control gets its `disabled` property set; a
- * custom one gets `setDisabled`; the host publishes `data-disabled` so the label
- * and the error can be dimmed with it.
- *
- * ERROR TEXT
- *
- * The field carries a *code*; the sentence is resolved here. The collection's own
- * validator codes come from standard text under `ui.field.*`, so an application
- * gets sentences without configuring anything. Codes an application's server
- * invents — `taken` is the example's — come in through `messages`. Neither path
- * ships prose from this file.
+ * The field carries an error code and the sentence is resolved here. The
+ * collection's own validator codes come from standard text under `ui.field.*`, so
+ * an application gets sentences without configuring anything. Codes an
+ * application's server invents, such as the example's `taken`, come in through
+ * `messages`. Neither path ships prose from this file.
  */
 export class UiField extends SignalElement {
   static properties = {
@@ -77,7 +69,7 @@ export class UiField extends SignalElement {
   /**
    * Error codes this application's server can send, to sentences. Consulted
    * before standard text, so it can also override a collection message for one
-   * field — "This name is required" where the generic one is too vague.
+   * field, such as "This name is required" where the generic one is too vague.
    *
    * @type {Readonly<Record<string, string>>}
    */
@@ -101,10 +93,10 @@ export class UiField extends SignalElement {
   /**
    * The field the current wiring reads.
    *
-   * `field` is a Lit property rather than a signal, so the effect below has no
-   * reactive dependency on *which* field it is looking at — only on what that
-   * field contains. Rebinding therefore has to be noticed here, and a form that
-   * swaps a field without it goes on editing the previous one.
+   * `field` is a Lit property rather than a signal, so the effect below depends
+   * reactively on what the field contains and not on which field it is looking at.
+   * Rebinding therefore has to be noticed here, and a form that swaps a field
+   * without it goes on editing the previous one.
    *
    * @type {FormField<any> | null}
    */
@@ -186,8 +178,8 @@ export class UiField extends SignalElement {
   }
 
   /**
-   * Find the projected control and bind it. Idempotent: the common case is that
-   * nothing changed and this returns after one comparison.
+   * Find the projected control and bind it. Idempotent, and the common case is
+   * that nothing changed and this returns after one comparison.
    */
   #attach() {
     const found = this.#findControl();
@@ -215,16 +207,16 @@ export class UiField extends SignalElement {
       { signal: listeners.signal },
     );
 
-    // Capture, because `blur` does not bubble: a listener on this element would
+    // Capture, because `blur` does not bubble. A listener on this element would
     // never hear the control's, and a control that generates its own focusable
     // node does not fire one on itself at all.
     found.addEventListener('blur', () => this.field?.touch(), { signal: listeners.signal, capture: true });
 
     this.#describe(found);
 
-    // One effect for all three outputs. They change together — a value written
-    // back after a reset, an error appearing, the control's id being pointed at
-    // it — and three effects would be three subscriptions to the same field.
+    // One effect for all three outputs, because they change together. A value is
+    // written back after a reset, an error appears, the control's id is pointed
+    // at. Three effects would be three subscriptions to the same field.
     this.#stopWatching = effect(() => {
       const field = this.field;
       if (field === null) return;
@@ -240,13 +232,13 @@ export class UiField extends SignalElement {
         found.setAttribute('aria-invalid', String(invalid));
         if (describedBy === '') found.removeAttribute('aria-describedby');
         else found.setAttribute('aria-describedby', describedBy);
-        // The property, not the attribute: `disabled=""` and `disabled="false"`
-        // are both disabled, and a control the caller wrote with the attribute
-        // already on it would then never come back.
+        // The property rather than the attribute, because `disabled=""` and
+        // `disabled="false"` are both disabled, and a control the caller wrote
+        // with the attribute already on it would never come back.
         if (isNativeControl(found)) found.disabled = disabled;
       }
-      // State for a stylesheet, the same way the shell elements publish theirs —
-      // the label and the error are this element's markup, so a caller dimming a
+      // State for a stylesheet, the same way the shell elements publish theirs.
+      // The label and the error are this element's markup, so a caller dimming a
       // switched-off field has nothing else to hang a selector on.
       this.toggleAttribute('data-disabled', disabled);
     });
@@ -307,8 +299,8 @@ export class UiField extends SignalElement {
     // into it would hide that behind a value that looks almost plausible.
     const next = typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '';
     // Compared first, because assigning `value` moves the caret to the end in
-    // every browser — including when the assignment changes nothing, which is
-    // every keystroke if this is unconditional.
+    // every browser, including when the assignment changes nothing. Unconditional,
+    // that is every keystroke.
     if (control.value !== next) control.value = next;
   }
 }
@@ -324,12 +316,12 @@ export class UiField extends SignalElement {
  * user has just been told is fine and is the more surprising of the two.
  *
  * `invalidPath` rather than `firstInvalid`, because the two disagree on exactly
- * one answer and it is the one a group-level rule produces: `firstInvalid` says
+ * one answer and it is the one a group-level rule produces. `firstInvalid` says
  * `''` both for "nothing is wrong" and for "the group itself is", where
  * `invalidPath` says `null` for the first. A path of `''` is a `ui-form-error`
- * with no name — the message for a rule that belongs to no single control.
+ * with no name, which is the message for a rule that belongs to no single control.
  *
- * @param {ParentNode} root Where to look — usually the screen itself.
+ * @param {ParentNode} root Where to look, usually the screen itself.
  * @param {FormGroup<any>} group
  * @returns {boolean} Whether a target was found to focus.
  */

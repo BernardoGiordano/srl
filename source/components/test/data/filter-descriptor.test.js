@@ -10,9 +10,9 @@ import {
 } from '@components/data/filter-descriptor.js';
 
 /**
- * The point of this file is that there is no fixture in it: no element, no mount,
- * no render pass. What "filtered" means is a plain function over a row, and these
- * are the cases the two components used to agree on only by coincidence.
+ * There is no fixture in this file, no element, no mount and no render pass. What
+ * "filtered" means is a plain function over a row, and these are the cases both
+ * components have to agree on.
  */
 
 /** @type {readonly import('@components/data/filter-descriptor.js').FilterColumn[]} */
