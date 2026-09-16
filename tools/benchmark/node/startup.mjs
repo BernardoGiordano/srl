@@ -1,30 +1,23 @@
 /**
- * Startup and delivery workloads: what it costs to open the application.
+ * Startup and delivery workloads, measuring what it costs to open the application.
  *
- * WHY THESE ARE DRIVEN FROM NODE
- *
- * A startup measurement cannot be taken from inside a page that has already
- * started. By the time Node could evaluate anything, the import map has been
- * parsed, the root module has run and the first route has settled — so the
- * stopwatch is installed at document start instead, before the page's own scripts,
+ * They are driven from Node because a startup measurement cannot be taken from inside
+ * a page that has already started. By the time Node could evaluate anything, the
+ * import map has been parsed, the root module has run and the first route has settled.
+ * The stopwatch is installed at document start instead, before the page's own scripts,
  * and Node only reads what it recorded.
  *
- * WHAT "FIRST ROUTE SETTLEMENT" MEANS HERE
+ * First route settlement means the first element inside the shell's outlet. It is
+ * observed through a MutationObserver rather than by importing the router, for two
+ * reasons. At document start no bare specifier resolves yet, and an application's
+ * first view appearing is the fact a user experiences. It is the same moment
+ * `navigationSettled()` resolves for the entry navigation, arrived at without needing
+ * the router's cooperation.
  *
- * The first element inside the shell's outlet. Observed through a MutationObserver
- * rather than by importing the router, for two reasons: at document start no bare
- * specifier resolves yet, and an application's first view appearing is the fact a
- * user experiences. It is the same moment `navigationSettled()` resolves for the
- * entry navigation, arrived at without needing the router's cooperation.
- *
- * REQUESTS AND BYTES
- *
- * The same load answers the delivery questions, so they are one workload rather
- * than two loads measuring the same page: how many native module requests an entry
- * route costs, how many encoded bytes arrive, and how much of that is the
- * development Tailwind that production replaces with a compiled stylesheet.
- *
- * AND HOW MANY OF THEM WAITED FOR EACH OTHER
+ * The same load answers the delivery questions, so they are one workload rather than
+ * two loads measuring the same page. How many native module requests an entry route
+ * costs, how many encoded bytes arrive, and how much of that is the development
+ * Tailwind that production replaces with a compiled stylesheet.
  *
  * `chainDepth` is the third delivery fact, and the only one of the three that moves
  * when a transfer stops being discovered and starts being announced. The harness
@@ -53,9 +46,9 @@ const LOAD_TIMEOUT_MS = 30_000;
  * simply not gated. Repeated rather than imported because the harness reads the
  * page's performance timeline, not the library's module graph. ADR-0084.
  *
- * Exported so a test can hold it against the runtime's own `StartupStep` union: a step
- * added there and not here reports in the browser's timeline and gates nothing, which is
- * the exact shape of silence this list exists to end.
+ * Exported so a test can hold it against the runtime's own `StartupStep` union. A step
+ * added there and not here reports in the browser's timeline and gates nothing, which
+ * is the exact shape of silence this list exists to end.
  *
  * @type {readonly string[]}
  */
@@ -73,8 +66,8 @@ export const STARTUP_STEPS = [
 const STEP_MEASURE = 'srl:startup:';
 
 /**
- * `templates` becomes `stepTemplates`: one metric per step, so a regression inside
- * one step is a named number rather than 30 ms hidden in an 88 ms total.
+ * `templates` becomes `stepTemplates`, one metric per step, so a regression inside one
+ * step is a named number rather than 30 ms hidden in an 88 ms total.
  *
  * @param {string} step
  * @returns {string}
@@ -87,9 +80,9 @@ function stepMetric(step) {
 const STEP_UNITS = Object.fromEntries(STARTUP_STEPS.map((step) => [stepMetric(step), 'ms']));
 
 /**
- * The steps this load ran, as metrics. A step the application does not use is
- * absent rather than zero: a zero would average into the median as a real
- * measurement of work that never happened.
+ * The steps this load ran, as metrics. A step the application does not use is absent
+ * rather than zero, because a zero would average into the median as a real measurement
+ * of work that never happened.
  *
  * @param {Record<string, number> | undefined} steps
  * @returns {Record<string, number>}
@@ -117,8 +110,8 @@ const ARTIFACT_DECLARATIONS = (await apps())
 /**
  * The application's root custom element, read from its own index.html.
  *
- * Derived rather than configured: the root tag is already stated in the page the
- * browser loads, and a benchmark that repeated it would be the fifth place that
+ * Derived rather than configured, because the root tag is already stated in the page
+ * the browser loads and a benchmark that repeated it would be the fifth place that
  * fact lives.
  *
  * @param {string} appDir
@@ -135,8 +128,8 @@ async function rootTagOf(appDir) {
 }
 
 /**
- * The stopwatch, installed at document start. Plain script: no imports, because the
- * import map does not exist yet.
+ * The stopwatch, installed at document start. Plain script with no imports, because
+ * the import map does not exist yet.
  *
  * @param {string} rootTag
  * @returns {string}
@@ -378,11 +371,11 @@ const NAVIGATE_ROUTE_TOUR = `async (input) => {
 /**
  * The stated conditions one journey is measured under.
  *
- * 40 ms of added round-trip time on 5 Mbit/s down and 1 Mbit/s up: an ordinary broadband
- * or good mobile connection, and a round trip a user would not call slow. The numbers are
- * fixed rather than sampled because the point is repeatability — a chain that grows a hop
- * costs 40 ms more here on every machine, which is the fact `chainDepth` stands in for
- * everywhere else in this harness. ADR-0100.
+ * 40 ms of added round-trip time on 5 Mbit/s down and 1 Mbit/s up, which is an
+ * ordinary broadband or good mobile connection and a round trip a user would not call
+ * slow. The numbers are fixed rather than sampled because repeatability is what they
+ * are for. A chain that grows a hop costs 40 ms more here on every machine, which is
+ * the fact `chainDepth` stands in for everywhere else in this harness. ADR-0100.
  */
 const JOURNEY_NETWORK = {
   latencyMs: 40,
@@ -393,7 +386,7 @@ const JOURNEY_NETWORK = {
 /**
  * Sign in, then open a route, on one page clock.
  *
- * Both marks come back from one evaluation because the journey is one number: the time
+ * Both marks come back from one evaluation because the journey is one number, the time
  * from the document starting to the destination view being on screen. Reading it in two
  * calls would put protocol latency between the halves and then add it to the total.
  */
@@ -437,8 +430,8 @@ const JOURNEY = `async (input) => {
 /**
  * One journey, under stated network conditions, reported as one sample.
  *
- * Cold every time: the cache is off and the page is new, so the sample is what a user
- * opening the deployed application for the first time pays. ADR-0100.
+ * Cold every time, because the cache is off and the page is new, so the sample is what
+ * a user opening the deployed application for the first time pays. ADR-0100.
  *
  * @param {NodeWorkloadContext} context
  * @param {{ path: string, tag: string }} route
@@ -551,8 +544,8 @@ function routeSample(page, result, expectedPath) {
   const templates = requests.filter(
     (request) => request.url.endsWith('.html') || request.url.includes('/assets/template'),
   );
-  // Every request here belongs to the navigation: the recorder was reset immediately
-  // before it, so the whole set is the chain that navigation walked.
+  // Every request here belongs to the navigation, because the recorder was reset
+  // immediately before it, so the whole set is the chain that navigation walked.
   const chain = requestChain(requests);
   return {
     ok: true,
@@ -735,8 +728,8 @@ function artifactSize(context) {
       ok: true,
       metrics: {
         files: report.totals.files,
-        // The build's own derivation, not a second one: `chain` is admitted by
-        // `parseReport` against `chunks[].imports` before it reaches disk, so the
+        // The build's own derivation rather than a second one. `chain` is admitted
+        // by `parseReport` against `chunks[].imports` before it reaches disk, so the
         // gate below is on a number no browser had to be started to produce.
         chainDepth: report.chain.depth,
         rawBytes: report.totals.bytes,
@@ -918,12 +911,12 @@ export const STARTUP_WORKLOADS = [
     title: 'Native module requests and encoded bytes for the entry route',
     driver: 'node',
     /**
-     * Warmed and sampled like `startup/cold`, which loads the same page, because it
-     * had neither and its duration was a coin flip: two samples with no warmup put
+     * Warmed and sampled like `startup/cold`, which loads the same page. Without
+     * either, this workload's duration is a coin flip. Two samples with no warmup put
      * whatever the browser had not done yet into half the median, and the same
      * unchanged repository reported 86.5 ms and 103.8 ms in consecutive gated runs
-     * while `startup/cold` — three samples, one warmup — stayed within 2% of its
-     * baseline in both. The counts and the byte totals were never affected; they are
+     * while `startup/cold`, at three samples and one warmup, stayed within 2% of its
+     * baseline in both. The counts and the byte totals are never affected and are
      * identical in every run. A warmup sample cannot help the measurement either,
      * because `warm: false` gives each sample its own empty cache.
      */

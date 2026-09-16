@@ -5,12 +5,13 @@
  *                               [--only keyed] [--out path.json] [--update-baseline]
  *                               [--baseline path.json]
  *
- * `npm run benchmark` is the local, detailed profile: more samples, every workload.
+ * `npm run benchmark` is the local, detailed profile, with more samples and every
+ * workload.
  * `npm run benchmark:ci` is the gate: fewer samples, a bounded runtime, and a
  * non-zero exit when a median or p95 has regressed past the threshold in budgets.json
  * or an absolute product budget is exceeded.
  *
- * WHAT MAKES IT A GATE RATHER THAN A REPORT
+ * Five things make it a gate rather than a report.
  *
  *   1. A workload whose correctness check failed fails the run. Fast and wrong is
  *      not a result.
@@ -61,10 +62,10 @@ const HERE = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const BASELINE = join(HERE, 'baseline.json');
 
 /**
- * The dist-origin baseline is the application's, not the harness's: it records the
- * verified byte counts of one production artifact, which only that application can
- * produce. It therefore lives in the repository that owns the application —
- * `<repo>/benchmark/artifact-baseline.json` — and `--baseline` overrides both.
+ * The dist-origin baseline is the application's rather than the harness's. It records
+ * the verified byte counts of one production artifact, which only that application can
+ * produce, so it lives in the repository that owns the application, at
+ * `<repo>/benchmark/artifact-baseline.json`. `--baseline` overrides both.
  */
 const ARTIFACT_BASELINE = join(REPO, 'benchmark', 'artifact-baseline.json');
 const BUDGETS = join(HERE, 'budgets.json');
@@ -147,11 +148,11 @@ async function main() {
   const readings = [];
   const started = Date.now();
 
-  // Nothing is measured until the reference workloads repeat, because the first thing a
-  // freshly launched Chrome does is not representative of anything. Measured across two
-  // back-to-back ci runs: the first reading of a run reported the layout reference at
-  // 224 ms and 117 ms while the same reference two suites later reported 25 ms, and the
-  // startup workloads that ran in between inherited every bit of that. A browser
+  // Nothing is measured until the reference workloads repeat, because the first thing
+  // a freshly launched Chrome does is not representative of anything. Across two
+  // back-to-back ci runs the first reading reported the layout reference at 224 ms and
+  // 117 ms while the same reference two suites later reported 25 ms, and the startup
+  // workloads that ran in between inherited every bit of that. A browser
   // starting its GPU and network processes, the previous run's compiler processes
   // exiting, and a page that has never laid out a box are all transients, and a
   // benchmark that measures them reports them as the framework's cost.
@@ -169,10 +170,10 @@ async function main() {
       // A reference reading when each suite starts, on the same page machinery every
       // workload uses. Comparisons are scaled by it, so a laptop that warmed up between
       // the template suite and the collection suite stops reading as a repository-wide
-      // regression — and one that moved too far to trust says so. One reading per
-      // suite, not per contiguous block: the registry interleaves two suites whose
-      // workloads share a module, and a second reading of the same suite would be a
-      // reading nothing is compared against.
+      // regression, and one that moved too far to trust says so. One reading per
+      // suite rather than per contiguous block, because the registry interleaves two
+      // suites whose workloads share a module and a second reading of the same suite
+      // would be a reading nothing is compared against.
       if (!measured.has(workload.suite)) {
         measured.add(workload.suite);
         process.stderr.write(`  reference for ${workload.suite} ... `);
@@ -231,7 +232,8 @@ async function main() {
   const elapsedMs = Date.now() - started;
   const calibration = summariseCalibration(
     // A run that measured nothing still has to produce a record rather than crash on
-    // an empty list: the failure it needs to report is the one that stopped it.
+    // an empty list, because the failure it needs to report is the one that stopped
+    // it.
     readings.length > 0 ? readings : [{ suite: 'none', arithmetic: 0, layout: 0 }],
   );
   const { comparable, reason, speedBySuite } = comparability({
@@ -262,10 +264,10 @@ async function main() {
     results,
   };
 
-  // The run, as evidence: the same call the performance guide makes over the checked-in
-  // baselines. What this run covered and what each of its numbers is worth are decided
-  // once, so the report a person reads here and the tables a reader is pointed at cannot
-  // say different things about the same measurement.
+  // The run as evidence, through the same call the performance guide makes over the
+  // checked-in baselines. What this run covered and what each of its numbers is worth
+  // are decided once, so the report a person reads here and the tables a reader is
+  // pointed at cannot say different things about the same measurement.
   const gate = gateReason(baseline, baselinePath, originAdapter, reason);
   const pending =
     originAdapter === 'dist'
@@ -319,10 +321,10 @@ async function main() {
   const out = flag('out');
   if (out !== undefined) await writeResults(resolve(out), file);
 
-  // A baseline is the thing every later run is measured against, so it may not be
-  // recorded on a machine that was moving while it was measured: the spike lands in one
-  // suite's numbers and then reads as an improvement in every run after it. `--out`
-  // still writes, because a result file is a record of what happened.
+  // A baseline is what every later run is measured against, so it may not be recorded
+  // on a machine that was moving while it was measured. The spike lands in one suite's
+  // numbers and then reads as an improvement in every run after it. `--out` still
+  // writes, because a result file is a record of what happened.
   const unstable = unstableReference(calibration, budgets.maxRunSpread);
   let refused = false;
   if (process.argv.includes('--update-baseline')) {
@@ -356,8 +358,8 @@ async function main() {
 
 /**
  * Read the already-built artifact as one benchmark-origin adapter. The benchmark never
- * rebuilds or repairs it: bytes under measurement must already have crossed the artifact
- * verification interface.
+ * rebuilds or repairs it, because bytes under measurement must already have crossed the
+ * artifact verification interface.
  *
  * @param {{ name: string, dir: string }} app
  */
@@ -396,11 +398,11 @@ async function readArtifactOrigin(app) {
 /**
  * Take reference readings, discarding them, until two in a row agree.
  *
- * The tolerance is on both references at once: a machine still starting processes moves
- * one of them, and either one moving means the next reading is not yet describing the
- * machine the workloads will get. Bounded attempts, because a machine that never
+ * The tolerance is on both references at once. A machine still starting processes
+ * moves one of them, and either one moving means the next reading is not yet describing
+ * the machine the workloads will get. Bounded attempts, because a machine that never
  * settles is a fact about the environment and the run should proceed and report it
- * rather than spin — the spread check will refuse to gate it anyway.
+ * rather than spin. The spread check refuses to gate it anyway.
  *
  * @param {import('./types.js').BenchmarkBrowser} browser
  * @param {{ attempts: number, tolerance: number }} options
@@ -442,13 +444,13 @@ function agrees(first, second, tolerance) {
  *
  * Measured through the same page and the same sample loop as everything else, so their
  * own overhead is the overhead the workloads pay too. Sample counts are fixed here
- * rather than in the registry because these are not workloads anybody may filter out:
- * without them there is no scale factor, and without a scale factor the gate is a coin
+ * rather than in the registry because these are not workloads anybody may filter out.
+ * Without them there is no scale factor, and without a scale factor the gate is a coin
  * toss on a laptop.
  *
- * One page for both, and a fresh one per reading: the layout reference leaves 4,000
- * elements behind per sample for the scope to release, and a page that has done that
- * seven times is not the page the first reading measured.
+ * One page for both, and a fresh one per reading, because the layout reference leaves
+ * 4,000 elements behind per sample for the scope to release and a page that has done
+ * that seven times is not the page the first reading measured.
  *
  * @param {import('./types.js').BenchmarkBrowser} browser
  * @returns {Promise<ReferenceReading>}
@@ -492,11 +494,12 @@ async function referenceMedian(page, exportName) {
 /**
  * Read the baseline every comparison is made against, or nothing when there is none.
  *
- * Absent is a legitimate state — the first run of a new baseline file has to produce one
- * — and it is reported as such by `gateReason` rather than passed over. Present and
- * unreadable is not: a corrupt or half-written baseline that read as `null` would make a
- * run silently gate on nothing, which is the failure mode this whole harness exists to
- * avoid. So only ENOENT becomes null and everything else is thrown, naming the file.
+ * Absent is a legitimate state, because the first run of a new baseline file has to
+ * produce one, and `gateReason` reports it rather than passing over it. Present and
+ * unreadable is not. A corrupt or half-written baseline that read as `null` would make
+ * a run silently gate on nothing, which is the failure mode this whole harness exists
+ * to avoid. Only ENOENT becomes null, and everything else is thrown, naming the
+ * file.
  *
  * @param {string} path
  * @returns {Promise<BaselineFile | null>}

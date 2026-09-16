@@ -1,16 +1,17 @@
 /**
- * Editor workloads: what the language server costs the editor waiting on it.
+ * Editor workloads, measuring what the language server costs the editor waiting on
+ * it.
  *
  * One module owns the fixture repositories, the cold and warm session states, the sample
  * loops and the correctness a sample has to satisfy before its timing counts. Callers get
  * workload records like any other suite.
  *
- * The claim used to be one assertion in cli/test/live-analysis.test.mjs: a single
- * completion, under 1000 ms. The suites keep the ordering facts; the timings are here,
- * with a sample policy behind them. ADR-0096.
+ * As one assertion in cli/test/live-analysis.test.mjs the claim would be a single
+ * completion under 1000 ms. The suites keep the ordering facts, and the timings are
+ * here with a sample policy behind them. ADR-0096.
  *
- * Fixtures are copies of the selected application in a temporary root — 1x is one, 10x is
- * ten — because the srl checkout is a project no consumer has.
+ * Fixtures are copies of the selected application in a temporary root, one for 1x and
+ * ten for 10x, because the srl checkout is a project no consumer has.
  */
 
 import { cp, mkdtemp, readdir, readFile, symlink, writeFile } from 'node:fs/promises';
@@ -119,7 +120,8 @@ async function build(context, scale) {
   for (const path of templates) {
     documents.push({ uri: pathToFileURL(path).href, source: await readFile(path, 'utf8') });
   }
-  // The largest template is the one every interactive sample edits: most bindings, most
+  // The largest template is the one every interactive sample edits, with the most
+  // bindings and the most
   // work for the checker, and the answer a completion has to be built against.
   const primary = [...documents].sort((first, second) => second.source.length - first.source.length)[0];
   if (primary === undefined) throw new Error('No primary template.');
