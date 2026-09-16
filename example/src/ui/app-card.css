@@ -1,9 +1,5 @@
 /*
- * A custom element is `display: inline` until something says otherwise. An inline box
- * ignores vertical margins, so `space-y-*` between two cards produces no gap, and it
- * sits on a line box whose strut leaves its content low inside it. Which box a
- * component is belongs to the component, so it is said here rather than by each
- * layout it is dropped into.
+ * Make the host a block so card margins and vertical spacing take effect.
  */
 :host {
   display: block;

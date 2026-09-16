@@ -10,17 +10,9 @@ import { LIVE_FEED } from '../../services/live-feed.js';
 /** @import { StockEvent } from '../../services/live-feed.js' */
 
 /**
- * The live ticker: stock movements as they arrive, with no polling anywhere.
- *
- * Nothing in this component listens to anything. `LiveFeed` owns the one
- * `EventSource` and writes its frames into signals; this element reads those signals
- * and has therefore subscribed. When the panel is swapped out it stops rendering and
- * that is the whole of its teardown — no `removeEventListener`, no flag, no leak.
- *
- * `limit` arrives as a property from the outlet's `props`. It is a Lit reactive
- * property with no class field of its own, because a field would install an own data
- * property that shadows the accessor and silently disable the re-render — see the note
- * in `SignalElement`. The default lives in the getter instead.
+ * Show recent stock movements from `LiveFeed` signals. The outlet sets `limit` as
+ * a reactive property. Its default stays in the getter so a class field cannot
+ * shadow the reactive accessor.
  */
 export class LivePanel extends SignalElement {
   static properties = {
@@ -62,7 +54,7 @@ export class LivePanel extends SignalElement {
   }
 
   /**
-   * "12 seconds ago", in the active locale, from `Intl.RelativeTimeFormat`.
+   * Format the movement time for the active locale.
    *
    * @param {StockEvent} movement
    */

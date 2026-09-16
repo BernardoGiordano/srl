@@ -19,19 +19,8 @@ import { SALES_SERVICE } from '../../services/sales-service.js';
 /** @import { ComboboxOption } from '@components/inputs/ui-combobox.js' */
 
 /**
- * Customers: the client-paginated screen, and the one that uses `ui-combobox` directly.
- *
- * Forty-eight rows arrive in one request and `pagination="client"` filters, sorts and
- * slices them locally, so every interaction after the first is instant and costs no
- * round trip. The orders screen next door is the same table in `server` mode; the
- * difference between them is two attributes and where the work happens, which is the
- * reason both exist here.
- *
- * The filter is a searchable multi-select rather than `ui-dynamic-filter`, because this
- * screen filters on one field and a control holding one rule is a combobox. Its emitted
- * value becomes an ordinary filter descriptor with `match: 'equals'` — chosen
- * deliberately: with `contains`, selecting *smb* would also match nothing here, but
- * selecting *enterprise* in a list that also held *pre-enterprise* would match both.
+ * Load all customers once and let the table page them locally. A searchable
+ * combobox filters segments with exact matches.
  */
 export class CustomersPage extends SignalElement {
   #customers = resource(
@@ -46,9 +35,7 @@ export class CustomersPage extends SignalElement {
   segments = signal(/** @type {readonly unknown[]} */ ([]));
 
   /**
-   * The options, translated. A computed signal so a language change relabels them
-   * without this screen refetching anything — the values are stable codes and only the
-   * labels move.
+   * Translate option labels when the language changes.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<readonly ComboboxOption[]>}
    */
@@ -64,10 +51,7 @@ export class CustomersPage extends SignalElement {
   }
 
   /**
-   * The descriptors the table applies. Two of them at most: the text box and the
-   * segment selection. Rebuilt as a computed value rather than assigned from event
-   * handlers, so there is one definition of "what is filtered" instead of two writers
-   * racing to keep a third signal correct.
+   * Derive table filters from search text and selected segments.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<readonly { key: string, value: unknown, match?: 'equals' }[]>}
    */
@@ -91,9 +75,7 @@ export class CustomersPage extends SignalElement {
   }
 
   /**
-   * `selection-change` carries the chosen options, not their values: the label is what
-   * a chip renderer needs and the value is what a filter needs, so the element hands
-   * over both and the consumer takes what it uses.
+   * Read filter values from the chosen combobox options.
    *
    * @param {Event} event
    */
@@ -134,7 +116,7 @@ export class CustomersPage extends SignalElement {
     return inject(AUTH_SESSION).scopes.value.includes('sales:write');
   }
 
-  /** Why the control is disabled, as a title. Empty when it is not. */
+/** Explain why the control is disabled. */
   get writeHint() {
     return this.canWrite ? '' : t('customers.needsWriteScope');
   }
@@ -144,13 +126,7 @@ export class CustomersPage extends SignalElement {
   }
 
   /**
-   * The row's link to the customer.
-   *
-   * A plain link for everybody, because the detail screen opens in view mode and
-   * needs only `sales:read` — the entitlement question moved to the Edit control
-   * inside it. This used to render an em-dash for a session without `sales:write`,
-   * since the only destination was the write route and offering a link that is
-   * known to bounce to `/forbidden` is worse than not offering one.
+   * Link to a customer's read-only detail screen.
    *
    * @param {unknown} row
    */

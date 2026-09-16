@@ -4,8 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /**
- * Resolve the language server shipped by this repository or by the project's own
- * @srljs/cli. Using the project copy keeps the template grammar version-aligned.
+ * Find the project's language server, preferring its installed `@srljs/cli`.
  *
  * @param {string} root
  * @returns {string | null}
@@ -27,11 +26,7 @@ const DEPENDENCY_FIELDS = [
 ];
 
 /**
- * Whether the folder's own manifest asks for srl.
- *
- * A folder that names `@srljs/cli` but has no server on disk has dependencies to install,
- * which is worth saying. A folder that names neither package is not an srl project at
- * all, and a window that opens one HTML file should not be told its toolchain is broken.
+ * Check whether the folder declares srl in its manifest.
  *
  * @param {string} root
  * @returns {boolean}
@@ -51,8 +46,7 @@ function declaresSrl(root) {
 }
 
 /**
- * What one folder offers: the server to start, and whether its absence is a problem the
- * folder's owner can act on.
+ * Return the server path and whether the folder declares srl.
  *
  * @param {string} root
  * @returns {{ server: string | null, declared: boolean }}

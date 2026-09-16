@@ -6,9 +6,7 @@
     lead="{{ t('customers.lead') }}"
   >
     <!--
-      Rendered for everyone and disabled with a reason for a session that lacks
-      `sales:write`, which is the same rule the account screen follows: a control that
-      vanishes is indistinguishable from a broken page.
+      Explain why the write control is disabled when the scope is missing.
     -->
     <button
       slot="actions"

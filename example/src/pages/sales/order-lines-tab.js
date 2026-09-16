@@ -13,12 +13,7 @@ import { SALES_SERVICE } from '../../services/sales-service.js';
 /** @import { OrderLine } from '../../services/sales-service.js' */
 
 /**
- * The lines of one order: `pagination="none"`.
- *
- * Six rows do not need paging, and `none` is the mode for that — the table still sorts
- * and still applies filters, it just does not slice. Reaching for `client` here would
- * add a pager under six rows; reaching for a plain `<table>` would give up sorting and
- * the accessible column semantics `ui-table` already has.
+ * Show an order's few lines in a sortable table without a pager.
  */
 export class OrderLinesTab extends SignalElement {
   #lines = resource(
@@ -44,9 +39,7 @@ export class OrderLinesTab extends SignalElement {
   }
 
   /**
-   * Mounted before the route parameter exists — a tab rendered by a layout whose own
-   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
-   * true, which is what the screen should be showing.
+   * Wait for the route's order id before fetching lines.
    */
   load() {
     return (routeParams.value.id ?? '') === '' ? undefined : this.#lines.reload();

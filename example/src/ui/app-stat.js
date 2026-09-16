@@ -3,18 +3,8 @@ import { defineComponent } from '@core/elements/component.js';
 import { cur, num, t } from '@core/localization/i18n.js';
 
 /**
- * One KPI tile: a label, a number, and how it moved.
- *
- * The formatting is the point. `value` arrives as a number and `currency` as a code,
- * and the tile renders it through `cur()` or `num()` — both memoised per locale and
- * both reactive — so switching to Italian re-renders `1.234,50 €` from the same
- * property with no work anywhere else. Currency stays a property of the amount rather
- * than of the locale, which is the mistake that makes an English page render euros as
- * dollars.
- *
- * `delta` is a fraction, not a percentage: 0.062 renders as +6.2%, and the sign
- * decides the colour. A tile that received a pre-formatted string could do none of
- * this, which is why no server in this example ever sends one.
+ * Format a KPI value and its change for the active locale. `currency` names the
+ * amount's currency; `delta` is a signed fraction, such as 0.062 for 6.2%.
  */
 export class AppStat extends SignalElement {
   static properties = {
@@ -42,9 +32,7 @@ export class AppStat extends SignalElement {
   }
 
   get formattedDelta() {
-    // `signDisplay: 'always'` rather than a hand-written '+': the sign is a property
-    // of the locale's number formatting, and Arabic does not spell it with an ASCII
-    // plus.
+    // Let the locale format the sign as well as the number.
     return num(this.delta, { style: 'percent', maximumFractionDigits: 1, signDisplay: 'always' });
   }
 

@@ -1,36 +1,16 @@
 <!--
-  The chrome: a sidebar, a header, a title bar, and the outlet every screen inside
-  the application renders into.
-
-  Every custom element here comes from source/components and ships no CSS of its
-  own; every class here is Tailwind over the semantic tokens whose values come from
-  /components/theme-default.css. Nothing in this file computes a class list, and nothing in
-  it knows what a collapsed sidebar looks like — `data-collapsed` is published by
-  the element and read by the `group-data-collapsed/sidebar:` variants below.
+  The shared components provide the sidebar and header. Tailwind classes read
+  semantic tokens, and the outlet holds each child screen.
 -->
 <ui-app-shell
   class="group/shell flex min-h-screen bg-canvas"
   backdrop-class="fixed inset-0 z-20 bg-overlay lg:hidden"
 >
-  <!-- ─────────────────────────────────────────────────────── SIDEBAR ── -->
+<!-- Sidebar -->
   <!--
-    Two layouts in one element, and the breakpoint is written on every class that
-    belongs to only one of them.
-
-    Below `lg` this is an off-canvas drawer: taken out of flow and slid away by its
-    own width, in whichever direction "away" is — `-translate-x-full` in a
-    left-to-right document, `translate-x-full` in a right-to-left one, because the
-    drawer is anchored to `start` and `translate-x` is physical.
-
-    From `lg` up it is a column of the page that stays put: `sticky top-0` with
-    `h-screen`, so the menu scrolls inside itself and the status bar at its foot
-    sits on the bottom edge of the viewport rather than the bottom of the document.
-
-    The `max-lg:` prefixes are what make that work. Tailwind orders `rtl:` after
-    `lg:`, so an unqualified `rtl:translate-x-full` beat `lg:translate-x-0` and left
-    the desktop sidebar pushed a full width off the right edge of a right-to-left
-    page — present in the DOM, invisible on screen. Scoping the drawer's classes to
-    the drawer's breakpoint removes the contest rather than trying to win it.
+    Below `lg`, the sidebar slides out in the document's reading direction.
+    From `lg` up, it stays in the page. Scope both RTL transforms to the small
+    layout so they cannot shift the desktop sidebar.
   -->
   <ui-sidebar
     slot="sidebar"
@@ -58,19 +38,8 @@
       </span>
 
       <!--
-        The collapse control. It knows nothing about this sidebar: it walks up to
-        the nearest <ui-sidebar> when clicked, which is why the same element works
-        in the header below with for="drawer".
-
-        Its hover background has to stay opaque. The button straddles the seam
-        between the sidebar and the page, so a translucent `bg-accent/10` let the
-        dark sidebar show through and read as the button vanishing under the cursor
-        — most obviously in the light theme, where the resting `bg-surface` is white.
-
-        The chevron is mirrored with `rtl:-scale-x-100` rather than rotated again:
-        it has to point at whichever edge the sidebar collapses towards, and
-        mirroring composes correctly with the collapsed rotation where a second
-        `rtl:rotate-180` would just cancel it.
+        Keep the toggle's hover background opaque across the sidebar edge. Mirror
+        its chevron for RTL before the collapsed rotation applies.
       -->
       <ui-sidebar-toggle
         label="{{ t('a11y.toggleSidebar') }}"
@@ -93,9 +62,7 @@
 
     <nav class="flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 pb-6 pt-2">
       <!--
-        The dashboard is a leaf at the root, so it is a row rather than a group.
-        `exact` is what keeps it from staying highlighted on every other screen:
-        without it, `/` is a prefix of everything.
+        Match `/` exactly so the dashboard does not highlight on other routes.
       -->
       <ui-sidebar-item
         class="block"
@@ -168,7 +135,7 @@
           </svg>
         </span>
 
-        <!-- The wrapper spaces the rows; the `*for` no longer needs one. -->
+<!-- The wrapper spaces the rows. -->
         <div class="space-y-0.5">
           <ui-sidebar-item
             *for="leaf of section.children; key: leaf.key"
@@ -182,7 +149,7 @@
       </ui-sidebar-group>
     </nav>
 
-    <!-- The live stream's state, where a status bar belongs. -->
+<!-- Show live stream status. -->
     <div
       class="flex items-center gap-2 border-t border-white/10 px-5 py-3 text-[12px] text-sidebar-muted group-data-collapsed/sidebar:justify-center group-data-collapsed/sidebar:px-0"
     >
@@ -196,13 +163,10 @@
     </div>
   </ui-sidebar>
 
-  <!-- ──────────────────────────────────────────────────── MAIN COLUMN ── -->
+<!-- Main column -->
   <div class="flex min-w-0 flex-1 flex-col">
     <!--
-      Scrolls away with the page. `<ui-topbar>` supports being pinned — that is what
-      its `stuck-offset` and `data-stuck` are for — but this application does not
-      pin it: the sidebar is the fixed frame here, and a second stationary strip
-      under it costs 60px of every screen to repeat what the title bar already says.
+      Let the top bar scroll with the page while the sidebar stays in place.
     -->
     <ui-topbar class="flex h-[60px] shrink-0 items-center gap-1 bg-surface px-4 sm:px-6">
       <ui-sidebar-toggle
@@ -225,9 +189,7 @@
 
       <div class="ms-auto flex items-center gap-2">
         <!--
-          The whole language switch. `setLocale` writes a signal every `t()` reads,
-          so every mounted component re-renders in the new language with no reload,
-          no per-locale bundle and no subscription anywhere.
+          `setLocale` updates translated text without a page reload.
         -->
         <label
           class="relative flex h-9 items-center gap-1.5 rounded-lg border border-ui-border bg-surface-raised ps-2 text-muted transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent hover:bg-canvas"
@@ -394,9 +356,7 @@
     </div>
 
     <!--
-      Where every child route renders. `display: contents` by default, so this
-      element does not become a box between the flex column and the page; the class
-      makes it one deliberately, because every screen inside wants to grow.
+      Give the child outlet a box that can grow with the page.
     -->
     <x-route-outlet class="block min-w-0 flex-1"></x-route-outlet>
   </div>

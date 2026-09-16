@@ -1,159 +1,105 @@
 # Defining a component
 
-One declaration per component, and the only place its tag is written:
+A component declares its tag, class, template, and element dependencies in one
+place.
 
 ```js
 import { defineComponent } from '@core/elements/component.js';
-import { UiCard } from '@app/ui/ui-card.js';
+import { SignalElement } from '@core/elements/signal-element.js';
+import { AppCard } from '../ui/app-card.js';
 
 export class UsersPage extends SignalElement {
-  get rows() { return inject(USER_SERVICE).users; }       // returns the signal
-  get isLoading() { return inject(USER_SERVICE).isLoading; }
-  reload() { void inject(USER_SERVICE).reload(); }
+  rows = [];
 }
 
 await defineComponent({
   tag: 'users-page',
   element: UsersPage,
-  module: import.meta.url,   // the template is this module's sibling .html
-  uses: [UiCard],            // the elements this template names, as classes
+  module: import.meta.url,
+  uses: [AppCard],
 });
 ```
 
-- **The template is derived** from `module`: the sibling `.html`. A component that
-  builds its markup in `render()` declares `template: false`; one whose markup is
-  elsewhere names it with `template`. Renaming a module renames its template with it,
-  which a written-down URL could not.
-- **`uses` is the dependency, as a value.** A `.html` file cannot import, so
-  `<ui-card>` in this markup means `ui-card.js` must have evaluated. Naming the class
-  is a real ESM import, so module evaluation order guarantees it — a module body runs
-  after every module it imports, top-level `await` included. It is Angular's `imports`
-  array, and the template checker reads the same list: a tag the component does not
-  import is a build error naming the class to add.
-- **Nothing else names the tag.** `component: UsersPage` in a route,
-  `tag: UsersPage` as an `<x-outlet>` target, `load: () => import('…').then((m) =>
-  m.UsersPage)` for a lazy one, `tagOf(BillingRoot)` for a remote's `rootTag`, and
-  startup's `root` reading the class its `load` resolved. `tagOf` is the one place a
-  reference becomes a tag, and a class with no definition says so instead of mounting
-  nothing.
-- **A tag has one owner.** A second class claiming a defined tag is refused, naming
-  both classes and the module. Re-declaring the same class with the same tag is a
-  no-op, so a module served under two URLs cannot take the page down.
-- **The order inside the call is the point.** `uses` is validated, the template is
-  compiled, then the element is defined — `customElements.define` upgrades elements
-  already in the document and Lit renders on connection, so defining first would flash
-  empty markup. A component module ends with this call, which is what makes "the
-  module loaded" mean "the element can render".
-- **A registered class stays exported even when no JavaScript imports it.** The
-  template checker types a template against its element class by name through the
-  declaring module, so removing `export` typechecks and lints clean and then fails
-  `templates:check`. It is the one class of export whose only consumer is a static
-  tool.
+`module` finds the sibling `.html` template. A component with a handwritten
+`render()` declares `template: false`; another path can be given through
+`template`. Export the class so the static checker can type its template.
 
-`<x-outlet>` and `<x-route-outlet>` are components like any other and must be imported
-by the templates that name them. `<x-content>` is not: it is the projection marker the
-template dialect defines.
+`uses` lists the element classes named by the template. Their modules run
+before this definition, and the template checker reports a missing entry.
+Routes and outlets can refer to the class, so the tag remains in its
+definition. `defineComponent()` checks dependencies and compiles the template
+before registering the element. An existing tag owned by another class is an
+error.
 
-## Styling one component
+Import `<x-outlet>` and `<x-route-outlet>` when a template names them.
+`<x-content>` is a projection marker provided by the template dialect.
 
-A component that needs CSS of its own says so, and the file is its module's sibling:
+## Component styles
+
+Declare `styles: true` to load a sibling CSS file.
 
 ```js
-await defineComponent({ tag: 'app-card', element: AppCard, module: import.meta.url, styles: true });
+await defineComponent({
+  tag: 'app-card',
+  element: AppCard,
+  module: import.meta.url,
+  styles: true,
+});
 ```
 
 ```css
-/* app-card.css */
 :host { display: block; }
 .title { letter-spacing: 0.01em; }
 :host([flush]) > .body { padding: 0; }
-[data-theme='dark'] :host .title { color: var(--ui-color-text); }
 ```
 
-- **The rules reach this component and nothing else.** `.title` matches the `.title` this
-  component's template renders. It does not match a `.title` a caller projects into the
-  card, one inside another component, or one anywhere else on the page. The template
-  compiler stamps `data-ui-owner="app-card"` on the markup it renders, and every rule is
-  rewritten to require that stamp.
-- **`:host` is the element itself, and it answers for the nearest instance.** A flush card
-  does not flush the body of an unflushed card nested inside it. `:host` is also the only
-  way to name context outside the element, as the dark-theme rule above does.
-- **A utility class still wins.** The rules sit in Tailwind's `components` layer, above
-  preflight and under every utility, so `<app-card class="hidden">` hides the card.
-- **It is plain CSS.** Tailwind directives, `@import`, `@layer` and names the whole
-  document shares, such as `@keyframes`, are refused at their line by `npm run verify` and
-  by the browser. Utilities stay in the template, and colours come from `var(--ui-color-*)`.
-- **It needs a template of its own.** `template: false` with `styles: true` is refused, and
-  so are two styled components declared in one module.
-- **Development and production agree.** Source delivery fetches the file and adopts the
-  scoped rules before the tag is defined, and a saved edit replaces them in place. A build
-  scopes the same text with the same function and folds it into the one stylesheet.
-  [ADR-0119](../adr/0119-an-element-stylesheet-reaches-only-that-element.md).
+The template compiler marks markup rendered by this component. Its CSS rules
+are scoped to that markup, so a caller's projected content and nested
+components keep their own styles. `:host` selects the component instance.
+The rules use Tailwind's `components` layer, allowing utilities to override
+them.
 
-## Two rules that are easy to trip over
+Component CSS is plain CSS. `@import`, Tailwind directives, document-wide
+names such as `@keyframes`, and `@layer` are rejected. A styled component
+needs a template of its own. Development adopts the scoped file when the tag
+is defined and swaps its rules after an edit. A build uses the same rewrite
+and adds the result to its stylesheet.
 
-**Named content must be a whole element.** Content is projected by *moving* the
-authored child nodes into `<x-content>` markers, and which marker a node goes to is
-read from its `slot` attribute. A structural directive is the thing that decides
-whether an element exists at all, so it cannot carry that decision — everything it
-produces goes to the default slot. Targeting a named one means wrapping it:
+## Projection and reactive properties
+
+Named projected content needs a stable element with a `slot` attribute.
+A structural directive creates or removes its element, so wrap it when the
+result belongs in a named slot.
 
 ```html
 <ui-sidebar-group>
-  <span slot="trigger">…</span>            <!-- must exist to be named -->
+  <span slot="trigger">Sections</span>
   <ui-sidebar-item *for="child of node.children; key: child.key"></ui-sidebar-item>
 </ui-sidebar-group>
 ```
 
-In the default slot a structural directive stands on its own. `*for`, `*if` and
-`{{ }}` each compile to a lit binding, which is a *range* between two anchor nodes,
-and projection moves those anchors with the output they delimit — so an update lands
-where the first render did.
+Structural directives work in the default slot. Projection moves their
+anchor nodes with their rendered content, so later updates land in the same
+place. Inside SVG, a compiled `*for` or `*if` body is parsed as HTML.
+Build path data outside the directive, as `example/src/icons.js` does.
 
-**No structural directive inside an `<svg>`.** `*for`/`*if` compile their body into a
-lit template of its own, and lit parses every template as HTML: a `<path>` with no
-`<svg>` around it becomes an `HTMLUnknownElement` and draws nothing. Concatenate the
-subpaths into one `d` instead — see `example/src/icons.js`.
-
-**A class field silently disables the reactive property it initialises.** The shape
-that causes it is the one every Lit example uses:
+Lit reactive properties use prototype accessors. A class field of the same
+name creates an own property and can shadow that accessor.
 
 ```js
 static properties = { open: { type: Boolean, reflect: true } };
-open = false;                       // ← breaks `open` completely
+open = false;
 ```
 
-`static properties` defines an accessor on the prototype; a class field is installed
-with [[Define]], not [[Set]], so it creates an *own* data property that shadows the
-accessor. From then on `this.open = true` writes a plain value: no `requestUpdate`, no
-re-render, no reflection, and nothing throws. Lit handles the case for properties
-present before its constructor runs, but subclass field initialisers run after the
-base constructor returns. TypeScript users never see it, because
-`useDefineForClassFields: false` compiles fields down to assignments — precisely the
-compile step this project does not have. `SignalElement` deletes each shadowing field
-and writes it back through the accessor on connect.
+`SignalElement` repairs a shadowed reactive property on connect. A field that
+hides a method such as `render` is rejected because there is no accessor to
+restore. Rename the field or define a method. Template-facing names also
+share `HTMLElement`'s namespace, so names such as `title` and `children`
+may conflict.
 
-**A class field over a *method* is refused rather than repaired.** Same [[Define]] rule,
-different member:
+## Reading asynchronous data
 
-```js
-render = 'state';                   // ← hides render(), and nothing can hand it back
-```
-
-There is no accessor underneath to write the value through, so the element refuses on
-connect and names the field, the method it covers and the two ways out — write it as a
-method, or rename the field. `npm run verify` reports the same thing from the source, at
-the line that declared it, and so does the editor while the file is open. A field whose
-value *is* callable — `render = () => html\`...\`` — is a working override and is left
-alone. [ADR-0115](../adr/0115-a-field-may-not-hide-a-method.md).
-
-**A component's template surface shares a namespace with `HTMLElement`.** `id`,
-`title`, `hidden`, `lang` and `children` are taken. tsc reports the collision, so it is
-a compile-time annoyance rather than a runtime bug.
-
-## Reading one asynchronous thing
-
-A screen that fetches gets `resource()`, not an `AbortController`:
+Use `resource()` for one latest request tied to an element's lifetime.
 
 ```js
 import { resource } from '@core/foundation/resource.js';
@@ -168,12 +114,10 @@ export class OrdersPage extends SignalElement {
   });
 
   rows = computed(() => this.#page.value.value.rows);
-  loading = this.#page.pending;      // a signal; the template unwraps it
+  loading = this.#page.pending;
   failed = this.#page.failed;
 
-  onMount() {
-    void this.#page.reload();
-  }
+  onMount() { void this.#page.reload(); }
 
   /** @param {TableQuery} query */
   load(query) {
@@ -183,46 +127,18 @@ export class OrdersPage extends SignalElement {
 }
 ```
 
-- **`reload()` aborts the request in flight.** The response of a superseded request is
-  dropped rather than written, which is what stops the slowest answer from winning a
-  screen where the user paged twice while typing in a filter.
-- **The inputs are read inside the loader, and the reload is the event.** `#query` is a
-  field, not a parameter threaded through three handlers, and `retry()` is
-  `this.#page.reload()` with nothing to remember. The loader runs untracked, so calling
-  `reload()` from an `effect` over `routeParams` subscribes that effect to nothing the
-  request happened to read.
-- **`initial` is required, and `pending` starts true.** Both exist so the first paint —
-  which happens before `onMount` — has something to bind and shows the loading state
-  rather than an empty one.
-- **`lifetime: () => this.lifetime`, as a function.** `SignalElement` builds a new
-  lifetime signal after every re-attach; a captured one would be permanently aborted
-  after a DOM move. Given it, `onDestroy` has nothing to write.
-- **`failed` is a boolean, and a failed reload keeps the last value.** A screen that
-  needs the server's error code catches inside its own loader and returns a value
-  carrying it. A screen that must not show a stale record under a failure notice — a
-  detail header — reads `null` while `failed`, in a getter of its own.
-- **`reload()` also resolves with the value**, or `undefined` when the request was
-  superseded, aborted or rejected. That is the path for a load whose result is not what
-  the screen binds: applying a record to a `group()`, or appending a window to rows the
-  screen accumulates itself.
+`reload()` aborts the previous request and ignores an answer from an older
+one. The required `initial` value supports rendering before `onMount()`.
+`pending` starts true. Pass `lifetime` as a function so a reattached
+element uses its new signal.
 
-It is not a cache and not a store: no keying, no deduplication, no
-stale-while-revalidate. One value, one latest call. ADR-0076.
+A failed reload leaves the last value and sets `failed`. A detail screen can
+hide that old value while showing an error. `reload()` resolves with the new
+value, or `undefined` after an abort, superseded request, or failure. The
+caller can use that result to fill a form or append rows.
 
-## Sharing one settled record
-
-Two route levels that must agree after a write use an application state module over
-`resource()`. The order detail layout and summary tab both call:
-
-```js
-const order = inject(ORDER_RECORDS).watch(
-  () => routeParams.value.id ?? '',
-  this.lifetime,
-);
-```
-
-`OrderRecords` owns one resource per id while any reader is mounted. It follows parameter
-changes on reused routes, keeps the record while a tab changes, refreshes every reader after
-`setStatus()`, and deletes the entry on the final release. These are order-domain decisions,
-so the module lives in the application rather than `core`; it has no TTL or stale cache.
-ADR-0106.
+`resource()` owns one value and one latest call. An application can build a
+shared record store over it. The example's `OrderRecords.watch()` keeps one
+resource per order id while readers are mounted, follows route parameter
+changes, refreshes after a write, and releases the entry after the final
+reader leaves.

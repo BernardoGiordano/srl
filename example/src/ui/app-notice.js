@@ -2,15 +2,8 @@ import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 
 /**
- * What a screen says while it is loading, and what it says when the request failed.
- *
- * Every screen in this application has the same three non-happy states — busy, failed,
- * nothing to show — and each of them was three lines of markup per screen before this
- * existed. Now they are one element, and the wording still belongs to the caller: a
- * component that spelled "Loading…" itself could not be rendered in Arabic.
- *
- * `action` and the `action` event are how a failure offers a retry without this element
- * knowing what retrying means.
+ * Show loading, error, or empty states with caller-supplied text. The optional
+ * action emits an event so the caller can retry.
  */
 export class AppNotice extends SignalElement {
   static properties = {
@@ -41,9 +34,7 @@ export class AppNotice extends SignalElement {
   }
 
   /**
-   * A live region for the busy state only. An error is announced by the assertive
-   * region below; making both polite means a failed request says nothing at all to a
-   * screen reader that was not looking there.
+   * Announce loading politely. The error uses the assertive region below.
    */
   get liveness() {
     return this.variant === 'error' ? 'assertive' : 'polite';

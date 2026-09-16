@@ -19,19 +19,9 @@ import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
 /** @import { FilterRule, FilterState } from '@components/data/ui-dynamic-filter.js' */
 
 /**
- * The staff directory.
- *
- * Client pagination over one request, like the customers screen, and a name cell written
- * as markup: a `<template *fragment="cell(person of rows)">` inside the column, mounting
- * the collection's own `ui-avatar`. The cell is checked like the rest of the page, and
- * `person` has the type its `of` clause gives it, so a misspelled field is a build error
- * rather than a blank column.
- *
- * The `daterange` rule filters the hire date. Its presets are the interesting part: the
- * stored interval is half-open, so "the last two years" ends *tomorrow*, and a preset
- * marked `default: true` would apply on every visit without being written back. None is
- * marked here, because a directory that silently hides half the company on first load is
- * a support ticket.
+ * Load the staff directory once and let the table filter and page it locally.
+ * Hire-date presets use an exclusive end date. None applies by default, so a
+ * first visit shows the full roster.
  */
 export class EmployeesPage extends SignalElement {
   #employees = resource(
@@ -80,9 +70,7 @@ export class EmployeesPage extends SignalElement {
         group: t('people.status'),
         label: t('people.onLeaveOnly'),
         value: true,
-        // A `boolean` rule's value is `true`, and this column holds a word, so the
-        // comparison is spelled out. `condition` is the escape hatch for exactly this:
-        // a rule whose meaning is not "equals the column named by ref".
+        // Compare the boolean rule with the status word in the row.
         condition: (row) => /** @type {Employee} */ (row).status === 'leave',
       },
       {
@@ -117,7 +105,7 @@ export class EmployeesPage extends SignalElement {
     this.filters.value = next;
   }
 
-  /** The plain name, so sorting and free-text search do not see the markup. */
+/** Return the plain name for sorting and search. */
   /** @param {unknown} row */
   nameValue = (row) => /** @type {Employee} */ (row).name;
 
@@ -132,7 +120,7 @@ export class EmployeesPage extends SignalElement {
 }
 
 /**
- * The last `years` years, ending tomorrow because the stored end is exclusive.
+ * Return the last `years` years with an exclusive end tomorrow.
  *
  * @param {number} years
  */
@@ -144,7 +132,7 @@ function lastYears(years) {
 }
 
 /**
- * Everything before `years` years ago.
+ * Return dates before `years` years ago.
  *
  * @param {number} years
  */

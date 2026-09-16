@@ -22,11 +22,7 @@
     ></app-notice>
 
     <!--
-      The reconciliation aid the selection exists for: a net quantity over the
-      chosen rows, which is the one arithmetic a stock log is read for and the
-      one a windowed table must still get right when most rows are not in the
-      DOM. The count is announced, because ticking a checkbox changes a number
-      several rows away.
+      Announce the net quantity of selected rows, including rows outside the window.
     -->
     <p
       *if="selectionCount > 0"
@@ -45,11 +41,7 @@
     </p>
 
     <!--
-      A window rather than pages. The list grows from the top while the user
-      watches it, and a page number that means a different row every few seconds
-      is worse than no page number: the rows a window holds are the rows the
-      scroll position asks for, so an arriving movement moves the list rather
-      than the reader. ADR-0107, ADR-0116.
+      The window follows the scroll position as new rows arrive at the top.
     -->
     <ui-table
       state-id="inventory-movements"

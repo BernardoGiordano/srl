@@ -1,120 +1,67 @@
 # Contributing
 
-`npm run check` is the contract. It is what CI runs, and a change that passes it locally
-passes there. Everything below is how to get there faster than by running the whole chain
-after every edit.
-
-## Setup
+Use Node.js 22 or newer. Install development dependencies and run the
+repository checks before opening a change.
 
 ```bash
 npm install
 npm run check
 ```
 
-Node 22 or later. Nothing is installed to *run* the application — the browser loads the
-committed files, and `source/lib/vendor/` holds the three runtime dependencies. `npm
-install` exists so `tsc`, `eslint`, the test runner and the benchmark can resolve the same
-versions the browser is served.
+The application itself can run without an install. The browser loads committed
+source and the runtime files in `source/lib/vendor/`. The install supplies
+type checking, lint, tests, packaging, and benchmarks.
 
-## The chain, and what each link is for
+## Checks while editing
 
-| Command | Refuses |
+Run the narrow check for the files you changed, then `npm run check` before
+pushing.
+
+| Change | Check |
 |---|---|
-| `npm run typecheck` | A type error, in JavaScript checked from JSDoc and `.d.ts` beside it |
-| `npm run templates:check` | A binding to a property that does not exist, a tag with no definition, a directive misuse |
-| `npm run lint` | A style or correctness rule, type-aware |
-| `npm run test:tools` | A broken tool: the project model, the checks, the delivery pipeline |
-| `npm run vendor` | A vendored file whose bytes no longer match its integrity hash |
-| `npm run package` | A published bundle that will not build, or that still names `@core/` — a specifier only an import map resolves |
-| `npm run verify` | A dependency-rule violation, four descriptions of the interface disagreeing, and a message key the source names that no bundle declares |
-| `npm run docs:check` | A generated reference table that drifted from the project model |
-| `npm run docs:adr` | A malformed record, or a citation that resolves to nothing |
-| `npm test` | A browser suite, in real Chrome, against the real DOM |
+| JavaScript or JSDoc | `npm run typecheck && npm run lint` |
+| Component template or public members | `npm run templates:check` |
+| Tool or language server | `npm run test:tools` |
+| VS Code launcher | `npm run test:editors` |
+| Import map, manifest, dependencies, or message keys | `npm run verify` |
+| Generated documentation | `npm run docs:check && npm run docs:adr` |
+| Browser behavior | `APP=example npm test` |
+| Package contents | `npm run package && npm run pack:check` |
 
-Run the narrow one while you work and the whole chain before you push.
+The [getting-started guide](docs/getting-started.md) explains the main commands.
+The [performance guide](docs/guide/performance.md) explains the separate
+benchmark gate.
 
-## The rules a change is judged by
+## Code boundaries
 
-Three of them are enforced, and the checks name themselves when they fail.
+`source/lib/core/` does not import authentication or application code.
+`source/` does not depend on the example or repository tools.
+`npm run verify` enforces these rules. The
+[architecture map](docs/architecture.md) shows the dependency direction.
 
-**The dependency rule.** `source/lib/core/` may not import `source/lib/auth/`, and nothing
-outside `source/` is reachable from inside it. `npm run verify` is the enforcement.
-[The architecture map](docs/architecture.md) is the explanation.
+`source/package.json` declares browser mounts, import prefixes, bundles, and
+vendored dependencies. The generated import map and the root TypeScript paths
+must agree with it. Update the declaration and run the verifier when adding a
+published module.
 
-**The interface is declared once.** `source/package.json` says what the library publishes —
-the mounts, the specifier prefixes, the bundles, the vendored dependencies. The `exports`
-map, the generated import-map fragment, each application's inline map and the root
-`tsconfig` paths are all derived from it or checked against it. Adding a layer is one edit
-there, not five: `npm run verify` refuses a prefix that no bundle is a barrel over, so the
-consumer who installs from a registry reaches it for the same reason a browser does
-([ADR-0066](docs/adr/0066-the-package-serves-two-audiences.md)).
-
-**Reasoning goes in a record, not a comment.** A source comment says why *that line* is the
-way it is. The narrative — what was tried, what it cost, what would reopen it — is a file
-under [`docs/adr/`](docs/adr/), cited by a number that never changes:
-
-```js
-// Deepest-first, so the specific question reaches the user first. ADR-0004.
-```
-
-Start a new record from [the template](docs/adr/0000-template.md), give it the next free
-number, and run `npm run docs:adr:write` to regenerate the index. `npm run docs:adr` fails
-on a citation that resolves to nothing, so deleting a record means rewriting the prose that
-cited it.
-
-## Where things go
-
-```
-source/lib/         the framework. Depends on nothing outside itself
-source/components/  the shared collection, built on source/lib
-source/dist/        generated: the bundles `npm run package` emits. Never edited
-example/            an application. Any root directory with an index.html is one
-cli/                the toolchain, and a package of its own: everything a repository
-                    built on srl needs. Extracting it is a file move
-tools/              the tools that only make sense in this repository. Published nowhere
-docs/               the manual; docs/adr/ the reasoning
-```
-
-`source/README.md` is the package's npm landing page and `source/LICENSE` a checked copy
-of the root one; both address the consumer reading a registry rather than this repository,
-which is why they are the one documented exception to the no-nested-READMEs rule above.
-A change to the published interface gets a line in [the changelog](CHANGELOG.md).
-
-There are no nested READMEs. A manual in the directory somebody edits first is the one that
-goes stale; [the documentation policy](docs/documentation.md) says where each kind of
-knowledge lives instead.
-
-Types live beside the code they describe: each subsystem owns a `types.d.ts` next to its
-modules, and `@core/foundation/types.js` holds only what every subsystem needs and no
-subsystem owns.
+Keep JSDoc types beside JavaScript. A source comment should explain a local
+rule or surprising choice. Put a longer decision and its tradeoffs in
+[an ADR](docs/adr/), then cite its number near the code. Start from the
+[template](docs/adr/0000-template.md) and run `npm run docs:adr:write` after
+adding a record.
 
 ## Tests
 
-Browser suites run in real Chrome against the real DOM. HTTP is the only boundary a suite
-fakes — no mocked router, no mocked storage, no mocked component.
+Browser suites use Chrome and the real DOM. The application tests replace
+HTTP at their boundary. Use the shared settling helper and manual clock
+rather than timing guesses. [Writing tests](docs/guide/testing.md) has the
+test conventions.
 
-```bash
-npm test                      # every suite
-APP=example npm test          # the library suite plus that application's
-npm run test:tools            # the Node-side tools, no browser
-```
+The [editor guide](docs/guide/editor-support.md#installed-editor-checks)
+explains conformance runs against installed VS Code and WebStorm clients.
 
-[Writing a test](docs/guide/testing.md) has the rules the existing suites already learned.
+## Pull requests
 
-The editor plugins have one more, outside the chain because it downloads an editor:
-`npm run conformance` installs the packed extension into a real VS Code and drives it
-against a project built from the tarballs this repository would publish
-([editor support](docs/guide/editor-support.md#conformance)).
-
-## Performance
-
-`npm run benchmark` measures against committed budgets. A regression has to be both
-relatively and absolutely large before the gate fails, and a result carries the environment
-that produced it — a number from your laptop and a number from CI are not comparable, which
-is why the harness records which one it was.
-
-## Opening a change
-
-Small and self-contained beats large and thorough. Say what you measured if the change is
-about performance, and add a record if the change is a decision somebody could reasonably
-reverse without knowing why it was made.
+Describe the behavior changed, the checks run, and any measurement behind a
+performance claim. Keep a change focused enough that its tests and reasoning
+can be reviewed together.

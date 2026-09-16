@@ -1,18 +1,8 @@
 'use strict';
 
 /**
- * The srl language sessions of one VS Code window.
- *
- * A session is one workspace folder's client, the resources that live exactly as long as
- * it, and the settings that decide how it starts. That used to be spread across activate,
- * start and stop: a file watcher created beside the client and disposed only when the
- * client failed to start, a restart that raced its own stop, and a trace setting the
- * client never read because its id did not match the contributed key. Callers now say
- * start, stop or restart, and hold no cleanup knowledge of their own. ADR-0090.
- *
- * Everything the editor supplies is injected, so the lifecycle can be driven by a test
- * without VS Code running: `vscode` for windows and configuration, `createClient` for the
- * language client, and `locate` for what a folder offers.
+ * Own one language client per VS Code workspace folder. Dependencies are injected
+ * so tests can drive the lifecycle without opening VS Code.
  */
 class SrlSessions {
   /** @type {any} */
@@ -23,7 +13,7 @@ class SrlSessions {
   #locate;
   /** Running clients, by workspace-folder key. @type {Map<string, any>} */
   #clients = new Map();
-  /** One task at a time per folder, so a start cannot overtake its own stop. @type {Map<string, Promise<void>>} */
+/** Serialize lifecycle tasks per folder. @type {Map<string, Promise<void>>} */
   #work = new Map();
 
   /**
@@ -44,9 +34,7 @@ class SrlSessions {
   }
 
   /**
-   * Serve one workspace folder. A folder already served, or holding no srl toolchain, is
-   * left alone; a folder whose project asked for srl and has none installed is reported,
-   * because that is the one case its owner can fix.
+   * Start a folder's server or report its missing declared toolchain.
    *
    * @param {any} folder
    * @returns {Promise<'running' | 'absent' | 'reported'>} What the folder was told, so a
@@ -82,8 +70,7 @@ class SrlSessions {
   }
 
   /**
-   * Stop one folder's session and release everything it owns. The client disposes the
-   * watchers it registered for the server, so stopping is the whole of the cleanup.
+   * Stop a folder's client and release its watchers.
    *
    * @param {string} key
    * @returns {Promise<void>}
@@ -104,13 +91,7 @@ class SrlSessions {
   }
 
   /**
-   * Restart every session in the window and pick up folders that gained a toolchain since
-   * the last attempt. Sessions for folders that are gone are stopped rather than left
-   * running against a directory nobody has open.
-   *
-   * A restart that leaves the window with nothing running says so, unless a folder has
-   * already said something more specific. Restarting used to be the one command that
-   * could do nothing at all and report nothing at all.
+   * Restart open folders, stop removed ones, and check for newly installed tools.
    *
    * @param {readonly any[]} folders
    * @returns {Promise<void>}
@@ -130,9 +111,7 @@ class SrlSessions {
   }
 
   /**
-   * Apply a settings change. `srl.nodePath` chooses the executable the server runs under,
-   * which is read when the process is spawned, so the folders it changed for are
-   * restarted rather than left running under the previous interpreter.
+   * Restart affected folders when their Node executable setting changes.
    *
    * @param {{ affectsConfiguration(section: string, scope?: any): boolean }} event
    * @param {readonly any[]} folders
@@ -154,24 +133,9 @@ class SrlSessions {
   }
 
   /**
-   * How one folder's server is started and what it is asked about.
-   *
-   * The client id is the extension's settings section rather than a per-folder name: a
-   * language client reads its trace level from `<id>.trace.server`, so an id of `srl-0`
-   * looked for `srl-0.trace.server`, which nothing contributes and nobody can set. The
-   * output channel keeps the folder in its name, which is what a multi-root window
-   * actually needs to tell two servers apart.
-   *
-   * No `synchronize.fileEvents` here: the server registers the watchers it needs, scoped
-   * to the project it serves, and the client owns and disposes them.
-   *
-   * The selector's patterns are absolute glob strings rather than `RelativePattern`s. A
-   * language client round-trips this selector through the protocol before it registers
-   * the editor's providers with it, and a `RelativePattern` does not survive that trip:
-   * it converts to `undefined`, which leaves each folder's providers claiming every
-   * folder's files. Two srl projects in one window then answered each other's requests —
-   * a rename in one edited the other's files. A string is matched against the document's
-   * absolute path and comes back as itself. ADR-0097.
+   * Start one folder's language client. Use the `srl` id for trace settings and a
+   * folder-specific output channel. Absolute glob strings keep multi-root document
+   * selectors scoped to their own folders after protocol conversion.
    *
    * @param {any} folder
    * @param {string} root
@@ -199,9 +163,7 @@ class SrlSessions {
   }
 
   /**
-   * Run `task` after whatever this folder was already doing. Start, stop and restart all
-   * mutate the same client, and a restart issued while a start is still in flight used to
-   * leave the window with a stopped session it believed was running.
+   * Run lifecycle tasks in order for one folder.
    *
    * @template T
    * @param {string} key
@@ -211,8 +173,7 @@ class SrlSessions {
   #queue(key, task) {
     const previous = this.#work.get(key) ?? Promise.resolve();
     const next = previous.then(task);
-    // The stored chain swallows failures so one folder's error cannot strand the next
-    // task queued behind it. The returned promise still carries it to the caller.
+    // Keep the queue moving while returning failures to callers.
     this.#work.set(
       key,
       next.then(
@@ -225,8 +186,7 @@ class SrlSessions {
 }
 
 /**
- * The folder's path as a glob prefix. Separators are `/` on every platform: a glob is
- * matched against the path, and a Windows backslash reads as an escape.
+ * Turn a folder path into a glob prefix with forward slashes.
  *
  * @param {any} folder
  * @returns {string}

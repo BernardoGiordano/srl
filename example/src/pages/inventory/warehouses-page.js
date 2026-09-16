@@ -12,12 +12,8 @@ import { INVENTORY_SERVICE } from '../../services/inventory-service.js';
 /** @import { Warehouse } from '../../services/inventory-service.js' */
 
 /**
- * Warehouses: six of them, so no table.
- *
- * The screen exists to make the point that not every collection is a grid. Six records
- * with four numbers each read better as cards, `ui-table` would add a pager and a column
- * chooser nobody needs, and the utilisation bar is a `<meter>` — a native element with a
- * native accessible value, which is what the div-with-a-width version throws away.
+ * Show the six warehouses as cards. A native `<meter>` reports each warehouse's
+ * utilisation to visual and assistive readers.
  */
 export class WarehousesPage extends SignalElement {
   #warehouses = resource(

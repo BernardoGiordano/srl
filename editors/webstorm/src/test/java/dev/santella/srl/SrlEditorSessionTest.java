@@ -13,8 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * What a project is told when a file is opened in it. The assertions are project outcomes,
- * not resolved paths: silence, a message its owner can act on, or a started server.
+ * Check whether opening a project starts a server, reports a problem, or stays quiet.
  */
 final class SrlEditorSessionTest {
   private static final String IN_REPOSITORY = "cli/language-server/server.mjs";

@@ -1,145 +1,81 @@
-# The template language and static checking
+# Templates and static checking
+
+Components can keep their markup in a sibling `.html` file. The runtime compiles
+that file when the component is defined, and the checker reads the same
+template grammar before the page runs.
 
 ```html
-<!-- every construct at once; the real ones are under example/src/pages/ -->
 <h1>{{ t('users.title') }}</h1>
-<span>{{ t('users.count', { count: rows.length }) }}</span>
 <button [?disabled]="isLoading" (click)="reload()">{{ t('users.reload') }}</button>
-
 <p *if="error">{{ error }}</p>
-
 <ul *else>
   <li *for="user of rows; key: user.id">
     <a [href]="'/users/' + user.id">{{ user.name }}</a>
-    <span class="rounded px-1.5 {{ statusClasses(user) }}">{{ t(statusKey(user)) }}</span>
   </li>
 </ul>
 ```
 
 | Syntax | Meaning |
 |---|---|
-| `{{ expr }}` | text and attribute interpolation |
-| `[href]="expr"` | attribute binding |
-| `[?disabled]="expr"` | boolean attribute, removed when false |
-| `[.limit]="expr"` | property binding; `[.max-rows]` sets `maxRows` |
-| `(click)="expr"` | event listener, with `$event` in scope |
-| `*if` / `*else` | conditional; `*else` goes on the next element |
-| `*for="u of users; key: u.id; index as i"` | repetition, keyed |
-| `<template *fragment="cell(row of rows)">` | markup another element renders, with locals |
-| `&expr` | resolve without unwrapping a signal |
+| `{{ expr }}` | Interpolate text or an attribute. |
+| `[href]="expr"` | Bind an attribute. |
+| `[?disabled]="expr"` | Add or remove a boolean attribute. |
+| `[.limit]="expr"` | Bind a property. Kebab-case names map to camelCase. |
+| `(click)="expr"` | Handle an event with `$event` in scope. |
+| `*if` and `*else` | Render one branch. |
+| `*for="u of users; key: u.id"` | Render keyed items. |
+| `<template *fragment="cell(row of rows)">` | Pass markup to another element. |
+| `&expr` | Pass a signal without unwrapping it. |
 
-Each compiled binding tracks its own signal dependencies and updates its own Lit part.
-Changing a signal used by one interpolation, attribute, property or structural
-directive does not reevaluate the component's unrelated bindings or call `render()`
-again. A hand-written JavaScript `render()` stays tracked at component granularity.
+Each compiled binding tracks the signals it reads and updates its own DOM
+part. A handwritten `render()` tracks at component granularity.
 
-## Why it is not slow
+## Loading and caching
 
-lit-html caches a parsed template against the **identity** of the
-`TemplateStringsArray` it was tagged with, and that array does not have to come from a
-literal in source: an array carrying a `raw` property behaves identically. Verified in
-real Chrome before any of this was designed — a hand-built strings array renders
-through lit's `html` tag; the same array on a second render patches the existing DOM in
-place; a different array with byte-identical contents builds fresh elements.
+The compiler creates one stable Lit template identity per template URL. The
+browser fetches and compiles it once; later renders patch existing DOM. It
+caches the in-flight promise too, so simultaneous mounts share one fetch and
+compile.
 
-So each `.html` file is fetched once, walked once, and compiled to exactly one strings
-array plus one closure per binding. Every render after that hands lit the same array:
-no re-parse, no `innerHTML`, no string diffing. The third observation is why the
-compiled result is cached per URL and never rebuilt.
+A built manifest can group template URLs by the code chunk that names them.
+Startup begins the entry group, and other groups begin when a component in
+their chunk asks for a template. Visitors load markup for the screens they
+open. [Delivery](delivery.md#templates-in-a-built-artifact) describes the
+other template modes.
 
-What is cached per URL is the *promise*, not the compiled result, so two components
-mounting at the same moment share one compile instead of racing two. The bytes are cached
-separately from the compile, which is what makes the request cheap to start early: by
-default a built artifact's `app.manifest.json` lists every template it holds, grouped by the
-chunk whose modules name it, and `prefetchTemplates` is called with a whole group at a time —
-so the markup is in flight while the chunks are still arriving and each `await` inside a
-component resolves from the cache. The prefetch takes the transfer only — a walk of every
-template in the application ahead of the first paint would cost more main thread than the
-round trips it saves — so a template is compiled when the component that names it is defined,
-and never before. Without it a chunk holding nine components costs nine requests in a
-row, because a component's template URL is not known until that component's module has been
-fetched and evaluated ([ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md)).
+Production templates are minified. The build compares the parsed source and
+output trees and fails if minification changes their structure. Whitespace
+inside `<pre>`, `<textarea>`, `<script>`, `<style>`, and elements with
+supported `white-space` declarations stays intact. A custom CSS class that
+sets `white-space` cannot be read by the minifier, so mark significant
+whitespace on the element itself.
 
-Startup starts the `entry` group; every other group starts on the first `attachTemplate` out
-of its own chunk, which is the module body that just arrived. Markup follows its code, so a
-visitor fetches the markup of the screens they were allowed to load and none of the rest
-([ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md)).
+## Expression language
 
-Nothing about that list changes how a template is delivered: the files stay separate,
-hash-named and immutable under every mode. Which of the three a deployment wants —
-announce all of them, announce none, or ship one bundle — is
-[a build flag](delivery.md#templates-in-a-built-artifact).
+Bindings use a parser and evaluator instead of `eval`. They support member
+access, optional chaining, calls, arithmetic, comparisons, ternaries, logical
+operators, arrays, objects, and assignment in event bindings. They exclude
+arrow functions, `new`, bitwise operators, and template literals. Templates
+read public component members.
 
-## Whitespace in production
-
-A built artifact serves minified markup: comments dropped, each run of whitespace collapsed
-to one space, `class` collapsed as the token list it is. A third of the authored bytes in
-practice, and nothing rendered differently — the build proves each template parses to the
-same tree its source did, and fails naming the template if it does not
-([ADR-0070](../adr/0070-a-production-template-is-minified-and-proved-equivalent.md)).
-
-A run of whitespace is collapsed, never removed, because `a<span> </span>b` and
-`a<span></span>b` are two different renderings. Whole subtrees are left byte for byte when
-the markup says whitespace matters in them:
+Signals unwrap during expression evaluation. Use `&` when another element
+needs the signal itself.
 
 ```html
-<pre>  two spaces, and a
-   line break  </pre>                        <!-- pre, textarea, script, style -->
-
-<p class="whitespace-pre-line">{{ notes }}</p>   <!-- whitespace-pre, -pre-line, -pre-wrap,
-                                                     -break-spaces, [white-space:pre] -->
-<p style="white-space: pre-wrap">{{ notes }}</p> <!-- or say it inline -->
+<x-outlet [.target]="&panel"></x-outlet>
 ```
 
-The one thing the build cannot read is a stylesheet. An element made preformatted by a
-class of the application's own — `.log { white-space: pre; }` — holding literal
-whitespace-significant text in its template has that whitespace collapsed. Say it on the
-element instead, or use `<pre>`.
+The parser lifts `{{ … }}` expressions before parsing HTML so comparisons
+inside them are not mistaken for tags. Property binding names are normalized
+to camelCase; expression values keep their spelling.
 
-## Bindings are a language, not `eval`
-
-`new Function` was rejected for two independent reasons. It requires
-`script-src 'unsafe-eval'`, the single CSP relaxation most likely to be refused by a
-security review — and it would not work anyway, because `this.#users` is unreachable
-from any dynamically compiled function.
-
-`core/template/expression.js` is therefore a tokenizer, a precedence-climbing parser
-and a closure compiler for a deliberately small language: member access, optional
-chaining, calls, arithmetic, comparison, ternary, `??`/`&&`/`||`, array and object
-literals, and assignment inside event bindings. No arrow functions, no `new`, no
-bitwise operators, no template literals. Angular draws the line in the same place.
-
-Templates read a component's **public** members. That restriction turned out to be an
-improvement: a component's template surface is now a handful of getters, and tsc checks
-every one of them.
-
-Three details worth knowing before writing a dialect change:
-
-- **Signals auto-unwrap.** Every resolution step reads a `Signal`, inside the render
-  effect, which is exactly what registers the dependency. The escape hatch is `&`:
-  `<x-outlet [.target]="&panel">` passes the signal itself, so the outlet subscribes
-  directly and swapping panels re-renders nothing in the parent.
-- **Interpolations are lifted before the HTML parser sees them.** `{{ a < b }}` in text
-  content parses as the start of a tag named `b`. Bodies are replaced with placeholders
-  first.
-- **Attribute names are lowercased by the parser; values are not.** Property bindings
-  use kebab-case and convert to camelCase, like `dataset`. Expressions keep their
-  casing because they live in values.
-- **`__proto__`, `constructor` and `prototype` are refused as member names, in every
-  operation.** Not only reads: a direct write, a computed write, an object-literal key
-  and a call are the same rule, because the rule is about the name rather than the
-  direction the value travels. A name written in the source is refused while parsing,
-  so the checker reports it and the browser never compiles it; a key that only exists
-  once an event fires — `row[column] = value` — is refused by the evaluator against the
-  same list. Templates are authored code rather than user input, so this is not a
-  sandbox: it exists so a template can never be the interesting half of a gadget chain.
+The language rejects `__proto__`, `constructor`, and `prototype` as member
+names for reads, writes, keys, and calls. That rule removes unsafe property
+paths from authored expressions.
 
 ## Fragments
 
-A `*fragment` is markup one component writes and another renders, as many times as it
-needs. The `<template>` carrying it renders nothing where it is written; it compiles to a
-function assigned to the named property of the element it sits in, and calling that
-function is what puts the markup somewhere.
+A fragment lets one component author markup that another renders.
 
 ```html
 <ui-table-column key="name" label="Name">
@@ -149,56 +85,25 @@ function is what puts the markup somewhere.
 </ui-table-column>
 ```
 
-The head reads as a signature because that is what a fragment is. `cell` is the property —
-kebab-cased and converted like any property binding — and the parameters are the locals the
-body sees, filled positionally by whoever calls it. `<ui-table>` calls its column's `cell`
-with `(row, index, value)`, the same arguments a `renderer` gets.
+`cell` names the receiving property. The consumer supplies arguments to the
+fragment, while its body reads the declaring component's members and outer
+locals. `of rows` gives `person` the row type for static checking. The
+runtime keeps each rendered position's scope while its DOM remains mounted.
 
-Three things follow from where the markup was written rather than where it renders:
+## DOM security
 
-- **The body reads the declaring component's members.** `{{ t('...') }}`, a method, a
-  signal, an enclosing `*for`'s variables — all of them resolve in the page, because that
-  is where the fragment was written. A parameter shadows an enclosing local of the same
-  name.
-- **The body is checked in the declaring template**, against the property's declared
-  signature. A fragment named after a property the element does not have, or one whose
-  body names a field a row does not have, is a build error in the page's own `.html`.
-- **`of` names where a local's type comes from**, and means what it means in `*for` — one
-  element of that iterable. A table works for rows of any shape, so `ui-table-column` can
-  only declare `unknown`; the page is where the answer is known, and says it once. Without
-  the clause the local keeps whatever the property declares.
+Template values are escaped or sanitized for the DOM sink they reach. URL
+attributes reject active schemes. Resource-loading sinks require an explicit
+trusted resource URL. HTML sinks remove active markup. Unsafe event-handler,
+`outerHTML`, prototype, and dynamic style bindings are refused.
 
-The runtime ignores `of` entirely: a local holds whatever the consumer passed. Each
-rendered position keeps its own scope for as long as its DOM lives, so a fragment patches
-in place across renders rather than rebuilding, exactly as a `*for` row does
-([ADR-0104](../adr/0104-authored-markup-is-a-value-an-element-renders.md)).
-
-## DOM security contexts and Trusted Types
-
-Template values are untrusted by default. Text stays escaped; bindings are sanitised
-according to the DOM sink they target:
-
-- `href`, ordinary `src`, `srcset`, `action`, `poster` and related URL attributes
-  reject active schemes such as `javascript:` and active `data:` payloads;
-- resource-loading sinks such as `iframe.src`, `object.data` and `link.href` accept
-  only an explicit trusted resource URL;
-- `innerHTML` and `srcdoc` remove active elements, event attributes and unsafe URLs;
-  dynamic style text rejects URLs, imports, expressions and CSS escapes;
-- event-handler, `outerHTML` and prototype property bindings are refused.
-
-The rules apply equally to `[href]="value"`, `href="{{ value }}"` and property
-bindings. Under a CSP containing `require-trusted-types-for 'script'` the sanitiser
-produces native Trusted Types through the allow-listed `ui-test` policy; the compiler
-and Lit use private `ui-test-template` and `lit-html` policies for framework-owned
-markup. A deployment enables all three by naming them in its `trusted-types` directive.
-
-The escape hatches are intentionally hard to overlook:
+The same rules apply to interpolated attributes and property bindings. A
+deployment can enforce Trusted Types through its CSP. Review every explicit
+bypass beside the validation that makes its value safe.
 
 ```js
 import { bypassSecurityTrustResourceUrl } from '@core/template/security.js';
 
-// Keep the validation and the bypass together. A normal string is rejected in
-// this resource-URL context.
 get reviewedFrameUrl() {
   const url = new URL(this.reportPath, location.origin);
   if (url.origin !== location.origin) throw new Error('Unexpected report origin');
@@ -206,59 +111,21 @@ get reviewedFrameUrl() {
 }
 ```
 
-Each wrapper is opaque, valid only for its matching context, and throws if it is
-stringified accidentally. A URL trusted with `bypassSecurityTrustUrl()` cannot be used
-where `bypassSecurityTrustResourceUrl()` is required. Treat every bypass as a
-security-review point.
+Trusted wrappers are tied to one security context and cannot be used as plain
+strings.
 
-## Static checking without a build
+## Static checking
 
-Source is `.js`; types are JSDoc, and each subsystem's non-trivial types live in a
-`types.d.ts` beside it in real TypeScript, referenced with one line:
+`npm run templates:check` discovers component and template pairs through the
+project model. It generates type queries in memory and checks expressions
+against the component's JSDoc and nearby `.d.ts` files. No runtime file
+changes.
 
-```js
-/** @import { Evaluator, ExprNode, Scope } from '@core/template/types.js' */
-```
+The checker covers public members, signal unwrapping, loop locals, branch
+narrowing, event targets, custom-element properties, observed attributes,
+`uses` entries, and unknown tags. Diagnostics point to the authored HTML.
 
-That reference costs zero runtime bytes. `node_modules` exists only so tsc and ESLint
-can resolve types for the *same* versions `/lib/vendor` serves; `npm run verify` fails
-if the two drift.
-
-`npm run templates:check` discovers every component/template pair through the project
-model, generates virtual TypeScript shims in memory, parses expressions with the same
-AST parser the browser uses, and asks the TypeScript compiler API to resolve them
-against the component class and its JSDoc types. No file is written and nothing changes
-in the runtime path. It covers component members, automatic signal unwrapping, nested
-`*for` locals, `*if`/`*else` narrowing, native event targets, boolean bindings,
-custom-element property assignments, unknown tags, elements the component never
-imported, and attributes a custom element does not observe. Diagnostics point back at the
-`.html` source.
-
-That last one closes the gap the property check leaves open. `[.emptyLabel]="x"` on an
-element with no such property is a type error, but `empty-label="No rows"` is markup: it
-reaches the DOM whatever the element does with it, and an element that observes nothing by
-that name renders nothing and says nothing. So the checker asks the project model what
-each custom element observes — `static properties` mapped through Lit's rule, or
-`static observedAttributes` for an element that is configuration rather than a component —
-and reports an attribute nothing reacts to. The same model resolves inherited static
-fields and getters, keeps `state: true` private to the owning element, and supplies custom
-event detail and `<x-content>` projection names to editor assistance:
-
-```text
-employees-page.html:22:7 - error: <ui-table> does not observe the attribute pagesize.
-                                  Did you mean page-size?
-employees-page.html:24:7 - error: <ui-table> declares rows as a property with no attribute,
-                                  so rows does nothing. Bind it as [.rows].
-```
-
-Three deliberate limits. Native elements are unchecked, because nothing here holds
-`<input>`'s attribute set. Global, `aria-*` and `data-*` attributes belong to every
-element. And an element whose surface no static tool can read — a class built inside a
-function, handed to `defineComponent` by a loader, or property options assembled at run
-time — is skipped rather than guessed at. The model retains declarations it did read,
-marks the surface incomplete, and never treats unknown as empty.
-
-Two frictions of JSDoc-based typing worth knowing: a JSDoc cast satisfies tsc but not
-typescript-eslint, because it leaves no assertion node in the ESLint AST — `Response
-.json()` returning `any` is confined once in `core/foundation/json.js`; and a value
-imported only for a JSDoc type reads as unused to ESLint, so use `@import`.
+A static tool cannot infer every dynamic element declaration. The model marks
+such a surface incomplete and avoids claiming unknown members are absent.
+Native attributes, `aria-*`, and `data-*` remain available without a
+project-specific element declaration.

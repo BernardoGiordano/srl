@@ -1,37 +1,24 @@
-# Writing a test here
+# Writing tests
 
-Rules the suites already learned. They are cheap to follow and expensive to
-rediscover:
+Use the same browser imports and lifetimes that an application uses.
 
-- **Await `settled`, never a frame.** `source/lib/test/harness.js` exposes it and
-  `@core/elements/settled.js` owns it, which is the module the router awaits too. It
-  walks the element and everything it rendered, repeatedly, because a routed layout's
-  child does not exist until that layout has rendered its outlet — so there is nothing
-  left for a suite to add. Do not declare a local `ready()`; ten of those were deleted
-  in ADR-0079. A navigation is awaited through `navigate()` or `navigationSettled`.
-- **Drain the clock, never sleep past a debounce.** Scheduled work in the library goes
-  through `@core/foundation/clock.js`. Install a test clock in `beforeEach`
-  (`configureClock({ clock: createManualClock() })`), restore real timers in `afterEach`
-  (`configureClock()`), and use `clock.flush()` to let a debounce happen and
-  `clock.pending` to assert what is still waiting. No suite sleeps, and no component
-  exports its debounce length so a suite can add to it. ADR-0079.
-- **Cross the interface an application crosses.** `AppRouter` is not exported, so a
-  router test attaches a router. A test that reaches past the interface passes
-  against a seam nothing else uses.
-- **No mock module loader, no transform.** The runner serves the same three mounts
-  the application does. Import through the import map, never by relative path into
-  another mount: module identity is URL identity, and two URLs for `inject.js` are
-  two injectors.
-- **Configure the memory storage adapter** (`createMemoryStorage()`, [preference persistence](preferences.md)) so cases
-  cannot inherit each other's preferences or leave any in the browser.
-- **Install the collection's text resolver in `beforeEach`, and do not restore it
-  while elements are still mounted** — a mounted element re-resolves its own strings,
-  so restoring the resolver first makes an unrelated case fail in the teardown of
-  this one.
-- **Cross-engine work belongs in the journey, not here.** These rules are for the
-  Chrome suites. One composed journey runs on three engines against the built artifact,
-  and it is written once in `cli/test/support/journey/` — see
-  [supported browsers](browser-support.md) for what it proves and what it does not.
-- **A framework suite may not read an application's files.** `source/lib/test/`
-  ships its own fixtures under `test/fixtures/`, because the runner mounts whichever
-  application is under test at `/`.
+- Await `settled` from `source/lib/test/harness.js` after rendering. It waits for
+  the element and its rendered descendants. Await `navigate()` or
+  `navigationSettled` for route changes.
+- Use `createManualClock()` for debounced work. Install it in `beforeEach`,
+  call `clock.flush()` to run scheduled work, and restore the real clock in
+  `afterEach`. Tests should not sleep past a guessed delay.
+- Test through public entry points. Router tests call `attachRouter()` because
+  `AppRouter` is internal.
+- Import through the browser import map. A second URL for the same module creates
+  a second module instance, including a second injector.
+- Give each test a `createMemoryStorage()` adapter so preference state cannot
+  leak between cases.
+- Install the collection text resolver before mounting elements. Restore it after
+  they are removed, since mounted elements can still read it during teardown.
+- Keep framework fixtures under `source/lib/test/fixtures/`. The library suite
+  must run with any application mounted at `/`.
+
+The browser suites run in Chrome. The separate
+[cross-browser journey](browser-support.md) runs a composed flow against a built
+artifact on Blink, Gecko, and WebKit.

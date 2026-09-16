@@ -2,7 +2,7 @@
 
 ## Glossary
 
-The document uses these words precisely:
+These terms describe the boundaries used throughout the guide.
 
 | Term | Meaning here |
 |---|---|
@@ -24,22 +24,18 @@ application  ->  components  ->  { host }  ->  { core, auth }
                                                  auth -> core
 ```
 
-One direction only, and `core/` never imports `auth/`. That is not aesthetic:
-`core/remotes/mfe.js` needs a capability object built from the session and gets it by
-asking the injector for `REMOTE_HOST`, which is what lets `host/remote-host.js` be
-replaced wholesale by an application with a different capability policy. The default
-installation of that provider therefore lives in `host/runtime.js`, not in
-`core/application/runtime.js`: a default at the core layer would import `auth/`
-transitively and collapse the seam it exists to hold open.
+Dependencies point in one direction. `core/` never imports `auth/`. The remote
+module asks the injector for `REMOTE_HOST`, and `host/runtime.js` installs the
+default provider. An application can replace that provider with its own policy
+without changing core.
 
-`npm run verify` fails if any file under `source/` imports `@app/…` or names an
-application directory. In this repository example is always present, so that mistake
-would otherwise stay invisible until the library was used somewhere else.
+`npm run verify` also rejects application imports inside `source/`. This keeps
+the published library independent of the example application.
 
-## The seams, and what proves each one
+## Replaceable boundaries
 
-A seam with one adapter is a hypothetical; two make it real. Where only one exists,
-the reason is recorded in the module that owns it.
+Each row shows the interface and the implementations that exercise it. Some
+boundaries have one production implementation and a test adapter.
 
 | Seam | Interface | Adapters |
 |---|---|---|

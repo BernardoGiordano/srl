@@ -18,21 +18,8 @@ import { LIVE_FEED } from '../../services/live-feed.js';
 /** @import { StockEvent } from '../../services/live-feed.js' */
 
 /**
- * Stock movements: a table that grows while you watch it.
- *
- * The initial page is a request; everything after it arrives on the event stream. The
- * merge is four lines in a getter, and the reason it is a getter is that reading the
- * feed's signal is what subscribes this element to it — no listener, no teardown, and no
- * chance of a subscription outliving the screen.
- *
- * The stream's frames and the API's rows are the same shape because they come from the
- * same objects on the server, so there is nothing to normalise. That is worth arranging
- * deliberately: a live feed whose payload differs from the resource it updates makes
- * every consumer write the adapter.
- *
- * The table is windowed rather than paged, because a page number over a list that grows
- * from the top names a different row every few seconds. The selection is a set of keys
- * for the same reason: a movement arriving above a chosen row must not unchoose it.
+ * Show fetched movements and new events in one windowed table. Incoming rows land
+ * at the top, so selection follows row keys instead of positions.
  */
 export class MovementsPage extends SignalElement {
   #fetched = resource(
@@ -44,13 +31,8 @@ export class MovementsPage extends SignalElement {
   failed = this.#fetched.failed;
 
   /**
-   * The fetched page with the streamed movements in front of it, de-duplicated by id: a
-   * reload after some events have arrived would otherwise show both copies.
-   *
-   * Computed rather than assembled in the getter, so the array keeps its identity between
-   * renders. A window reads a new array as a different list and puts the scroll position
-   * back at the top — so a getter that rebuilt it would send the reader to row one every
-   * time a checkbox moved.
+   * Merge fetched and streamed rows by id. The computed array keeps its identity
+   * until the data changes, which preserves the table's scroll position.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<Array<Movement | StockEvent>>}
    */
@@ -70,10 +52,7 @@ export class MovementsPage extends SignalElement {
   }
 
   /**
-   * The chosen rows, by key.
-   *
-   * Keys rather than rows, so a movement arriving on the stream cannot unselect
-   * anything: the window re-renders around a key that is still in the list. ADR-0105.
+   * Selected movement keys, stable as new rows arrive.
    */
   selectedKeys = signal(/** @type {readonly unknown[]} */ ([]));
 
@@ -82,8 +61,7 @@ export class MovementsPage extends SignalElement {
   }
 
   /**
-   * The net quantity over the selection, issues counted negative — the same sign the
-   * quantity column renders.
+   * Net selected quantity, with issues counted as negative.
    */
   get selectedNet() {
     const chosen = new Set(this.selectedKeys.value.map(String));

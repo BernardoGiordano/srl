@@ -1,40 +1,35 @@
 # @srljs/core
 
-**srl** (**s**ource **r**uns **l**ive) is an Angular-inspired SDK for lightweight,
-buildless, reactive single-page applications. It gives you signals, a template dialect
-that is statically checked without a compiler, routing, forms, i18n, auth and
-micro-frontends, plus a component collection built on all of it.
+**srl** (**s**ource **r**uns **l**ive) is an Angular-inspired library for reactive
+web components. It includes signals, templates, routing, forms, localization,
+authentication, remote applications, and a component collection.
 
-The browser loads your source files directly. Production optimisation and static
-verification are separate, optional, deterministic steps.
+The browser can load the library and your application as source files through
+an import map. Types and templates can be checked without compiling the app.
+A separate production build is available through [`@srljs/cli`](https://www.npmjs.com/package/@srljs/cli).
 
-Full documentation, the guides and the decision records are in
-[the repository](https://github.com/BernardoGiordano/srl).
+## Install
 
-## Two ways to install
-
-The two shapes are not the same. The first is what this library is for.
-
-### A browser with an import map
-
-Nothing is bundled and nothing is compiled. Serve the package's two directories from your
-origin and paste the import-map fragment it publishes.
-
-```
-node_modules/@srljs/core/lib/          ->  /lib/
-node_modules/@srljs/core/components/   ->  /components/
+```bash
+npm install @srljs/core
 ```
 
-```html
-<script type="importmap">
-  <!-- the contents of node_modules/@srljs/core/lib/importmap.json -->
-</script>
-<script type="module" src="/src/main.js"></script>
+### Direct browser loading
+
+Serve these package directories from the same origin as your application.
+
+```text
+node_modules/@srljs/core/lib/          -> /lib/
+node_modules/@srljs/core/components/   -> /components/
 ```
 
-The fragment carries integrity hashes for the vendored runtime dependencies, computed from
-the bytes in `lib/vendor`, so a page gets the library's own map rather than a copy somebody
-typed. Your source then imports the way the library itself does.
+Copy the JSON from `node_modules/@srljs/core/lib/importmap.json` into an
+`<script type="importmap">` element. It maps the browser specifiers and pins
+the vendored runtime files with integrity hashes. The CLI scaffold writes
+this setup for you. The [example document](https://github.com/BernardoGiordano/srl/blob/main/example/index.html)
+shows a complete import map.
+
+Your source can then import individual modules.
 
 ```js
 import { defineComponent } from '@core/elements/component.js';
@@ -42,33 +37,52 @@ import { SignalElement } from '@core/elements/signal-element.js';
 import { UiTable } from '@components/data/ui-table.js';
 ```
 
-### Node or a bundler
+### Node.js or a bundler
 
-No import map exists there, so the bare prefixes above resolve to nothing. Two
-pre-resolved bundles cover that case.
+Use the package exports when an import map is unavailable.
 
 ```js
 import { defineComponent, SignalElement } from '@srljs/core';
 import { UiTable } from '@srljs/core/components';
 ```
 
-`@srljs/core/components` imports `@srljs/core` rather than inlining it, so one page holds
-one custom element registry. Minified builds are `@srljs/core/dist/srl-core.min.js` and
-`@srljs/core/dist/srl-components.min.js`, and each imports the minified other.
+The component bundle imports the core bundle, so both use the same element
+registry. The bundles include component templates. Direct browser loading
+fetches each template beside its component module.
 
-Component templates are inlined into the components bundle, so a bundled application makes
-no template request. The buildless path fetches each `.html` beside its module instead.
-Both run the same compiler over the same bytes.
+## A component
+
+```js
+import { defineComponent } from '@core/elements/component.js';
+import { SignalElement } from '@core/elements/signal-element.js';
+
+export class GreetingCard extends SignalElement {
+  name = 'world';
+}
+
+await defineComponent({
+  tag: 'greeting-card',
+  element: GreetingCard,
+  module: import.meta.url,
+});
+```
+
+The sibling `greeting-card.html` contains its template.
+
+```html
+<h1>Hello, {{ name }}</h1>
+```
+
+The template checker checks bindings against the class. The
+[component guide](https://github.com/BernardoGiordano/srl/blob/main/docs/guide/components.md)
+explains dependencies, styles, and data loading.
 
 ## Types
 
-Both paths are typed from one set of JSDoc, written in the `.js` files the browser runs.
-
-The bundles carry their own declarations, so `import { defineComponent } from '@srljs/core'`
-is typed with no configuration. `exports` names a `.d.ts` beside each bundle.
-
-The buildless path needs the table that resolves `@core/…` for tsc, which this package
-publishes.
+The source modules carry JSDoc types, and the package ships declarations
+generated from them. Package exports resolve to their declarations without
+extra configuration. For direct browser imports, extend the published base
+configuration from your repository root.
 
 ```json
 {
@@ -77,54 +91,22 @@ publishes.
 }
 ```
 
-Extend it from the root of your repository and `@core/…` resolves for tsc to the
-declarations of the modules the browser loads, from one table rather than a copy.
+The base configuration resolves `@core/` and `@components/` for the type
+checker. The CLI scaffold writes this file too.
 
-## A component, end to end
+## Tools and documentation
 
-```js
-import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
-import { UiAvatar } from '@components/shell/ui-avatar.js';
+Install `@srljs/cli` as a development dependency to scaffold an application,
+serve source with live updates, check templates, or build a production artifact.
+The [repository](https://github.com/BernardoGiordano/srl) contains the guides,
+architecture map, and working example.
 
-export class UsersPage extends SignalElement {
-  get rows() { return inject(USER_SERVICE).users; }
-  reload() { void inject(USER_SERVICE).reload(); }
-}
+## Runtime dependencies and license
 
-await defineComponent({
-  tag: 'users-page',
-  element: UsersPage,
-  module: import.meta.url,   // the template is this module's sibling .html
-  uses: [UiAvatar],          // the elements this template names, as classes
-});
-```
+The runtime uses Lit 3.3.3 and `@preact/signals-core` 1.14.4. Their browser
+files are also committed under `lib/vendor/`. That directory includes
+`@tailwindcss/browser` 4.3.3 for development pages that use it. The package
+records licenses in `lib/vendor/LICENSES.md` and file provenance in
+`lib/vendor/provenance.json`.
 
-```html
-<h1>{{ t('users.title') }}</h1>
-<button (click)="reload()">{{ t('users.reload') }}</button>
-
-<ui-avatar *for="user of rows; key: user.id" [name]="user.name"></ui-avatar>
-```
-
-## Building and deploying
-
-`@srljs/cli` is the toolchain — the scaffold, the dev server, the template checker, the
-language server and the release pipeline. It is a separate package, and nothing in it is
-needed to run an application.
-
-```bash
-npm install --save-dev @srljs/cli
-```
-
-## Runtime dependencies
-
-Two, declared as dependencies and also committed into `lib/vendor` so the buildless path
-needs no install. They are **lit** 3.3.3 (BSD-3-Clause) and **@preact/signals-core** 1.14.4
-(MIT). `lib/vendor` additionally carries **@tailwindcss/browser** 4.3.3 (MIT) for
-development pages that compile utilities in the browser, and nothing imports it. Notices
-are in `lib/vendor/LICENSES.md`, provenance in `lib/vendor/provenance.json`.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+The package is MIT licensed. See [LICENSE](LICENSE).

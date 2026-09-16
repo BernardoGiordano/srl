@@ -2,14 +2,7 @@
   class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_3px_var(--ui-color-shadow)]"
 >
   <!--
-    The header is unconditional, and that is load-bearing rather than lazy.
-
-    A projection marker inside a structural directive is a marker that appears and
-    disappears: `heading` arrives as an attribute during the *caller's* render commit, so a
-    header behind `*if="heading"` is absent on this component's first render and present on
-    its second — and projected content moved into a marker that no longer exists is a
-    HierarchyRequestError, not an empty slot. Markers stay put; `*if` guards only the text
-    around them, and `:empty` hides what has nothing in it.
+    Keep the header mounted so projected content always has a stable marker.
   -->
   <header class="border-b border-ui-border px-5 py-4">
     <p *if="eyebrow" class="text-[11px] font-semibold uppercase tracking-wider text-muted">

@@ -1,14 +1,6 @@
 /**
- * Reading values out of a JSON payload.
- *
- * Two functions, and they exist because `String(value)` on an `unknown` is a bug waiting
- * for a schema change: an object reaching it renders `[object Object]` on screen, which is
- * the kind of thing that ships. `typescript-eslint`'s `no-base-to-string` rule says so, and
- * the fix is not a suppression — it is deciding, once, what a non-scalar means here.
- *
- * The decision: a string, a number or a boolean is text; anything else is absent. A filter
- * value that arrived as an object is not a filter value, and dropping it is what makes the
- * query the user sees match the query that goes out.
+ * Read scalar values from JSON. Objects and arrays are absent rather than rendered
+ * as `[object Object]`.
  */
 
 /**
@@ -23,11 +15,7 @@ export function text(value) {
 }
 
 /**
- * A filter descriptor's value as a list of query values.
- *
- * One value, a list for a `multiple` rule, or nothing. Empty entries are dropped rather
- * than sent: `?status=` filters on the empty string in most APIs, which is a match nothing
- * has, so a screen would show no rows and no reason.
+ * Return nonempty query values from a single value or a list.
  *
  * @param {unknown} value
  * @returns {string[]}

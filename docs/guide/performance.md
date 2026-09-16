@@ -6,25 +6,18 @@ npm run benchmark:ci         # the bounded gate, against tools/benchmark/baselin
 npm run benchmark -- --suite collection --only table-sort-10000
 ```
 
-The harness drives Chrome over the DevTools protocol from `tools/benchmark/`, serving
-the same source over the same mount table the application uses. It is not a test-runner
-plugin because `@web/test-runner` owns its own sample loop and page lifecycle and cannot
-collect garbage or read a heap. The measured origin generates a harness page carrying the
-application's own import map, with the sha256 of that inline map added to `script-src` —
-exactly what the production nginx header does — and the production Trusted Types list.
-Zero network comes from `--host-resolver-rules` plus a dead `--proxy-server`, not request
-interception: interception turns Chrome's cache off, and a warm start measured with no
-cache is not a warm start.
+The harness drives Chrome directly against the application's mount layout. It
+uses the application's import map, CSP hash, and Trusted Types policy. Direct
+DevTools control lets it collect garbage and read heap use. Zero-network runs
+block external connections without request interception, which would disable
+Chrome's cache and distort warm-start results.
 
 ## The envelope
 
-Every number below is derived from the checked-in baselines by
-`npm run docs:performance`, which fails when a table here disagrees with the file the gate
-compares against ([ADR-0099](../adr/0099-a-performance-claim-carries-its-standing.md)). Nothing in this section is typed by hand, including the machine that
-produced it and the standing each number has. `npm run benchmark` regenerates the
-measurements; `npm run docs:performance:write` regenerates the tables.
-
-These are diagnostic evidence about one machine, not acceptance limits.
+The tables below come from checked-in measurements. `npm run docs:performance`
+checks them against the baseline; `npm run docs:performance:write` updates them.
+They describe one machine and carry their own standing
+([ADR-0099](../adr/0099-a-performance-claim-carries-its-standing.md)).
 
 ### Where the numbers came from
 
@@ -195,11 +188,10 @@ Requests, bytes, chain depth, startup steps and heap, from the same loads.
 
 <!-- /generated:performance-facts -->
 
-Two facts these numbers settle. **No route index is needed** at this scale. And **rendering
-10,000 rows whole costs 468.9 ms**, which is what the frame budget below now fails, so
-`<ui-table>` renders a window of them when a screen asks for one
-([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)). Sticky columns are the
-table's sharpest cost curve and the first place to look if a wide table feels slow.
+The route scan meets the measured budget at this scale. Rendering 10,000 rows
+whole took 468.9 ms, so a screen can ask `<ui-table>` to render a window
+([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)). Sticky
+columns remain the table's steepest measured cost.
 
 The editor suite's own sample policy, and the first numbers it produced, are in
 [ADR-0096](../adr/0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md). A
@@ -208,8 +200,7 @@ there.
 
 ## What the numbers do not cover
 
-A gate that passes says nothing about a workload it did not run. Every gap is listed with
-its reason, and the runner prints the same list at the end of every run.
+The runner lists workloads it has not measured and explains each gap.
 
 <!-- generated:performance-coverage -->
 
@@ -254,120 +245,62 @@ No workflow in `.github/workflows` runs the benchmark gate: every limit below fa
 
 <!-- /generated:performance-gating -->
 
-## How to read a benchmark number here
+## Reading a benchmark result
 
-The rules that make comparison meaningful. Ignoring them produces confident nonsense:
+The gate compares medians with a baseline and reports p95 values alongside
+them. Each sample also checks an observable result, so fast but incorrect
+behavior fails.
 
-- **The gate reads the median, not the p95.** Both are reported; a p95 over a handful of
-  samples moves tens of percent between identical runs. The editor target is a p95 —
-  100 ms is what a keystroke is judged against — and it is reported over a hundred samples
-  rather than gated
-  ([ADR-0096](../adr/0096-the-editor-latency-claim-is-a-workload-not-an-assertion.md)).
-- **Correctness is checked before timing, twice.** Every workload has a cheap observable
-  answer verified per sample in the page, and aggregation refuses any workload with a
-  failed sample. A workload that returns the wrong DOM fails even when it is fast.
-- **Every run measures the machine, twice per suite.** Two fixed reference workloads —
-  an arithmetic loop and a layout loop, in `browser/calibration.js` — are read before each
-  suite and once at the end, and each suite's baseline is scaled by the reading that
-  bracketed it and the reference its work resembles. One reference was not enough: with
-  only the arithmetic loop, two back-to-back runs reported 16 and 17 regressions of 45–75%
-  across every render and tooling workload while the arithmetic loop called the machine
-  unchanged at 1.01x, because the load was in the renderer and the page cache. **Neither
-  loop may ever be tuned**: changing one invalidates every baseline.
-- **Nothing is measured until the machine settles.** Reference readings are taken and
-  discarded until two agree within 10%, up to six attempts.
-- **A run whose machine moved reports and does not gate.** If two readings of one
-  reference disagree by more than `maxRunSpread`, the run prints every difference, fails
-  nothing, and refuses to become a baseline — a spike baked into a baseline reads as an
-  improvement in every run after it. On an interactive desktop a meaningful fraction of
-  runs will decline to gate; the answer is to re-run, not to widen the limit.
-- **Two noise controls, both measured into existence.** A per-unit minimum delta
-  (1 ms, 2 MiB, 20 counts), because Chrome quantises `performance.now()` to 100 µs; and a
-  per-suite threshold, because tooling processes on a shared machine do not repeat to 20%.
-- **Depth is the delivery fact, not the duration.** Zero network means no request pays a
-  real round trip, so a serial chain and a flat one of the same size report the same
-  milliseconds, the same count and the same bytes. `chainDepth` — how many requests had to
-  wait for another request to arrive first — is derived from the initiator each request
-  already carries, and it is the number that moves when a transfer stops being discovered
-  and starts being announced ([ADR-0082](../adr/0082-chain-depth-is-the-gated-delivery-fact.md)).
-  Its minimum delta is 1: unlike a request total, it does not move on noise.
-- **One workload pays for a round trip.** Everything else is measured with zero network,
-  so no duration here can see a serial chain. `delivery/journey-40ms` opens the built
-  artifact under 40 ms of added round-trip time on 5 Mbit/s, waits for the real session
-  restore and route guard, and reports one number for reaching a working authenticated
-  screen ([ADR-0100](../adr/0100-a-journey-is-measured-under-stated-network-conditions.md)).
-  It is emulation, not a network: no loss, no congestion, no TLS, same host — a floor
-  rather than an experience.
-- **The editor suite measures a fixture, not this checkout.** `editor/*` drives the real
-  language server over stdio against temporary copies of the selected application — one
-  copy, then ten — because the srl repository is a project no consumer has. Each
-  interactive sample carries its answer *and* whether validation was still queued when
-  that answer arrived, so an idle server cannot produce a latency figure.
-- **Forced collection happens only in the memory workloads**, and the leak check is
-  batch-by-batch monotonic growth rather than one before/after pair.
-- **Every run prints what it does not cover**, so a green gate cannot be mistaken for full
-  coverage. Pending workloads carry their reasons in `tools/benchmark/workloads.mjs`, and
-  the generated coverage table above lists them beside the workloads that are declared and
-  unmeasured.
+The harness measures an arithmetic reference and a layout reference around
+each suite. It scales comparable baselines by the reference that matches the
+work. If a reference moves too much during a run, the harness reports results
+but does not gate or record a new baseline. Re-run after the machine settles.
+
+A regression must clear both a relative threshold and a minimum change in
+milliseconds, memory, or counts. The measured minimums keep clock resolution
+and shared-machine noise from turning tiny differences into failures.
+
+Most workloads block external network requests and measure local behavior.
+`delivery/artifact-size.chainDepth` instead counts serial requests in the
+built graph. `delivery/journey-40ms` adds 40 ms round-trip time and a 5 Mbit/s
+link to the built artifact, then waits for a usable signed-in screen. This is
+controlled emulation, without packet loss, congestion, or TLS.
+
+Editor workloads run the language server against temporary installed
+application fixtures. Memory workloads force collection before checking for
+growth. The runner prints unmeasured and pending workloads beside the results,
+so a passing gate can be read with its actual coverage.
 
 ## Budgets
 
-Two kinds, in `tools/benchmark/budgets.json`:
+`tools/benchmark/budgets.json` holds two kinds of limits.
 
-| Setting | Value | Meaning |
-|---|---|---|
-| `regressionThreshold` | 0.10 | A median may not exceed the machine-scaled baseline by more than 10% |
-| `suiteThresholds.tooling` | 1.0 | Child-process workloads on a shared machine only catch order-of-magnitude change |
-| `product` | absolute limits | Compared raw: no speed scaling, no noise slack. The generated table above lists every entry and what it currently measures |
-| `maxSpeedDrift` | where scaling stops being credible | A machine twice as slow is a different machine, and its numbers are incomparable |
-| `maxRunSpread` | how far a reference may move inside one run | Above it, the run reports and cannot gate |
-| ci ceiling | 420 s | `--ci` takes about 150 s here, 45 s of it the editor suite; the ceiling failing means reconsidering sample counts, not raising it |
+| Limit | Purpose |
+|---|---|
+| Relative regression | A median may exceed a machine-scaled baseline by at most 10%, subject to a minimum meaningful change. |
+| Absolute product limit | A requirement that applies without scaling or noise slack. |
 
-A duration limit here has to be a requirement with room in it rather than a fence around a
-median. Limits set near this machine's medians would fail on any slower machine and on
-every busy moment here — the busy population measured 1.46x to 2.63x — and a gate that
-reds for the environment teaches people to ignore it.
-
-`collection/table-window-10000.render` is the first duration limit and is set that way.
-16 ms is one frame, which is what a table a user is scrolling has to produce a paint in. A
-local run measured 2.60 ms for the windowed render and 1.70 ms per scroll, with 38 of the
-10,000 rows in the DOM, so the limit clears the 2.63x spread several times over; what fails
-it is the thing it was written for, the same 10,000 rows rendered whole at 468.9 ms.
-`collection/table-window-scroll-10000` carries the same frame for the cost paid on every
-scroll rather than once at mount. Neither is in `baseline.json` yet, so both are listed
-above as declared and unmeasured, and the two figures here are reported rather than gated:
-the run that produced them was on Chrome 152 against a baseline recorded on 151
+The table window's 16 ms render limit represents one frame. A local run
+rendered the window in 2.60 ms and scrolled it in 1.70 ms, with 38 of 10,000
+rows in the DOM. Rendering all rows took 468.9 ms. The window workloads are
+still absent from `baseline.json`, so those local figures are reported
+evidence rather than an active gate
 ([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)).
 
-The other two absolute limits are not timings. `delivery/artifact-size.chainDepth` is how many
-round trips deep the entry's static chunk graph is, derived by the build from
-`chunks[].imports`, admitted by `parseReport` against the graph it came from, and read from
-a verified report without starting a browser. A count of hops does not change with the
-machine, so it needs neither the speed scaling nor the noise slack that make an absolute
-duration unfair here. It applies to the dist origin alone — the source origin ships no
-bundler, and its depth describes the source layout rather than a delivery defect. Raising
-it is a decision to ship a deeper startup graph, taken deliberately.
+`delivery/artifact-size.chainDepth` limits the built entry graph to three
+serial requests. `editor/edit-burst.validations` limits ten edits inside one
+debounce window to one validation. Both are counts independent of machine
+speed.
 
-`editor/edit-burst.validations` is the same kind of fact one subsystem over: ten edits
-written into one debounce window are one check, on any machine. It is limited to 1, and the
-relative gate could not hold it — a count's minimum delta is 20, so one check becoming two
-is invisible to it.
-
-**Baseline discipline.** A baseline moves only in the commit that moved the number, with
-the reason recorded beside it. Do not re-record one as a side effect of an unrelated
-change: a baseline that moved without a reason is how a gate stops meaning anything. Note
-that `--update-baseline` rewrites the whole file, so a deliberate decision to leave other
-metrics untouched has to be applied by hand.
+Change a baseline in the commit that changes the workload, and record why.
+`--update-baseline` rewrites the whole file, so review every entry before
+keeping the result.
 
 ## Explaining one update
 
-A benchmark says a workload got slower. It does not say which component re-rendered or
-which binding ran four hundred times, and in this framework those are separate questions
-from each other: an element renders when a signal its `render()` read changed or when a
-reactive property was written, and a compiled binding patches its own Lit Part when a
-signal *its* expression read changed, with no render anywhere
-([ADR-0014](../adr/0014-compiled-templates-and-scopes-keep-their-identity.md)). A timer around renders
-sees only half of it.
+A benchmark can show a slower workload. `recordUpdates()` shows which elements
+rendered and which compiled bindings patched their DOM parts
+([ADR-0014](../adr/0014-compiled-templates-and-scopes-keep-their-identity.md)).
 
 `@core/diagnostics/updates.js` records both, around whatever you want explained:
 
@@ -380,11 +313,9 @@ await theInteractionThatFeelsWrong();
 console.log(formatUpdateReport(stop()));
 ```
 
-The report has two summaries and a timeline. The summaries rank every tag and every
-binding by the time they spent, breaking ties on how often they ran, which is how a
-binding that costs nothing each time and runs four hundred times still reaches the top.
-The timeline is where the causes are, and it nests: a binding under an element render is
-one the render re-evaluated, and a binding at the top level patched on its own.
+The report ranks tags and bindings by total time and shows their causes in a
+timeline. An indented binding ran during its element's render. A top-level
+binding patched on its own.
 
 ```
 srl updates — 42.10 ms, 1 tag, 3 bindings
@@ -406,7 +337,7 @@ Timeline (ms from start)
      31.40  employees-page.html {{ pendingCount }} signal, 0.02 ms, changed
 ```
 
-Read the causes literally:
+The report uses these causes.
 
 | Cause | On | What it means |
 |---|---|---|
@@ -419,13 +350,10 @@ Read the causes literally:
 | `rerender` | bindings | the scope it reads bumped its version: the host rendered, or its `*for` row got a new item |
 | `rebind` | bindings | the Part now holds a different expression or scope — an `*if` branch that flipped, or a keyed row that moved |
 
-`cause: 'signal'` deliberately stops at "the effect re-ran". Nothing in the reactive
-library reports a dependency by name, and a report that guessed at one would be worth less
-than one that admits it cannot
+`cause: 'signal'` means the effect ran again. The reactive library does not
+report which signal changed
 ([ADR-0109](../adr/0109-an-update-reports-why-it-happened.md)).
 
-Two limits worth knowing. Only one recording runs at a time, and a second one throws
-rather than splitting the tree. And a recording retains 5,000 records by default, after
-which the timeline stops growing and `report.dropped` says by how much — the summaries
-stay exact either way, so a long recording still counts correctly even where it cannot
-show the order.
+Only one recording can run at a time. A recording retains 5,000 timeline
+records by default, then counts further events in `report.dropped`. Its
+summaries continue to count all updates.

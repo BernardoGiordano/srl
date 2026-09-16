@@ -3,13 +3,8 @@ import { token } from '@core/foundation/inject.js';
 /** @import { ApiClient } from '@core/http/client.js' */
 
 /**
- * The Settings section's own resources: application accounts and the audit trail.
- *
- * Both endpoints are scope-gated on the server (`users:read`, `users:write`,
- * `audit:read`), and the routes that reach them are guarded with the same scopes in
- * `routes.js`. The duplication is deliberate: the guard is why a viewer does not see
- * a screen full of errors, and the server check is why not seeing the screen is not
- * the thing keeping them out.
+ * Load accounts and audit entries for Settings. Routes check scopes before opening
+ * these screens, and the server checks them again for each request.
  */
 
 /** @type {import('@core/foundation/types.js').InjectionToken<AdminService>} */

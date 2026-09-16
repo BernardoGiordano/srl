@@ -1,84 +1,49 @@
 # Editor support
 
-srl uses one Language Server Protocol implementation for every editor. It runs from the
-project's own `@srljs/cli`, reads the same project model as the build, imports the same
-template dialect as the browser, and sends unsaved HTML and JavaScript buffers through the
-same template checker as `srl check templates`, and resolves message keys through the same
-catalog as `srl check messages`. An editor therefore has no second account of what a
-component, binding, valid expression or message is.
+The srl language server runs from a project's `@srljs/cli`. It uses the same
+project model, template grammar, and message catalog as the command-line
+checks. VS Code and WebStorm launch that server rather than implementing
+another checker.
 
-The server provides:
+The server provides template and message diagnostics, completion, hover,
+definitions, references, tag rename, semantic highlighting, and document
+symbols. A quick fix adds the import and `uses` entry for a known component.
+Diagnostics also cover unknown elements, unsupported attributes, and message
+placeholders a call does not supply.
 
-- diagnostics for template expressions, directives, unknown elements, missing `uses`
-  entries, custom-element properties and observed attributes;
-- diagnostics for message keys, in templates and in JavaScript: a key no bundle the file
-  can reach declares is underlined where the literal is, with the nearest existing key
-  named, and a placeholder the call does not pass is reported on the same line. The keys
-  come from the buffer and the bundles from disk, so a misspelling shows before a reload
-  ([ADR-0117](../adr/0117-a-message-reference-is-resolved-against-one-catalog.md));
-- completion for custom elements, bindings, directives, DOM events, component members,
-  template globals, loop locals, and `$event`;
-- hover and go-to-definition for custom elements, their properties, component members,
-  and template globals;
-- find references and project-wide rename for custom-element tags, across template files
-  and the `html` templates of handwritten Lit components, including their
-  `defineComponent()` declaration;
-- a quick fix that adds both the import and `uses` entry for a known component;
-- semantic highlighting for interpolations and srl attributes, document links, template
-  outlines, and workspace element symbols.
-
-Expression completion follows compiler types after a dot: `rows.` offers array members,
-loop items keep the iterable's element type, and `$event.` uses the bound element and DOM
-event. Loop names leave scope with their element. Tag rename changes parsed start and end
-tags, in template files and in the `html` templates a handwritten Lit component writes in
-JavaScript, never tag-shaped text in comments, strings or raw `script` and `style`
-content, and refuses an identity already registered by another element.
+Completion follows types through member access, loop locals, and `$event`.
+Tag rename changes parsed tags and their component declaration across
+templates. It leaves matching text in comments and unrelated strings alone.
 
 ## Inline Lit templates
 
-A component may write markup in an `html` or `svg` tagged template instead of a sibling
-`.html` file. The server reads those templates in Lit's own syntax against the same
-element model, so the same questions get the same answers in the writing the form uses
-([ADR-0090](../adr/0090-one-language-server-two-editor-clients.md)).
+The server recognizes `html` and `svg` tagged templates in JavaScript.
+It answers element and binding questions in Lit syntax.
 
-| Question | Template file | Inline Lit |
-| --- | --- | --- |
-| Property binding | `[.row-key]="expr"` | `.rowKey=${expr}` |
-| Event binding | `(click)="pick($event)"` | `@click=${pick}` |
+| Feature | srl template | Inline Lit |
+|---|---|---|
+| Property | `[.row-key]="expr"` | `.rowKey=${expr}` |
+| Event | `(click)="pick($event)"` | `@click=${pick}` |
 | Boolean attribute | `[?disabled]="busy"` | `?disabled=${busy}` |
-| Conditionals and loops | `*if`, `*for`, `*fragment` | expressions in `${…}` |
+| Condition and loop | `*if`, `*for` | JavaScript in `${…}` |
 
-Tag completion, binding completion, binding hover, property go-to-definition, semantic
-highlighting of tags and binding prefixes, and the `uses` quick fix all work inside those
-templates. A tag named there needs a `uses` entry exactly as one written in a template
-file does, because `uses` is what registers the element, and the same quick fix adds it.
+The editor's JavaScript service handles the code inside Lit substitutions.
+The srl server handles tags and their bindings. A tag in either template form
+still needs a `uses` entry.
 
-Inside a `${…}` substitution the server stops. That is the module's own JavaScript, and
-the editor's JavaScript service already completes and types it — a second list over a
-correct one would only get in the way. srl's typed template scope is likewise srl-only:
-loop locals, signal unwrapping and a typed `$event` are template grammar, and a Lit
-template writes those things as ordinary expressions.
+## Project requirements
 
-JavaScript editing remains the editor's own JavaScript language service. The srl server
-adds the template half and project-model diagnostics; it does not replace JavaScript
-completion, formatting, or refactoring.
-
-## Project requirement
-
-Install the matching library and toolchain in the repository. The plugins deliberately use
-this copy rather than bundling another version, so a project on srl 0.7 is checked with the
-0.7 grammar and a later project can move independently.
+Install matching versions of the library and toolchain. The plugin uses the
+server in the project, so each workspace gets its own grammar version. The CLI
+requires Node.js 22 or newer.
 
 ```bash
 npm install --save-dev @srljs/core@0.9.0 @srljs/cli@0.9.0
 ```
 
-Node.js 22 or newer must be available. This is already the engine required by
-`@srljs/cli`.
-
 ## VS Code
 
-Build a VSIX from this repository and install it:
+Build and install the extension from this repository.
 
 ```bash
 cd editors/vscode
@@ -88,106 +53,61 @@ npm run package
 code --install-extension srl-0.9.0.vsix
 ```
 
-The extension starts one server per workspace folder, so a multi-root workspace may hold
-projects on different srl versions. Each server watches only its own folder, so one root's
-edit reloads one root's model.
+The extension starts one server per workspace folder and watches each folder
+separately. Set `srl.nodePath` if Node is absent from the extension host's
+`PATH`. Changing it restarts affected sessions. The **srl: Restart Language
+Server** command checks folders again after installing dependencies.
+`srl.trace.server` writes protocol traces to the folder's output channel.
 
-Set `srl.nodePath` when `node` is not on the extension host's `PATH`; changing it restarts
-the folders it applies to. Use **srl: Restart Language Server** after installing the
-toolchain into a folder that did not have it. Protocol traces are available through
-`srl.trace.server`, in the **srl Language Server** output channel of the folder they
-belong to.
-
-A folder whose `package.json` asks for `@srljs/cli` or `@srljs/core` and has no server
-installed says so. A folder that asks for neither is left to VS Code's ordinary HTML and
-JavaScript support without comment.
-
-The VS Code package also injects TextMate scopes for `{{ expression }}`, directives,
-events, and bindings, and contributes HTML and JavaScript snippets. Ordinary HTML, CSS,
-JavaScript, and Emmet support continue to come from VS Code.
+A folder that declares srl but lacks an installed server gets a message. Other
+folders keep ordinary VS Code HTML and JavaScript support. The extension also
+adds syntax scopes and snippets for srl markup.
 
 ## WebStorm
 
-Build the JetBrains plugin with Java 21, then install the ZIP from
-**Settings | Plugins | Install Plugin from Disk**:
+Build with Java 21 and install the resulting ZIP through **Settings | Plugins |
+Install Plugin from Disk**.
 
 ```bash
 cd editors/webstorm
 mvn package
 ```
 
-The artifact is written to `target/srl-webstorm-<version>.zip`. The build resolves the
-IntelliJ Platform as ordinary Maven artifacts, so no WebStorm installation is needed to
-compile.
+The plugin targets WebStorm 2026.1 and newer. It uses WebStorm's LSP client
+and starts the project's installed server. It finds Node from the login shell
+environment; `SRL_NODE_PATH` can choose a specific executable. A declared
+project with missing dependencies or Node receives a notification.
 
-The plugin targets WebStorm 2026.1 and newer and uses WebStorm's native LSP client. It
-starts only when the project contains the srl server. It runs that server with the `node`
-found on the login shell's `PATH` rather than the IDE process's, so an install managed by
-nvm, fnm, or Volta is reachable from a desktop-launched IDE; `SRL_NODE_PATH` names a
-specific executable instead. A project with no reachable Node.js says so rather than
-failing to spawn quietly.
+Live templates in the `srl` group provide interpolation, conditionals,
+loops, events, properties, and component declarations. Tag rename needs
+WebStorm 2026.1.1 or newer. `mvn -Pverify-plugin verify` checks the ZIP
+against an installed IDE.
 
-A project whose `package.json` asks for `@srljs/cli` or `@srljs/core` and has no server
-installed says so once, in a notification. A project that asks for neither is left to
-WebStorm's ordinary HTML and JavaScript support without comment. Opening an srl file again
-after installing the dependencies starts the server.
-
-It contributes the same six snippets as the VS Code package, as live templates in the
-`srl` group: `srl-interpolation`, `srl-if`, `srl-for`, `srl-event`, `srl-property` and
-`srl-component`.
-
-One feature-specific limit: the platform's LSP rename arrives in 2026.1.1. On 2026.1 every
-other feature listed at the top of this page works, and renaming a tag is available in VS
-Code or by upgrading the IDE.
-
-`mvn -Pverify-plugin verify` runs the IntelliJ Plugin Verifier over the ZIP against an
-installed IDE. It defaults to `/Applications/WebStorm.app/Contents`; elsewhere pass
-`-Dwebstorm.home=<directory containing lib/>`.
-
-## Conformance
-
-Packaging proves the artifact and the Plugin Verifier proves the plugin loads. Neither
-proves that installing one makes an editor start the project's toolchain and answer with
-it, so one command does:
+## Installed-editor checks
 
 ```bash
-npm run conformance                  # VS Code, minimum and current
-npm run conformance -- --webstorm    # and the WebStorm installed on this machine
+npm run conformance
+npm run conformance -- --webstorm
 ```
 
-It builds four projects from the tarballs this repository would publish — two installed,
-one that declares srl without installing it, one that never asked — installs the packed
-extension into a profile of its own, and drives the scenarios in
-`tools/conformance/scenarios.mjs` through the editor's own providers. The result is one
-parity table over every editor it could reach; `--report <path>` writes it as Markdown.
-
-VS Code answers every scenario. WebStorm answers the session ones — a project that starts
-its toolchain, projects that stay quiet, nothing left running — because the platform
-exposes no way to ask an installed IDE for a completion from outside it. The table says
-which is which on every run. CI runs the VS Code half; WebStorm needs a licensed IDE, so
-it is local and opt-in. ADR-0097.
+Conformance installs packed packages into fixture projects and drives the
+installed editor. The VS Code run covers language features. WebStorm covers
+the session scenarios available through its external interface. CI runs the
+VS Code half; WebStorm needs a local licensed IDE. Use `--report <path>` to
+write the result as Markdown.
 
 ## Other LSP clients
 
-Any client that can start a stdio language server can use the same implementation:
+A client that can start a stdio language server can run:
 
 ```bash
 srl language-server
 ```
 
-Run it with the repository root as its working directory. `SRL_ROOT` may name that root
-explicitly for clients whose server working directory cannot be configured.
+Run it from the project root or set `SRL_ROOT`. Clients that support dynamic
+file watcher registration receive project-scoped watchers. Without that
+capability, changes outside open buffers require a restart.
 
-The server registers the file watchers it needs through `client/registerCapability`, and
-only when the client declares `workspace.didChangeWatchedFiles.dynamicRegistration`. A
-client that declares it and `relativePatternSupport` gets patterns rooted at the project,
-which is what keeps one project's edits out of another's model. A client that declares
-neither is told on stderr that changes made outside its open buffers refresh only on
-restart.
-
-## What counts as a template
-
-An `.html` file receives srl semantics when the project model associates it with a static
-`defineComponent({ tag, element, ... })` declaration. A sibling template is discovered
-without configuration; an explicit literal `template` path works too. Other HTML files
-keep ordinary editor HTML support and receive no srl template diagnostics.
+An `.html` file receives srl template behavior when the project model links
+it to a static `defineComponent()` declaration. Other HTML files keep the
+editor's ordinary HTML support.

@@ -1,71 +1,42 @@
 # Documentation and source comments
 
-Three durable surfaces, and the split between them is the same one the code uses.
-`README.md` is the interface: what this is, how to run it, one working component, and
-where everything else lives. `docs/` is the implementation of that interface — the manual,
-one subject per page. `docs/adr/` is the reasoning behind both — one decision per file,
-each with a number that never changes.
+The root [README](../README.md) introduces srl and gets a reader to a running
+application. `docs/guide/` explains how to use each feature. `docs/reference/`
+holds generated facts about the source. The [decision records](adr/) explain why
+an architectural choice was made.
 
-Two more exist for one reason, and it is a different reader rather than a different
-subject: `source/` is the published package, and somebody installing `@srljs/core` from a
-registry has a tarball rather than this repository. `source/README.md` is that listing's
-landing page and `CHANGELOG.md` is what a version bump means, both scoped to the published
-interface and nothing behind it.
+The published packages have their own READMEs. A reader installing
+`@srljs/core` or `@srljs/cli` may never see this repository, so each package
+needs a short entry point. Feature details belong in the guides, where there is
+one page per subject.
 
-Nothing else. There are no READMEs *under* `source/lib` or `source/components` — a manual
-in the directory somebody edits first is the one that goes stale, and `npm run verify`
-refuses one — and no further surface: knowledge lives in a page here, in a record, in a
-type, in a test, or in an executable check.
-
-All of it is generated against reality where it can be:
-
-```bash
-npm run docs:check    # fails when a generated table drifts from the project model
-npm run docs:write    # regenerate them
-npm run docs:adr      # fails on a malformed record or a citation that resolves to nothing
-npm run docs:adr:write # regenerate the record index
-```
-
-Both run inside `npm run check`. `docs:check` also refuses a missing marker, a duplicate
-marker, an unterminated block and a generated name it does not produce — all four mean the
-document and the generator disagree about what is generated. `docs:adr` additionally
-refuses a README section number cited from source, and project-phase vocabulary in a
-permanent file.
-
-Where knowledge goes, and why each destination is the one that keeps it true:
-
-| Kind of knowledge | Destination |
+| Information | Put it in |
 |---|---|
-| What this is, and the first thing to run | `README.md`, and nothing longer |
-| The same, for somebody who installed the package instead | `source/README.md`, shorter still, linking back here |
-| What changed in the published interface, and what a bump means | `CHANGELOG.md`, one entry per version |
-| Caller-facing interface rule | The page in `docs/guide/` that owns the subject |
-| A fact derived from the source | A generated block in `docs/reference/`, never typed by hand |
-| How a decision was reached, and what would reopen it | A record in `docs/adr/`, cited by number |
-| Enforceable invariant | A type, a runtime validation, or a verifier check |
-| Behavioural claim | A test name and its assertion |
-| Security-sensitive local warning | A concise source comment, plus [the security model](guide/auth-and-remotes.md) |
-| Required JSDoc type | Source. It is executable static information |
-| What happened, and when | Git history |
-| Repeated usage example | One example, on the page that owns the subject |
-| Non-obvious algorithm reason | A concise local source comment |
+| First steps and project overview | Root `README.md` |
+| Package entry point | `source/README.md` or `cli/README.md` |
+| Feature behavior and examples | The relevant page in `docs/guide/` |
+| Facts derived from source | Generated blocks in `docs/reference/` |
+| Decision and its tradeoffs | One record in `docs/adr/` |
+| Rule the project can enforce | A type, test, or verifier check |
+| Local reason a reader needs beside code | A short source comment |
 
-A page in `docs/guide/` owns one subject completely. Splitting a subject across two pages
-is how the second one starts disagreeing with the first, which is the failure the
-single-file rule was protecting against and the one this structure has to keep refusing.
+JSDoc types are part of the checked JavaScript and must stay with the code. A
+prose comment should explain a rule or a surprising choice. Git history records
+past approaches, so comments can describe the current behavior.
 
-Type-bearing JSDoc is not a comment in the removable sense: this project typechecks
-`.js` with JSDoc, so "remove comments" must never mean "break typechecking". What source
-comments must *not* carry is design-notebook prose — the narrative of how a decision was
-reached. In a buildless architecture, prose in a module on the critical path is shipped
-bytes. A comment states the rule and cites the record:
+Use an ADR number when a source comment needs to point to a longer decision.
+The number survives file moves and changes to guide headings.
 
 ```js
-// State rather than a rejection: a link click has no caller to reject at. ADR-0003.
+// A link click has no caller to receive a rejection. ADR-0003.
 ```
 
-Cite by record number, never by section number and never by file path. A number survives
-every reorganisation of this directory; `§12` is wrong the moment a section is inserted
-above it, and `docs/guide/auth-and-remotes.md` is wrong the moment a page is renamed —
-which is why `docs:adr` fails on a section number appearing in `source/`, `cli/`, `tools/` or an
-application directory.
+Generated sections should be updated through their commands. The checks report
+missing markers, stale tables, malformed records, and broken citations.
+
+```bash
+npm run docs:check
+npm run docs:write
+npm run docs:adr
+npm run docs:adr:write
+```

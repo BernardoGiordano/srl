@@ -18,28 +18,9 @@ import { ApiError } from '@core/http/client.js';
 /** @import { TabItem } from '../../ui/app-tabs.js' */
 
 /**
- * One order: a layout route with three child routes.
- *
- * WHAT THE LAYOUT BUYS
- *
- * This component stays mounted while `''`, `lines` and `history` replace each other, so
- * the shared order stays settled and switching tabs costs only a tab-specific request,
- * where one exists. Leaving the section tears the chain down deepest first.
- *
- * WHY THE ID COMES FROM A SIGNAL
- *
- * `routeParams` is a signal, and navigating from `/sales/orders/OR-1` to
- * `/sales/orders/OR-2` does not change the route — only the parameter — so this element
- * is *reused* rather than remounted. Reading the id in `onMount` would therefore leave
- * the second order showing the first one's data. `OrderRecords.watch()` follows the
- * parameter and moves both readers to one new keyed resource.
- *
- * THE WRITE PATH
- *
- * Advancing the status needs `sales:write`. The control is rendered for everybody and
- * disabled with a reason for those who lack it, because a missing button is
- * indistinguishable from a broken one. The server checks the scope regardless — see
- * `example/server/api.mjs` — and a 403 is shown rather than swallowed.
+ * Keep the order header mounted while its three tabs change. `OrderRecords.watch()`
+ * follows the route id when this element is reused for another order. Status changes
+ * require `sales:write`; the control explains when that scope is missing.
  */
 export class OrderDetailPage extends SignalElement {
   /** The shared record view installed after this element is mounted. */
@@ -56,9 +37,7 @@ export class OrderDetailPage extends SignalElement {
   }
 
   /**
-   * The record, or nothing while the last load is failing. A resource keeps the value
-   * it had, which is right for a list being refreshed and wrong for a header: the
-   * previous order's code under a "not found" notice is a worse answer than none.
+   * Hide the previous order's header when a new request fails.
    */
   get record() {
     return this.failed.value ? null : (this.#order.value?.value.value ?? null);
@@ -142,7 +121,7 @@ export class OrderDetailPage extends SignalElement {
     return !this.canWrite || this.nextStatus === '' || this.saving.value;
   }
 
-  /** Why the control is disabled, as a title. Empty when it is not. */
+/** Explain why the status control is disabled. */
   get advanceHint() {
     if (this.canWrite) return '';
     return t('orders.needsWriteScope');
@@ -153,8 +132,7 @@ export class OrderDetailPage extends SignalElement {
   }
 
   /**
-   * The tab strip. Computed, because the hrefs contain the current id and the labels
-   * come from the message table.
+   * Build tab links and labels from the current id and language.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<readonly TabItem[]>}
    */
@@ -173,8 +151,7 @@ export class OrderDetailPage extends SignalElement {
   }
 
   onMount() {
-    // The state module follows parameter changes and releases its keyed record
-    // with this element. The child tab watches through the same module.
+    // The child tab shares this keyed record until both readers release it.
     this.#order.value = inject(ORDER_RECORDS).watch(() => this.orderId, this.lifetime);
   }
 
@@ -195,8 +172,7 @@ export class OrderDetailPage extends SignalElement {
     this.saving.value = true;
     this.writeErrorKey.value = '';
 
-    // The state module owns the write-then-refresh ordering, so every reader sees
-    // the same settled answer rather than this screen refreshing only its copy.
+    // The shared record refreshes after a status write.
     void order
       .setStatus(next)
       .catch((cause) => {

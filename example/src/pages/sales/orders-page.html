@@ -6,10 +6,7 @@
     lead="{{ t('orders.lead') }}"
   >
     <!--
-      One control holding every filter this screen offers, plus the rail of chips
-      saying which are on. The screen declares rules and consumes state; it never
-      touches options, and it never imports the table's matching code — both sides
-      import filter-descriptor.js, so the connection is one assignment.
+      The filter control owns the rules and shows active values as chips.
     -->
     <ui-dynamic-filter
       slot="toolbar"
@@ -98,10 +95,7 @@
         [.renderer]="renderPlacedOn"
       ></ui-table-column>
       <!--
-        Rendered as formatted currency, so the cell text is "€ 1.234,50" and would
-        sort as a string. `sort-value` hands the table the number instead — which is
-        academic under server pagination and correct the day this screen switches to
-        client mode.
+        `sort-value` keeps the numeric total apart from its formatted text.
       -->
       <ui-table-column
         key="total"
