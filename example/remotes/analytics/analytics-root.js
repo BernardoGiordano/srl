@@ -7,20 +7,20 @@
  * replaces its own subtree, and every subscription torn down by hand in
  * `disconnectedCallback`.
  *
- * That is real ceremony the shell's own components do not pay, and showing the cost is the
- * point: it is what a team on another stack pays to integrate here, they pay it inside
- * their own folder, and the shell is unaffected.
+ * That is real ceremony the shell's own components do not pay, and showing the cost is
+ * what this file is for. It is what a team on another stack pays to integrate here, they
+ * pay it inside their own folder, and the shell is unaffected.
  *
- * Two things it does not do differently, because the contract carries them: translation and
- * authorization. Its strings come from its own bundle merged into the shell's table, and
- * its API calls go through the shell's outbound HTTP path — with the shell's credential
- * attachment, its refresh and its retry. It never sees a token, and it cannot: the context
- * exposes `fetch` and `json` and no way to obtain one.
+ * Two things it does not do differently, because the contract carries them, are
+ * translation and authorization. Its strings come from its own bundle merged into the
+ * shell's table, and its API calls go through the shell's outbound HTTP path, with the
+ * shell's credential attachment, refresh and retry. It never sees a token and it cannot,
+ * because the context exposes `fetch` and `json` and no way to obtain one.
  *
- * The re-render strategy is the crudest possible: throw the subtree away and rebuild it. No
- * diffing, so nothing here may hold focus or scroll position across a render, and nothing
- * does. A remote at real scale would bring its own renderer, which is exactly what it is
- * allowed to do.
+ * The re-render strategy is the crudest possible. Throw the subtree away and rebuild it.
+ * No diffing, so nothing here may hold focus or scroll position across a render, and
+ * nothing does. A remote at real scale would bring its own renderer, which is exactly
+ * what it is allowed to do.
  */
 
 /** @import { HostContext } from '../../../source/lib/core/remotes/types.js' */
@@ -88,14 +88,14 @@ function defineAnalyticsRoot(tag) {
         // Subscribing without clearing first leaves a duplicate listener per move.
         this.#unsubscribe();
         this.#subscriptions = [
-          // Sign-in, sign-out, any change of scope: the permission-gated control has to
-          // appear and disappear with it.
+          // Sign-in, sign-out and any change of scope, because the permission-gated
+          // control has to appear and disappear with it.
           host.auth.onChange(() => {
             this.#notice = null;
             void this.#load();
           }),
-          // A locale change re-renders from the same data. Nothing is refetched, because
-          // the numbers are not localised — only their formatting is.
+          // A locale change re-renders from the same data. Nothing is refetched,
+          // because only the formatting of the numbers is localised.
           host.i18n.onChange(() => {
             this.render();
           }),
@@ -140,9 +140,9 @@ function defineAnalyticsRoot(tag) {
       }
 
       /**
-       * Call an API this remote is not granted, on purpose, and show what comes back. The
-       * demonstration is the error: the shell refuses before a request is made, and the
-       * refusal names the grant that would have to change.
+       * Call an API this remote is not granted, on purpose, and show what comes back.
+       * The error is the demonstration. The shell refuses before a request is made, and
+       * the refusal names the grant that would have to change.
        *
        * @returns {Promise<void>}
        */
@@ -280,11 +280,12 @@ function defineAnalyticsRoot(tag) {
         );
 
         /*
-         * The permission gate. `can` answers only about permissions this remote was granted
-         * in the manifest, so the button is absent for a session without the write scope —
-         * and the remote learns nothing about the user's other entitlements. The server must
-         * check it again regardless: this is an affordance, not an authorization decision,
-         * and any remote could render the button anyway.
+         * The permission gate. `can` answers only about permissions this remote was
+         * granted in the manifest, so the button is absent for a session without the
+         * write scope and the remote learns nothing about the user's other
+         * entitlements. The server must check it again regardless, because this is an
+         * affordance rather than an authorization decision and any remote could render
+         * the button anyway.
          */
         if (host.auth.can('analytics:write')) {
           actions.append(
@@ -403,8 +404,9 @@ function readSummary(value) {
     generatedAt: typeof record.generatedAt === 'string' ? record.generatedAt : '',
     currency: typeof record.currency === 'string' ? record.currency : 'EUR',
     conversion: requireNumber(record.conversion, 'conversion'),
-    // Cast at the point of iteration rather than into a variable: `Array.isArray` narrows an
-    // `unknown` to `any[]`, and an intermediate binding would carry that `any` onwards.
+    // Cast at the point of iteration rather than into a variable, because
+    // `Array.isArray` narrows an `unknown` to `any[]` and an intermediate binding would
+    // carry that `any` onwards.
     byChannel: (Array.isArray(record.byChannel)
       ? /** @type {unknown[]} */ (record.byChannel)
       : []

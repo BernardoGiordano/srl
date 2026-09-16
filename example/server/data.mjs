@@ -1,8 +1,8 @@
 /**
  * The dataset, in memory.
  *
- * No database, on purpose: an example application's backend should be readable in
- * one sitting and runnable with `node`, and every query in api.mjs is a few array
+ * No database, on purpose. An example application's backend should be readable in one
+ * sitting and runnable with `node`, and every query in api.mjs is a few array
  * operations over the arrays below. What it does not fake is HTTP: paging,
  * sorting, filtering and authorization all happen here rather than in the browser,
  * so the client code is the code a real API needs and not a demo shortcut.
@@ -10,9 +10,9 @@
  * Everything is generated from one seed, so two boots produce the same rows and a
  * screenshot or a failing assertion reproduces.
  *
- * Mutations (an order's status, a user's state) are applied to these objects and
- * are therefore lost on restart. That is the intended lifetime: this is a fixture,
- * not storage.
+ * Mutations, such as an order's status or a user's state, are applied to these objects
+ * and are therefore lost on restart. That is the intended lifetime, because this is a
+ * fixture rather than storage.
  */
 
 import { createRandom } from './random.mjs';
@@ -125,8 +125,8 @@ export const CITIES = Object.freeze(
 /* ── Customers ────────────────────────────────────────────────────────────── */
 
 /**
- * What a contact can be to a customer. Declared before the fixture rather than
- * beside it: the rows below are built while this module evaluates, so a `const`
+ * What a contact can be to a customer. Declared before the fixture rather than beside
+ * it, because the rows below are built while this module evaluates and a `const`
  * underneath them is still in its temporal dead zone when they ask for it.
  */
 export const CONTACT_ROLES = ['billing', 'technical', 'commercial'];
@@ -135,10 +135,10 @@ export const CONTACT_ROLES = ['billing', 'technical', 'commercial'];
  * The company names already handed out, so no two customers share one.
  *
  * Twenty-two heads over seven tails is a hundred and fifty-four combinations for
- * forty-eight draws, which collides often enough to matter: the API rejects a name
- * or an address a second customer already holds, so a pair of twins in the fixture
- * is a pair of records that cannot be saved back unchanged — `taken` against a field
- * the user never touched. Redrawing is bounded because the pool is larger than the
+ * forty-eight draws, which collides often enough to matter. The API rejects a name or
+ * an address a second customer already holds, so a pair of twins in the fixture is a
+ * pair of records that cannot be saved back unchanged, with `taken` against a field the
+ * user never touched. Redrawing is bounded because the pool is larger than the
  * fixture.
  *
  * @type {Set<string>}
@@ -156,10 +156,10 @@ function uniqueCompanyName() {
 }
 
 /**
- * Mutable, unlike most of this file: `/api/customers` accepts a POST and a PATCH, so
- * the array is the store the write path writes to. Nothing is persisted — a restart
- * is the reset button — which is the right amount of durability for an example whose
- * job is to make the round trip real rather than to keep it.
+ * Mutable, unlike most of this file, because `/api/customers` accepts a POST and a
+ * PATCH and the array is the store the write path writes to. Nothing is persisted, and
+ * a restart is the reset button, which is the right amount of durability for an example
+ * whose job is to make the round trip real rather than to keep it.
  *
  * @type {Array<{
  *   id: string, name: string, email: string, segment: string, city: string,
@@ -171,7 +171,7 @@ function uniqueCompanyName() {
 export const CUSTOMERS = Array.from({ length: 48 }, (_unused, index) => {
   const warehouse = random.pick(WAREHOUSES);
   const name = uniqueCompanyName();
-  // Derived from the name, so a unique name is a unique address as well — the
+  // Derived from the name, so a unique name is a unique address as well, which is the
   // second rule the API checks across customers.
   const mailbox = name.toLowerCase().replaceAll(/[^a-z0-9]+/gu, '.');
   return {
@@ -190,8 +190,8 @@ export const CUSTOMERS = Array.from({ length: 48 }, (_unused, index) => {
     // as the repeating one without anybody having to construct it.
     //
     // The row number is in the address because two contacts of one customer may
-    // not share one, and two random picks from the same name lists can collide —
-    // a fixture that violates its own rule is a record that cannot be saved back
+    // not share one and two random picks from the same name lists can collide. A
+    // fixture that violates its own rule is a record that cannot be saved back
     // unchanged.
     contacts: Array.from({ length: random.int(3) }, (_ignored, row) => {
       const person = `${random.pick(FIRST_NAMES)} ${random.pick(LAST_NAMES)}`;
@@ -239,8 +239,8 @@ export const PRODUCTS = Array.from({ length: 640 }, (_unused, index) => {
 export const ORDERS = Array.from({ length: 312 }, (_unused, index) => {
   const customer = random.pick(CUSTOMERS);
   // The delivery municipality, drawn from the 8,600-entry list. This is the field
-  // the typeahead filter exists for: nothing can hand that list to a browser, and
-  // nobody scrolls it.
+  // the typeahead filter exists for, because nothing can hand that list to a browser
+  // and nobody scrolls it.
   const comune = random.pick(CITIES);
   const placedDaysAgo = random.int(540);
   return {
@@ -263,8 +263,8 @@ export const ORDERS = Array.from({ length: 312 }, (_unused, index) => {
 
 /**
  * Lines, keyed by order id. A separate endpoint rather than an embedded array,
- * because the detail screen's tabs are separate routes and each fetches its own
- * slice — which is what makes the child-route layout worth having.
+ * because the detail screen's tabs are separate routes and each fetches its own slice,
+ * which is what makes the child-route layout worth having.
  *
  * @type {Map<string, Array<{ line: number, sku: string, name: string, quantity: number, unitPrice: number, total: number }>>}
  */
@@ -288,8 +288,8 @@ export const ORDER_LINES = new Map(
 );
 
 /**
- * Per-order history. Append-only in the same sense the audit log is: a status
- * change through the API adds an entry here.
+ * Per-order history. Append-only in the same sense the audit log is, so a status change
+ * through the API adds an entry here.
  *
  * @type {Map<string, Array<{ at: string, actor: string, event: string, detail: string }>>}
  */
@@ -434,16 +434,15 @@ export const AUDIT = Array.from({ length: 26 }, (_unused, index) => ({
 }));
 
 /**
- * Which scopes a role carries. The three roles exist so that the shell's guards
- * have something to refuse: a viewer cannot reach `/settings/users` and cannot
- * mount the analytics remote, and both refusals are visible in the UI rather than
- * hypothetical.
+ * Which scopes a role carries. The three roles exist so that the shell's guards have
+ * something to refuse. A viewer cannot reach `/settings/users` and cannot mount the
+ * analytics remote, and both refusals are visible in the UI rather than hypothetical.
  *
- * Every scope listed here is enforced somewhere a user can see. A scope no route
- * guard, no control and no endpoint reads would still be printed on the profile
- * screen and still be announced on the sign-in screen, which is an entitlement the
- * application advertises and does not have — the one thing this list must not do.
- * So the enforcement points are, exhaustively:
+ * Every scope listed here is enforced somewhere a user can see. A scope no route guard,
+ * no control and no endpoint reads would still be printed on the profile screen and
+ * still be announced on the sign-in screen, which is an entitlement the application
+ * advertises and does not have. That is the one thing this list must not do, so the
+ * enforcement points are, exhaustively:
  *
  *   sales:read       the orders and customers routes, and their endpoints
  *   sales:write      the order and customer controls, and their endpoints

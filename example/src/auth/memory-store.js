@@ -33,8 +33,8 @@ import {
  * token. A reload costs one network round trip; an XSS payload gets a token that
  * dies with the tab and cannot be renewed once the tab closes.
  *
- * What this does not do: survive with the tab closed, or share a session between
- * tabs by itself. Each tab performs its own refresh. AuthSession's
+ * It does not survive with the tab closed, and does not share a session between tabs by
+ * itself. Each tab performs its own refresh. AuthSession's
  * BroadcastChannel coordinates logout across tabs but cannot share the in-memory
  * token, by design.
  *
@@ -95,9 +95,9 @@ export class MemoryTokenStore {
   }
 
   /**
-   * Not `async`: attaching a bearer header is synchronous. The interface returns a
-   * Promise because the DPoP strategy has to sign, and a caller must not need to
-   * know which strategy it is talking to.
+   * Not `async`, because attaching a bearer header is synchronous. The interface
+   * returns a Promise because the DPoP strategy has to sign, and a caller must not need
+   * to know which strategy it is talking to.
    *
    * @param {Request} request
    * @returns {Promise<Request>}
@@ -114,7 +114,7 @@ export class MemoryTokenStore {
    *
    * Every failure leaves this store holding no access token and raises one of the
    * two errors `@auth/session-policy.js` defines, because `AuthSession` schedules
-   * refreshes against them: a refused grant ends the session, an unreachable
+   * refreshes against them. A refused grant ends the session, and an unreachable
    * endpoint does not.
    *
    * @param {Record<string, string>} body
@@ -139,8 +139,8 @@ export class MemoryTokenStore {
 
     if (response.status === 401 || response.status === 403) {
       this.#accessToken = null;
-      // The one expected non-answer: no refresh cookie, or one the server no
-      // longer honours. That is "nobody is signed in", not a failure.
+      // The one expected non-answer, meaning no refresh cookie or one the server has
+      // stopped honouring. That is "nobody is signed in" rather than a failure.
       if (options.allowUnauthenticated) return null;
       throw new AuthRejected(`${where} rejected the credentials.`);
     }
@@ -149,11 +149,10 @@ export class MemoryTokenStore {
       throw await failureFor(response, where);
     }
 
-    // Cleared before admission and assigned only after it. The server has
-    // answered, so whatever we held is now the previous answer; if this one turns
-    // out to be unadmissible, `AuthSession` ends the session, and a store still
-    // holding the old token would go on authorizing requests for a session that
-    // no longer exists.
+    // Cleared before admission and assigned only after it. The server has answered, so
+    // whatever was held is now the previous answer. If this one turns out to be
+    // unadmissible, `AuthSession` ends the session, and a store still holding the old
+    // token would go on authorizing requests for a session that has ended.
     this.#accessToken = null;
     const session = readTokenResponse(await readPayload(response, where), where);
     this.#accessToken = session.accessToken;
@@ -165,9 +164,9 @@ export class MemoryTokenStore {
  * An RFC 6749 token response, as this authorization server sends it, rebuilt into
  * a `Session` plus the credential the store keeps privately.
  *
- * The token is returned beside the session rather than on it: a `Session` reaches
+ * The token is returned beside the session rather than on it. A `Session` reaches
  * guards, screens and the remote host contract, and a credential on it would
- * eventually be logged or copied into a diagnostic. ADR-0021, ADR-0021.
+ * eventually be logged or copied into a diagnostic. ADR-0021.
  *
  * @param {unknown} value
  * @param {string} where

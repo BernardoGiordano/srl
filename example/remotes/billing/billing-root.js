@@ -10,25 +10,23 @@ import { UiTableColumn } from '@components/data/ui-table-column.js';
 /**
  * The billing remote's root.
  *
- * WHAT IT SHARES, AND WHAT IT ASKS FOR
+ * It shares the stack, meaning Lit, the signals library, the template compiler, the i18n
+ * module and two elements from `source/components`. A remote using the shell's component
+ * collection is worth demonstrating, because the collection imports nothing from an
+ * application, so it works here exactly as it does in `src/` and this screen's table has
+ * the same sorting, column chooser and accessible names as the shell's own.
  *
- * It shares the *stack*: Lit, the signals library, the template compiler, the i18n module
- * and two elements from `source/components`. A remote using the shell's component
- * collection is worth demonstrating — the collection imports nothing from an application,
- * so it works here exactly as it does in `src/`, and this screen's table has the same
- * sorting, column chooser and accessible names as the shell's own.
- *
- * It does not share the shell's *state*. Routing arrives through `mount(host)`, not by
- * importing `currentPath` and `navigate` — which would resolve, and would duplicate the
- * mount path and bypass a capability `revoke()` can take back. ADR-0016.
+ * It does not share the shell's state. Routing arrives through `mount(host)` rather than
+ * by importing `currentPath` and `navigate`, which would resolve, duplicate the mount
+ * path and bypass a capability `revoke()` can take back. ADR-0016.
  *
  * Sub-view routing stays this remote's business. The shell's route table knows nothing of
- * `/invoices` or `/plans`, which is exactly what lets this folder add or rename a sub-view
- * with no shell change, and the prefix those views hang off comes from `host.mount`.
+ * `/invoices` or `/plans`, which is what lets this folder add or rename a sub-view with no
+ * shell change, and the prefix those views hang off comes from `host.mount`.
  *
- * The data is local on purpose: this remote is granted no API access in the manifest, and
- * it needs none. `remotes/analytics/` is the one that calls a server, and its grants say
- * exactly which paths it may reach.
+ * The data is local on purpose, because this remote is granted no API access in the
+ * manifest and needs none. `remotes/analytics/` is the one that calls a server, and its
+ * grants say exactly which paths it may reach.
  */
 export class BillingRoot extends SignalElement {
   /** This mount's capabilities, handed over by `remote-entry.js` before connection. */
@@ -37,10 +35,10 @@ export class BillingRoot extends SignalElement {
 
   /**
    * The shell's path, pushed in through the context rather than read from the shell's
-   * signal. A signal on this side of the seam is what turns the contract's callback into
-   * something a template can render off — and the contract deals in callbacks on purpose,
-   * since exposing a `Signal` would oblige every remote to agree on the shell's reactive
-   * library.
+   * signal. A signal on this side of the seam turns the contract's callback into
+   * something a template can render off. The contract deals in callbacks on purpose,
+   * because exposing a `Signal` would oblige every remote to agree on the shell's
+   * reactive library.
    */
   #path = signal('');
 
@@ -54,11 +52,12 @@ export class BillingRoot extends SignalElement {
     const { mount } = this.#requireHost();
     const path = this.#path.value;
 
-    // The prefix check is not redundant. A computed keeps evaluating while anything reads
-    // it, and this element is alive for a moment after the router has navigated away — the
-    // shell reports the new path before the mount is torn down — so an unrelated path
-    // would otherwise be sliced into a view name that does not exist. Harmless on screen,
-    // and it puts a missing-key warning in the console that sends you to the wrong file.
+    // The prefix check is not redundant. A computed keeps evaluating while anything
+    // reads it, and this element is alive for a moment after the router has navigated
+    // away, because the shell reports the new path before the mount is torn down. An
+    // unrelated path would otherwise be sliced into a view name that does not exist.
+    // Harmless on screen, and it puts a missing-key warning in the console that sends
+    // you to the wrong file.
     if (path !== mount && !path.startsWith(`${mount}/`)) return 'overview';
 
     const rest = path.slice(mount.length).replace(/^\/+/u, '');
@@ -92,8 +91,8 @@ export class BillingRoot extends SignalElement {
    * Receive this mount's capability context.
    *
    * Called between `createElement` and insertion, so the first render already has a path
-   * and a mount prefix. Never stored at module scope: a second visit gets a second
-   * context, and the revoked first one is unreachable.
+   * and a mount prefix. Never stored at module scope, because a second visit gets a
+   * second context and the revoked first one is unreachable.
    *
    * @param {HostContext} host
    */
@@ -121,9 +120,10 @@ export class BillingRoot extends SignalElement {
   /** @param {string} name */
   go(name) {
     const host = this.#requireHost();
-    // Through the context, so this remote has one way out and the shell keeps the ability
-    // to cut it. Completion is not offered across the seam: a remote awaiting the shell's
-    // navigation would learn only that a guard sent the user elsewhere.
+    // Through the context, so this remote has one way out and the shell keeps the
+    // ability to cut it. Completion is not offered across the seam, because a remote
+    // awaiting the shell's navigation would learn only that a guard sent the user
+    // elsewhere.
     host.router.navigate(name === 'overview' ? host.mount : `${host.mount}/${name}`);
   }
 

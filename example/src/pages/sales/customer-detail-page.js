@@ -34,55 +34,42 @@ const CONTACTS_MAX = 5;
 /**
  * One customer: read it, edit it, or create it. Three modes, one screen.
  *
- * WHAT THIS FILE IS FOR
+ * The screen is built on `@core/forms` and `<ui-field>`, so what is left below is the
+ * part that is actually about customers. Which rules apply, what the server is asked,
+ * and where to go afterwards.
  *
- * It was written twice: once with nothing but native inputs and the template
- * dialect, to measure what a form costs without a forms layer, and again on
- * `@core/forms` and `<ui-field>`. What is left below
- * is the part that is actually about customers — which rules apply, what the server
- * is asked, where to go afterwards.
+ * The mode is in the URL. `/sales/customers/:id` reads, `?edit=true` edits, and
+ * `/sales/customers/new` creates. Nothing here holds an `editing` flag. That is also
+ * why the discard prompt is not asked on the way in or out of edit mode, because the
+ * guard is about leaving the screen and a query change does not leave it. Only
+ * `cancel()` discards, and it says so on the button.
  *
- * THE MODE IS IN THE URL
+ * The rules are the declaration. `group()` is the whole of the form's state. Validity,
+ * touched, dirty, the timing rule for showing an error, and the server's per-field
+ * answers are all derived from it, and none of them appears as a signal in this class.
  *
- * `/sales/customers/:id` reads, `?edit=true` edits, `/sales/customers/new`
- * creates. Nothing here holds an `editing` flag. That is also why the
- * discard prompt is not asked on the way in or out of edit mode — the guard is
- * about leaving the screen, and a query change does not leave it. Only `cancel()`
- * discards, and it says so on the button.
+ * Two of the server's rules are about data no client holds, because a name and an email
+ * address are unique across the account. The name arrives as a 422 and `applyErrors`
+ * puts it under its field. The address is asked about while the user types, through an
+ * `async` validator on the field, so the answer arrives beside the control the user has
+ * just left rather than after eight more fields. The 422 is still the authority and
+ * still lands the same way, and the check only moves the common case forward.
  *
- * THE RULES ARE THE DECLARATION
+ * A third rule is about the set of contacts rather than one of them. `uniqueBy` answers
+ * it against the array, and `<ui-form-error>` is where the answer goes, because there is
+ * no control on screen for "the contacts".
  *
- * `group()` is the whole of the form's state. Validity, touched, dirty, the
- * timing rule for showing an error, and the server's per-field answers are all
- * derived from it, and none of them appears as a signal in this class.
+ * This screen still owns loading, saving, and translating between the form's strings and
+ * the API's types. Values stay strings until `toInput`, because `Number('')` is `0` and
+ * a form that converts per keystroke cannot tell an empty revenue field from a customer
+ * who has spent nothing.
  *
- * Two of the server's rules are about data no client holds — a name and an email
- * address are unique across the account. The name still arrives as a 422 and
- * `applyErrors` puts it under its field. The address is asked about while the user
- * types, through an `async` validator on the field, so the answer arrives beside the
- * control the user has just left rather than after eight more fields. The 422 is
- * still the authority and still lands the same way; the check only moves the common
- * case forward.
- *
- * A third rule is about the *set* of contacts rather than one of them. `uniqueBy`
- * answers it against the array, and `<ui-form-error>` is where the answer goes,
- * because there is no control on screen for "the contacts".
- *
- * WHAT IS STILL THIS SCREEN'S JOB
- *
- * Loading, saving, and translating between the form's strings and the API's
- * types. Values stay strings until `toInput`, because `Number('')` is `0` and a
- * form that converts per keystroke cannot tell an empty revenue field from a
- * customer who has spent nothing.
- *
- * LEAVING WITH UNSAVED WORK
- *
- * `canLeave()` is the route's `canDeactivate` (see `routes.js`). It resolves
- * against a `<ui-dialog>` rather than `confirm()`: the native prompt blocks the
- * event loop, cannot be styled or translated, and reads as a browser error to
- * the user. The dialog is `mandatory`, because the guard is holding a promise
- * that only an answer can resolve. `beforeunload` still covers closing the tab,
- * which is the one navigation no application can intercept.
+ * `canLeave()` is the route's `canDeactivate`, declared in `routes.js`. It resolves
+ * against a `<ui-dialog>` rather than `confirm()`, because the native prompt blocks the
+ * event loop, cannot be styled or translated, and reads as a browser error to the user.
+ * The dialog is `mandatory`, because the guard is holding a promise that only an answer
+ * can resolve. `beforeunload` still covers closing the tab, which is the one navigation
+ * no application can intercept.
  */
 export class CustomerDetailPage extends SignalElement {
   form = group({
@@ -147,10 +134,10 @@ export class CustomerDetailPage extends SignalElement {
   );
 
   /**
-   * `/sales/customers/new` has nothing to read, so the resource is never asked and its
-   * own `pending` stays true — which is the right answer for a screen waiting on a
-   * record and the wrong one for a screen creating one. The mode is what tells them
-   * apart, and this is the only place that has to know.
+   * `/sales/customers/new` has nothing to read, so the resource is never asked and
+   * its own `pending` stays true. That is the right answer for a screen waiting on a
+   * record and the wrong one for a screen creating one. The mode tells them apart, and
+   * this is the only place that has to know.
    */
   loading = computed(() => this.customerId !== '' && this.#customer.pending.value);
 
@@ -187,17 +174,17 @@ export class CustomerDetailPage extends SignalElement {
   /**
    * Editable, and the one derivation the rest of the screen hangs off.
    *
-   * Creating has nothing to read, so the mode is not a question; editing is,
-   * and the query alone does not answer it — a URL is typed by anyone, and a
-   * form that enabled itself for a reader would let them fill in a save the
-   * server is going to refuse.
+   * Creating has nothing to read, so the mode is not a question there. Editing is,
+   * and the query alone does not answer it, because a URL is typed by anyone and a
+   * form that enabled itself for a reader would let them fill in a save the server is
+   * going to refuse.
    *
-   * `sales:write` is checked in both branches even though `customers/new` is a
-   * guarded route, because a guard runs once at navigation and this is a signal.
-   * A session that loses the scope while the screen is mounted — a second tab
-   * signing in as a reader against the same cookie, a refresh that comes back
-   * with fewer entitlements — leaves a live form behind an entitlement that is
-   * gone, and the first thing the user learns is a 403 on a filled-in record.
+   * `sales:write` is checked in both branches even though `customers/new` is a guarded
+   * route, because a guard runs once at navigation and this is a signal. A session that
+   * loses the scope while the screen is mounted, from a second tab signing in as a
+   * reader against the same cookie or a refresh that comes back with fewer
+   * entitlements, leaves a live form behind an entitlement that is gone, and the first
+   * thing the user learns is a 403 on a filled-in record.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<boolean>}
    */
@@ -230,9 +217,9 @@ export class CustomerDetailPage extends SignalElement {
   }
 
   /**
-   * The heading. Creating has no customer to name, and editing is a mode of the
-   * same screen rather than a different place, so the name stands in both — the
-   * word "Edit" belongs on the control that got the user here, not on the record.
+   * The heading. Creating has no customer to name, and editing is a mode of the same
+   * screen rather than a different place, so the name stands in both. The word "Edit"
+   * belongs on the control that got the user here rather than on the record.
    */
   get title() {
     if (this.creating) return t('customerForm.newTitle');
@@ -277,10 +264,10 @@ export class CustomerDetailPage extends SignalElement {
   /* ── Contacts ───────────────────────────────────────────────────────────── */
 
   /**
-   * The rows, each with the key a keyed `*for` tracks and the index its fields
-   * are addressed by. Nothing here holds them: the array does, and it is part of
-   * the form, so a contact added and then abandoned is caught by the same dirty
-   * check and the same discard prompt as a typo in the name.
+   * The rows, each with the key a keyed `*for` tracks and the index its fields are
+   * addressed by. Nothing here holds them, because the array does and it is part of the
+   * form, so a contact added and then abandoned is caught by the same dirty check and
+   * the same discard prompt as a typo in the name.
    */
   get contactRows() {
     return this.fields.contacts.rows.value;
@@ -291,9 +278,9 @@ export class CustomerDetailPage extends SignalElement {
   }
 
   /**
-   * Nothing to add when the form is not editable or the server would refuse it.
-   * The limit is the server's; this is the affordance, and `api.mjs` still
-   * answers `contacts: tooMany` to anything that gets past it.
+   * Nothing to add when the form is not editable or the server would refuse it. The
+   * limit is the server's, this is the affordance, and `api.mjs` still answers
+   * `contacts: tooMany` to anything that gets past it.
    */
   get canAddContact() {
     return this.editing && this.fields.contacts.length.value < CONTACTS_MAX;
@@ -352,10 +339,10 @@ export class CustomerDetailPage extends SignalElement {
    * the framework's own validators produce, which is why this table is three
    * entries rather than a dozen.
    *
-   * `taken` is the server's answer and the email check's alike — one rule, reached
-   * two ways. `duplicate` is the server's answer against the contact row that
-   * repeats and `duplicated` is `uniqueBy`'s against the array as a whole; they
-   * read as one sentence, because to the user they are one fact.
+   * `taken` is the server's answer and the email check's alike, one rule reached two
+   * ways. `duplicate` is the server's answer against the contact row that repeats and
+   * `duplicated` is `uniqueBy`'s against the array as a whole. They read as one
+   * sentence, because to the user they are one fact.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<Readonly<Record<string, string>>>}
    */
@@ -388,9 +375,9 @@ export class CustomerDetailPage extends SignalElement {
   onMount() {
     void this.#loadCountries();
 
-    // The whole of what view mode is. One effect, so there is no path through
-    // this screen that changes the mode and forgets the fields — including the
-    // back button, which changes the query and nothing else.
+    // The whole of what view mode is. One effect, so there is no path through this
+    // screen that changes the mode and forgets the fields, including the back button,
+    // which changes the query and nothing else.
     this.#stopMode = effect(() => {
       this.form.setDisabled(!this.#editing.value);
     });
@@ -439,9 +426,9 @@ export class CustomerDetailPage extends SignalElement {
   canLeave() {
     if (!this.dirty || this.saving.value) return true;
     const already = this.#pendingLeave.value;
-    // A second click while the prompt is open is the same question. Answering
-    // the first with `false` keeps the router's bookkeeping honest — that
-    // navigation really was refused — and leaves the prompt up for this one.
+    // A second click while the prompt is open is the same question. Answering the
+    // first with `false` keeps the router's bookkeeping honest, because that
+    // navigation really was refused, and leaves the prompt up for this one.
     if (already !== null) already(false);
     return new Promise((resolve) => {
       this.#pendingLeave.value = resolve;
@@ -467,10 +454,10 @@ export class CustomerDetailPage extends SignalElement {
   }
 
   /**
-   * The one load whose result is not what the screen renders: the fields are the form's,
-   * so a settled value is applied to it rather than bound. `reload()` hands the value
-   * back for exactly this, and `undefined` means the request was superseded, aborted or
-   * rejected — all three of which the resource has already recorded.
+   * The one load whose result is not what the screen renders. The fields are the
+   * form's, so a settled value is applied to it rather than bound. `reload()` hands the
+   * value back for exactly this, and `undefined` means the request was superseded,
+   * aborted or rejected, all three of which the resource has already recorded.
    */
   async load() {
     if (this.customerId === '') return;
@@ -488,10 +475,10 @@ export class CustomerDetailPage extends SignalElement {
       const rows = await inject(LOOKUP_SERVICE).options('country');
       this.countryOptions.value = rows.map((row) => ({ value: String(row.value), label: row.label }));
     } catch {
-      // A failed lookup leaves the control empty rather than the screen broken.
-      // The field is still required, so the form refuses to save with nothing
-      // chosen — and a value already loaded stays pending until the options
-      // arrive, which is `ui-combobox`'s half of the contract.
+      // A failed lookup leaves the control empty rather than the screen broken. The
+      // field is still required, so the form refuses to save with nothing chosen, and
+      // a value already loaded stays pending until the options arrive, which is
+      // `ui-combobox`'s half of the contract.
       this.countryOptions.value = [];
     }
   }
@@ -501,8 +488,8 @@ export class CustomerDetailPage extends SignalElement {
   /** @param {Event} event */
   async submit(event) {
     event.preventDefault();
-    // View mode has no submit button, but a `<form>` still submits on Enter — and
-    // a disabled form reports valid, so this would post the record back to itself
+    // View mode has no submit button, but a `<form>` still submits on Enter, and a
+    // disabled form reports valid, so this would post the record back to itself
     // unchanged rather than being refused by validation.
     if (this.viewing || this.saving.value || this.loading.value) return;
 
@@ -533,20 +520,19 @@ export class CustomerDetailPage extends SignalElement {
     this.form.setDisabled(true);
     void (id === '' ? service.createCustomer(input) : service.updateCustomer(id, input))
       .then((saved) => {
-        // Saved, so nothing is unsaved: the baseline moves before the navigation,
-        // or `canLeave` prompts on the way out of a form that was just persisted.
+        // Saved, so nothing is unsaved. The baseline moves before the navigation, or
+        // `canLeave` prompts on the way out of a form that was just persisted.
         this.form.reset(toValues(saved));
         this.loadedName.value = saved.name;
         // A create has nowhere to stay, so it lands on the list. An edit drops
-        // `?edit=true` and stays on the record it just wrote, which is the same
-        // screen with the fields switched off — the shortest way to see that the
-        // save landed.
+        // `?edit=true` and stays on the record it just wrote, which is the same screen
+        // with the fields switched off and the shortest way to see the save landed.
         void navigate(id === '' ? '/sales/customers' : `/sales/customers/${encodeURIComponent(id)}`);
       })
       .catch((cause) => {
-        // Before anything below looks for a field to focus: a disabled field is
-        // not offered as one, so a form still switched off would name nothing
-        // and the user would be left with an error and no cursor.
+        // Before anything below looks for a field to focus, because a disabled field
+        // is not offered as one, so a form still switched off would name nothing and
+        // the user would be left with an error and no cursor.
         this.form.setDisabled(false);
         if (!(cause instanceof ApiError)) {
           this.saveErrorKey.value = 'common.saveFailed';
@@ -576,8 +562,8 @@ export class CustomerDetailPage extends SignalElement {
 
   /**
    * A `navigate` rather than an `<a href>`, for the same reason the list's create
-   * control is a button: it has to be renderable and refusable for a session
-   * without `sales:write`, and there is no disabled anchor.
+   * control is a button. It has to be renderable and refusable for a session without
+   * `sales:write`, and there is no disabled anchor.
    */
   startEdit() {
     if (!this.canWrite || this.creating) return;
@@ -587,9 +573,9 @@ export class CustomerDetailPage extends SignalElement {
   /**
    * Leave edit mode, or leave the screen when there is nothing to go back to.
    *
-   * This is the only path that throws work away, which is why the reset is here
-   * and not in the mode effect: the back button also leaves edit mode, and a user
-   * who backed out of a mistake and returned to it would find the form emptied by
+   * This is the only path that throws work away, which is why the reset is here and
+   * not in the mode effect. The back button also leaves edit mode, and a user who
+   * backed out of a mistake and returned to it would find the form emptied by
    * a rule nobody told them about. Everywhere else the edits survive, and the
    * route's own prompt still catches them on the way out of the screen.
    */

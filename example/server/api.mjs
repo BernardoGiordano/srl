@@ -1,16 +1,16 @@
 /**
  * The API.
  *
- * One function per resource, dispatched from a small table at the bottom. Three
- * things here are worth more than the data they return:
+ * One function per resource, dispatched from a small table at the bottom. Three things
+ * here are worth more than the data they return.
  *
  *  1. **Paging, sorting and filtering happen on this side.** `/api/orders` returns
  *     one page and a total count, so the orders screen is written the way a screen
- *     over a real API is written — `pagination="server"`, one `query-change`
- *     handler, an AbortController per request — rather than the way a demo over a
+ *     over a real API is written, with `pagination="server"`, one `query-change`
+ *     handler and an AbortController per request, rather than the way a demo over a
  *     local array is.
- *  2. **Scopes are enforced here, not only in the router.** A guard hides a screen;
- *     it does not stop a request. Every endpoint below states the scope it needs and
+ *  2. **Scopes are enforced here, not only in the router.** A guard hides a screen and
+ *     does not stop a request. Every endpoint below states the scope it needs and
  *     answers 403 without it, which is why the shell's guards can be understood as
  *     usability rather than as the security boundary they are often mistaken for.
  *  3. **401 is real.** Past its access window a request is refused, and the browser's
@@ -80,8 +80,8 @@ async function readBody(request) {
   for await (const chunk of request) {
     const buffer = Buffer.from(chunk);
     size += buffer.byteLength;
-    // A body limit is not paranoia in an example: without one, a stray upload
-    // against a development server exhausts the process rather than failing.
+    // A body limit is not paranoia in an example. Without one, a stray upload against
+    // a development server exhausts the process rather than failing.
     if (size > 64 * 1024) throw new Error('Request body too large.');
     chunks.push(buffer);
   }
@@ -95,7 +95,7 @@ async function readBody(request) {
 /**
  * `JSON.parse` is declared to return `any`, and that `any` spreads into every caller. An
  * annotated alias returns `unknown` instead, so a request body has to be narrowed rather
- * than trusted — which, for a body that arrived over the network, is the point.
+ * than trusted, which is the right default for a body that arrived over the network.
  *
  * @type {(text: string) => unknown}
  */
@@ -134,8 +134,8 @@ function field(row, key) {
 
 /**
  * Sort a copy by one key. Numbers compare numerically, everything else through
- * `localeCompare` with `numeric: true`, which is what makes `SKU-00009` come
- * before `SKU-00010` instead of after it.
+ * `localeCompare` with numeric collation, which is what makes `SKU-00009` come before
+ * `SKU-00010` instead of after it.
  *
  * @template {Record<string, unknown>} T
  * @param {T[]} rows
@@ -171,8 +171,9 @@ function searched(rows, term, keys) {
 
 /**
  * A field value as text. Anything that is not a scalar is absent rather than
- * `[object Object]`: a row whose field arrived as an object has no text to search or sort by,
- * and pretending otherwise puts the string "[object Object]" into a comparison.
+ * `[object Object]`, because a row whose field arrived as an object has no text to search
+ * or sort by and pretending otherwise puts the string "[object Object]" into a
+ * comparison.
  *
  * @param {unknown} value
  * @returns {string}
@@ -190,8 +191,8 @@ function fold(value) {
 }
 
 /**
- * A half-open day range, `since to until`, exactly as `ui-date-range` stores it —
- * `until` exclusive, because the query behind it is `since <= x < until`.
+ * A half-open day range, `since to until`, exactly as `ui-date-range` stores it, with
+ * `until` exclusive because the query behind it is `since <= x < until`.
  *
  * @template {Record<string, unknown>} T
  * @param {T[]} rows
@@ -238,23 +239,23 @@ function page(rows, offset, limit) {
 /**
  * The rules a customer has to satisfy, checked here because this is the side that
  * cannot be skipped. The screen checks the same ones as the user types, and that
- * duplication is deliberate rather than accidental: the client copy exists to answer
- * within a keystroke, this one exists because a client is not an authority.
+ * duplication is deliberate rather than accidental. The client copy exists to answer
+ * within a keystroke, and this one exists because a client is not an authority.
  *
- * Two rules have no client counterpart at all — a name and an email address must be
- * unique across the account — because no client holds the data to answer them. They
- * are the reason the response carries per-field codes rather than one message: a
- * screen that can only say "saving failed" cannot put the caret in the field that
- * caused it.
+ * Two rules have no client counterpart at all, because a name and an email address must
+ * be unique across the account and no client holds the data to answer them. They are
+ * why the response carries per-field codes rather than one message, since a screen that
+ * can only say "saving failed" cannot put the caret in the field that caused it.
  *
- * A contact's rules are addressed the same way, by a path: `contacts.1.email` names
- * the email of the second contact, which is the string the form's `firstInvalid`
- * produces and the string its `<ui-field name>` carries. Nothing here knows that —
- * dotted paths are just what a nested body is addressed by — but it is why a 422
- * against a repeating row lands under the row that caused it rather than at the top
- * of the screen.
+ * A contact's rules are addressed the same way, by a path. `contacts.1.email` names the
+ * email of the second contact, which is the string the form's `firstInvalid` produces
+ * and the string its `<ui-field name>` carries. Nothing here knows that, because dotted
+ * paths are simply what a nested body is addressed by, and it is why a 422 against a
+ * repeating row lands under the row that caused it rather than at the top of the
+ * screen.
  *
- * Codes, not sentences. `too_short` is resolved to a language by whoever displays it,
+ * Codes rather than sentences. `too_short` is resolved to a language by whoever displays
+ * it,
  * which is the same rule the rest of this server follows for `status` and `role`.
  *
  * @param {Record<string, unknown>} body
@@ -349,10 +350,10 @@ function validateContacts(value, fields) {
 
   /** @type {Set<string>} */
   const seen = new Set();
-  // Validated against the same normalisation the store gets, so a value that
-  // passes here is the value that is written: trimming in one function and
-  // checking the untrimmed original in the other is how a length rule lets
-  // through a name the column cannot hold.
+  // Validated against the same normalisation the store gets, so a value that passes
+  // here is the value that is written. Trimming in one function and checking the
+  // untrimmed original in the other is how a length rule lets through a name the
+  // column cannot hold.
   for (const [index, row] of contactsFrom(value).entries()) {
     if (row.name === '') fields[`contacts.${index}.name`] = 'required';
     else if (row.name.length > 80) fields[`contacts.${index}.name`] = 'tooLong';
@@ -376,7 +377,7 @@ const CUSTOMER_COUNTRIES = [...new Set(WAREHOUSES.map((warehouse) => warehouse.c
 );
 
 /**
- * The validated body as a customer's writable fields, and nothing else: a client that
+ * The validated body as a customer's writable fields and nothing else. A client that
  * posts `id`, `openOrders` or a field this server has never heard of gets it dropped
  * here rather than assigned into the store.
  *
@@ -499,9 +500,9 @@ const ROUTES = [
       if (city !== null) rows = rows.filter((order) => city.has(order.city));
       const customer = anyOf(query, 'customerId');
       if (customer !== null) rows = rows.filter((order) => customer.has(order.customerId));
-      // Municipality ids, from the typeahead. Ids rather than names: two towns share
-      // a name often enough that filtering on the label is wrong, and the id is what
-      // survives in preference storage.
+      // Municipality ids, from the typeahead. Ids rather than names, because two
+      // towns share a name often enough that filtering on the label is wrong and the
+      // id is what survives in preference storage.
       const comune = anyOf(query, 'comune');
       if (comune !== null) rows = rows.filter((order) => comune.has(order.comuneId));
 
@@ -663,8 +664,9 @@ const ROUTES = [
         rows = rows.filter((product) => product.stock < product.reorderPoint);
       }
       rows = sorted(rows, query.get('sort') ?? '', query.get('direction') ?? '');
-      // Offset/limit rather than page/pageSize: this screen appends pages instead
-      // of replacing them, and an offset is what "append from here" means.
+      // Offset and limit rather than page and pageSize, because this screen appends
+      // pages instead of replacing them and an offset is what "append from here"
+      // means.
       const offset = Math.max(0, number(query, 'offset', 0));
       const limit = Math.min(200, Math.max(1, number(query, 'limit', 25)));
       json(response, page(rows, offset, limit));
@@ -752,8 +754,8 @@ const ROUTES = [
       const ids = anyOf(query, 'id');
       if (ids !== null) {
         // Resolving persisted values by id, which is what a `typeahead` rule's
-        // `resolve` needs on load: without it a filter the user left switched on
-        // has no label and is dropped.
+        // `resolve` needs on load. Without it a filter the user left switched on has
+        // no label and is dropped.
         json(response, { rows: CITIES.filter((city) => ids.has(city.id)) });
         return;
       }
@@ -761,9 +763,9 @@ const ROUTES = [
       const limit = Math.min(50, Math.max(1, number(query, 'limit', 20)));
       /** @type {typeof CITIES[number][]} */
       const rows = [];
-      // A bounded scan rather than filter-then-slice: the whole reason this
-      // endpoint exists is that the list is too big to hand over, so it is also
-      // too big to copy on every keystroke.
+      // A bounded scan rather than filter-then-slice. This endpoint exists because
+      // the list is too big to hand over, so it is also too big to copy on every
+      // keystroke.
       for (const city of CITIES) {
         if (term !== '' && !fold(city.name).includes(term)) continue;
         rows.push(city);
@@ -920,7 +922,8 @@ export async function handleApi(request, response, url) {
 
   if (!accessFresh(session)) {
     // The gap a real BFF has between its access token expiring and the next
-    // refresh. `authorizedFetch` handles exactly this: refresh once, retry once.
+    // refresh. `authorizedFetch` handles exactly this, refreshing once and retrying
+    // once.
     json(response, { error: 'token_expired' }, 401);
     return true;
   }
