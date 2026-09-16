@@ -7,13 +7,13 @@ import { RANGE_SEPARATOR } from '../data/filter-descriptor.js';
 /**
  * Separates the two halves of a stored range.
  *
- * Kept as the original's `' to '` rather than something tidier, because the
- * string crosses the wire: a backend already splitting on it keeps working, and
- * a filter persisted by the Angular application restores here unchanged.
+ * `' to '` rather than something tidier, because the string crosses the wire. A
+ * backend already splitting on it keeps working, and a filter persisted elsewhere
+ * restores here unchanged.
  *
  * Defined in `filter-descriptor.js` and re-exported here, because the string is
- * the format of a range *filter value*: the code that decides whether a row falls
- * in a range has to split it too, and two components splitting on two copies of a
+ * the format of a range filter value. The code that decides whether a row falls in
+ * a range has to split it too, and two components splitting on two copies of a
  * separator is one edit away from a filter that matches nothing.
  */
 export const DATE_RANGE_SEPARATOR = RANGE_SEPARATOR;
@@ -27,29 +27,25 @@ export const DATE_RANGE_SEPARATOR = RANGE_SEPARATOR;
  *       @range-cancel=${() => close()}
  *     ></ui-date-range>
  *
- * INLINE, NOT A MODAL, WHICH IS THE ONE DESIGN DECISION HERE
+ * It renders inline under its own row rather than as a modal. The editor is where
+ * the pointer already is, dismissing it costs an Escape, and the component carries
+ * no pending state. A value goes in and an event comes out.
  *
- * Rendered inline under its own row, the editor is where the pointer already is,
- * dismissing it costs an Escape, and the component carries no pending state at
- * all: a value in, an event out.
- *
- * THE HALF-OPEN INTERVAL, WHICH IS THE ONLY SUBTLE THING HERE
- *
- * The stored `until` is EXCLUSIVE, because the query behind it is
- * `since <= x < until` and that is the form that does not lose the last day to a
- * timestamp of 14:32. The user is never shown it. Both inputs work in inclusive
- * days — "to the 31st" means the 31st is in — and the conversion happens on the
- * way in and on the way out, in one place, here.
+ * The stored `until` is exclusive, because the query behind it is
+ * `since <= x < until` and that form does not lose the last day to a timestamp of
+ * 14:32. The user is never shown it. Both inputs work in inclusive days, so "to
+ * the 31st" means the 31st is in, and the conversion happens on the way in and on
+ * the way out, in one place, here.
  *
  * Two `<input type="date">` rather than a calendar library. The native control
  * brings its own locale, keyboard handling and mobile picker, and loses only the
- * two-month range highlight. Reopen that choice if a product need appears for a
- * two-month range highlight, or for date semantics the native control cannot
- * express; the cost is a vendored dependency and its integrity pin.
+ * two-month range highlight. Reopen that choice for a product need that wants the
+ * highlight, or date semantics the native control cannot express. The cost is a
+ * vendored dependency and its integrity pin.
  *
- * No text is shipped. Every label is standard text from `ui.dateRange.*`,
- * resolved through `text.js`: an editor that says "From", "To", "Apply" and
- * "Cancel" says the same four things on every screen that opens one.
+ * No text is shipped. Every label is standard text from `ui.dateRange.*`, resolved
+ * through `text.js`, so an editor that says "From", "To", "Apply" and "Cancel"
+ * says the same four things on every screen that opens one.
  */
 export class UiDateRange extends SignalElement {
   static properties = {
@@ -88,7 +84,7 @@ export class UiDateRange extends SignalElement {
 
   /**
    * The incoming range is split into the two inclusive days the fields show, and
-   * only when it actually changes: re-splitting on every render would overwrite
+   * only when it actually changes. Re-splitting on every render would overwrite
    * what the user is halfway through typing.
    */
   willUpdate() {

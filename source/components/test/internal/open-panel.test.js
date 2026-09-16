@@ -2,15 +2,15 @@ import { assert, mount, present, unmountAll } from '../../../lib/test/harness.js
 import { openPanel, panelBinding } from '@components/internal/open-panel.js';
 
 /**
- * The module three elements route their open panel through, and the one that had
- * no suite at all while it owned the geometry: flip-above, the viewport clamp,
- * the right-to-left flush and the re-measure were each a comment and a hope.
+ * The module three elements route their open panel through, and the one that owns
+ * the geometry. Flip-above, the viewport clamp, the right-to-left flush and the
+ * re-measure are each checked here.
  *
- * Everything here runs against real layout in a real browser, because that is the
- * only place `getBoundingClientRect` means anything. Positions are asserted as
- * relations — the panel sits above the anchor, the panel starts no further left
- * than the margin — rather than as pixel values, so a scrollbar or a user-agent
- * border does not decide whether the suite passes.
+ * Everything runs against real layout in a real browser, because that is the only
+ * place `getBoundingClientRect` means anything. Positions are asserted as
+ * relations, such as the panel sitting above the anchor or starting no further
+ * left than the margin, rather than as pixel values, so a scrollbar or a
+ * user-agent border does not decide whether the suite passes.
  */
 
 /** @type {(() => void)[]} */
@@ -74,7 +74,7 @@ describe('openPanel', () => {
     const anchor = trigger.getBoundingClientRect();
     const box = panel.getBoundingClientRect();
     assert.ok(box.top >= anchor.bottom, `panel at ${String(box.top)}, anchor ends ${String(anchor.bottom)}`);
-    // The whole reason for the top layer: no ancestor's overflow can clip it.
+    // The reason for the top layer. No ancestor's overflow can clip it.
     assert.equal(document.querySelector(':popover-open'), panel);
   });
 
@@ -127,8 +127,9 @@ describe('openPanel', () => {
     track(openPanel(host, trigger, panel, { onDismiss: () => undefined }));
     const before = panel.getBoundingClientRect().top;
 
-    // A scrolling card, not the window: the listener is registered in the capture
-    // phase for exactly this, and the panel has to be re-placed either way.
+    // A scrolling card rather than the window. The listener is registered in the
+    // capture phase for exactly this, and the panel has to be re-placed either
+    // way.
     trigger.style.top = '160px';
     window.dispatchEvent(new Event('scroll'));
 
@@ -163,8 +164,8 @@ describe('openPanel', () => {
     release();
 
     assert.equal(trigger.getAttribute('aria-expanded'), 'false');
-    // Removed rather than emptied: `aria-controls` naming an element that is not
-    // in the document is the state the template binding used to leave behind.
+    // Removed rather than emptied, because `aria-controls` naming an element that
+    // is not in the document points a screen reader at nothing.
     assert.equal(trigger.getAttribute('aria-controls'), null);
     assert.equal(document.querySelector(':popover-open'), null);
   });
@@ -192,9 +193,9 @@ describe('openPanel', () => {
     track(
       openPanel(host, trigger, panel, {
         onDismiss: (reason) => {
-          // Focus has to be off the panel by now: this is the callback that
-          // removes it, and focus left on a removed element sends the next Tab to
-          // the top of the document.
+          // Focus has to be off the panel by now. This is the callback that
+          // removes it, and focus left on a removed element sends the next Tab
+          // to the top of the document.
           assert.equal(document.activeElement, trigger);
           dismissed.push(reason);
         },
@@ -249,8 +250,8 @@ describe('panelBinding', () => {
   });
 
   /**
-   * A component's shape without the component: a trigger that is always there and
-   * a panel that exists only while it is open.
+   * A component's shape without the component. A trigger that is always there,
+   * and a panel that exists only while it is open.
    *
    * @returns {{ host: HTMLElement, render: (open: boolean) => HTMLElement | null }}
    */
@@ -302,9 +303,9 @@ describe('panelBinding', () => {
     const id = panel.id;
     assert.equal(trigger.getAttribute('aria-controls'), id);
 
-    // The two fields this replaces existed for this line: a component re-renders
-    // for reasons that have nothing to do with the panel, and tearing it down and
-    // putting it back would drop the scroll position and the popover with it.
+    // A component re-renders for reasons that have nothing to do with the panel,
+    // and tearing the panel down and putting it back would drop the scroll
+    // position and the popover with it.
     binding.sync(true);
     assert.equal(panel.id, id, 'same panel, same open');
     assert.equal(document.querySelector(':popover-open'), panel);
@@ -339,7 +340,7 @@ describe('panelBinding', () => {
     binding.sync(true);
     assert.equal(document.querySelector(':popover-open'), panel);
 
-    // What `onDestroy` used to write by hand, three lines per element.
+    // What `onDestroy` would otherwise write by hand, three lines per element.
     controller.abort();
     assert.equal(document.querySelector(':popover-open'), null);
 
@@ -365,7 +366,8 @@ describe('panelBinding', () => {
     assert.sameArray(dismissed, ['closed']);
 
     // The component has not re-rendered yet, so the panel is still open and still
-    // listening — the second gesture is the user pressing Escape on the same frame.
+    // listening. The second gesture is the user pressing Escape on the same
+    // frame.
     escape();
     assert.sameArray(dismissed, ['closed', 'closed']);
     binding.close();

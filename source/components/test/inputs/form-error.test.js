@@ -10,9 +10,9 @@ import '@components/inputs/ui-form-error.js';
 /** @import { UiFormError } from '@components/inputs/ui-form-error.js' */
 
 /**
- * `ui-form-error`, which is the answer to the question that kept container
- * validators out of the library: a rule about a set of values has a code and no
- * control to sit under. ADR-0102.
+ * `ui-form-error`, the answer to the question that kept container validators out
+ * of the library. A rule about a set of values has a code and no control to sit
+ * under. ADR-0102.
  */
 describe('ui-form-error', () => {
   beforeEach(() => {

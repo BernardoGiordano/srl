@@ -4,7 +4,7 @@ import { defineComponent } from '@core/elements/component.js';
 import { optionalAttr } from '../internal/dom.js';
 
 /**
- * A modal: a panel over the page, with everything behind it out of reach.
+ * A modal panel over the page, with everything behind it out of reach.
  *
  *     <ui-dialog
  *       alert
@@ -17,35 +17,31 @@ import { optionalAttr } from '../internal/dom.js';
  *       …heading, prose and the buttons that answer it…
  *     </ui-dialog>
  *
- * WHY THIS IS A NATIVE `<dialog>`
+ * It is a native `<dialog>`.
  *
  * Top layer, an inert page behind it, a real `::backdrop` and focus return are all
- * specified and implemented; a `role="dialog"` div re-implements four of them
- * badly and the fifth not at all. ADR-0029. `aria-modal` is deliberately absent:
- * `showModal()` already matches `:modal`, and the attribute is the version of that
- * claim which can be wrong.
+ * specified and implemented, where a `role="dialog"` div re-implements four of
+ * them badly and the fifth not at all. ADR-0029. `aria-modal` is deliberately
+ * absent, because `showModal()` already matches `:modal` and the attribute is the
+ * version of that claim which can be wrong.
  *
- * `open` IS THE CONSUMER'S
+ * `open` belongs to the consumer. Escape and a backdrop click do not close
+ * anything by themselves. They ask, with `cancel` always prevented, and the
+ * element answers by lowering its own `open` and emitting `close`, so a screen
+ * that binds `[.open]` stays the single source of truth. `mandatory` refuses even
+ * to ask, which is the case a discard prompt needs. ADR-0030.
  *
- * Escape and a backdrop click do not close anything by themselves. They ask —
- * `cancel` is always prevented — and the element answers by lowering its own
- * `open` and emitting `close`, so a screen that binds `[.open]` stays the single
- * source of truth. `mandatory` refuses even to ask, which is the case a discard
- * prompt needs. ADR-0030.
- *
- * WHAT IT LEAVES TO THE CONSUMER
- *
- * Every word and every class inside the panel, and the panel's own box through
- * `panel-class`. What it keeps is the layer: full-viewport, centred, transparent —
- * the one place this collection's stylesheet claims layout, and see the note in
- * `style.css` for why.
+ * Every word and every class inside the panel is the consumer's, as is the panel's
+ * own box through `panel-class`. What this element keeps is the layer, which is
+ * full-viewport, centred and transparent. That is the one place this collection's
+ * stylesheet claims layout, and the note in `style.css` says why.
  */
 export class UiDialog extends SignalElement {
   static properties = {
-    // Reflected as `data-*` rather than as a bare `open`, which is a real
-    // boolean attribute of `<dialog>`: two elements in one subtree carrying the
-    // same attribute name for two different states is the sort of thing that
-    // typechecks and then confuses everyone reading the DOM.
+    // Reflected as `data-*` rather than as a bare `open`, which is a real boolean
+    // attribute of `<dialog>`. Two elements in one subtree carrying the same
+    // attribute name for two different states typechecks and then confuses
+    // everyone reading the DOM.
     open: { type: Boolean, reflect: true, attribute: 'data-open' },
     alert: { type: Boolean },
     mandatory: { type: Boolean },
@@ -85,10 +81,10 @@ export class UiDialog extends SignalElement {
   /* ── Showing and hiding ─────────────────────────────────────────────────── */
 
   /**
-   * `updated` rather than an effect on a signal: `open` is a Lit property, and
-   * this has to run *after* the render that projected the consumer's content into
-   * the panel. `showModal()` moves focus to the first focusable thing it finds,
-   * and a dialog shown before its buttons exist finds nothing.
+   * `updated` rather than an effect on a signal, because `open` is a Lit property
+   * and this has to run after the render that projected the consumer's content into
+   * the panel. `showModal()` moves focus to the first focusable thing it finds, and
+   * a dialog shown before its buttons exist finds nothing.
    *
    * @param {Map<PropertyKey, unknown>} changed
    */
@@ -115,8 +111,8 @@ export class UiDialog extends SignalElement {
   }
 
   /**
-   * Escape. Always prevented — see the note on `open` — and then treated as a
-   * dismissal unless this dialog is one that must be answered.
+   * Escape. Always prevented, as the note on `open` explains, and then treated as
+   * a dismissal unless this dialog is one that must be answered.
    *
    * @param {Event} event
    */
@@ -127,7 +123,7 @@ export class UiDialog extends SignalElement {
 
   /**
    * A click on the layer rather than on the panel, which is what a click on the
-   * backdrop is: the panel is the dialog's only child, so any click whose target
+   * backdrop is. The panel is the dialog's only child, so any click whose target
    * is still the dialog itself landed beside it.
    *
    * @param {Event} event
@@ -158,7 +154,7 @@ export class UiDialog extends SignalElement {
 
 /**
  * The document does not stop scrolling behind a modal dialog, which is the one
- * thing `showModal()` leaves out: the page under the backdrop is inert to the
+ * thing `showModal()` leaves out. The page under the backdrop is inert to the
  * keyboard and to a pointer, and still scrolls under a wheel.
  *
  * Counted rather than set and cleared, because a dialog opened from a dialog

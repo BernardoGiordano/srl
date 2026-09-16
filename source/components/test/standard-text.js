@@ -8,8 +8,9 @@
  * whatever an application injects, which is what makes the seam real rather than
  * hypothetical.
  *
- * The wording is deliberately terse and stable: assertions read `Previous`, not
- * `ui.table.previous`, and nothing here is translated because nothing here ships.
+ * The wording is deliberately terse and stable, so assertions read `Previous`
+ * rather than `ui.table.previous`. Nothing here is translated, because nothing
+ * here ships.
  */
 
 import { configureCollectionText, STANDARD_TEXT } from '@components/internal/text.js';

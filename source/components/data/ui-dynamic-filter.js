@@ -77,11 +77,8 @@ const TYPEAHEAD_MIN_CHARS = 2;
 /**
  * Quiet period after the last keystroke before typeahead searches go out.
  *
- * Not exported. It was, for one caller: the async suite added twenty to it and
- * slept, because a raw `setTimeout` gave it no other way to reach the far side of
- * the debounce. The debounce now goes through the injected clock, so the suite
- * drains that instead and this number is nobody's business but this file's.
- * ADR-0079.
+ * Not exported. The debounce goes through the injected clock, so a suite drains
+ * that instead of sleeping past this number. ADR-0079.
  */
 const TYPEAHEAD_DEBOUNCE_MS = 300;
 
@@ -89,13 +86,13 @@ const TYPEAHEAD_DEBOUNCE_MS = 300;
  * One control holding every filter a screen offers, and the rail of chips saying
  * which are on.
  *
- * A rule declares a filter; the component turns rules into options, remembers what
+ * A rule declares a filter. The component turns rules into options, remembers what
  * was chosen across reloads, and emits state. What it emits is a filter
- * descriptor — `key`, `match` and `predicate` from `filter-descriptor.js`, which
- * this element and `ui-table` both import and neither owns — so connecting the two
- * is one assignment and they never import each other.
+ * descriptor, carrying `key`, `match` and `predicate` from `filter-descriptor.js`,
+ * which this element and `ui-table` both import and neither owns. Connecting the
+ * two is one assignment, and they never import each other.
  *
- * `condition` is optional: leaving it out means "match the column named `ref`, the
+ * `condition` is optional. Leaving it out means "match the column named `ref`, the
  * way this rule type matches", and the rule type decides the comparison. A rule
  * writes a predicate only when its comparison is neither a field comparison nor a
  * range.
@@ -160,9 +157,9 @@ export class UiDynamicFilter extends SignalElement {
   #cache = [];
 
   /**
-   * Options fetched once and kept: an `observer` rule's list, a `lazy` rule's
-   * list after it was asked for, a `typeahead` rule's labels for values restored
-   * from storage.
+   * Options fetched once and kept. That covers an `observer` rule's list, a `lazy`
+   * rule's list after it was asked for, and a `typeahead` rule's labels for values
+   * restored from storage.
    *
    * @type {Map<string, readonly SelectItem[]>}
    */
@@ -171,10 +168,10 @@ export class UiDynamicFilter extends SignalElement {
   /**
    * The current typeahead results per ref, replaced wholesale by each search.
    *
-   * Wholesale replacement is what removes the "which options belong to the search
-   * that is showing" bookkeeping: this map *is* the current result, and a selected
-   * option keeps its own object in `selection`, so nothing has to stay in the list
-   * to make its chip render.
+   * Wholesale replacement removes the "which options belong to the search that is
+   * showing" bookkeeping, because this map is the current result. A selected option
+   * keeps its own object in `selection`, so nothing has to stay in the list to make
+   * its chip render.
    *
    * @type {Map<string, readonly SelectItem[]>}
    */
@@ -182,8 +179,8 @@ export class UiDynamicFilter extends SignalElement {
 
   /**
    * The custom range currently held per `daterange` ref. Kept beside the options
-   * rather than on them, so a rebuild — a lazy load elsewhere, a typeahead
-   * search — cannot lose a range the user has already picked.
+   * rather than on them, so that a rebuild from a lazy load elsewhere or a
+   * typeahead search cannot lose a range the user has already picked.
    *
    * @type {Map<string, string>}
    */
@@ -209,14 +206,14 @@ export class UiDynamicFilter extends SignalElement {
 
   /**
    * Rules are compiled here rather than in `connectedCallback` because a late
-   * `.rules` assignment is the normal case: a page builds its rules from a
-   * service response, after its own first render.
+   * `.rules` assignment is the normal case. A page builds its rules from a service
+   * response, after its own first render.
    *
-   * The identity check, rather than Lit's `changedProperties`, is deliberate.
-   * The first update reports `rules` as changed from `undefined` — the base
-   * class's field adoption is what wrote it — so a `changedProperties` guard
-   * cannot tell "constructed with rules" from "given rules a tick later", and
-   * the second is the case that matters.
+   * The identity check, rather than Lit's `changedProperties`, is deliberate. The
+   * first update reports `rules` as changed from `undefined`, because the base
+   * class's field adoption wrote it. A `changedProperties` guard therefore cannot
+   * tell "constructed with rules" from "given rules a tick later", and the second
+   * is the case that matters.
    */
   willUpdate() {
     if (this.rules === this.#builtRules) return;
@@ -277,8 +274,8 @@ export class UiDynamicFilter extends SignalElement {
   }
 
   /**
-   * A persisted `daterange` value belongs to the custom option unless it is one
-   * of the presets — "this week" is a preset choice, "3 to 17 March" is not.
+   * A persisted `daterange` value belongs to the custom option unless it is one of
+   * the presets. "This week" is a preset choice, "3 to 17 March" is not.
    */
   #adoptCachedRanges() {
     for (const rule of this.normalizedRules) {
@@ -294,9 +291,9 @@ export class UiDynamicFilter extends SignalElement {
    * With nothing in storage, presets marked `default` start selected.
    *
    * Deliberately not persisted. The default stands until the user touches the
-   * filters, and only then does the state — default included — get written. That
-   * is what lets a default of "this week" mean this week on every visit, rather
-   * than the week it was first computed.
+   * filters, and only then is the state written, default included. That lets a
+   * default of "this week" mean this week on every visit, rather than the week it
+   * was first computed.
    */
   #applyDefaultPresets() {
     /** @type {FilterOption[]} */
@@ -319,17 +316,16 @@ export class UiDynamicFilter extends SignalElement {
   }
 
   /**
-   * Everything that must be fetched before the restored state is complete: every
-   * `observer` list, the `lazy` lists a persisted value belongs to, and the
-   * labels a `typeahead` needs to render a persisted value as anything other
-   * than a raw id.
+   * Everything that must be fetched before the restored state is complete. That is
+   * every `observer` list, the `lazy` lists a persisted value belongs to, and the
+   * labels a `typeahead` needs to render a persisted value as anything other than
+   * a raw id.
    *
-   * A deferred rule with nothing in storage is left alone — that is the whole
-   * point of deferring it — but a deferred rule *with* something in storage is
-   * not optional. Its option does not exist until the list arrives, and an entry
-   * whose option is missing is dropped by `#restoreSelection`, so skipping the
-   * fetch does not merely delay the chip: it deletes the filter the user left
-   * switched on.
+   * A deferred rule with nothing in storage is left alone, which is what deferring
+   * it buys. A deferred rule with something in storage is not optional. Its option
+   * does not exist until the list arrives, and `#restoreSelection` drops an entry
+   * whose option is missing, so skipping the fetch deletes the filter the user
+   * left switched on rather than merely delaying its chip.
    *
    * @param {AbortSignal} signal
    * @returns {{ ref: string, run: () => Promise<readonly SelectItem[]> }[]}
@@ -360,11 +356,11 @@ export class UiDynamicFilter extends SignalElement {
   /**
    * A persisted `typeahead` value, resolved by searching for it.
    *
-   * `resolve` is the right way to do this — one request for the whole set, and
-   * the server matching on id. This is the fallback for a rule that did not
-   * declare one, and it works because the value a typeahead stores is usually
-   * the thing the search matches on. It is not free: one request per persisted
-   * value. A rule restoring more than a couple should declare `resolve`.
+   * `resolve` is the right way to do this, with one request for the whole set and
+   * the server matching on id. This is the fallback for a rule that did not declare
+   * one, and it works because the value a typeahead stores is usually the thing the
+   * search matches on. It costs one request per persisted value, so a rule
+   * restoring more than a couple should declare `resolve`.
    *
    * @param {FilterRule & { type: 'typeahead' }} rule
    * @param {readonly unknown[]} values
@@ -410,11 +406,11 @@ export class UiDynamicFilter extends SignalElement {
       // is lost by dropping these.
       for (const rule of this.#typeaheadRules) this.#loaded.delete(rule.ref);
 
-      // `#rebuild`, not a bare `#createOptions`: the fresh options are all
-      // enabled and the selection points at the previous ones. Assigning the list
-      // straight across would leave every restored filter unlocked — a second
-      // value pickable for a ref that holds one — and the chips pointing at
-      // objects no longer in the list.
+      // `#rebuild` rather than a bare `#createOptions`, because the fresh options
+      // are all enabled and the selection points at the previous ones. Assigning
+      // the list straight across would leave every restored filter unlocked, with
+      // a second value pickable for a ref that holds one, and the chips pointing
+      // at objects no longer in the list.
       this.#rebuild();
     }
 
@@ -495,8 +491,8 @@ export class UiDynamicFilter extends SignalElement {
           break;
         }
         case 'typeahead': {
-          // A permanently disabled row, so the group is visible — and says what
-          // to do about it — before anything has been typed.
+          // A permanently disabled row, so the group is visible and says what to
+          // do about it before anything has been typed.
           options.push({
             ...this.#toOption(rule, { value: placeholderValue(rule.ref), label: rule.label }),
             disabled: true,
@@ -507,9 +503,9 @@ export class UiDynamicFilter extends SignalElement {
           break;
         }
         case 'daterange': {
-          // Presets first: a ready-made range that applies on click. Then the
-          // one row that opens the dialog, carrying whatever custom range is
-          // currently held.
+          // Presets come first, each a ready-made range that applies on click.
+          // Then the one row that opens the dialog, carrying whatever custom
+          // range is currently held.
           for (const preset of rule.presets ?? []) {
             options.push({
               ...this.#toOption(rule, { value: preset.value, label: preset.label }),
@@ -573,8 +569,8 @@ export class UiDynamicFilter extends SignalElement {
     }
     this.selection = restored;
     for (const option of restored) this.#lockRef(option);
-    // Rewrite the cache: an entry whose option no longer exists — a role that was
-    // deleted, a rule the consumer removed — must not outlive this load, or it
+    // Rewrite the cache. An entry whose option no longer exists, such as a deleted
+    // role or a rule the consumer removed, must not outlive this load, or it
     // reappears as an invisible filter the user cannot switch off.
     //
     // A rule still loading is the exception. Its options are not here yet, and
@@ -592,8 +588,8 @@ export class UiDynamicFilter extends SignalElement {
   }
 
   /**
-   * One value per ref, enforced by disabling the siblings rather than hiding them:
-   * a greyed "Status: active" next to the chosen "Status: pending" says why it
+   * One value per ref, enforced by disabling the siblings rather than hiding them.
+   * A greyed "Status: active" next to the chosen "Status: pending" says why it
    * cannot be picked, where a vanished row says nothing. `multiple: true` on the
    * rule opts out.
    *
@@ -635,8 +631,8 @@ export class UiDynamicFilter extends SignalElement {
       return;
     }
     if (option.type === 'daterange' && option.preset !== true) {
-      // Not a value yet either: it becomes one when the editor under the row says
-      // so. Clicking the row again folds the editor away.
+      // Not a value yet either. It becomes one when the editor under the row says
+      // so, and clicking the row again folds the editor away.
       this.selection = this.selection.filter((candidate) => candidate !== option);
       this.rangeEditor = this.rangeEditor === option.ref ? '' : option.ref;
       return;
@@ -684,8 +680,8 @@ export class UiDynamicFilter extends SignalElement {
 
   /**
    * The row whose editor is showing, as the option object the combobox compares
-   * against. Reading it out of `options` rather than keeping the object is what
-   * survives a rebuild: a lazy load elsewhere replaces every option, and a held
+   * against. Reading it out of `options` rather than keeping the object survives a
+   * rebuild, because a lazy load elsewhere replaces every option and a held
    * reference would point at a row no longer in the list.
    */
   get rangeEditorOption() {
@@ -699,9 +695,9 @@ export class UiDynamicFilter extends SignalElement {
   /**
    * The range editor that belongs under the expanded row.
    *
-   * Dismissing leaves nothing behind, which is why the row was never added to the
-   * selection in the first place: the Angular version added it, opened a modal,
-   * and had to unpick the selection on the cancel branch.
+   * Dismissing leaves nothing behind, because the row is never added to the
+   * selection until the editor says so. Adding it first would mean unpicking the
+   * selection on the cancel branch.
    *
    * @type {(option: ComboboxOption) => unknown}
    */
@@ -730,9 +726,9 @@ export class UiDynamicFilter extends SignalElement {
     if (range === '') return;
 
     // Picking, by hand, the days a preset already covers selects the preset.
-    // Otherwise the same range would sit in two rows at once, and only one of
-    // them would be the chip — which is also how a restored value is read, in
-    // `#adoptCachedRanges`.
+    // Otherwise the same range would sit in two rows at once and only one of them
+    // would be the chip. `#adoptCachedRanges` reads a restored value the same
+    // way.
     const rule = this.#ruleFor(option.ref);
     const matchesPreset =
       rule?.type === 'daterange' && (rule.presets ?? []).some((preset) => preset.value === range);
@@ -757,10 +753,10 @@ export class UiDynamicFilter extends SignalElement {
   onPanelClose() {
     this.#cancelSearch?.();
     this.#cancelSearch = undefined;
-    // Cancelling the pending debounce is not enough: a search already in flight
+    // Cancelling the pending debounce is not enough. A search already in flight
     // would land after this and put its results straight back, so a reopened panel
-    // would show the leftovers this method exists to drop. Bumping the token is
-    // what makes the in-flight `#runSearch` discard its own reply.
+    // would show the leftovers this method exists to drop. Bumping the token makes
+    // the in-flight `#runSearch` discard its own reply.
     this.#searchToken += 1;
     if (this.#searchController !== undefined) {
       this.#searchController.abort();
@@ -804,7 +800,7 @@ export class UiDynamicFilter extends SignalElement {
       (rule) => term.length >= (rule.minChars ?? TYPEAHEAD_MIN_CHARS),
     );
     if (rules.length === 0) {
-      // Too short, or cleared: back to just the hint.
+      // Too short, or cleared, so back to just the hint.
       if (this.#results.size === 0) return;
       this.#results.clear();
       this.#rebuild();
@@ -831,11 +827,11 @@ export class UiDynamicFilter extends SignalElement {
   /**
    * A lazy list, fetched the first time its row is expanded.
    *
-   * The signal is the current build's, not the element's lifetime. A new `.rules`
-   * assignment throws away every option this load was going to fill in, so the
-   * request is dead the moment the rebuild starts — and using `this.lifetime` meant
-   * only disconnection could cancel it, leaving the reply to be written into a
-   * `#loaded` map that no longer describes the rules on screen.
+   * The signal is the current build's rather than the element's lifetime. A new
+   * `.rules` assignment throws away every option this load was going to fill in, so
+   * the request is dead the moment the rebuild starts. With `this.lifetime` only
+   * disconnection could cancel it, and the reply would land in a `#loaded` map that
+   * no longer describes the rules on screen.
    *
    * @param {FilterOption} placeholder
    */
@@ -854,17 +850,17 @@ export class UiDynamicFilter extends SignalElement {
       this.#rebuild();
     } catch {
       if (token !== this.#buildToken) return;
-      // Leave the row in place and selectable again: a failed load is worth a
-      // second try, and a row that silently stops responding is not.
+      // Leave the row in place and selectable again, because a failed load is
+      // worth a second try and a row that silently stops responding is not.
       placeholder.loading = false;
       this.options = [...this.options];
     }
   }
 
   /**
-   * Typed text becomes an option belonging to the free rule. One at a time: the
-   * second free entry would be a second value for the same ref, and refs hold
-   * one value.
+   * Typed text becomes an option belonging to the free rule, one at a time. A
+   * second free entry would be a second value for the same ref, and refs hold one
+   * value.
    *
    * @type {(term: string) => FilterOption | undefined}
    */
@@ -888,10 +884,10 @@ export class UiDynamicFilter extends SignalElement {
    * Two rows escape the combobox's own label matching.
    *
    * A typeahead result was matched by the server, quite possibly on a field the
-   * label does not show — a comune matched by postcode. Filtering it again here
-   * would hide the very row the user searched for.
+   * label does not show, such as a comune matched by postcode. Filtering it again
+   * here would hide the very row the user searched for.
    *
-   * A typeahead hint is the opposite: it is only useful until the search takes
+   * A typeahead hint runs the other way. It is useful only until the search takes
    * over, so it survives exactly as long as the term is too short to search.
    *
    * @type {(term: string, option: ComboboxOption) => boolean}
@@ -963,7 +959,7 @@ export class UiDynamicFilter extends SignalElement {
 
   /**
    * A row that loads rather than filters says so while it does, with a spinner
-   * beside its own label rather than by replacing it: the label is what the user
+   * beside its own label rather than by replacing it. The label is what the user
    * clicked, and swapping it for "Loading…" makes the row look like it moved.
    *
    * @type {(option: ComboboxOption) => unknown}
@@ -987,9 +983,9 @@ export class UiDynamicFilter extends SignalElement {
    * What the screen hands to whatever consumes filters.
    *
    * `key` mirrors `ref`, and `match` comes from the rule type rather than from the
-   * screen: a listed choice carries the value the field holds, so picking one means
-   * `equals` — substring matching there is why choosing *Sales* would also select
-   * *Pre-Sales* — and a range means a range.
+   * screen. A listed choice carries the value the field holds, so picking one means
+   * `equals`, and a range means a range. Substring matching on a listed choice is
+   * why picking *Sales* would also select *Pre-Sales*.
    *
    * @returns {FilterState[]}
    */

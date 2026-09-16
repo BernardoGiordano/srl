@@ -10,9 +10,8 @@ import '@components/data/ui-dynamic-filter.js';
 const STATE_KEY = preferenceKey('ui-dynamic-filter', 'async-filter');
 
 /**
- * The clock the typeahead debounce is scheduled on. This suite used to import the
- * element's debounce constant and sleep past it; draining the clock says the same
- * thing without the element having to publish a number. ADR-0079.
+ * The clock the typeahead debounce is scheduled on. Draining it reaches the far
+ * side of the debounce without the element having to publish a number. ADR-0079.
  *
  * @type {ManualClock}
  */
@@ -340,7 +339,7 @@ describe('ui-dynamic-filter async rules', () => {
         type: 'typeahead',
         group: 'Comune',
         label: 'Type to search',
-        // Matched by postcode on the server: the label has no '20121' in it.
+        // Matched by postcode on the server, so the label has no '20121' in it.
         children: () => resolved([{ value: 'mi', label: 'Milano' }]),
       },
     ];
@@ -481,8 +480,8 @@ describe('ui-dynamic-filter async rules', () => {
       'a ref holds one value, and a restored value locks its siblings exactly as a click does',
     );
 
-    // The bug this covers: the last rebuild after the initial loads handed the
-    // combobox a fresh, all-enabled list, so a second team was selectable.
+    // Covers the case where the last rebuild after the initial loads hands the
+    // combobox a fresh, all-enabled list, leaving a second team selectable.
     await choose(filter, 'Web');
     assert.sameArray(
       filter.states.map((entry) => entry.value),

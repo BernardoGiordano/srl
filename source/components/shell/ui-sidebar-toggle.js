@@ -12,19 +12,17 @@ import { optionalAttr } from '../internal/dom.js';
  *     </ui-sidebar-toggle>
  *
  * It finds what it controls with `closest()` rather than being handed a
- * reference or reading a shared singleton. That is the whole reason two
- * sidebars on one page work, and it is the same lookup Angular's element
- * injector does for a directive that wants its host component.
+ * reference or reading a shared singleton. That is what makes two sidebars on one
+ * page work, and it is the same lookup Angular's element injector does for a
+ * directive that wants its host component.
  *
- * `for="drawer"` targets the enclosing `<ui-app-shell>` instead, which is what
- * a hamburger in the header wants: the same component, a different ancestor.
+ * `for="drawer"` targets the enclosing `<ui-app-shell>` instead, which is what a
+ * hamburger in the header wants. Same component, different ancestor.
  *
- * WHY IT RENDERS ITS OWN <button>
- *
- * Because the alternative is `role="button"` plus keydown handling on the host,
- * which is a worse button. The convention across this collection is therefore:
- * the component owns the semantic element and the consumer styles it through a
- * `*-class` property, while the host stays free for layout.
+ * It renders its own `<button>`, because the alternative is `role="button"` plus
+ * keydown handling on the host, which is a worse button. That is the convention
+ * across this collection. The component owns the semantic element, the consumer
+ * styles it through a `*-class` property, and the host stays free for layout.
  */
 export class UiSidebarToggle extends SignalElement {
   static properties = {
@@ -48,9 +46,9 @@ export class UiSidebarToggle extends SignalElement {
   }
 
   /**
-   * `aria-expanded` describes the thing being controlled, so it has to track
-   * that thing's state. Reading the signal here — during render — is what
-   * subscribes this component to a state it does not own.
+   * `aria-expanded` describes the thing being controlled, so it has to track that
+   * thing's state. Reading the signal here, during render, subscribes this
+   * component to a state it does not own.
    *
    * Resolved on every render rather than cached, because at first render this
    * element may still be sitting in its parent's projection bucket, detached,

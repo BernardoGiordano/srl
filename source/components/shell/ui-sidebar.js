@@ -12,14 +12,14 @@ const SIDEBAR_STATE_VERSION = 1;
 const PERSIST_DEBOUNCE_MS = 250;
 
 /**
- * A collapsible sidebar. Holds one piece of state — collapsed or not — and
+ * A collapsible sidebar. It holds one piece of state, collapsed or not, and
  * renders nothing but its own children.
  *
- * The state is published three ways, on purpose, because three different kinds
- * of consumer need it:
+ * The state is published three ways, on purpose, because three different kinds of
+ * consumer need it.
  *
- *  - `data-collapsed` on the host, for CSS. This is how the width changes and
- *    how every label inside disappears, with no JavaScript involved:
+ *  - `data-collapsed` on the host, for CSS. This is how the width changes and how
+ *    every label inside disappears, with no JavaScript involved.
  *
  *        <ui-sidebar class="group/sidebar w-60 data-collapsed:w-[76px]">
  *          <span class="group-data-collapsed/sidebar:hidden">Settings</span>
@@ -34,8 +34,8 @@ const PERSIST_DEBOUNCE_MS = 250;
  *
  * The key names a `preferences/persistence.js` entry rather than a raw
  * `localStorage` slot, so an application that swaps the store swaps it here too.
- * ADR-0015. The stored value is the versioned envelope every other preference
- * uses, under `ui.component-state:ui-sidebar:<storage-key>`; a value written by an
+ * ADR-0015. The stored value is the versioned envelope every other preference uses,
+ * under `ui.component-state:ui-sidebar:<storage-key>`. A value written by an
  * earlier build is not read, so the first load after upgrading starts expanded
  * once.
  */
@@ -95,8 +95,8 @@ export class UiSidebar extends SignalElement {
   }
 
   onDestroy() {
-    // Flush rather than cancel: navigating away right after collapsing must not
-    // be the one case where the choice is forgotten.
+    // Flush rather than cancel, because navigating away right after collapsing
+    // must not be the one case where the choice is forgotten.
     if (this.#cancelPersist === undefined) return;
     this.#cancelPersist();
     this.#cancelPersist = undefined;
@@ -116,11 +116,11 @@ export class UiSidebar extends SignalElement {
   }
 
   /**
-   * Storage can be unavailable (Safari private mode, a blocked third-party
-   * context) or hold something written by another version. `loadPreference`
-   * already treats every one of those as "no stored state", which is the right
-   * answer here: a sidebar that throws on load because it wanted to remember its
-   * width is a worse outcome than one that forgets.
+   * Storage can be unavailable, in Safari private mode or a blocked third-party
+   * context, or hold something written by another version. `loadPreference` treats
+   * every one of those as "no stored state", which is the right answer here. A
+   * sidebar that throws on load because it wanted to remember its width is worse
+   * than one that forgets.
    *
    * @returns {boolean | undefined}
    */
@@ -136,7 +136,7 @@ export class UiSidebar extends SignalElement {
 
   /**
    * Debounced, because `collapsed` is a signal an animation or a keyboard repeat
-   * can drive: the visible state is the signal's, and storage only has to agree
+   * can drive. The visible state is the signal's, and storage only has to agree
    * with wherever it settles.
    *
    * @param {boolean} value

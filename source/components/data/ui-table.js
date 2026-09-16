@@ -30,7 +30,8 @@ const PERSIST_DEBOUNCE_MS = 250;
  *
  * Four is what a wheel notch or a trackpad flick moves before the scroll event
  * that redraws the window arrives, so the user sees rows rather than the gap the
- * spacer leaves. Larger buys nothing: the cost of the window is the rows in it.
+ * spacer leaves. Larger buys nothing, because the cost of the window is the rows
+ * in it.
  */
 const WINDOW_OVERSCAN = 4;
 
@@ -41,7 +42,7 @@ const DEFAULT_ROW_HEIGHT = 44;
 const DEFAULT_VIEWPORT_HEIGHT = 480;
 
 /**
- * A table filter *is* a filter descriptor: the vocabulary lives in
+ * A table filter is a filter descriptor. The vocabulary lives in
  * `filter-descriptor.js`, which both this element and `ui-dynamic-filter` import,
  * so neither one owns the meaning of "matches" and neither has to know the other
  * exists. The two aliases keep the names this element's own API already uses.
@@ -96,8 +97,8 @@ const DEFAULT_VIEWPORT_HEIGHT = 480;
  *
  * `virtualized` bounds what reaches the DOM to the rows a scrolling viewport can
  * show, with spacer rows holding the scroll extent. It changes what is rendered
- * and nothing else: the page, the selection and the query still cover every row
- * the table was given. ADR-0107.
+ * and nothing else, so the page, the selection and the query still cover every
+ * row the table was given. ADR-0107.
  *
  * Events:
  * - `query-change`: full query after page, page-size, sort or filter changes
@@ -153,9 +154,9 @@ export class UiTable extends SignalElement {
   sortDirection = '';
 
   /**
-   * Filter descriptors. `filter-descriptor.js` defines what they mean —
-   * `ANY_COLUMN` for "any declared column", the match modes, and the row
-   * comparison — so a producer of filters and this consumer of them agree without
+   * Filter descriptors. `filter-descriptor.js` defines what they mean, from
+   * `ANY_COLUMN` for "any declared column" through the match modes to the row
+   * comparison, so a producer of filters and this consumer of them agree without
    * either importing the other.
    *
    * @type {readonly TableFilter[]}
@@ -183,7 +184,7 @@ export class UiTable extends SignalElement {
   /**
    * The chosen keys, first choice first.
    *
-   * Consumer-owned the way `rows` is: assign a new array to change it from
+   * Consumer-owned the way `rows` is, so assign a new array to change it from
    * outside. The caches keyed on it compare identity, so an array mutated in place
    * is the same array and nothing re-reads it.
    *
@@ -204,7 +205,7 @@ export class UiTable extends SignalElement {
   caption = '';
 
   /**
-   * The one label a screen still owns: "No employees yet" names the data, where
+   * The one label a screen still owns. "No employees yet" names the data, where
    * "Previous page" names the interaction. Empty falls back to `ui.table.empty`.
    */
   emptyLabel = '';
@@ -220,9 +221,9 @@ export class UiTable extends SignalElement {
   /**
    * Render only the rows a scrolling viewport can show.
    *
-   * Off by default, and opt-in rather than automatic, because it makes three
-   * promises about the screen that the table cannot check: the rows are uniform in
-   * height, the table is its own scroller, and the columns lay out fixed. ADR-0107.
+   * Off by default, because it makes three promises about the screen that the
+   * table cannot check. The rows are uniform in height, the table is its own
+   * scroller, and the columns lay out fixed. ADR-0107.
    */
   virtualized = false;
 
@@ -373,7 +374,7 @@ export class UiTable extends SignalElement {
    * cell, so at 10,000 rows and four columns these getters ran 10,000 and 40,000
    * times for one render, each rebuilding a key map, an ordered array and, for a
    * sticky column, a walk over the visible columns to sum the widths in front of
-   * it. None of that depends on the row: it depends on the columns, their order,
+   * it. None of that depends on the row. It depends on the columns, their order,
    * which are hidden, their widths and their sticky sides, and each of those has
    * one place it changes.
    *
@@ -386,11 +387,13 @@ export class UiTable extends SignalElement {
   #presentation;
 
   /**
-   * Bumped by every change the projection is derived from: the column set, their
-   * order, which are hidden, their widths — authored, dragged and measured — and
-   * their sticky sides. Separate from `#columnRevision` on purpose: that one keys
-   * the processed-row cache, and dragging a resize handle must not re-filter and
-   * re-sort ten thousand rows per pointer move.
+   * Bumped by every change the projection is derived from, which is the column
+   * set, their order, which are hidden, their widths (authored, dragged and
+   * measured) and their sticky sides.
+   *
+   * Separate from `#columnRevision` on purpose. That one keys the processed-row
+   * cache, and dragging a resize handle must not re-filter and re-sort ten
+   * thousand rows per pointer move.
    */
   #presentationRevision = 0;
 
@@ -403,8 +406,8 @@ export class UiTable extends SignalElement {
    * it to the top layer, where the card's overflow does not apply, and caps it at
    * the room actually available so a long list scrolls instead of vanishing.
    *
-   * `within` is the toolbar strip, not the table: a pointer on a row is outside
-   * the chooser and has to close it.
+   * `within` is the toolbar strip rather than the table, so a pointer on a row is
+   * outside the chooser and has to close it.
    */
   #columnsPanel = panelBinding({
     host: this,
@@ -447,7 +450,7 @@ export class UiTable extends SignalElement {
     this.#viewportObserver = undefined;
     this.#scroller = null;
     // A debounced write must not be lost because the user navigated away half a
-    // second after dragging a column: flush it, do not cancel it.
+    // second after dragging a column. Flush it, do not cancel it.
     this.#flushPersist();
   }
 
@@ -566,7 +569,7 @@ export class UiTable extends SignalElement {
 
   /**
    * The rows this page holds, which is what selection, the status line and the
-   * window are all measured against. Not what is in the DOM — `renderedRows` is.
+   * window are all measured against. `renderedRows` is what is in the DOM.
    *
    * Cached because a render asks for it a dozen times, once per selection
    * question and once per window arithmetic, and in `client` mode each of those
@@ -664,9 +667,9 @@ export class UiTable extends SignalElement {
   /**
    * Where the row at `offset` in the rendered list sits on the page.
    *
-   * Every question the row template asks about a row — its key, whether it is
-   * selected, which record to activate — is asked with this rather than with the
-   * loop index, because a window renders row 8,412 in slot 3.
+   * The row template asks this rather than the loop index for a row's key, its
+   * selected state and the record to activate, because a window renders row 8,412
+   * in slot 3.
    *
    * @param {number} offset
    */
@@ -790,8 +793,8 @@ export class UiTable extends SignalElement {
   /**
    * `page` on the button for the page being shown, and the attribute absent
    * everywhere else. `aria-current="false"` would also be correct ARIA and is
-   * avoided on purpose: it makes the styling a matter of matching a value rather
-   * than of the attribute existing, which is one more thing to get wrong.
+   * avoided on purpose, because it makes the styling match a value rather than
+   * the attribute existing, which is one more thing to get wrong.
    *
    * @param {number} number
    */
@@ -895,13 +898,12 @@ export class UiTable extends SignalElement {
   }
 
   /**
-   * A cell's content: the column's authored fragment, its renderer, or the raw
-   * value.
+   * A cell's content, taken from the column's authored fragment, its renderer, or
+   * the raw value.
    *
-   * The fragment wins because it is the more specific declaration — a column
-   * carrying both said the markup twice — and because a fragment returns a
-   * renderable even when the row has nothing at `key`, so `??` would never reach
-   * it.
+   * The fragment wins because it is the more specific declaration, and a column
+   * carrying both said the markup twice. It also returns a renderable even when
+   * the row has nothing at `key`, so `??` would never reach the renderer.
    *
    * @param {UiTableColumn} column @param {unknown} row @param {number} index
    */
@@ -959,10 +961,11 @@ export class UiTable extends SignalElement {
    * Persist soon, not now.
    *
    * Every internal trigger comes through here, because the interesting ones arrive
-   * in bursts: holding ArrowRight on a resize handle is one write to localStorage
-   * and one `state-change` event per keypress, and `JSON.stringify` of the whole
-   * column model each time. `saveState()` stays the immediate path, for a consumer
-   * that means now — and `onDestroy` flushes, so nothing is lost by leaving.
+   * in bursts. Holding ArrowRight on a resize handle would otherwise be one write
+   * to localStorage, one `state-change` event and one `JSON.stringify` of the
+   * whole column model per keypress. `saveState()` stays the immediate path for a
+   * consumer that means now, and `onDestroy` flushes, so nothing is lost by
+   * leaving.
    */
   #schedulePersist() {
     if (this.persistenceId === '') return;
@@ -1053,8 +1056,8 @@ export class UiTable extends SignalElement {
   }
 
   /**
-   * Standard interaction text: everything this element says about itself, from
-   * `ui.table.*`. See `text.js` for why these are not properties any more.
+   * Standard interaction text, which is everything this element says about itself,
+   * read from `ui.table.*`. `text.js` says why these are not properties.
    *
    * @param {string} name
    * @returns {string}
@@ -1277,9 +1280,9 @@ export class UiTable extends SignalElement {
    * A row's identity, or `undefined` when it has none.
    *
    * Deliberately not `keyFor`, whose positional fallback exists to keep a `*for`
-   * keyed when rows carry no id. A position is not an identity — `2:3` names a
-   * different record after a sort — so a selection built on it would follow the
-   * slot rather than the row. A row the caller cannot name cannot be chosen.
+   * keyed when rows carry no id. A position is not an identity, because `2:3`
+   * names a different record after a sort, so a selection built on it would follow
+   * the slot rather than the row. A row the caller cannot name cannot be chosen.
    *
    * @param {unknown} row @param {number} index
    */
@@ -1302,7 +1305,7 @@ export class UiTable extends SignalElement {
   /**
    * The selected rows this table is holding, in row order.
    *
-   * A key whose row is not loaded is absent here and still selected: a server
+   * A key whose row is not loaded is absent here and still selected. A server
    * table pages through a collection it never holds all of, so the keys are the
    * selection and these are the rows it can hand over now.
    */
@@ -1461,8 +1464,8 @@ export class UiTable extends SignalElement {
    *
    * Only where this table was given the whole collection. In `server` mode `rows`
    * is one page, so a key absent from it means "on another page", and pruning
-   * would empty the selection on every page change — which is the one thing
-   * keying it exists to prevent.
+   * would empty the selection on every page change, which is the one thing keying
+   * it exists to prevent.
    */
   #pruneSelection() {
     if (this.normalizedMode === 'server') return;
@@ -1550,8 +1553,8 @@ export class UiTable extends SignalElement {
    * The target is checked here as well as in `activate`, because the row is what
    * carries the handler and a keypress inside a cell reaches it by bubbling.
    * Preventing the default first would take Space away from the control the user
-   * is actually on — a selection checkbox, or the button a screen rendered in a
-   * cell — and the row would refuse to activate anyway.
+   * is actually on, such as a selection checkbox or a button a screen rendered in
+   * a cell, and the row would refuse to activate anyway.
    *
    * @param {unknown} row @param {number} index @param {KeyboardEvent} event
    */
@@ -1629,8 +1632,8 @@ export class UiTable extends SignalElement {
    *
    * A new page, sort or filter is a different list, and leaving the scroller where
    * it was would open it two thousand rows down. Arriving rows are deliberately
-   * not on the list: that is `infinite` mode extending the list the user is
-   * already reading.
+   * not on the list, because that is `infinite` mode extending the list the user
+   * is already reading.
    *
    * @param {Map<PropertyKey, unknown>} changed
    */
@@ -1652,7 +1655,7 @@ export class UiTable extends SignalElement {
   /**
    * Read the two lengths the window arithmetic needs from what was just rendered.
    *
-   * Both converge: a measurement that moves the window causes one more render,
+   * Both converge. A measurement that moves the window causes one more render,
    * which measures the same numbers and stops. The row height is taken from a
    * rendered row rather than from `row-height`, so a screen whose cells are taller
    * than it declared still gets spacers that match its scrollbar.
@@ -1723,9 +1726,9 @@ export class UiTable extends SignalElement {
    * Note the row a scroll is about to unmount from under the keyboard.
    *
    * Focus in a removed row falls to `document.body`, which drops the user out of
-   * the table entirely. The rule is that focus keeps its kind and moves to the
-   * nearest row that survives: a focused row becomes the edge row, a focused
-   * selection checkbox becomes that row's checkbox.
+   * the table entirely. Focus keeps its kind and moves to the nearest row that
+   * survives, so a focused row becomes the edge row and a focused selection
+   * checkbox becomes that row's checkbox.
    *
    * @param {{ start: number, end: number }} after
    */
@@ -1763,13 +1766,12 @@ export class UiTable extends SignalElement {
   /**
    * Watch the sentinel that asks for the next page when it scrolls into view.
    *
-   * Called from `updated`, so it runs on every render — including the renders the
-   * arriving rows themselves cause. Rebuilding the observer each time meant
-   * disconnecting and reconstructing it while the user was still scrolling toward
-   * it, and a fresh observer reports its first intersection asynchronously, so the
-   * one thing this exists to notice was the thing most likely to be missed. The
-   * sentinel element survives re-renders, so the observer can too: it is rebuilt
-   * only when the node it watches actually changes.
+   * Called from `updated`, so it runs on every render, including the renders the
+   * arriving rows themselves cause. Rebuilding the observer each time would
+   * disconnect and reconstruct it while the user is still scrolling toward it, and
+   * a fresh observer reports its first intersection asynchronously, which loses
+   * the one thing this exists to notice. The sentinel element survives re-renders,
+   * so the observer is rebuilt only when the node it watches changes.
    */
   #watchInfiniteSentinel() {
     const sentinel =
@@ -1904,9 +1906,9 @@ export class UiTable extends SignalElement {
    * The derived column projection, rebuilt only when `#presentationRevision` moved.
    *
    * `#reconcileColumnState` runs first and may itself invalidate, which is why the
-   * revision is read after it: the lazy reconcile is how a table whose columns
-   * arrived before its persisted state gets an order at all, and it has to be able
-   * to make the projection it is about to be used for stale.
+   * revision is read after it. The lazy reconcile is how a table whose columns
+   * arrived before its persisted state gets an order at all, so it has to be able
+   * to make the projection stale.
    */
   #columnPresentation() {
     if (this.columns.length > 0 && (this.#columnOrder.length === 0 || this.#pendingState !== undefined)) {
@@ -1947,9 +1949,9 @@ export class UiTable extends SignalElement {
   }
 
   /**
-   * Mark the projection stale. Cheap on purpose: it is called from every mutation
-   * that feeds the projection, including one per pointer move during a resize
-   * drag, and the rebuild happens once on the next read rather than once per call.
+   * Mark the projection stale. Cheap on purpose, because every mutation that feeds
+   * the projection calls it, including one per pointer move during a resize drag.
+   * The rebuild happens once on the next read rather than once per call.
    */
   #invalidateColumnPresentation() {
     this.#presentationRevision += 1;
@@ -1970,8 +1972,8 @@ export class UiTable extends SignalElement {
     const position = this.columnSticky(column);
     // A windowed table is its own scroller, so the header sticks to the top of it
     // rather than scrolling out of the viewport the window is measured against. One
-    // element can stick on both axes, and the four layers are: header over a sticky
-    // column, header, sticky cell, ordinary cell.
+    // element can stick on both axes. The four layers, top down, are header over a
+    // sticky column, header, sticky cell, ordinary cell.
     const stuckDown = header && this.virtualized;
     if (position !== '' || stuckDown) {
       declarations.push('position:sticky');
@@ -2081,10 +2083,10 @@ function normalizePersistedTableState(value) {
 }
 
 /**
- * Filters as JSON keeps `key`, `value` and `match`, and drops every `predicate`:
- * a function has no JSON form. So a descriptor whose comparison came from its rule
- * type restores intact, and one carrying a hand-written predicate restores as a
- * plain `match` — which is one more reason the rule types now imply their own
+ * Filters as JSON keep `key`, `value` and `match`, and drop every `predicate`,
+ * because a function has no JSON form. A descriptor whose comparison came from its
+ * rule type restores intact, and one carrying a hand-written predicate restores as
+ * a plain `match`. That is one more reason the rule types imply their own
  * comparison rather than leaving screens to write one.
  *
  * @param {readonly TableFilter[]} filters
@@ -2100,16 +2102,17 @@ function serializableFilters(filters) {
 }
 
 /**
- * How far each sticky column sits from its own edge: the summed width of the
- * sticky columns between it and that edge.
+ * How far each sticky column sits from its own edge, which is the summed width of
+ * the sticky columns between it and that edge.
  *
  * One pass per side over the visible columns, rather than one walk per column
- * asking the same question — at twenty-four columns with twelve sticky that is two
+ * asking the same question. At twenty-four columns with twelve sticky that is two
  * passes instead of twelve walks, and each cell then reads a map.
  *
- * The `has` guard keeps the answer the per-column walk gave: it stopped at the
- * first column identical to the one it was asked about, so a column appearing
- * twice — which only a duplicate `key` produces — keeps its first offset.
+ * The `has` guard keeps the answer a per-column walk would give, because that walk
+ * stops at the first column identical to the one it was asked about. A column
+ * appearing twice, which only a duplicate `key` produces, keeps its first
+ * offset.
  *
  * @param {readonly UiTableColumn[]} visible
  * @param {(column: UiTableColumn) => TableStickyPosition} positionOf
@@ -2172,9 +2175,9 @@ function isInteractiveTarget(target) {
   );
 }
 
-// `uses` rather than the side-effect import this had: a table reads its
-// `<ui-table-column>` children, so that element existing is this component's
-// dependency and now says so as a value.
+// A table reads its `<ui-table-column>` children, so that element existing is this
+// component's dependency. `uses` says so as a value, where a side-effect import
+// would not.
 await defineComponent({
   tag: 'ui-table',
   element: UiTable,

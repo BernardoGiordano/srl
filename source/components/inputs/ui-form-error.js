@@ -7,36 +7,31 @@ import { nextElementId } from '../internal/dom.js';
 /** @import { FormNode } from '@core/forms/types.js' */
 
 /**
- * The message for a rule that is about a *set* of values rather than one of them.
+ * The message for a rule about a set of values rather than one of them.
  *
  *     <ui-form-error name="period" [.node]="form.fields.period"
  *                    error-class="…"></ui-form-error>
  *
- * WHY IT IS NOT `ui-field`
+ * It is not `ui-field`. `ui-field` is a label, a projected control and the error
+ * under it, and almost all of it is control wiring, from the projection query and
+ * the blur listener to the value write-back, `aria-describedby` and the disabled
+ * property. A group has no control, so every one of those would be dead. This
+ * element is the half that is left. ADR-0102.
  *
- * `ui-field` is a label, a projected control and the error under it, and almost
- * all of it is control wiring: the projection query, the blur listener, the value
- * write-back, `aria-describedby`, the disabled property. A group has no control,
- * so every one of those would be dead. This element is the half that is left.
- * ADR-0102.
- *
- * WHERE THE CODE COMES FROM
- *
- * `node.visibleError`, which is a `FormGroup`'s or a `FormArray`'s own code once
- * the timing rule allows it — after a submit, or once every member has been
- * visited. The vocabulary is the same one `ui-field` resolves, `ui.field.*`, so
- * `ordered()` and `required()` are sentences from the same bundle.
+ * The code comes from `node.visibleError`, which is a `FormGroup`'s or a
+ * `FormArray`'s own code once the timing rule allows it, meaning after a submit or
+ * once every member has been visited. The vocabulary is the one `ui-field`
+ * resolves, `ui.field.*`, so `ordered()` and `required()` are sentences from the
+ * same bundle.
  *
  * A `FormField` works here too and shows the field's own error without a control
  * beside it. Rare, and not the reason this exists.
  *
- * WHAT `name` IS FOR
- *
- * The path of the node this displays, which is what `focusInvalidField` matches
- * on — the empty string for the form itself, `period` for a nested group,
- * `contacts` for an array. The element takes focus programmatically so a refused
- * submit has somewhere to send the user when the rule that refused it belongs to
- * no single control.
+ * `name` is the path of the node this displays, which is what `focusInvalidField`
+ * matches on. That is the empty string for the form itself, `period` for a nested
+ * group, `contacts` for an array. The element takes focus programmatically, so a
+ * refused submit has somewhere to send the user when the rule that refused it
+ * belongs to no single control.
  */
 export class UiFormError extends SignalElement {
   static properties = {
@@ -80,8 +75,8 @@ export class UiFormError extends SignalElement {
   }
 
   onMount() {
-    // Focusable by script, not by tab: the message is not a stop on the way
-    // through the form, but a refused submit has to be able to land on it.
+    // Focusable by script rather than by tab. The message is not a stop on the
+    // way through the form, but a refused submit has to be able to land on it.
     if (!this.hasAttribute('tabindex')) this.tabIndex = -1;
   }
 

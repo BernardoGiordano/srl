@@ -11,17 +11,18 @@ import { currentPath } from '@core/navigation/router.js';
  *       <span class="group-data-collapsed/sidebar:hidden">Users</span>
  *     </ui-sidebar-item>
  *
- * Everything inside the row is the consumer's: icon, label, badge, order. What
- * this owns is the part that is identical in every application and wrong in
- * most of them — deciding whether the row is the current one.
+ * Everything inside the row is the consumer's, from the icon and label to the
+ * badge and the order. What this owns is deciding whether the row is the current
+ * one, the part that is identical in every application and wrong in most of
+ * them.
  *
  * `/` matches only itself. Every other path matches itself and its subtree, so
  * `/settings` stays lit on `/settings/users`, which is what a section link is
  * for. `exact` turns that off for a link that must not.
  *
- * The result is published as `data-active` on the host *and* as `active-class`
- * on the anchor, because the two get used for different things: the attribute
- * for styling descendants, the class list for the row itself.
+ * The result is published both as `data-active` on the host and as `active-class`
+ * on the anchor, because the two get used for different things. The attribute
+ * styles descendants, and the class list styles the row itself.
  */
 export class UiSidebarItem extends SignalElement {
   static properties = {
@@ -61,7 +62,7 @@ export class UiSidebarItem extends SignalElement {
   /** @param {Map<PropertyKey, unknown>} changed */
   updated(changed) {
     super.updated(changed);
-    // Not a reactive property: it is derived from a signal the render already
+    // Not a reactive property. It is derived from a signal the render already
     // read, so setting it here cannot loop and needs no declaration.
     this.toggleAttribute('data-active', this.isActive);
   }

@@ -4,12 +4,12 @@ import { currentPath } from '@core/navigation/router.js';
 import { nextElementId, optionalAttr } from '../internal/dom.js';
 
 /**
- * A collapsible section of sidebar rows. The accordion every enterprise menu
- * has, with the two behaviours that make one usable:
+ * A collapsible section of sidebar rows, the accordion every enterprise menu has,
+ * with the two behaviours that make one usable.
  *
- *  - it opens itself when the current route is inside it, so a reload on a deep
- *    link does not present a closed menu with no indication of where you are;
- *  - a click still wins, so opening a section to look at it does not fight the
+ *  - It opens itself when the current route is inside it, so a reload on a deep
+ *    link does not present a closed menu with no indication of where you are.
+ *  - A click still wins, so opening a section to look at it does not fight the
  *    router, and closing the section you are inside stays closed.
  *
  *     <ui-sidebar-group match="/settings" trigger-class="…" panel-class="…">
@@ -19,13 +19,12 @@ import { nextElementId, optionalAttr } from '../internal/dom.js';
  *       </div>
  *     </ui-sidebar-group>
  *
- * NAMED CONTENT MUST BE A WHOLE ELEMENT
- *
- * `slot="trigger"` has to sit on an element that exists when this component
- * captures its content, so a `*if` or `*for` cannot produce the trigger itself —
- * wrap it, as above. The default slot has no such rule: projection moves the
- * caller's binding anchors along with its output, so a structural directive can
- * stand on its own there. See projection.js.
+ * Named content must be a whole element. `slot="trigger"` has to sit on an element
+ * that exists when this component captures its content, so a `*if` or `*for` cannot
+ * produce the trigger itself and has to wrap it, as above. The default slot has no
+ * such rule, because projection moves the caller's binding anchors along with its
+ * output, so a structural directive can stand on its own there. See
+ * projection.js.
  */
 export class UiSidebarGroup extends SignalElement {
   static properties = {
@@ -81,9 +80,9 @@ export class UiSidebarGroup extends SignalElement {
   toggle() {
     this.open = !this.expanded;
     this.#chosen = true;
-    // `open` may not have changed value — closing a group that was open only
-    // because the route matched sets false to false — and Lit schedules on
-    // change. Ask explicitly rather than relying on the two agreeing.
+    // `open` may not have changed value, since closing a group that was open only
+    // because the route matched sets false to false, and Lit schedules on change.
+    // Ask explicitly rather than relying on the two agreeing.
     this.requestUpdate();
   }
 

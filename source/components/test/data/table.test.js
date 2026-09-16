@@ -340,10 +340,9 @@ describe('ui-table', () => {
   });
 
   /**
-   * The chooser is one of the three panels that go through `open-panel.js`, and
-   * the one that had least of this before: the trigger claimed `aria-expanded`
-   * and named nothing at all, and Escape closed the chooser from anywhere in the
-   * document whether or not it was open. ADR-0078.
+   * The chooser is one of the three panels that go through `open-panel.js`. The
+   * trigger has to claim `aria-expanded` and name a real element, and Escape has
+   * to reach the chooser only while it is open. ADR-0078.
    */
   it('announces the chooser, and closes it on a pointer outside the toolbar', async () => {
     const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(`
@@ -367,8 +366,8 @@ describe('ui-table', () => {
     assert.equal(trigger.getAttribute('aria-expanded'), 'true');
     assert.equal(trigger.getAttribute('aria-controls'), panel.id, 'and it names the panel');
 
-    // The dismissal region is the toolbar strip, not the table: a pointer on a
-    // row is outside the chooser, and a table fills the screen.
+    // The dismissal region is the toolbar strip rather than the table. A pointer
+    // on a row is outside the chooser, and a table fills the screen.
     present(table.querySelector('[data-ui-part="table-cell"]')).dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true }),
     );
@@ -385,12 +384,13 @@ describe('ui-table', () => {
   });
 
   /**
-   * The column projection — order, visibility, and the offset every sticky column
-   * sits at — is computed once per change rather than once per cell. So each thing
-   * it is derived from has to be a thing the rendered cells still follow.
+   * The column projection covers order, visibility and the offset every sticky
+   * column sits at, and it is computed once per change rather than once per cell.
+   * Each thing it is derived from has to be a thing the rendered cells still
+   * follow.
    *
-   * Widths are authored rather than measured, which is what makes an offset
-   * arithmetic a test can state: `team` starts where `name` ends.
+   * Widths are authored rather than measured, which makes the offsets arithmetic a
+   * test can state. `team` starts where `name` ends.
    */
   it('recomputes sticky offsets when order, visibility, or width changes', async () => {
     const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(`
@@ -430,9 +430,9 @@ describe('ui-table', () => {
 
   /**
    * Processed rows are cached on the identity of everything they are computed
-   * from, and a column is one of those things: the same rows under the same sort
-   * key sort differently once the column says how to read its value. The cache
-   * that missed this would be a table stuck in its previous order.
+   * from, and a column is one of those things. The same rows under the same sort
+   * key sort differently once the column says how to read its value, and a cache
+   * that misses this leaves the table stuck in its previous order.
    */
   it('reprocesses rows when a column changes how it sorts', async () => {
     const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(`
@@ -458,7 +458,7 @@ describe('ui-table', () => {
   });
 
   /**
-   * The whole authoring path, as a page walks it: the compiler turns a
+   * The whole authoring path, as a page walks it. The compiler turns a
    * `<template *fragment>` into a value, lit assigns it to the column, the table
    * captures the column as projected content and moves it into `<x-content>`, and
    * the cell renders from a scope that belongs to the page. Every earlier test
@@ -501,11 +501,11 @@ describe('ui-table', () => {
 
   /**
    * A column offers two ways to write a rich cell, and the table has to choose
-   * between them the same way every time. `cell` is authored markup a page
-   * declares in its own template — `template.js` compiles it and hands the column
-   * a function — and `renderer` is the computed escape hatch. The fragment is more
-   * specific, so it wins, and it is reached even when the row holds nothing at the
-   * column's key.
+   * between them the same way every time. `cell` is authored markup a page declares
+   * in its own template, which `template.js` compiles into a function handed to the
+   * column. `renderer` is the computed escape hatch. The fragment is more specific,
+   * so it wins, and it is reached even when the row holds nothing at the column's
+   * key.
    */
   it('prefers a column fragment over its renderer, empty value or not', async () => {
     const table = /** @type {import('@components/data/ui-table.js').UiTable} */ (mount(`
@@ -533,8 +533,8 @@ describe('ui-table', () => {
   });
 
   /**
-   * Each of these leaks differently: an observer holds the element alive, a
-   * debounced write lands after the screen is gone, a panel promoted to the top
+   * Each of these leaks differently. An observer holds the element alive, a
+   * debounced write lands after the screen is gone, and a panel promoted to the top
    * layer stays there over whatever the user navigated to. `onDestroy` is the only
    * place they are released, so one test covers the whole set.
    */
@@ -589,8 +589,8 @@ describe('ui-table', () => {
       assert.equal(document.querySelector('[data-ui-part="table-row"]'), null, 'and takes the rows with it');
 
       // A timer that survived the flush would still be on the clock, and draining
-      // the clock would fire it. Both are claims about what is scheduled, which is
-      // why this no longer sleeps 400ms hoping to have outlasted one.
+      // the clock would fire it. Both are claims about what is scheduled, which a
+      // sleep past the debounce cannot make.
       assert.equal(clock.pending, 0, 'the flush cancelled the timer rather than leaving it');
       clock.flush();
       assert.equal(writes.length, 1, 'so nothing writes a second time');
@@ -651,10 +651,10 @@ describe('ui-table', () => {
   });
 
   /**
-   * `table-name` is the older spelling of `state-id`, kept because pages were
-   * authored against it. Two attributes for one concept only stay honest while
-   * something checks that they still mean the same thing — and that `state-id`
-   * wins when a page carries both, which is what the collection's contract promises.
+   * `table-name` is the older spelling of `state-id`, kept because pages are
+   * authored against it. Two attributes for one concept stay honest only while
+   * something checks that they mean the same thing, and that `state-id` wins when a
+   * page carries both, which is what the collection's contract promises.
    */
   it('persists under table-name, and lets state-id win over it', async () => {
     const aliased = `
@@ -691,8 +691,8 @@ describe('ui-table', () => {
   /* ── Selection ─────────────────────────────────────────────────────────── */
 
   /**
-   * The reason a selection is keyed rather than positional: a bulk action is
-   * chosen on one page, under one sort, and performed after both have moved.
+   * Why a selection is keyed rather than positional. A bulk action is chosen on
+   * one page, under one sort, and performed after both have moved.
    */
   it('keeps chosen rows through sorting and page changes', async () => {
     const table = selectionFixture();
@@ -733,9 +733,9 @@ describe('ui-table', () => {
   });
 
   /**
-   * The header acts on what the user can see. Anything wider than the page —
-   * every loaded row, every matching record on a server — is a screen's decision,
-   * not a checkbox's.
+   * The header acts on what the user can see. Anything wider than the page, such
+   * as every loaded row or every matching record on a server, is a screen's
+   * decision rather than a checkbox's.
    */
   it('selects the page from the header and reports a mixed page as indeterminate', async () => {
     const table = selectionFixture();
@@ -893,9 +893,9 @@ describe('ui-table', () => {
 
   /**
    * Holding an arrow key on a resize handle is one config change per keypress, and
-   * each one used to be a `JSON.stringify` of the whole column model into storage.
-   * `saveState()` stays immediate for a consumer that means now; the internal
-   * triggers coalesce.
+   * each would otherwise be a `JSON.stringify` of the whole column model into
+   * storage. The internal triggers coalesce, and `saveState()` stays immediate for
+   * a consumer that means now.
    */
   it('coalesces a burst of column changes into one write', async () => {
     /** @type {string[]} */

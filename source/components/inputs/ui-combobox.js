@@ -26,21 +26,21 @@ import { nextElementId, optionalAttr } from '../internal/dom.js';
  */
 
 /**
- * A searchable select: chips for what is chosen, a text input, and a panel of
- * options underneath.
+ * A searchable select, with chips for what is chosen, a text input, and a panel
+ * of options underneath.
  *
- * Options are data, not markup. `<ui-table-column>` is declarative because a
- * consumer authors columns by hand; nobody authors eight thousand `<option>`
- * elements, and the interesting sources — a fetch, a typeahead — produce arrays.
+ * Options are data rather than markup. `<ui-table-column>` is declarative because
+ * a consumer authors columns by hand. Nobody authors eight thousand `<option>`
+ * elements, and the interesting sources, a fetch or a typeahead, produce arrays.
  *
  * Everything visual is the consumer's. Rich option and chip content arrive as
- * `optionRenderer` / `chipRenderer` callbacks, the same escape hatch `ui-table`
- * gives cells, which is why this component can carry a spinner inside an option
- * without knowing what a spinner is.
+ * `optionRenderer` and `chipRenderer` callbacks, the same escape hatch `ui-table`
+ * gives cells, so this component can carry a spinner inside an option without
+ * knowing what a spinner is.
  *
- * No text is shipped. What the control says about itself is standard text
- * resolved through `text.js`; what names the data — the not-found line, the
- * add-tag prefix, the label and the placeholder — stays a property.
+ * No text is shipped. What the control says about itself is standard text resolved
+ * through `text.js`. What names the data stays a property, which covers the
+ * not-found line, the add-tag prefix, the label and the placeholder.
  */
 export class UiCombobox extends SignalElement {
   static properties = {
@@ -130,7 +130,7 @@ export class UiCombobox extends SignalElement {
    * The one row currently showing its expansion, or nothing.
    *
    * A property rather than something the renderer decides on its own, because
-   * "which row is open" is state this component has to react to: a consumer that
+   * "which row is open" is state this component has to react to. A consumer that
    * only flipped a flag of its own would change what `optionExpansion` returns
    * without anything here knowing the panel needs re-rendering.
    *
@@ -142,10 +142,10 @@ export class UiCombobox extends SignalElement {
    * Extra content for the expanded row, rendered in its own block under the
    * option rather than inside it.
    *
-   * This is what lets an option *be* a small form — a date range picked in place
-   * — without the combobox knowing what a date is, and without putting form
-   * controls inside a `role="option"`, where a screen reader would read them as
-   * part of the choice.
+   * This lets an option be a small form, such as a date range picked in place,
+   * without the combobox knowing what a date is and without putting form controls
+   * inside a `role="option"`, where a screen reader would read them as part of the
+   * choice.
    *
    * @type {((option: ComboboxOption) => unknown) | undefined}
    */
@@ -164,9 +164,9 @@ export class UiCombobox extends SignalElement {
   placeholder = '';
 
   /**
-   * The two strings that name what is being searched rather than the control
-   * doing the searching: "No comune matches", `Search comuni "mil"`. Empty falls
-   * back to `ui.combobox.notFound` / `ui.combobox.addTag`.
+   * The two strings that name what is being searched rather than the control doing
+   * the searching, such as "No comune matches" and `Search comuni "mil"`. Empty
+   * falls back to `ui.combobox.notFound` and `ui.combobox.addTag`.
    */
   notFoundLabel = '';
   addTagLabel = '';
@@ -199,10 +199,10 @@ export class UiCombobox extends SignalElement {
   #scrollActivePending = false;
 
   /**
-   * The panel obligation: position, outside pointer, Escape, the ARIA pair, and
-   * the teardown that used to be three lines in `onDestroy`. The input is the
-   * trigger because it is the `role="combobox"`; the control is the anchor
-   * because the panel is as wide as the whole box, chips included.
+   * The panel obligation, covering position, outside pointer, Escape, the ARIA
+   * pair and the teardown. The input is the trigger because it is the
+   * `role="combobox"`, and the control is the anchor because the panel is as wide
+   * as the whole box, chips included.
    */
   #panel = panelBinding({
     host: this,
@@ -238,13 +238,13 @@ export class UiCombobox extends SignalElement {
   /* ── The form-control contract ──────────────────────────────────────────── */
 
   /**
-   * The selection as *codes*, which is what a form field holds: a string when
-   * single, an array of them when `multiple`. `value` stays the option objects,
-   * because a chip needs the label and an option renderer needs the whole thing.
+   * The selection as codes, which is what a form field holds. That is a string
+   * when single and an array of them when `multiple`. `value` stays the option
+   * objects, because a chip needs the label and an option renderer needs the whole
+   * thing.
    *
-   * This asymmetry is the reason `form-control.js` exists. A screen wiring this
-   * element by hand had to map both ways at every site; now the mapping lives
-   * once, here, beside the data it maps.
+   * This asymmetry is why `form-control.js` exists. The mapping lives once, here,
+   * beside the data it maps, rather than at every site that wires the element.
    *
    * @type {string | readonly string[]}
    */
@@ -341,12 +341,12 @@ export class UiCombobox extends SignalElement {
    * What the control renders as chips, which is the selection only when there can
    * be more than one of it.
    *
-   * A chip earns its place by being removable *individually*, and a single-choice
-   * control has nothing to individuate: its one chip carried a `×` that did exactly
-   * what the clear button beside it did, so the field offered the same action twice
-   * and looked like a filter rather than a value. Single choice puts its label in
-   * the input instead — see `inputText` — which is what a `<select>` does and what
-   * a form asking one question should look like.
+   * A chip earns its place by being removable individually, and a single-choice
+   * control has nothing to individuate. Its one chip would carry a `×` doing
+   * exactly what the clear button beside it does, so the field would offer the same
+   * action twice and look like a filter rather than a value. Single choice puts its
+   * label in the input instead, which `inputText` handles. That is what a
+   * `<select>` does, and what a form asking one question should look like.
    *
    * @returns {readonly ComboboxOption[]}
    */
@@ -357,14 +357,14 @@ export class UiCombobox extends SignalElement {
   /**
    * The text in the control's input.
    *
-   * Multiple choice: always the search term, because the selection is beside it in
-   * chips. Single choice: the term while the panel is open, and the chosen label
-   * when it is closed. The panel is what separates the two — `closePanel` clears
-   * the term, and `onFocus` opens it — so the label can never be half-edited into a
-   * search, and a search can never be mistaken for a value.
+   * Multiple choice always shows the search term, because the selection is beside
+   * it in chips. Single choice shows the term while the panel is open and the
+   * chosen label when it is closed. The panel separates the two, since `closePanel`
+   * clears the term and `onFocus` opens it, so the label can never be half-edited
+   * into a search and a search can never be mistaken for a value.
    *
-   * `option.label` rather than `renderChip`: this is an input's value, so it has to
-   * be a string, and a `chipRenderer` may return a template.
+   * `option.label` rather than `renderChip`, because this is an input's value and
+   * has to be a string, where a `chipRenderer` may return a template.
    *
    * @returns {string}
    */
@@ -453,10 +453,10 @@ export class UiCombobox extends SignalElement {
   }
 
   /**
-   * Shown when the control has nothing of its own to say: no chips beside the input
-   * and no text in it. Keyed on what is rendered rather than on the selection, so a
-   * single-choice control that has emptied its input to be searched prompts again
-   * instead of sitting blank.
+   * Shown when the control has nothing of its own to say, meaning no chips beside
+   * the input and no text in it. Keyed on what is rendered rather than on the
+   * selection, so a single-choice control that has emptied its input to be searched
+   * prompts again instead of sitting blank.
    */
   get placeholderAttr() {
     return this.chips.length === 0 && this.inputText === '' && this.placeholder !== ''
@@ -478,8 +478,8 @@ export class UiCombobox extends SignalElement {
 
   /**
    * A tag is offered when the term names nothing already listed. Comparing the
-   * label rather than the value is deliberate: the consumer's `addTag` decides
-   * what the value becomes, and it has not run yet.
+   * label rather than the value is deliberate, because the consumer's `addTag`
+   * decides what the value becomes and it has not run yet.
    */
   get showAddTag() {
     if (typeof this.addTag !== 'function' || this.term === '') return false;
@@ -532,9 +532,10 @@ export class UiCombobox extends SignalElement {
   }
 
   /**
-   * Standard interaction text, from `ui.combobox.*`. See `text.js`: what a
-   * combobox says about itself is the same on every screen, so only the two
-   * strings that name the *data* — nothing found, add this tag — stay properties.
+   * Standard interaction text, from `ui.combobox.*`. What a combobox says about
+   * itself is the same on every screen, so only the two strings that name the data
+   * stay properties, which are the nothing-found line and the add-tag prefix.
+   * `text.js` has the rest.
    *
    * @param {string} name
    * @returns {string}
@@ -553,14 +554,14 @@ export class UiCombobox extends SignalElement {
   updated(changed) {
     super.updated(changed);
 
-    // Switched off with the panel open — a form disabling itself as it starts to
-    // save, most often, while the user was still choosing. `openPanel` refuses
-    // to open a disabled control; nothing else was closing one.
+    // Switched off with the panel open, most often a form disabling itself as it
+    // starts to save while the user is still choosing. `openPanel` refuses to open
+    // a disabled control, and nothing else closes one.
     if (this.disabled && this.open) this.closePanel();
 
     // A form fills its fields from a record that arrives before the lookup that
-    // explains it: `formValue = 'IT'` can be set while `options` is still empty.
-    // The codes are kept and resolved here, whenever the options turn up.
+    // explains it, so `formValue = 'IT'` can be set while `options` is still
+    // empty. The codes are kept and resolved here, whenever the options turn up.
     if (changed.has('options') && this.#pendingCodes !== undefined) this.#applyCodes();
 
     this.#panel.sync(this.open);
@@ -584,10 +585,9 @@ export class UiCombobox extends SignalElement {
       return;
     }
 
-    // A panel that grew a hundred options — a lazy rule finishing its load — is
-    // re-laid-out by the browser with scrollTop clamped or reset. Putting it back
-    // is what stops the list jumping to the top under the pointer, which is the
-    // bug the Angular version worked around with two try/catch helpers.
+    // A panel that grows a hundred options, say from a lazy rule finishing its
+    // load, is re-laid-out by the browser with scrollTop clamped or reset. Putting
+    // it back stops the list jumping to the top under the pointer.
     if (this.#panelScrollTop > 0 && panel.scrollTop === 0) {
       panel.scrollTop = this.#panelScrollTop;
     }
@@ -599,8 +599,8 @@ export class UiCombobox extends SignalElement {
    * An expansion that just opened is brought into view, row and all.
    *
    * Nothing else does this. The expansion's own content may take focus, and a
-   * focused input does scroll itself into view — but only itself, which leaves the
-   * row that opened it above the fold, and re-rendering the list around it resets
+   * focused input scrolls itself into view, but only itself, which leaves the row
+   * that opened it above the fold. Re-rendering the list around it resets
    * `scrollTop` afterwards anyway.
    *
    * @param {HTMLElement} panel
@@ -615,9 +615,9 @@ export class UiCombobox extends SignalElement {
     if (this.#expanded) return;
 
     // The expansion's content is very likely a custom element, which renders in
-    // its own update a frame or two after this one — so the first height read here
-    // is 0, the second is half a form, and scrolling to either puts the wrong
-    // thing at the fold. Measure until the number stops changing, then commit.
+    // its own update a frame or two after this one. The first height read here is
+    // 0, the second is half a form, and scrolling to either puts the wrong thing
+    // at the fold. Measure until the number stops changing, then commit.
     const height = expansion.offsetHeight;
     if (height === 0 || height !== this.#expandedHeight) {
       this.#expandedHeight = height;
@@ -634,7 +634,7 @@ export class UiCombobox extends SignalElement {
     if (bottom > panel.scrollTop + panel.clientHeight) {
       panel.scrollTop = bottom - panel.clientHeight;
     }
-    // Second, and deliberately: with both ends off-screen the row wins, because a
+    // Second, and deliberately. With both ends off-screen the row wins, because a
     // form whose heading has scrolled away is a form with no name on it.
     if (top < panel.scrollTop) panel.scrollTop = top;
     this.#panelScrollTop = panel.scrollTop;
@@ -808,7 +808,8 @@ export class UiCombobox extends SignalElement {
 
   /** @param {ComboboxOption} option @param {Event} event */
   onOptionPointerDown(option, event) {
-    // Keeps focus in the input: a blurred input closes the panel and loses the term.
+    // Keeps focus in the input, because a blurred input closes the panel and loses
+    // the term.
     event.preventDefault();
     if (option.disabled === true) return;
     this.toggleOption(option);
@@ -908,10 +909,10 @@ function offsetWithin(container, element) {
 /**
  * Same options, same order, by identity.
  *
- * Guards the assignment in `#applyCodes`: writing `value` re-renders and
- * invalidates the visible-option cache, and doing it on every update — which is
- * what an unconditional assignment means once a form is bound — turns typing in
- * the search box into a render loop.
+ * Guards the assignment in `#applyCodes`. Writing `value` re-renders and
+ * invalidates the visible-option cache, and an unconditional assignment does that
+ * on every update once a form is bound, which turns typing in the search box into
+ * a render loop.
  *
  * @param {readonly ComboboxOption[]} left
  * @param {readonly ComboboxOption[]} right

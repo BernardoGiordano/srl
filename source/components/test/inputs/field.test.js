@@ -12,11 +12,11 @@ import '@components/inputs/ui-combobox.js';
 /**
  * `ui-field`, against both kinds of control it understands.
  *
- * The native case is the easy half and is here mostly as the control: if a plain
+ * The native case is the easy half and is here mostly as the control. If a plain
  * `<input>` did not work there would be no reason to trust the other one. The
- * combobox case is the reason the element exists — ADR-0011 records the four
- * separate frictions a screen hit wiring one by hand, and each of them is an
- * assertion below.
+ * combobox case is why the element exists. ADR-0011 records the four separate
+ * frictions a screen hits wiring one by hand, and each of them is an assertion
+ * below.
  */
 
 /** @param {HTMLElement} element */
@@ -62,8 +62,8 @@ describe('ui-field', () => {
     await settled(host);
 
     assert.notOk(city.touched.value);
-    // Capture, because blur does not bubble: a listener that waited for it to
-    // arrive at `ui-field` would never hear it.
+    // Capture, because blur does not bubble. A listener waiting for it to arrive
+    // at `ui-field` would never hear it.
     present(host.querySelector('input')).dispatchEvent(new FocusEvent('blur'));
     assert.ok(city.touched.value);
   });
@@ -199,7 +199,8 @@ describe('ui-field', () => {
       'the code became the option, so the control shows a label',
     );
 
-    // And back: choosing an option writes the code, not the object.
+    // And back, because choosing an option writes the code rather than the
+    // object.
     present(combobox.querySelector('[data-ui-part="combobox-control"]')).dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true }),
     );
@@ -295,8 +296,8 @@ describe('ui-field', () => {
       'focus() on the host would have done nothing at all',
     );
 
-    // A server error outranks a client rule: it is about a value the user was
-    // just told was fine, and is the more surprising of the two.
+    // A server error outranks a client rule, because it is about a value the user
+    // was just told was fine and is the more surprising of the two.
     form.fields.name.serverError.value = 'taken';
     assert.ok(focusInvalidField(host, form));
     assert.equal(document.activeElement?.id, 'name-input');

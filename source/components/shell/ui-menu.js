@@ -6,24 +6,23 @@ import { optionalAttr } from '../internal/dom.js';
 import { panelBinding } from '../internal/open-panel.js';
 
 /**
- * A dropdown: a trigger, and a panel that appears under it.
+ * A dropdown, which is a trigger and a panel that appears under it.
  *
  *     <ui-menu class="relative" trigger-class="…" panel-class="absolute end-0 …">
  *       <span slot="trigger"><ui-avatar …></ui-avatar></span>
  *       <div>…</div>
  *     </ui-menu>
  *
- * Positioning is the consumer's — `relative` on the host and `absolute` on the
- * panel covers the case every header needs, and a component that took a
- * `placement` prop would owe you a collision detector.
+ * Positioning is the consumer's. `relative` on the host and `absolute` on the
+ * panel covers the case every header needs, and a component that took a `placement`
+ * prop would owe you a collision detector.
  *
- * What is here is the part that is always the same and always half-finished:
- * closing. A dropdown must close on a click outside it, on Escape with focus
- * returning to the trigger, and on a navigation. The first two belong to every
- * open panel and come from `open-panel.js`, which also writes the
- * `aria-expanded`/`aria-controls` pair. The third is this element's own, and it
- * is the one that gets forgotten: it leaves a user menu floating over the page
- * it just linked to.
+ * What is here is closing, the part that is always the same and always
+ * half-finished. A dropdown must close on a click outside it, on Escape with focus
+ * returning to the trigger, and on a navigation. The first two belong to every open
+ * panel and come from `open-panel.js`, which also writes the `aria-expanded` and
+ * `aria-controls` pair. The third is this element's own, and it is the one that
+ * gets forgotten, leaving a user menu floating over the page it just linked to.
  */
 export class UiMenu extends SignalElement {
   static properties = {
@@ -52,10 +51,8 @@ export class UiMenu extends SignalElement {
   #stopWatchingRoute;
 
   /**
-   * Dismissal and the ARIA pair, but not position: `anchor: null` because a
-   * header menu is placed by the two utility classes the consumer already wrote,
-   * and a component that took a `placement` prop would owe you a collision
-   * detector.
+   * Dismissal and the ARIA pair, but not position. `anchor: null`, because a
+   * header menu is placed by the two utility classes the consumer already wrote.
    */
   #panel = panelBinding({
     host: this,

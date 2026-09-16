@@ -1,46 +1,36 @@
 /**
  * Everything an open panel has to do, in one place.
  *
- * WHY A PANEL IS NOT JUST `absolute`
- *
- * A panel left in the normal flow pushes the rest of the page down when it
- * opens, which is the one thing a dropdown must never do. `position: absolute`
- * fixes that and buys a second bug: the panel is still painted inside its
- * ancestors, so a single `overflow-hidden` on a card — the ordinary way to make
- * a rounded border clip the table inside it — cuts the panel off, and no
- * z-index rescues it.
+ * A panel left in the normal flow pushes the rest of the page down when it opens,
+ * which is the one thing a dropdown must never do. `position: absolute` fixes that
+ * and buys a second bug, because the panel is still painted inside its ancestors.
+ * A single `overflow-hidden` on a card, the ordinary way to make a rounded border
+ * clip the table inside it, cuts the panel off, and no z-index rescues it.
  *
  * So the panel is promoted to the top layer with `popover`, where no ancestor's
- * overflow, stacking context or transform can reach it, and its coordinates are
- * written here: under the anchor, flipped above when there is more room there,
- * clamped into the viewport, re-measured whenever anything moves. That last part
- * is what a `placement` property would owe you and rarely delivers.
+ * overflow, stacking context or transform can reach it. Its coordinates are
+ * written here. It sits under the anchor, flips above when there is more room
+ * there, clamps into the viewport, and is re-measured whenever anything moves.
+ * That last part is what a `placement` property owes you and rarely delivers.
  *
  * A browser without `popover` keeps the fixed positioning and loses only the
- * immunity to a clipping ancestor, which is the same behaviour this component
- * collection had before.
+ * immunity to a clipping ancestor.
  *
- * WHY POSITIONING WAS NOT THE WHOLE JOB
+ * Positioning is the part an open panel shares least. `ui-menu` positions its own
+ * with two utility classes and needs none of it. What every open panel does need
+ * is the rest: outside-pointerdown dismissal, Escape, the release bookkeeping, and
+ * an `aria-expanded` and `aria-controls` pair that names an element which actually
+ * exists. Stated per element, those four drift apart.
  *
- * Positioning was all this module used to own, and it is the part an open panel
- * shares least: `ui-menu` positions its own with two utility classes and needs
- * none of it. What every open panel does need was restated per element instead —
- * outside-pointerdown dismissal three times, Escape three times, the release
- * bookkeeping twice in eighteen near-identical lines, and the `aria-expanded`
- * and `aria-controls` pair spelled differently in each template, missing
- * altogether on the table's column chooser, and pointing at an id with no
- * element behind it whenever the combobox was closed.
+ * So the concept is the export. `openPanel()` opens one and returns the single
+ * call that undoes all of it, and `panelBinding()` drives that from a component's
+ * `updated()` without the component tracking what it opened. Positioning is the
+ * part you can decline, with `anchor: null`.
  *
- * Four habits for one concept is how they disagree. So the concept is the export:
- * `openPanel()` opens one and returns the single call that undoes all of it, and
- * `panelBinding()` drives that from a component's `updated()` without the
- * component holding the two fields it used to take to remember what it opened.
- * Positioning becomes the part you can decline, with `anchor: null`.
- *
- * `ui-dialog` stays out, and should: a native `<dialog>` shown with
- * `showModal()` owns the top layer, inertness, the focus trap and the focus
- * return already, and reimplementing any of that here would be the fight
- * ADR-0029 exists to avoid. ADR-0078.
+ * `ui-dialog` stays out. A native `<dialog>` shown with `showModal()` already owns
+ * the top layer, inertness, the focus trap and the focus return, and
+ * reimplementing any of that here would be the fight ADR-0029 exists to avoid.
+ * ADR-0078.
  */
 
 import { isRtl, nextElementId } from './dom.js';
@@ -68,7 +58,7 @@ const MIN_HEIGHT = 96;
  */
 
 /**
- * Open `panel`: place it, announce it, and watch for the two gestures that close
+ * Open `panel`. Place it, announce it, and watch for the two gestures that close
  * it.
  *
  *     this.#release = openPanel(this, input, panel, {
@@ -79,18 +69,19 @@ const MIN_HEIGHT = 96;
  *     …
  *     this.#release();
  *
- * `host` is what counts as inside: a pointer down anywhere else dismisses. It is
- * usually the element, but not always — the table's column chooser lives in a
+ * `host` is what counts as inside, so a pointer down anywhere else dismisses. It
+ * is usually the element, but not always. The table's column chooser lives in a
  * toolbar strip inside a table that fills the screen, and a click on a row has to
  * close the chooser.
  *
  * `trigger` is the control that owns the panel in the accessibility tree and the
  * one focus returns to on Escape. It is also the anchor unless `anchor` says
- * otherwise: `null` leaves positioning to the consumer, and an element anchors to
- * something other than the trigger — a combobox announces its panel from the
- * `role="combobox"` input but must be as wide as the whole control around it.
+ * otherwise. `null` leaves positioning to the consumer, and an element anchors to
+ * something other than the trigger. A combobox, for instance, announces its panel
+ * from the `role="combobox"` input but must be as wide as the whole control around
+ * it.
  *
- * `align: 'stretch'` matches the anchor's width, which is what a select wants;
+ * `align: 'stretch'` matches the anchor's width, which is what a select wants.
  * `'start'` and `'end'` are logical edges and follow the anchor's writing
  * direction.
  *
@@ -113,9 +104,9 @@ export function openPanel(host, trigger, panel, options) {
   const anchor = options.anchor === null ? null : (options.anchor ?? trigger);
   if (anchor !== null) follow(anchor, panel, options, signal);
 
-  // pointerdown rather than click: a click listener fires after the button is
-  // released, so a drag that starts inside the panel and ends outside it would
-  // close the panel mid-gesture. `composedPath` rather than `contains`, so a
+  // pointerdown rather than click, because a click listener fires after the
+  // button is released, so a drag that starts inside the panel and ends outside it
+  // would close the panel mid-gesture. `composedPath` rather than `contains`, so a
   // consumer who puts a shadow-rooted element in the panel is still inside it.
   document.addEventListener(
     'pointerdown',
@@ -177,11 +168,10 @@ export function openPanel(host, trigger, panel, options) {
  *
  *     updated(changed) { …; this.#panel.sync(this.open); }
  *
- * The parts are selectors rather than elements because the element does not
- * exist until the render that opens it, and is a different element the next time.
- * That is the whole reason the two fields this replaces existed: one held the
- * release, one held the panel it belonged to, so a re-render that changed neither
- * did not tear the panel down and put it back.
+ * The parts are selectors rather than elements, because the element does not
+ * exist until the render that opens it and is a different element the next time.
+ * This binding keeps the release and the panel it belongs to together, so a
+ * re-render that changes neither leaves the panel standing.
  *
  * `lifetime` is read at each open rather than once, because a `SignalElement`
  * makes a new one every time it re-enters the DOM. Given it, `onDestroy` has
@@ -282,15 +272,15 @@ function follow(anchor, panel, options, signal) {
   };
   place();
 
-  // Capture, because the element that scrolls is almost never the window: an
-  // anchor inside a scrolling card moves with it and the panel has to follow.
+  // Capture, because the element that scrolls is almost never the window. An
+  // anchor inside a scrolling card moves with it, and the panel has to follow.
   const listener = { capture: true, passive: true, signal };
   window.addEventListener('scroll', place, listener);
   window.addEventListener('resize', place, listener);
 
-  // The panel's own size changes under it — a lazy list finishing its load, a
-  // search replacing ten rows with one — and each of those moves the flip
-  // decision and the clamp.
+  // The panel's own size changes under it when a lazy list finishes loading or a
+  // search replaces ten rows with one, and each of those moves the flip decision
+  // and the clamp.
   const observer = new ResizeObserver(place);
   observer.observe(anchor);
   observer.observe(panel);
@@ -307,8 +297,8 @@ function follow(anchor, panel, options, signal) {
 function reveal(panel) {
   if (!supportsPopover(panel)) return;
   panel.popover = 'manual';
-  // `manual` rather than `auto`: light dismissal would close the panel on the
-  // very pointerdown that is selecting an option, and `openPanel` owns the
+  // `manual` rather than `auto`, because light dismissal would close the panel on
+  // the very pointerdown that is selecting an option. `openPanel` owns the
   // outside-click and Escape handling itself.
   if (!panel.matches(':popover-open')) panel.showPopover();
 }
@@ -336,20 +326,20 @@ function position(anchor, panel, settings) {
   style.position = 'fixed';
   style.inset = 'auto';
   style.margin = '0';
-  // Every number below is a border-box number: `natural` adds the borders back on,
-  // the room is measured against the anchor's own rect, and `maxHeight` is a
+  // Every number below is a border-box number. `natural` adds the borders back
+  // on, the room is measured against the anchor's own rect, and `maxHeight` is a
   // promise about how much of the viewport the panel may take. `max-height` caps
   // the content box unless this says otherwise, so without it a padded panel
   // flipped above its anchor overhangs it by its own padding. Tailwind's reset
-  // happens to set this collection's panels already; the arithmetic here should
+  // sets this for the collection's panels already, and the arithmetic here should
   // not depend on the consumer having one.
   style.boxSizing = 'border-box';
   if (settings.align === 'stretch') style.width = `${String(Math.round(box.width))}px`;
 
   // How tall the panel wants to be, read from its content rather than by clearing
-  // `max-height` and measuring. Clearing it works exactly once: the second time,
+  // `max-height` and measuring. Clearing it works exactly once. The second time
   // the panel is scrolled, and letting it snap to full height for one frame
-  // collapses `scrollTop` to zero on the way back — which looks like the list
+  // collapses `scrollTop` to zero on the way back, which looks like the list
   // jumping to the top whenever anything moves.
   const natural = panel.scrollHeight + (panel.offsetHeight - panel.clientHeight);
 

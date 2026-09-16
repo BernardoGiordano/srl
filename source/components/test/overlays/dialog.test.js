@@ -6,12 +6,12 @@ import '@components/overlays/ui-dialog.js';
 /**
  * `ui-dialog`, which is mostly an argument about who owns `open`.
  *
- * The element delegates the hard half — the top layer, inertness, the focus trap
- * and the backdrop — to `showModal()`, and there is no point asserting the
+ * The element delegates the hard half to `showModal()`, meaning the top layer,
+ * inertness, the focus trap and the backdrop, and there is no point asserting the
  * browser implements its own specification. What is worth asserting is the part
- * this element decided: that Escape and a backdrop click *ask* rather than close,
- * that `mandatory` refuses to be asked at all, and that a screen driving `open`
- * from state of its own is never contradicted.
+ * this element decided. Escape and a backdrop click ask rather than close,
+ * `mandatory` refuses to be asked at all, and a screen driving `open` from state
+ * of its own is never contradicted.
  */
 
 /** @param {UiDialog} host @returns {HTMLDialogElement} */
