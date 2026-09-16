@@ -2,12 +2,13 @@
  * What a measurement means, with no browser and no filesystem in sight.
  *
  * The harness has two halves and this is the one that can be tested in a
- * millisecond: samples in, one comparable record out. Everything that can go
- * wrong about a number — too few samples, a workload that was fast because it
- * rendered the wrong thing, a comparison against a baseline recorded on another
- * machine — is decided here rather than inside the code that drives Chrome.
+ * millisecond, with samples in and one comparable record out. Everything that can go
+ * wrong about a number is decided here rather than inside the code that drives
+ * Chrome, whether that is too few samples, a workload that was fast because it
+ * rendered the wrong thing, or a comparison against a baseline recorded on another
+ * machine.
  *
- * THREE RULES THIS MODULE ENFORCES
+ * It enforces three rules.
  *
  *  1. Correctness before timing. A sample carries the answer its workload
  *     produced, and `aggregate` refuses the whole workload when any sample's
@@ -44,17 +45,18 @@ export const BASELINE_VERSION = 2;
 /**
  * Which reference workload normalises which suite.
  *
- * Not a taste question — measured. Under a memory-bandwidth load, three real render
+ * Measured rather than chosen. Under a memory-bandwidth load, three real render
  * workloads slowed by 31%, 34% and 36% while the arithmetic reference reported 12% and
- * the layout reference reported 30%. Scaling by arithmetic would have left ~20% of
- * environmental slowdown looking like a repository regression; scaling by layout left
- * 1–6%, inside the threshold. Everything that runs in a page is therefore scaled by
- * the layout reference.
+ * the layout reference reported 30%. Scaling by arithmetic would leave about 20% of
+ * environmental slowdown looking like a repository regression, and scaling by layout
+ * left 1 to 6%, inside the threshold. Everything that runs in a page is therefore
+ * scaled by the layout reference.
  *
  * The tooling suite is scaled by arithmetic because neither reference describes a
  * fresh `tsc` process reading a few hundred files, and arithmetic at least tracks the
- * clock. What actually carries that suite is its much wider threshold in budgets.json.
- * The editor suite is the same case: child processes and a worker thread, no renderer.
+ * clock. What carries that suite is its much wider threshold in budgets.json. The
+ * editor suite is the same case, with child processes and a worker thread and no
+ * renderer.
  *
  * @type {Record<Suite, ReferenceKind>}
  */
@@ -72,9 +74,9 @@ export const REFERENCE_FOR_SUITE = {
 /**
  * Summarise one metric's samples.
  *
- * p95 is nearest-rank over the sorted samples rather than an interpolation: with
- * ten samples an interpolated p95 invents a number that no run produced, and the
- * point of reporting a tail at all is to name a run that actually happened.
+ * p95 is nearest-rank over the sorted samples rather than an interpolation. With ten
+ * samples an interpolated p95 invents a number that no run produced, and reporting a
+ * tail is only worth doing if it names a run that actually happened.
  *
  * @param {readonly number[]} values
  * @returns {MetricStats}
@@ -104,9 +106,9 @@ function quantile(sorted, fraction) {
 }
 
 /**
- * Thrown when a workload's samples cannot be turned into a measurement: a failed
- * correctness check, or no samples at all. Named so the runner can report it as a
- * workload failure rather than a harness crash.
+ * Thrown when a workload's samples cannot be turned into a measurement, either from a
+ * failed correctness check or from no samples at all. Named so the runner can report
+ * it as a workload failure rather than a harness crash.
  */
 export class WorkloadFailure extends Error {
   /**
@@ -124,10 +126,10 @@ export class WorkloadFailure extends Error {
  * Turn a workload's samples into the record that gets printed, written to JSON
  * and compared against a baseline.
  *
- * A timed workload reports `duration` in milliseconds. A measured workload
- * reports whatever numeric metrics it collected — bytes, requests, retained
- * nodes — and each is summarised separately, because a memory workload's heap
- * figure and its node count regress for different reasons.
+ * A timed workload reports `duration` in milliseconds. A measured workload reports
+ * whatever numeric metrics it collected, such as bytes, requests or retained nodes,
+ * and each is summarised separately, because a memory workload's heap figure and its
+ * node count regress for different reasons.
  *
  * @param {WorkloadSpec} spec
  * @param {readonly BenchmarkSample[]} samples
@@ -193,7 +195,7 @@ function push(into, name, value) {
  * its results.
  *
  * One reading is taken before each suite rather than one per run, because the noise
- * this corrects for is local in time: a laptop warms up over ninety seconds, a video
+ * this corrects for is local in time. A laptop warms up over ninety seconds, a video
  * plays for thirty, an indexer wakes up once. A single reading at the start describes
  * the machine the first suite got and no other. `spread` is the largest ratio between
  * any two readings of the same reference in one run, and it is how a run reports that
@@ -213,8 +215,8 @@ export function summariseCalibration(readings) {
   /** @type {Record<string, ReferenceReading>} */
   const bySuite = {};
   for (const reading of readings) {
-    // First reading wins: a suite that reappears later in the registry was measured
-    // by the reading taken when it started.
+    // First reading wins, because a suite that reappears later in the registry was
+    // measured by the reading taken when it started.
     bySuite[reading.suite] ??= { arithmetic: reading.arithmetic, layout: reading.layout };
   }
 
@@ -233,7 +235,7 @@ export function summariseCalibration(readings) {
 /**
  * The reference that moved too far during this run, if one did.
  *
- * Two callers, one rule: a run that measured a machine which did not hold still may
+ * Two callers, one rule. A run that measured a machine which did not hold still may
  * not fail a build, and may not become the baseline every later run is compared
  * against either.
  *
@@ -255,16 +257,17 @@ export function unstableReference(calibration, maxRunSpread) {
  * Decide whether this run may fail a build, and by how much each suite's baseline
  * should be scaled.
  *
- * Four reasons to report instead of gate, and each of them was a false red build
- * before it was a rule:
+ * Four reasons to report instead of gate, and each of them is a false red build
+ * otherwise:
  *
  *   1. No baseline. Nothing to compare against.
  *   2. A baseline from an older harness. Its calibration means something different.
  *   3. A different machine, by environment profile.
- *   4. A machine that changed too much — either against the baseline's (`maxSpeedDrift`)
- *      or during the run itself (`maxRunSpread`). Scaling by a factor of three is
- *      arithmetic, not measurement, and a machine whose layout reference moved 40%
- *      mid-run cannot tell a regression from the load that caused the move.
+ *   4. A machine that changed too much, either against the baseline's
+ *      (`maxSpeedDrift`) or during the run itself (`maxRunSpread`). Scaling by a
+ *      factor of three is arithmetic rather than measurement, and a machine whose
+ *      layout reference moved 40% mid-run cannot tell a regression from the load that
+ *      caused the move.
  *
  * @param {{
  *   baseline: BaselineFile | null,
@@ -346,28 +349,27 @@ export function comparability(input) {
 /**
  * Compare a run against a checked-in baseline.
  *
- * Two kinds of budget. A *regression* budget is relative: the median may not exceed
- * the baseline by more than `threshold`, and the p95 is reported beside it rather
- * than gated. A *product* budget is absolute, comes from the target application
- * rather than from a previous run, and is only applied to the metrics that declare
- * one.
+ * Two kinds of budget. A regression budget is relative, so the median may not exceed
+ * the baseline by more than `threshold`, and the p95 is reported beside it rather than
+ * gated. A product budget is absolute, comes from the target application rather than
+ * from a previous run, and is only applied to the metrics that declare one.
  *
- * A regression has to be over the threshold *and* over a minimum meaningful delta
- * for its unit, thresholds are per suite, and the gate reads the median rather than
- * the p95. ADR-0044. Everything is still reported — those rules only decide what can
+ * A regression has to be over the threshold and over a minimum meaningful delta for
+ * its unit, thresholds are per suite, and the gate reads the median rather than the
+ * p95. ADR-0044. Everything is still reported, and those rules only decide what can
  * fail a build.
  *
- * The baseline is additionally scaled by how much faster or slower the machine is
- * *now*, from the fixed reference workloads in
- * tools/benchmark/browser/calibration.js. ADR-0043. The factor is per suite
- * (`speedBySuite`), from the reference reading taken when that suite started and the
- * reference kind that suite's work resembles — see `REFERENCE_FOR_SUITE`. A single
- * scalar for the whole run is the fallback, and it is only right when the machine
- * held still from the first workload to the last.
+ * The baseline is additionally scaled by how much faster or slower the machine is now,
+ * from the fixed reference workloads in tools/benchmark/browser/calibration.js.
+ * ADR-0043. The factor is per suite through `speedBySuite`, from the reference reading
+ * taken when that suite started and the reference kind that suite's work resembles,
+ * which `REFERENCE_FOR_SUITE` decides. A single scalar for the whole run is the
+ * fallback, and it is only right when the machine held still from the first workload
+ * to the last.
  *
- * Nothing here fails on a missing baseline entry: a new workload has no history,
- * and reporting it as new is more useful than either passing it silently or
- * failing a build for having added a measurement.
+ * Nothing here fails on a missing baseline entry. A new workload has no history, and
+ * reporting it as new is more useful than either passing it silently or failing a
+ * build for having added a measurement.
  *
  * @param {readonly WorkloadRecord[]} current
  * @param {BaselineFile | null} baseline
@@ -413,7 +415,7 @@ export function compare(current, baseline, policy) {
         change = ratio(baselineStats.median, stats.median);
       } else {
         // How much slower the machine was when this suite ran than when the baseline
-        // recorded it: 1.4 means everything here is expected to take 40% longer for
+        // recorded it. 1.4 means everything here is expected to take 40% longer for
         // reasons that are not code. Only time scales with it — a request count and a
         // byte count do not, so they are compared as recorded.
         const speed = policy.speedBySuite?.[record.suite] ?? policy.speed ?? 1;

@@ -1,29 +1,28 @@
 /**
- * The origin under measurement: one adapter over `cli/origin/`.
+ * The origin under measurement, one adapter over `cli/origin/`.
  *
- * A benchmark that serves the application differently from production measures
- * the benchmark's server. So the mount table, the traversal refusal, the directory
- * index and the history fallback are the shared ones — `cli/origin/index.mjs`, the
+ * A benchmark that serves the application differently from production measures the
+ * benchmark's server. The mount table, the traversal refusal, the directory index and
+ * the history fallback are therefore the shared ones from `cli/origin/index.mjs`, the
  * same rules the development server and the artifact test origin answer with
- * (ADR-0075) — and what is stated here is only what a measurement needs
- * differently:
+ * (ADR-0075). What is stated here is only what a measurement needs differently:
  *
  *   1. No live-reload injection. The bytes the browser gets here are the bytes on
  *      disk, which is what nginx sends.
- *   2. A production cache policy rather than the dev server's `no-store`:
- *      /lib/vendor immutable, everything else `no-cache`.
- *      Warm startup only means something if the second load can revalidate the
- *      way a production reload does.
+ *   2. A production cache policy rather than the dev server's `no-store`, so
+ *      /lib/vendor is immutable and everything else is `no-cache`. Warm startup only
+ *      means something if the second load can revalidate the way a production reload
+ *      does.
  *   3. gzip, at nginx's default level, cached per file so the numbers are browser
  *      delivery rather than repeated compression work.
  *
  * One extra mount exists, at /__benchmark/, and it is why this file is not simply
- * `srl serve` with a flag: the workload modules the page imports are tooling,
- * they must not sit inside an application or the library, and they still have to
- * arrive over the same origin as the code they measure. The harness page itself is
- * generated rather than checked in, because its import map is the application's
- * own, read from that application's index.html at start-up. A copy would be a
- * fourth import map to keep in step with the other three.
+ * `srl serve` with a flag. The workload modules the page imports are tooling, they
+ * must not sit inside an application or the library, and they still have to arrive
+ * over the same origin as the code they measure. The harness page itself is generated
+ * rather than checked in, because its import map is the application's own, read from
+ * that application's index.html at start-up. A copy would be a fourth import map to
+ * keep in step with the other three.
  *
  * The port is ephemeral. A fixed port is a benchmark that fails when a dev server
  * is running, and there is nothing to bookmark here.
@@ -125,7 +124,7 @@ export async function startOrigin(app, options = {}) {
           : {}),
       }),
 
-      // gzip, and nothing else: the bytes are the artifact's. Only measured
+      // gzip and nothing else, because the bytes are the artifact's. Only measured
       // artifacts are compressed, because only they are what nginx would serve.
       transform: async (file, { request, stats }) => {
         if (artifact === undefined || stats.size < 512) return null;
@@ -164,14 +163,15 @@ export async function startOrigin(app, options = {}) {
         }
 
         // A static origin still needs the browser-facing half of the application's
-        // backend seam, and neither adapter runs the application's server. Signed out
-        // is the deterministic startup state: the real endpoint 401s, which the BFF
-        // store admits as an ordinary visitor rather than a startup failure.
+        // backend seam, and neither adapter runs the application's server. Signed
+        // out is the deterministic startup state, because the real endpoint 401s and
+        // the BFF store admits that as an ordinary visitor rather than a startup
+        // failure.
         //
-        // Both adapters, because the alternative is not "an unauthenticated page" but
-        // no page at all: the session restore is a startup step, a 404 is not a
+        // Both adapters, because without it there is no page at all rather than an
+        // unauthenticated one. The session restore is a startup step, a 404 is not a
         // refusal any store may interpret, and `startApplication` correctly turns it
-        // into an ApplicationStartupError. The source origin therefore failed every
+        // into an ApplicationStartupError, so the source origin would fail every
         // startup and delivery sample it took rather than measuring a slower boot.
         if (url.pathname === '/auth/session' && request.method === 'GET') {
           send(response, {
@@ -205,10 +205,10 @@ export async function startOrigin(app, options = {}) {
 }
 
 /**
- * The page micro-workloads run in: the application's import map, the production
- * Trusted Types policy list, and nothing else. No application module is loaded,
- * because a workload that measures template compilation should not be paying for
- * a router, a session restore and a mock backend first.
+ * The page micro-workloads run in, carrying the application's import map, the
+ * production Trusted Types policy list, and nothing else. No application module is
+ * loaded, because a workload that measures template compilation should not be paying
+ * for a router, a session restore and a mock backend first.
  *
  * @param {string} importMap
  * @returns {string}
@@ -228,12 +228,12 @@ function harnessPage(importMap) {
 }
 
 /**
- * Model only the publication fact the stale-tab workload needs: a new release no longer
- * references selected old hashes, while the shared asset store still retains them. The
- * files remain read from the verified artifact; this changes serving eligibility, never
- * artifact bytes.
+ * Model only the publication fact the stale-tab workload needs, which is that a new
+ * release stops referencing selected old hashes while the shared asset store still
+ * retains them. The files are still read from the verified artifact, and this changes
+ * serving eligibility rather than artifact bytes.
  *
- * Kept inside the origin implementation: the benchmark crosses one small switch
+ * Kept inside the origin implementation, so the benchmark crosses one small switch
  * interface and does not learn server routing state.
  *
  * @param {{ assets?: readonly string[] } | undefined} artifact
@@ -286,16 +286,16 @@ function createReleaseSimulation(artifact) {
 
 /**
  * An artifact workload that walks lazy application routes needs the application's
- * backend answering behind this origin. Reuse the browser suite's HTTP fake: route
- * JavaScript still performs ordinary same-origin requests, while the benchmark avoids
- * coupling artifact delivery numbers to a database or a live account.
+ * backend answering behind this origin. It reuses the browser suite's HTTP fake, so
+ * route JavaScript still performs ordinary same-origin requests while the benchmark
+ * avoids coupling artifact delivery numbers to a database or a live account.
  *
  * The adapter is declared, not named here. An application points `backend` in its
- * benchmark.json at a module exporting `installFakeServer` — normally the very module
+ * benchmark.json at a module exporting `installFakeServer`, normally the very module
  * its browser suite installs, so the benchmark cannot drift from what the suite
  * asserts. An application that declares none runs against static bytes alone.
  *
- * Signing in is separate and optional: an application that wants the authenticated
+ * Signing in is separate and optional. An application that wants the authenticated
  * variant exports `benchmarkSignIn(fetch, origin)` beside it. Guessing a credential
  * shape is the one thing this must not do, so a workload that asks to be signed in
  * against an application whose backend declares no sign-in fails and says which export

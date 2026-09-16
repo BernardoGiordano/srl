@@ -1,38 +1,32 @@
 /**
  * One interface between a measurement and a performance claim.
  *
- * A number becomes a claim the moment somebody quotes it, and until this module existed
- * the quoting happened three times over: the runner printed a report, the guide restated
- * a table by hand, and a reader reconstructed what was actually proved from a baseline
+ * A number becomes a claim the moment somebody quotes it. Without one interface the
+ * quoting happens three times over, as the runner prints a report, the guide restates a
+ * table by hand, and a reader reconstructs what was actually proved from a baseline
  * file, a budgets file and a prose paragraph. Three assemblies of the same facts drift,
- * and they drifted in the direction that flatters: the guide claimed 88 ms and Chrome 150
- * while the checked-in baseline said otherwise, and the workloads nobody had run were a
- * sentence somewhere else again.
+ * and they drift in the direction that flatters.
  *
- * WHAT A CLAIM CARRIES
+ * A claim carries a median and the three things that decide what it is worth. Its
+ * provenance, meaning which machine, which browser, which dependency versions and how
+ * far the reference readings moved while it was taken. Its standing, which is `limited`
+ * when an absolute budget holds it on any machine, `gated` when a later run is compared
+ * against it, and `reported` when nothing fails if it moves. And the coverage around
+ * it, because a green run of half the workloads is not evidence about the other half.
  *
- * A median, and the three things that decide what it is worth. Its provenance — which
- * machine, which browser, which dependency versions, how far the reference readings moved
- * while it was taken. Its standing — `limited` when an absolute budget holds it on any
- * machine, `gated` when a later run is compared against it, `reported` when nothing fails
- * if it moves. And the coverage around it, because a green run of half the workloads is
- * not evidence about the other half.
- *
- * WHY STANDING IS COMPUTED HERE AND NOT READ FROM THE RUN
- *
- * `measure.mjs` decides whether a comparison failed. That is a different question from
- * what a number proves, and only the second one reaches a reader. An incomparable run
- * still produces medians, and those medians are exactly the numbers somebody copies into
- * a slide. So an incomparable run demotes every claim it did not hold absolutely, and the
- * demotion is a field rather than a footnote: a caller that wants to print "gated" has to
- * read a value that says so. ADR-0044 sets when a difference is real; this sets when a
+ * Standing is computed here rather than read from the run. `measure.mjs` decides
+ * whether a comparison failed, which is a different question from what a number proves,
+ * and only the second one reaches a reader. An incomparable run still produces medians,
+ * and those medians are exactly the numbers somebody copies into a slide. So an
+ * incomparable run demotes every claim it did not hold absolutely, and the demotion is a
+ * field rather than a footnote, because a caller that wants to print "gated" has to read
+ * a value that says so. ADR-0044 sets when a difference is real, and this sets when a
  * number may be quoted as proved.
  *
- * ORIGINS ARE ADAPTERS
- *
- * Source and dist are two measured sets of the same shape — a `BaselineFile` — read from
- * two files. The runner builds one from the run it just finished; the documentation check
- * reads both from disk. Neither knows anything this module does not.
+ * Origins are adapters. Source and dist are two measured sets of the same shape, a
+ * `BaselineFile`, read from two files. The runner builds one from the run it just
+ * finished, and the documentation check reads both from disk. Neither knows anything
+ * this module does not.
  *
  * ADR-0099.
  */
@@ -84,7 +78,7 @@ export function formatValue(value, unit) {
  * The metric a workload is quoted by.
  *
  * `duration` when it has one, because that is what a workload is normally asked about,
- * and otherwise the first metric it declared — `delivery/artifact-size` starts a browser
+ * and otherwise the first metric it declared. `delivery/artifact-size` starts a browser
  * for nothing and measures files rather than time.
  *
  * @param {WorkloadRecord} record
@@ -137,8 +131,8 @@ export function performanceEvidence(input) {
         basis = `absolute limit ${formatValue(limit, unit)}, compared raw on any machine`;
       } else if (!comparable && !independent.has(record.id)) {
         standing = 'reported';
-        // The run's own words when it has them: `comparability` says which of the four
-        // reasons it was, and repeating a vaguer sentence here would lose that.
+        // The run's own words when it has them. `comparability` says which of the
+        // four reasons it was, and repeating a vaguer sentence here would lose that.
         basis =
           reason ??
           'measured on a machine this evidence cannot compare, so nothing fails when it moves';
@@ -274,7 +268,7 @@ function provenanceOf(file) {
 /**
  * Whether a workflow file runs the benchmark gate.
  *
- * Pure over the text, because the fact matters more than the file: a repository whose
+ * Pure over the text, because the fact matters more than the file. A repository whose
  * documented numbers are gated by nothing that runs on its own is a repository where
  * "the gate is green" means "somebody ran it once, on their laptop". That sentence
  * belongs in the guide, and it may only be written by reading the workflow.
@@ -289,10 +283,10 @@ export function runsTheGate(workflow) {
 /**
  * Gaps that share a reason, gathered.
  *
- * One decision can cover fifty workloads — the artifact baseline records one of them on
- * purpose — and repeating its sentence fifty times buries the gaps that are each their
- * own story. Grouping is done here rather than in each reader so the report and the guide
- * summarise the same way.
+ * One decision can cover fifty workloads, as the artifact baseline records one of them
+ * on purpose, and repeating its sentence fifty times buries the gaps that are each
+ * their own story. Grouping is done here rather than in each reader so the report and
+ * the guide summarise the same way.
  *
  * @param {EvidenceDocument} evidence
  * @returns {Array<{ kind: string, reason: string, ids: string[] }>}

@@ -1,17 +1,14 @@
 /**
  * The Chrome the harness measures in.
  *
- * WHY THIS EXISTS RATHER THAN A TEST-RUNNER PLUGIN
- *
  * A benchmark needs to own the sample loop, collect garbage and read a heap, and
- * @web/test-runner offers none of the three. ADR-0045. Both halves still run the
- * same source over one origin, which is the property that matters.
+ * @web/test-runner offers none of the three, which is why this is not a test-runner
+ * plugin. ADR-0045. Both halves still run the same source over one origin, which is
+ * the property that matters.
  *
- * ZERO NETWORK, WITHOUT DISABLING THE CACHE
- *
- * The block is at the network stack rather than by request interception, which
- * would disable Chrome's cache and make a warm start meaningless. Two flags leave
- * caching untouched:
+ * The network is blocked at the network stack rather than by request interception,
+ * which would disable Chrome's cache and make a warm start meaningless. Two flags
+ * leave caching untouched:
  *
  *   --host-resolver-rules  every host but the loopback fails to resolve
  *   --proxy-server         anything that got past that has nowhere to go
@@ -20,13 +17,12 @@
  * somebody's edge cache, and `offOrigin()` reports what it tried, so the failure
  * names the URL instead of a timeout.
  *
- * WHAT A PAGE CAN DO HERE
- *
- * Beyond evaluating a workload: collect garbage and read the JavaScript heap, and
- * count the DOM nodes and listeners the renderer is holding. Those are the three
- * capabilities the memory and lifecycle workloads are built out of, and none of
- * them is reachable from inside a page — `performance.memory` is coarse, quantised
- * and clamped, and there is no counter for retained listeners at all.
+ * Beyond evaluating a workload, a page here can collect garbage and read the
+ * JavaScript heap, and count the DOM nodes and listeners the renderer is holding.
+ * Those are the three capabilities the memory and lifecycle workloads are built out
+ * of, and none of them is reachable from inside a page. `performance.memory` is
+ * coarse, quantised and clamped, and there is no counter for retained listeners at
+ * all.
  */
 
 import { Launcher } from 'chrome-launcher';
@@ -40,7 +36,7 @@ import { HARNESS_PATH } from './origin.mjs';
 /**
  * Flags chosen for a measurement rather than for a session a human uses.
  *
- * The throttling ones matter most: a headless page that Chrome decides is
+ * The throttling ones matter most. A headless page that Chrome decides is
  * backgrounded gets its timers clamped to once a second, which turns a 30-sample
  * workload into a 30-second one and its p95 into fiction.
  *
@@ -71,9 +67,9 @@ function launchFlags(originUrl) {
  * Launch Chrome, or fail with the reason and what to do about it.
  *
  * The executable is the one @web/test-runner would have used, found by
- * chrome-launcher, so the browser tests and the benchmarks report on the same
- * binary. A missing Chrome is an environment failure and says so: silently
- * reporting no results is how a benchmark gate stops being a gate.
+ * chrome-launcher, so the browser tests and the benchmarks report on the same binary.
+ * A missing Chrome is an environment failure and says so, because silently reporting
+ * no results is how a benchmark gate stops being a gate.
  *
  * @param {{ originUrl: string }} options
  * @returns {Promise<{
@@ -137,17 +133,17 @@ function findChrome() {
 }
 
 /**
- * `init` runs at document start, before the page's own scripts and before the
- * import map is parsed, which is the only place a startup measurement can be taken
- * from: by the time Node could evaluate anything, the application has already
- * booted. It is therefore plain script rather than a module, and must not import —
- * bare specifiers do not resolve yet.
+ * `init` runs at document start, before the page's own scripts and before the import
+ * map is parsed, which is the only place a startup measurement can be taken from. By
+ * the time Node could evaluate anything, the application has already booted. It is
+ * therefore plain script rather than a module, and must not import, because bare
+ * specifiers do not resolve yet.
  *
- * `network` is the other thing that has to be in place before the first byte moves. The
- * harness resolves no host, so a request costs nothing to make and a serial chain reads
- * like a flat one — which is why depth rather than duration is the gated delivery fact
- * (ADR-0082). A workload that wants the round trip back asks for it here, in stated
- * conditions, and pays it on every request the page makes. ADR-0100.
+ * `network` is the other thing that has to be in place before the first byte moves.
+ * The harness resolves no host, so a request costs nothing to make and a serial chain
+ * reads like a flat one, which is why depth rather than duration is the gated delivery
+ * fact (ADR-0082). A workload that wants the round trip back asks for it here, in
+ * stated conditions, and pays it on every request the page makes. ADR-0100.
  *
  * @param {Browser} browser
  * @param {string} originUrl
@@ -198,9 +194,9 @@ async function openPage(browser, originUrl, path, options) {
 /**
  * Run a function's source in the page and bring back its JSON result.
  *
- * A source string rather than a function reference on purpose: workload code lives
- * in modules the page imports over the origin, and what crosses this boundary is a
- * few lines that name one of them. Anything larger belongs in a module the browser
+ * A source string rather than a function reference on purpose, because workload code
+ * lives in modules the page imports over the origin and what crosses this boundary is
+ * a few lines that name one of them. Anything larger belongs in a module the browser
  * fetches like any other, where the checker and the linter can see it.
  *
  * @template T
@@ -225,8 +221,8 @@ async function evaluate(session, body, argument) {
     throw new Error(`The page threw while running a workload:\n${message}`);
   }
 
-  // Through `unknown` in two steps: the protocol's value is `any`, and the linter
-  // rightly refuses to see `any` returned as a type parameter.
+  // Through `unknown` in two steps, because the protocol's value is `any` and the
+  // linter rightly refuses to see `any` returned as a type parameter.
   const value = /** @type {unknown} */ (result.result.value);
   return /** @type {T} */ (value);
 }
@@ -234,10 +230,10 @@ async function evaluate(session, body, argument) {
 /**
  * Collect garbage, then read the used JavaScript heap.
  *
- * Twice, because one collection leaves objects that only became unreachable
- * *during* that collection — a released route chain drops listeners whose closures
- * drop scopes — and a heap read between the two attributes retained memory to the
- * wrong thing. Only the memory workloads call this: forcing a collection inside a
+ * Twice, because one collection leaves objects that only became unreachable during
+ * that collection, such as a released route chain dropping listeners whose closures
+ * drop scopes, and a heap read between the two attributes retained memory to the wrong
+ * thing. Only the memory workloads call this, because forcing a collection inside a
  * timed loop measures the collector.
  *
  * @param {CDPSession} session
@@ -267,13 +263,11 @@ async function domCounters(session) {
  * cache off. Cache state comes back on the response event, so a warm load reports
  * the same request with `fromCache` set instead of vanishing from the count.
  *
- * WHAT CAUSED EACH REQUEST
- *
- * `requestWillBeSent` carries an initiator — the parser, script or preload scanner
- * that asked for it — and dropping it is what made a serial hop invisible: a request
+ * `requestWillBeSent` carries an initiator, the parser, script or preload scanner
+ * that asked for it, and dropping it is what makes a serial hop invisible. A request
  * count and a byte total are identical whether twenty transfers happen in one round
- * trip or in twenty. Kept here, and turned into a chain depth by `chain.mjs`, which
- * is the fact the delivery work is about. ADR-0082.
+ * trip or in twenty. It is kept here and turned into a chain depth by `chain.mjs`,
+ * which is the fact the delivery work is about. ADR-0082.
  *
  * @param {CDPSession} session
  * @param {string} originUrl

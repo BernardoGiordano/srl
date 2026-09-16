@@ -1,13 +1,13 @@
 /**
- * Shared-collection workloads: the table and the combobox, driven the way a screen
+ * Shared-collection workloads for the table and the combobox, driven the way a screen
  * drives them.
  *
- * Every one of these goes through the element's public interface — set `rows`, set
- * `filters`, type into the search field — and asserts on rendered DOM before its
- * timing counts. That is deliberate: the table's internals are the thing a later
- * phase may rewrite behind a projection or a visible-row window, and a benchmark
- * that reached into them would have to be rewritten alongside, which is how a
- * before/after comparison stops being a comparison.
+ * Every one of these goes through the element's public interface, setting `rows`,
+ * setting `filters` or typing into the search field, and asserts on rendered DOM
+ * before its timing counts. That is deliberate. The table's internals are what a
+ * later phase may rewrite behind a projection or a visible-row window, and a
+ * benchmark that reached into them would have to be rewritten alongside, which is how
+ * a before-and-after comparison stops being a comparison.
  *
  * The row counts are 100, 1,000 and 10,000, with 50 visible in the paginated case,
  * plus the full 10,000-row render that produced the ~398,000 DOM nodes the first
@@ -59,12 +59,12 @@ function sourceColumn(index) {
 /**
  * The `key` attribute of the column at `index`.
  *
- * The first four name row fields directly; every one past them names the copy
- * `wideRows` puts on the row. Distinctness is not cosmetic: `<ui-table>` keys its
+ * The first four name row fields directly, and every one past them names the copy
+ * `wideRows` puts on the row. Distinctness is not cosmetic. `<ui-table>` keys its
  * column order, hidden set, widths, sticky sides and measured header widths by
- * `column.key`, so repeating a key makes twenty-four columns share four sets of
- * everything — four measured widths, four sticky offsets — and the wide-table
- * workloads stop measuring a wide table.
+ * `column.key`, so repeating a key makes twenty-four columns share four measured
+ * widths and four sticky offsets, and the wide-table workloads stop measuring a wide
+ * table.
  *
  * @param {number} index
  * @returns {string}
@@ -100,8 +100,8 @@ function wideRows(rows, columnCount) {
 /**
  * Build a `<ui-table>` with its columns, attribute by attribute.
  *
- * No markup string anywhere: the benchmark page enforces the production Trusted
- * Types policy list, which has no policy that would let a fixture set `innerHTML`.
+ * No markup string anywhere, because the benchmark page enforces the production
+ * Trusted Types policy list and no policy there would let a fixture set `innerHTML`.
  * Building the element tree is also closer to what a compiled template does.
  *
  * @param {HTMLElement} container
@@ -133,8 +133,8 @@ function buildTable(container, options) {
     const source = sourceColumn(index);
     const column = document.createElement('ui-table-column');
     // Columns past the first four repeat the same data under a distinct key, which
-    // is what a wide table looks like: many columns, one row object. `wideRows`
-    // supplies the value each repeated key reads.
+    // is what a wide table looks like, with many columns and one row object.
+    // `wideRows` supplies the value each repeated key reads.
     column.setAttribute('key', columnKeyAt(index));
     column.setAttribute('label', `${source.label} ${String(index)}`);
     if (source.sortable) column.setAttribute('sortable', '');
@@ -158,10 +158,10 @@ function renderedRows(table) {
 /**
  * Header and body cells that are actually stuck to an edge.
  *
- * `[data-sticky]` on its own matches every cell in the table: the template binds
- * `[data-sticky]="columnSticky(column)"`, a column that is not sticky answers with
- * the empty string, and an empty attribute is still an attribute that is present.
- * The value has to be part of the selector.
+ * `[data-sticky]` on its own matches every cell in the table. The template binds
+ * `[data-sticky]="columnSticky(column)"`, a column that is not sticky answers with the
+ * empty string, and an empty attribute is still an attribute that is present. The
+ * value has to be part of the selector.
  *
  * @param {UiTable} table
  * @returns {number}
@@ -171,11 +171,11 @@ function stickyCells(table) {
 }
 
 /**
- * Mount a paginated client table: `rows` owned rows, `pageSize` of them on screen.
+ * Mount a paginated client table, with `rows` owned rows and `pageSize` of them on
+ * screen.
  *
- * The cheap case, and the one a real screen is in. Review2 measured 24 ms for
- * 10,000 rows at 50 visible, which is the figure this workload turns into a
- * repeatable median.
+ * The cheap case, and the one a real screen is in. 10,000 rows at 50 visible measured
+ * 24 ms, which is the figure this workload turns into a repeatable median.
  *
  * @type {import('./support.js').Workload}
  */
@@ -249,7 +249,8 @@ export const table_sort = {
 };
 
 /**
- * Render every row at once: `pagination="none"`, 10,000 rows, 40,000 cells.
+ * Render every row at once, with `pagination="none"`, 10,000 rows and 40,000
+ * cells.
  *
  * The worst case the table supports, and the one that would decide whether row
  * windowing is needed. ADR-0044. Its DOM node count is reported as a metric
@@ -284,16 +285,16 @@ export const table_full_render = {
 };
 
 /**
- * The same 10,000 rows with `virtualized` set: a window of them reaches the DOM.
+ * The same 10,000 rows with `virtualized` set, so a window of them reaches the DOM.
  *
- * The comparison this exists for is `table_full_render` above it, which renders
- * every row and is the number the frame budget in budgets.json fails. Both go
- * through the element's public interface — set `virtualized`, set `rows` — so the
- * pair measures the decision rather than two different fixtures.
+ * The comparison this exists for is `table_full_render` above it, which renders every
+ * row and is the number the frame budget in budgets.json fails. Both go through the
+ * element's public interface, setting `virtualized` and setting `rows`, so the pair
+ * measures the decision rather than two different fixtures.
  *
- * The check asserts the DOM is bounded rather than asserting a row count: the
- * window is derived from a measured row height, so the exact number belongs to the
- * browser laying it out and only its order of magnitude is the claim.
+ * The check asserts the DOM is bounded rather than asserting a row count. The window
+ * is derived from a measured row height, so the exact number belongs to the browser
+ * laying it out and only its order of magnitude is the claim.
  *
  * @type {import('./support.js').Workload}
  */
@@ -330,10 +331,10 @@ export const table_window = {
 /**
  * Scroll a windowed 10,000-row table by one screenful.
  *
- * The cost a user actually pays: the mount happens once, and every frame after it
- * is this. `scrollTop` is set and the scroll event dispatched rather than waiting
- * on a real one, because a synthetic scroll reaches the same handler and a real one
- * would put the browser's own scheduling inside the median.
+ * The cost a user actually pays. The mount happens once, and every frame after it is
+ * this. `scrollTop` is set and the scroll event dispatched rather than waiting on a
+ * real one, because a synthetic scroll reaches the same handler and a real one would
+ * put the browser's own scheduling inside the median.
  *
  * @type {import('./support.js').Workload}
  */
@@ -366,10 +367,10 @@ export const table_window_scroll = {
 /**
  * Reverse a fully rendered keyed list of `rows` rows.
  *
- * `rowKey` defaults to `id`, so this is the keyed path: the table should move rows
- * rather than rebuild them. The check asserts the first row is the one that used to
- * be last, which is the cheapest observable proof that the reorder actually
- * happened before the clock stopped.
+ * `rowKey` defaults to `id`, so this is the keyed path and the table should move rows
+ * rather than rebuild them. The check asserts the first row is the one that was last,
+ * which is the cheapest observable proof that the reorder happened before the clock
+ * stopped.
  *
  * @type {import('./support.js').Workload}
  */
@@ -403,8 +404,8 @@ export const table_reorder = {
  * cost is a function of how many are sticky and how many columns they have to walk
  * past. Run at a realistic count and at a deliberately hostile one.
  *
- * `sticky` is a count per edge: the first `sticky` columns stick to the start and
- * the last `sticky` to the end, so the table has twice that many sticky columns
+ * `sticky` is a count per edge, so the first `sticky` columns stick to the start and
+ * the last `sticky` to the end, and the table has twice that many sticky columns
  * unless the two ends overlap.
  *
  * @type {import('./support.js').Workload}
@@ -432,7 +433,7 @@ export const table_sticky = {
     // The union of the two edges, which is every column once they meet.
     const stickyColumns = Math.min(2 * Number(args.sticky), Number(args.columns));
     expect(answer.rows, rows, 'visible rows');
-    // One header cell per sticky column plus one body cell per rendered row: the
+    // One header cell per sticky column plus one body cell per rendered row. The
     // offsets this workload exists to measure are only real if they were applied.
     expect(answer.stuck, stickyColumns * (rows + 1), 'sticky header and body cells');
   },
@@ -442,8 +443,8 @@ export const table_sticky = {
  * Type into a combobox holding `options` local options and wait for the filtered
  * list.
  *
- * Through the input element, not through the internal search state: the question is
- * what a person typing into a 1,000-option combobox experiences.
+ * Through the input element rather than the internal search state, because the
+ * question is what a person typing into a 1,000-option combobox experiences.
  *
  * @type {import('./support.js').Workload}
  */
