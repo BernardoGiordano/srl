@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 /**
  * Shared asset directories may contain retained hashes from older releases. Versioned
- * release directories are exact: any unreported file there is publication drift.
+ * release directories are exact, so any unreported file there is publication drift.
  *
  * @param {{ releaseDir: string, assetsDir: string }} options
  */

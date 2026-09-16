@@ -4,21 +4,21 @@
  *
  * Optional, and it is worth being precise about what it does and does not do.
  *
- * It does NOT compile anything. The runtime compiler in source/lib/core/template/template.js
- * is the only compiler, in development and in production, and it runs over the
- * same bytes either way. So this cannot change how a template renders, which is
- * the property that makes it safe to skip: if templates.json is absent the
- * application fetches each `.html` individually and behaves identically.
+ * It compiles nothing. The runtime compiler in
+ * source/lib/core/template/template.js is the only compiler, in development and in
+ * production, and it runs over the same bytes either way. This cannot change how a
+ * template renders, which is what makes it safe to skip. With templates.json absent
+ * the application fetches each `.html` individually and behaves identically.
  *
- * What it does is turn N requests into one. Twelve templates over HTTP/2 on a
- * fast connection is not worth optimising; twelve templates over a high-latency
- * link, or a hundred templates in a real application, is.
+ * What it does is turn N requests into one. Twelve templates over HTTP/2 on a fast
+ * connection is not worth optimising. Twelve over a high-latency link, or a hundred
+ * in a real application, is.
  *
- * This is the path for a deployment with no build step. `srl build` does not use
- * it: an artifact emits one minified, immutable file per template and lets each
+ * This is the path for a deployment with no build step. `srl build` does not use it,
+ * because an artifact emits one minified, immutable file per template and lets each
  * component fetch its own (ADR-0081), and `--templates bundle` is where the
  * one-request trade lives there. Nothing here minifies, because nothing here
- * verifies — the proof that makes minification safe is the build's (ADR-0070).
+ * verifies, and the proof that makes minification safe is the build's (ADR-0070).
  *
  *   node cli/delivery/bundle-templates.mjs [--app example]
  *
@@ -26,13 +26,11 @@
  * app.manifest.json. Its main.js seeds the template cache from it before the first
  * component loads.
  *
- * WHY IT IS PER APPLICATION
+ * It is per application because the keys are the URLs the browser will ask for, and
+ * only an application knows where every file is mounted. ADR-0042.
  *
- * The keys are the URLs the browser will ask for, and only an application knows
- * where every file is mounted. ADR-0042.
- *
- * Zero dependencies. Re-run it when a template changes; it is idempotent and
- * takes a few milliseconds.
+ * Zero dependencies. Re-run it when a template changes. It is idempotent and takes a
+ * few milliseconds.
  */
 
 import { readFile, writeFile } from 'node:fs/promises';

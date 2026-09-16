@@ -1,9 +1,9 @@
 /**
- * The one thing the journey runs against: a built artifact, served as production serves
+ * The one thing the journey runs against, a built artifact served as production serves
  * it, with the application's own Content-Security-Policy on the entry document.
  *
- * Both callers stage it the same way — the suite that fails a pull request and the
- * recorder that writes the support matrix — because a matrix recorded against friendlier
+ * Both callers stage it the same way, the suite that fails a pull request and the
+ * recorder that writes the support matrix, because a matrix recorded against friendlier
  * bytes than the suite drives would be a claim about nothing. The build is the real
  * `buildArtifact`, the origin is `cli/origin`, and the policy is the one the build
  * emitted.
@@ -42,9 +42,9 @@ export async function stageArtifact(name) {
 
   const temporary = await mkdtemp(join(tmpdir(), `journey-${name}-`));
 
-  // The shell declares its Remotes, so it cannot be composed without them. They are built
-  // here for the same reason the shell is: the journey drives the application the pipeline
-  // emits, not a reduced one.
+  // The shell declares its Remotes, so it cannot be composed without them. They are
+  // built here for the same reason the shell is, because the journey drives the
+  // application the pipeline emits rather than a reduced one.
   const declared = /** @type {{ remotes?: Array<{ name: string }> }} */ (
     JSON.parse(await readFile(join(app.dir, 'app.manifest.json'), 'utf8'))
   );

@@ -3,10 +3,10 @@
 /**
  * srl Language Server Protocol adapter.
  *
- * No protocol dependency: stdio framing and JSON-RPC dispatch are small, while every
+ * No protocol dependency. stdio framing and JSON-RPC dispatch are small, and every
  * language feature lives in `service.mjs`. Both VS Code and WebStorm start this file
- * from the project's own `@srljs/cli`, so editor semantics match installed srl semantics.
- * ADR-0090.
+ * from the project's own `@srljs/cli`, so editor semantics match installed srl
+ * semantics. ADR-0090.
  *
  * Dispatch answers messages; it does not decide when analysis runs, or where. Document
  * lifetime, staleness, scheduling and the thread a check executes on belong to

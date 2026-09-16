@@ -1,10 +1,10 @@
 /**
  * The readings a journey may take, as types.
  *
- * This is the observable interaction interface written down. The observer produces these
- * shapes inside the page, the driver forwards them, and the journey is typechecked against
- * them — so a step that asks for a property no engine reports fails before a browser is
- * launched, and adding an observation means adding it here.
+ * This is the observable interaction interface written down. The observer produces
+ * these shapes inside the page, the driver forwards them, and the journey is typechecked
+ * against them, so a step that asks for a property no engine reports fails before a
+ * browser is launched and adding an observation means adding it here.
  */
 
 /** Whatever currently has focus, in the terms a journey refers to it by. */

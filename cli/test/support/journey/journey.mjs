@@ -2,32 +2,29 @@
  * One accessible interaction journey, written once and run by every engine.
  *
  * The journey is the unit a support claim is made about. Its steps are the composed
- * behaviour the focused suites each prove in isolation and nothing proves together: a
- * windowed table that keeps its selection and its focus while the window moves under it,
- * a field whose asynchronous answer arrives as an error assistive technology is pointed
- * at, a combobox driven entirely from the keyboard, and a modal that takes focus, is
- * answered with a key, and gives focus back.
+ * behaviour the focused suites each prove in isolation and nothing proves together. A
+ * windowed table keeps its selection and its focus while the window moves under it, a
+ * field's asynchronous answer arrives as an error assistive technology is pointed at, a
+ * combobox is driven entirely from the keyboard, and a modal takes focus, is answered
+ * with a key, and gives focus back.
  *
- * WHAT IT MAY TOUCH
+ * It may touch keys, and readings taken through the accessibility surface. It never
+ * calls a component method, never asserts on a class field, and never clicks, because a
+ * journey that calls `table.toggleRow()` proves the application can call itself, which
+ * is not in doubt and is identical on every engine. Focus is seeded into the page
+ * twice, once onto a row's checkbox and once onto the email control, because a journey
+ * that tabbed forty times to reach a form would be measuring the shell's tab order
+ * rather than the screen's. Both seeds land where a keyboard user could have landed,
+ * and every interaction after them is a real key.
  *
- * Keys, and readings taken through the accessibility surface. It never calls a component
- * method, never asserts on a class field, and never clicks: a journey that calls
- * `table.toggleRow()` proves the application can call itself, which is not in doubt and
- * is identical on every engine. Focus is seeded into the page twice — once onto a row's
- * checkbox and once onto the email control — because a journey that tabbed forty times to
- * reach a form would be measuring the shell's tab order rather than the screen's. Both
- * seeds land where a keyboard user could have landed, and every interaction after them is
- * a real key.
+ * Navigation goes through the history API rather than a link, for the same reason. The
+ * interaction under test at the end is the discard dialog rather than the sidebar. The
+ * route guard, the rollback and the dialog it raises are all the real ones.
  *
- * Navigation goes through the history API rather than a link, for the same reason: the
- * interaction under test at the end is the discard dialog, not the sidebar. The route
- * guard, the rollback and the dialog it raises are all the real ones.
- *
- * WHAT EACH STEP RETURNS
- *
- * A record of what it observed, which is what the support matrix publishes. A step that
- * passed silently would leave the matrix saying "green" and nothing else, and "green" is
- * the claim this whole arrangement exists to replace. ADR-0116.
+ * Each step returns a record of what it observed, which is what the support matrix
+ * publishes. A step that passed silently would leave the matrix saying "green" and
+ * nothing else, and "green" is the claim this whole arrangement exists to replace.
+ * ADR-0116.
  */
 
 import assert from 'node:assert/strict';
@@ -38,8 +35,9 @@ const CUSTOMER = '/sales/customers/CU-0001';
 const CUSTOMER_LIST = '/sales/customers';
 
 /**
- * Edit mode is a query, not a button: the screen derives it from the URL and the session's
- * scopes together, so this is how a user with `sales:write` arrives at an editable form.
+ * Edit mode is a query rather than a button. The screen derives it from the URL and
+ * the session's scopes together, so this is how a user with `sales:write` arrives at an
+ * editable form.
  */
 const CUSTOMER_EDIT = `${CUSTOMER}?edit=true`;
 
@@ -56,9 +54,9 @@ const ROWS_TO_CROSS = 18;
 const CLEAR_PRESSES = 60;
 
 /**
- * The strings the journey recognises, in both languages the example ships a full bundle
- * for. Matching text at all is the point — an assertion on a code would pass while the
- * user was being shown nothing.
+ * The strings the journey recognises, in both languages the example ships a full
+ * bundle for. Matching text is what makes the assertion real, because an assertion on a
+ * code would pass while the user was being shown nothing.
  */
 const SELECTED = /(movements? selected|moviment[oi] selezionat)/iu;
 const TAKEN = /(already uses this|utilizza già|usa già)/iu;
@@ -197,9 +195,10 @@ export async function runJourney(driver) {
     moved.scrollTop !== null && moved.scrollTop > 0,
     'the scroller must have followed the focused row',
   );
-  // The chosen row has left the DOM with the window. What the table renders and what it
-  // has selected are two different sets now, which is the composition ADR-0105 and
-  // ADR-0107 have to agree on — and the one a screen gets wrong by counting checkboxes.
+  // The chosen row has left the DOM with the window. What the table renders and what
+  // it has selected are two different sets now, which is the composition ADR-0105 and
+  // ADR-0107 have to agree on, and the one a screen gets wrong by counting
+  // checkboxes.
   assert.equal(moved.checked, 0, 'the chosen row must have left the DOM with the window');
   assert.equal(
     announcedSelection(await driver.observe('announced')),
@@ -248,16 +247,16 @@ export async function runJourney(driver) {
   await driver.type(TAKEN_EMAIL);
 
   // Read once before waiting, so the record can say whether the answer was still in
-  // flight when typing stopped. Evidence, not an assertion: a fast enough machine could
-  // settle it between the last key and this reading, and a journey that failed for that
-  // reason would be testing the clock.
+  // flight when typing stopped. Evidence rather than an assertion, because a fast
+  // enough machine could settle it between the last key and this reading, and a journey
+  // that failed for that reason would be testing the clock.
   const whileChecking = await driver.observe('field', 'email');
   assert.notEqual(whileChecking, null, 'the email control must still be on the screen');
 
-  // Leaving the field is what makes its error showable — an error announced under a
-  // control the user is still typing into interrupts them mid-word. So the journey moves
-  // on the way a keyboard user does, onto the next control, and the error has to arrive
-  // on the field behind it. ADR-0103.
+  // Leaving the field is what makes its error showable, because an error announced
+  // under a control the user is still typing into interrupts them mid-word. The journey
+  // moves on the way a keyboard user does, onto the next control, and the error has to
+  // arrive on the field behind it. ADR-0103.
   await driver.advance();
 
   const refused = await driver.until(
@@ -284,8 +283,8 @@ export async function runJourney(driver) {
 
   /* ── Choosing a combobox option with the keyboard ─────────────────────────── */
 
-  // Focus is already here: the move that blurred the email field landed on it, and a
-  // combobox opens when it is focused.
+  // Focus is already here, because the move that blurred the email field landed on it
+  // and a combobox opens when it is focused.
   const opened = await driver.until(
     'combobox',
     ['cf-segment'],
@@ -294,8 +293,8 @@ export async function runJourney(driver) {
   );
 
   // Down to an option the customer does not already have, so Enter is a choice rather
-  // than an unchoosing: the screen loads with a segment, and the first option in the list
-  // is sometimes the one it loaded with.
+  // than an unchoosing. The screen loads with a segment, and the first option in the
+  // list is sometimes the one it loaded with.
   let pointing = opened;
   for (let step = 0; step < opened.options; step += 1) {
     await driver.press('ArrowDown');

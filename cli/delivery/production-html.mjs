@@ -3,21 +3,21 @@
  *
  *   node cli/delivery/production-html.mjs application > staged/index.html
  *
- * Every index.html in this repository ships in development mode: Tailwind v4 is
- * loaded as a browser script and compiles the stylesheet from a MutationObserver
- * on every page load, and the <link> to the compiled app.css sits commented out
- * beside it. That is the right default for a clone and the wrong thing to serve —
- * it costs every visitor a build the CLI already did, and it rules out the
+ * Every index.html in this repository ships in development mode. Tailwind v4 is
+ * loaded as a browser script and compiles the stylesheet from a MutationObserver on
+ * every page load, and the <link> to the compiled app.css sits commented out beside
+ * it. That is the right default for a clone and the wrong thing to serve, because it
+ * costs every visitor a build the CLI already did and it rules out the
  * Content-Security-Policy the deployed config carries. ADR-0041.
  *
- * A transform at deploy time rather than an edit before it, so neither state
- * depends on remembering. Both substitutions are required and each is asserted:
- * dropping the JIT without linking app.css renders a page with no stylesheet,
- * which answers HTTP 200 and is unusable, so a miss exits non-zero.
+ * A transform at deploy time rather than an edit before it, so neither state depends
+ * on remembering. Both substitutions are required and each is asserted. Dropping the
+ * JIT without linking app.css renders a page with no stylesheet, which answers HTTP
+ * 200 and is unusable, so a miss exits non-zero.
  *
  * The import map is deliberately not touched. Its exact text is hashed into the
- * deployed CSP, so a transform that reformatted it — even by a space — would block
- * the map and take module resolution down with it.
+ * deployed CSP, so a transform that reformatted it, even by a space, would block the
+ * map and take module resolution down with it.
  */
 
 import { readFileSync } from 'node:fs';
@@ -56,7 +56,7 @@ function edit(pattern, replacement, what) {
 }
 
 // 1. Drop the Tailwind browser JIT. Written across several lines in every
-//    application, hence [\s\S] rather than . — and anchored on the src, so a
+//    application, hence [\s\S] rather than `.`, and anchored on the src so a
 //    different vendored script on either side of it is left alone.
 edit(
   /^[ \t]*<script\s+src="\/lib\/vendor\/tailwind-browser\.js"[\s\S]*?<\/script>\n/mu,
@@ -73,10 +73,10 @@ edit(
 );
 
 /*
- * Left in place on purpose: the <style type="text/tailwindcss"> block.
+ * The <style type="text/tailwindcss"> block is left in place on purpose.
  *
- * Without the JIT loaded no parser claims that type, so the browser ignores it
- * whole — it is inert rather than wrong. Its content is duplicated in src/app.css
+ * Without the JIT loaded no parser claims that type, so the browser ignores it whole
+ * and it is inert rather than wrong. Its content is duplicated in src/app.css
  * and therefore already inside the compiled app.css, so removing it would save a
  * couple of kilobytes on the wire and cost a third regex over a hand-edited file.
  * Not a trade worth making for bytes that gzip to nearly nothing.

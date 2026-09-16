@@ -1,27 +1,25 @@
 /**
  * The browser engines a journey runs on, and the thin driver each one answers through.
  *
- * There are three of them and one of everything else. An engine adapter here may navigate,
- * press a real key, evaluate the observer and report its version, and nothing more. Every
- * judgement about what a running application looks like belongs to `observer.mjs`, and
- * every judgement about what the application should do belongs to `journey.mjs`. ADR-0116.
- * A driver that grew a `selectRow()` would be the browser-compatibility layer this
- * arrangement exists to avoid: the same expectation would then be written three times and
- * could quietly mean three things.
+ * There are three of them and one of everything else. An engine adapter here may
+ * navigate, press a real key, evaluate the observer and report its version, and
+ * nothing more. Every judgement about what a running application looks like belongs to
+ * `observer.mjs`, and every judgement about what the application should do belongs to
+ * `journey.mjs`. ADR-0116. A driver that grew a `selectRow()` would be the
+ * browser-compatibility layer this arrangement exists to avoid, because the same
+ * expectation would then be written three times and could quietly mean three things.
  *
- * WHY THE KEYS ARE REAL
+ * The keys are real. `element.focus()` and `element.click()` are the application
+ * calling itself, and a keyboard event synthesised in the page skips the part every
+ * engine implements differently, such as default actions, focus order and what a
+ * native `<dialog>` does with focus when it closes. The journey presses keys through
+ * the driver, and reaches into the page only to put focus somewhere a pointerless user
+ * could have put it.
  *
- * `element.focus()` and `element.click()` are the application calling itself. A keyboard
- * event synthesised in the page skips the part every engine implements differently —
- * default actions, focus order, what a native `<dialog>` does with focus when it closes.
- * So the journey presses keys through the driver, and reaches into the page only to put
- * focus somewhere a pointerless user could have put it.
- *
- * THE ORIGIN IS THE ONLY ORIGIN
- *
- * Every request to anywhere else is refused, in every engine, by the same route handler.
- * The built artifact is self-contained by construction, and a journey that silently
- * reached a CDN would be proving something about the network rather than about the bytes.
+ * The origin is the only origin. Every request to anywhere else is refused, in every
+ * engine, by the same route handler. The built artifact is self-contained by
+ * construction, and a journey that silently reached a CDN would be proving something
+ * about the network rather than about the bytes.
  */
 
 import { chromium, firefox, webkit } from 'playwright';
@@ -31,16 +29,17 @@ import { OBSERVER_SOURCE } from './observer.mjs';
 /**
  * The engines the journey declares, in the order the support matrix lists them.
  *
- * `id` is what a record and a `--engine` argument name; `engine` is the rendering engine,
- * which is the thing a support claim is actually about — "Chrome and Edge" is one entry
- * here, not two.
+ * `id` is what a record and a `--engine` argument name. `engine` is the rendering
+ * engine, which is what a support claim is actually about, so "Chrome and Edge" is one
+ * entry here rather than two.
  *
  * `nextControl` is the one per-engine fact in this file, and it is a platform setting
- * rather than a workaround. WebKit ships with full keyboard access off, so plain Tab moves
- * between links and text fields only and skips a checkbox entirely; Option+Tab is the
- * documented way to reach every control, and it is what a Safari user with the default
- * settings actually presses. Recording it beats hiding it: the support matrix says which
- * key each engine needed, so a reader can see that one of them needs a different one.
+ * rather than a workaround. WebKit ships with full keyboard access off, so plain Tab
+ * moves between links and text fields only and skips a checkbox entirely. Option+Tab
+ * is the documented way to reach every control, and it is what a Safari user with the
+ * default settings actually presses. Recording it beats hiding it, so the support
+ * matrix says which key each engine needed and a reader can see that one of them needs
+ * a different one.
  *
  * @type {ReadonlyArray<{ id: string, title: string, engine: string, nextControl: string, browser: import('playwright').BrowserType }>}
  */
@@ -134,9 +133,9 @@ export async function openEngine(engine, origin) {
     }
   });
 
-  // Installed over the protocol rather than as a `<script>`: the entry document is served
-  // with the artifact's own `script-src 'self'`, and leaving that policy alone is half the
-  // reason for driving the built bytes at all.
+  // Installed over the protocol rather than as a `<script>`, because the entry
+  // document is served with the artifact's own `script-src 'self'` and leaving that
+  // policy alone is half the reason for driving the built bytes at all.
   await page.addInitScript({ content: `void ${OBSERVER_SOURCE};` });
 
   /**
@@ -194,9 +193,9 @@ export async function openEngine(engine, origin) {
     /**
      * Read one observation until it says what the journey is waiting for.
      *
-     * A journey has no clock of its own and no `waitForSelector`: what it waits for is a
-     * reading of the page it already knows how to take, which keeps the waiting in the
-     * same vocabulary as the assertion that follows it.
+     * A journey has no clock of its own and no `waitForSelector`. What it waits for
+     * is a reading of the page it already knows how to take, which keeps the waiting
+     * in the same vocabulary as the assertion that follows it.
      */
     until: /** @type {Driver['until']} */ (/** @type {unknown} */ (async (
       /** @type {string} */ name,

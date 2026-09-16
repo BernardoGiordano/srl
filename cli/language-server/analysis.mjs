@@ -1,30 +1,25 @@
 /**
  * Live project analysis: what is current, what is stale, what runs next, and where it runs.
  *
- * WHAT IT OWNS
+ * It owns the lifetime of every open document, the set of documents whose answers are
+ * stale, which documents a change makes stale, when the project model is re-read, when
+ * the template checker's cached compiler stops being about this project's
+ * configuration, and the thread a check executes on.
  *
- * The lifetime of every open document, the set of documents whose answers are stale,
- * which documents a change makes stale, when the project model is re-read, when the
- * template checker's cached compiler stops being about this project's configuration, and
- * the thread a check executes on.
+ * As two timers and a most-recent-URI in the protocol adapter, dispatching a message
+ * would mean knowing about scheduling. A second file opened within the debounce window
+ * would replace the first one's pending validation, and the first would never get
+ * diagnostics at all. Ordering is not a protocol concern, and freshness is not a
+ * per-message decision. ADR-0090.
  *
- * WHY IT EXISTS
+ * Execution lives here for the same reason. A check is one synchronous compiler call,
+ * so the only bound a protocol thread has is a time budget, and a check the budget
+ * cancels is retried without one. Freshness and execution are one decision, because
+ * the reason to stop a check is that its answer stopped being wanted. ADR-0090.
  *
- * This was two timers and a most-recent-URI in the protocol adapter, so dispatching a
- * message meant knowing about scheduling: a second file opened within the debounce window
- * replaced the first one's pending validation, and the first never got diagnostics at
- * all. Ordering is not a protocol concern, and freshness is not a per-message decision.
- * ADR-0090.
- *
- * Execution moved here for the same reason. A check is one synchronous compiler call, so
- * the only bound the protocol thread had was a time budget, and a check the budget
- * cancelled was retried without one. Freshness and execution are one decision: the reason
- * to stop a check is that its answer stopped being wanted. ADR-0090.
- *
- * WHAT IT DELIBERATELY DOES NOT DO
- *
- * It does not expose the lane. Callers ask for the current outcome of an editor document;
- * whether that costs a thread, a restart, or nothing is this module's to decide.
+ * It does not expose the lane. Callers ask for the current outcome of an editor
+ * document, and whether that costs a thread, a restart or nothing is this module's to
+ * decide.
  */
 
 import { setImmediate as yieldToRequests } from 'node:timers/promises';
@@ -104,9 +99,9 @@ export class LiveAnalysis {
   /**
    * Read the project for the first time.
    *
-   * Failure is reported rather than thrown: a project the model cannot read is a project
-   * with no completions, which is worse than a server that starts and better than one
-   * that does not.
+   * Failure is reported rather than thrown. A project the model cannot read is a
+   * project with no completions, which is worse than a server that starts and better
+   * than one that does not.
    */
   async start() {
     try {
@@ -197,10 +192,10 @@ export class LiveAnalysis {
   /**
    * Stop analysing, and leave no thread behind.
    *
-   * Nothing is published afterwards: a client that asked the server to shut down is not
-   * expecting one more diagnostic to arrive on the way out. This resolves once the lane
-   * has exited, so a caller shutting the server down knows the compiler thread it started
-   * is gone rather than hoping so.
+   * Nothing is published afterwards, because a client that asked the server to shut
+   * down is not expecting one more diagnostic on the way out. This resolves once the
+   * lane has exited, so a caller shutting the server down knows the compiler thread it
+   * started is gone rather than hoping so.
    */
   async dispose() {
     this.#disposed = true;
@@ -326,7 +321,7 @@ export class LiveAnalysis {
   /**
    * Run `step` after whatever is already running.
    *
-   * One chain, and a failed step does not break it: an analysis that stops scheduling
+   * One chain, and a failed step does not break it. An analysis that stops scheduling
    * after one bad file looks to the editor exactly like a server that died.
    *
    * @param {() => Promise<void>} step
@@ -340,9 +335,9 @@ export class LiveAnalysis {
   /** @param {string} uri */
   #mark(uri) {
     for (const candidate of this.#dependents(uri)) {
-      // Moved to the end, which is where the queue starts: the document just touched is
-      // the one whose answer someone is waiting for, and a dependent of it is the next
-      // most likely to be looked at.
+      // Moved to the end, which is where the queue starts. The document just touched
+      // is the one whose answer someone is waiting for, and a dependent of it is the
+      // next most likely to be looked at.
       this.#stale.delete(candidate);
       this.#stale.add(candidate);
     }
@@ -387,8 +382,8 @@ export class LiveAnalysis {
 
   async #reload() {
     // The compiler caches the parsed tsconfig.json, so a project whose configuration
-    // changed is not the project it was built for — on either thread. Source edits keep
-    // it: discarding it costs the cold rebuild ADR-0039 exists to avoid.
+    // changed is not the project it was built for, on either thread. Source edits keep
+    // it, because discarding it costs the cold rebuild ADR-0039 exists to avoid.
     const configuration = this.#reloadConfiguration;
     this.#reloadConfiguration = false;
     if (configuration) {
@@ -411,7 +406,8 @@ export class LiveAnalysis {
    * The thread is handed back before each document so that a completion which arrived
    * while the previous one was checked is answered before the next check starts. A
    * document edited while its own check ran is queued again by the edit itself, and the
-   * abandoned answer is dropped: it describes text the editor has already replaced.
+   * abandoned answer is dropped, because it describes text the editor has already
+   * replaced.
    */
   async #drain() {
     if (this.#draining || this.#disposed) return;

@@ -1,21 +1,22 @@
 /**
  * A static origin that serves one built artifact, and a Chrome to drive it.
  *
- * Shared because two suites need the same origin: the library's own, which builds the
+ * Shared because two suites need the same origin, the library's own, which builds the
  * example application, and whichever repository pilots the artifact pipeline on a real
  * application of its own.
  *
- * The serving itself is `cli/origin/index.mjs` — the mounts, the traversal refusal, the
- * directory index and the history fallback, the same rules the development server and the
- * benchmark origin answer with (ADR-0075). The whole point of driving the built bytes in a
- * browser is that nothing about the serving is approximate, and a private copy of a file
- * server is a second place for a MIME type or a fallback rule to be subtly wrong. What is
- * stated here is only what a test needs and production must never have: an entry document
- * whose module is swapped for a test starter, one deliberately unavailable path, and one
- * deliberately tampered byte.
+ * The serving itself is `cli/origin/index.mjs`, carrying the mounts, the traversal
+ * refusal, the directory index and the history fallback, the same rules the
+ * development server and the benchmark origin answer with (ADR-0075). Driving the
+ * built bytes in a browser is worth doing because nothing about the serving is
+ * approximate, and a private copy of a file server is a second place for a MIME type
+ * or a fallback rule to be subtly wrong. What is stated here is only what a test needs
+ * and production must never have, which is an entry document whose module is swapped
+ * for a test starter, one deliberately unavailable path, and one deliberately tampered
+ * byte.
  *
- * Not part of the published package: this is test support for repositories that consume
- * cli/, reached by path like the rest of cli/.
+ * Not part of the published package. This is test support for repositories that
+ * consume cli/, reached by path like the rest of cli/.
  */
 
 import assert from 'node:assert/strict';
@@ -38,11 +39,11 @@ function artifactCache(path) {
 }
 
 /**
- * The module the test page runs instead of the production entry: install the
- * application's own HTTP fake, sign in against it, then import the real entry.
+ * The module the test page runs instead of the production entry. It installs the
+ * application's own HTTP fake, signs in against it, then imports the real entry.
  *
  * The credential is the fake's, and the fake is the module the application's browser
- * suite already installs — so a caller that needs different values passes them rather
+ * suite already installs, so a caller that needs different values passes them rather
  * than this file knowing anybody's username.
  *
  * @param {string} entry
@@ -128,8 +129,9 @@ export async function launchChrome(origin) {
 }
 
 /**
- * The two modules the test page loads that the artifact does not contain: the starter
- * that replaced the production entry, and the application's own HTTP fake behind it.
+ * The two modules the test page loads that the artifact does not contain, which are
+ * the starter that replaced the production entry and the application's own HTTP fake
+ * behind it.
  *
  * @param {string} appDir
  * @param {string} start
@@ -163,7 +165,7 @@ export async function startArtifactOrigin(options) {
   const modules = testModules(options.appDir, testStart(options.entry, options.session));
 
   // Each Remote is published under its own base, so those mounts are declared before
-  // the artifact's own `/` — which matches everything.
+  // the artifact's own `/`, which matches everything.
   const mounts = /** @type {Array<[string, string]>} */ ([
     ...(options.mounts ?? []).map(({ base, dir }) => [base, dir]),
     ['/', options.artifactDir],
@@ -195,7 +197,7 @@ export async function startArtifactOrigin(options) {
       }
       if (await modules(request, response, url)) return true;
       if (url.pathname === '/api/events') {
-        // Held open and never written to: the application's live feed must connect
+        // Held open and never written to, so the application's live feed can connect
         // without the suite having to model a stream.
         response.writeHead(200, {
           'Content-Type': 'text/event-stream',

@@ -4,19 +4,19 @@
  * One entry point for the toolchain, so a consumer types `srl build --app web`
  * rather than `node node_modules/@srljs/cli/delivery/build.mjs --app web`.
  *
- * A dispatcher and nothing else. Every tool below already owns its own argument
- * parsing and its own exit codes, and each is still runnable by path — this file
- * adds a name, not a layer. A subcommand that grew flag handling here would be a
- * second parser to keep in step with the first.
+ * A dispatcher and nothing else. Every tool below owns its own argument parsing and
+ * its own exit codes, and each is still runnable by path, so this file adds a name
+ * rather than a layer. A subcommand that grew flag handling here would be a second
+ * parser to keep in step with the first.
  *
- * The dispatch is an `import()`, not a spawn: one process, no second Node startup,
- * and an error keeps the stack of the tool that threw. What makes that work is the
- * line below rewriting `process.argv` — each tool decides whether to run its
- * command block by comparing `process.argv[1]` against its own path, which is the
+ * The dispatch is an `import()` rather than a spawn, so there is one process, no
+ * second Node startup, and an error keeps the stack of the tool that threw. The line
+ * below rewriting `process.argv` is what makes that work. Each tool decides whether
+ * to run its command block by comparing `process.argv[1]` against its own path, the
  * standard "am I the program?" test, and under this dispatcher the answer is yes.
- * Nothing is being fooled: the target module *is* the program being run, and the
- * path handed to it is derived from this file's own URL so that it resolves through
- * the same symlinks the module's `import.meta.url` does.
+ * Nothing is being fooled, because the target module is the program being run, and
+ * the path handed to it is derived from this file's own URL so that it resolves
+ * through the same symlinks the module's `import.meta.url` does.
  */
 
 import { fileURLToPath } from 'node:url';
@@ -24,10 +24,10 @@ import { fileURLToPath } from 'node:url';
 /**
  * Subcommand -> the module that is the program, relative to `cli/`.
  *
- * Flat rather than grouped, with `check` the one exception: the three checks are a
- * set a repository runs together in CI and none is a verb on its own.
+ * Flat rather than grouped, with `check` the one exception, because the three checks
+ * are a set a repository runs together in CI and none is a verb on its own.
  *
- * Absent on purpose: the vendor refresh and the bundle build. Those act on the
+ * The vendor refresh and the bundle build are absent on purpose. They act on the
  * library's own committed bytes, are meaningful only inside the srl repository, and
  * are not in this package at all.
  */
