@@ -65,7 +65,7 @@ export class UiDialog extends SignalElement {
   /** Accessible name for the dialog. */
   label = '';
 
-  /** Classes for the panel — its width, padding, radius and border. */
+  /** Classes for the panel, covering its width, padding, radius and border. */
   panelClass = '';
 
   /* ── Template surface ───────────────────────────────────────────────────── */

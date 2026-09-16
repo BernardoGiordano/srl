@@ -597,9 +597,9 @@ export class CustomerDetailPage extends SignalElement {
 /**
  * Optional, and a non-negative whole amount when present.
  *
- * Written here rather than composed from `min(0)` because the rule is one
- * sentence in the domain — "revenue, if you know it" — and three framework
- * validators expressing it would each have to re-answer "is it empty".
+ * Written here rather than composed from `min(0)` because the rule is one sentence in
+ * the domain, "revenue, if you know it", and three framework validators expressing it
+ * would each have to re-answer "is it empty".
  *
  * @param {string} value
  * @returns {string}

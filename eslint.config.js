@@ -6,13 +6,13 @@ import tseslint from 'typescript-eslint';
  * Type-aware linting over plain JavaScript.
  *
  * `projectService: true` hands each file to the TypeScript program described by
- * tsconfig.json, so rules that need types (no-unsafe-*, no-floating-promises,
- * await-thenable) work on .js exactly as they would on .ts. This is the half of
- * "full compatibility with typecheck and linters" that people assume you give up
- * along with the build step. You do not.
+ * tsconfig.json, so rules that need types, such as no-unsafe-*, no-floating-promises and
+ * await-thenable, work on .js exactly as they would on .ts. That is the half of full
+ * compatibility with typecheck and linters people assume you give up along with the
+ * build step. You do not.
  *
- * Backed by typescript@6.0.3, not tsgo. typescript-eslint requires the compiler
- * API, whose peer range is `>=4.8.4 <6.1.0`; TypeScript 7.0 ships no public API
+ * Backed by typescript@6.0.3 rather than tsgo. typescript-eslint requires the compiler
+ * API, whose peer range is `>=4.8.4 <6.1.0`, and TypeScript 7.0 ships no public API
  * until 7.1. See package.json.
  *
  * Config blocks are scoped by `files` with per-block `extends`, rather than
@@ -28,23 +28,23 @@ export default tseslint.config(
     // tools/delivery/vendor.mjs and enforced by the browser.
     ignores: [
       'node_modules/**',
-      // Both spellings: an application's build output at the root, and the
-      // package bundles `npm run package` writes into source/dist. A flat-config
-      // pattern is anchored at the config file, so `dist/**` alone misses the second.
+      // Both spellings, an application's build output at the root and the package
+      // bundles `npm run package` writes into source/dist. A flat-config pattern is
+      // anchored at the config file, so `dist/**` alone misses the second.
       'dist/**',
       '**/dist/**',
       'source/lib/vendor/**',
       '**/app.css',
       '**/templates.json',
       'coverage/**',
-      // Fixture projects for the project model's tests: deliberately unreadable
-      // declarations, which is the point of them.
+      // Fixture projects for the project model's tests, holding deliberately
+      // unreadable declarations, which is what they are for.
       'cli/test/fixtures/**',
       // Coding-assistant scratch space, gitignored, and the place a git worktree
       // gets checked out. A worktree is a second copy of this repository sitting
-      // inside it: `eslint .` walked one, typechecked it against the root
-      // tsconfig it does not belong to, and reported hundreds of errors about a
-      // revision nobody was editing.
+      // inside it. `eslint .` walks one, typechecks it against the root tsconfig it
+      // does not belong to, and reports hundreds of errors about a revision nobody was
+      // editing.
       '.claude/**',
     ],
   },
@@ -93,13 +93,13 @@ export default tseslint.config(
   },
 
   {
-    // Node-side code: the tools, the config files, and any application's own backend —
-    // plain Node with no dependencies. `*/server/**/*.mjs` rather than a list of them,
-    // because an application is discovered rather than configured everywhere else and a
-    // named list here is the one place that would go stale when the next one lands. The
-    // extension is the declaration: `.mjs` under an application means nothing in it ever
-    // reaches a browser, which is what makes the Node globals correct here and wrong in
-    // that application's `src/`.
+    // Node-side code, meaning the tools, the config files and any application's own
+    // backend, all plain Node with no dependencies. `*/server/**/*.mjs` rather than a
+    // list of them, because an application is discovered rather than configured
+    // everywhere else and a named list here is the one place that would go stale when
+    // the next one lands. The extension is the declaration, because `.mjs` under an
+    // application means nothing in it ever reaches a browser, which is what makes the
+    // Node globals correct here and wrong in that application's `src/`.
     files: [
       'cli/**/*.mjs',
       'tools/**/*.mjs',
@@ -110,8 +110,8 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node } },
     rules: {
       'no-console': 'off',
-      // Tooling reads JSON whose shape it validates by hand; `any` from
-      // JSON.parse is the point, not an oversight.
+      // Tooling reads JSON whose shape it validates by hand, so `any` from JSON.parse
+      // is deliberate rather than an oversight.
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
@@ -120,20 +120,21 @@ export default tseslint.config(
   },
 
   {
-    // Both suites: source/lib/test (the framework) and <app>/test (one application).
+    // Both suites, source/lib/test for the framework and <app>/test for one
+    // application.
     files: ['**/test/**/*.js'],
     languageOptions: { globals: { ...globals.browser, ...globals.mocha } },
   },
 
   {
     // tools/benchmark/browser holds the workload modules Chrome imports over the
-    // benchmark origin: browser code that is neither library nor application.
+    // benchmark origin, which is browser code that is neither library nor application.
     //
-    // The unsafe-* rules are off for the same reason they are off for tools/*.mjs,
-    // one level further in: the sample loop is generic over fixtures it cannot know
-    // the type of, so a workload's `state` is `any` by construction. The alternative
-    // is a generic typedef per workload, which buys nothing — these files build DOM
-    // and read it back, and the source they measure is type-checked either way.
+    // The unsafe-* rules are off for the same reason they are off for tools/*.mjs, one
+    // level further in. The sample loop is generic over fixtures it cannot know the
+    // type of, so a workload's `state` is `any` by construction. A generic typedef per
+    // workload buys nothing, because these files build DOM and read it back and the
+    // source they measure is type-checked either way.
     files: ['tools/benchmark/browser/**/*.js'],
     languageOptions: { globals: { ...globals.browser } },
     rules: {

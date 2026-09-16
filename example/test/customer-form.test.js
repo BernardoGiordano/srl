@@ -482,7 +482,7 @@ describe('customer form', () => {
     assert.equal(errorOf('name'), 'Another customer already uses this.');
 
     // The server answered about the previous value, so the answer stops applying the
-    // moment the value changes — otherwise a corrected name keeps a stale error.
+    // moment the value changes, or a corrected name keeps a stale error.
     await type('name', 'Caelum Energy');
     assert.equal(errorOf('name'), '', 'editing the field clears the server error');
   });

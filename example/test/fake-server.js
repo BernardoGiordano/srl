@@ -1,18 +1,17 @@
 /**
  * The browser suite's stand-in for `example/server/`.
  *
- * This application is the one with a real backend, which is the whole point of it — so a
- * stub here needs justifying rather than assuming. The reason is what the runner is: it
- * serves the repository's files over one origin and runs the suite inside the page. It is
- * not the application's server, and pointing the suite at a separately started Node process
- * would make `npm test` depend on a second thing being up, in the right state, on the right
- * port.
+ * This application is the one with a real backend, so a stub here needs justifying
+ * rather than assuming. The reason is what the runner is. It serves the repository's
+ * files over one origin and runs the suite inside the page. It is not the application's
+ * server, and pointing the suite at a separately started Node process would make
+ * `npm test` depend on a second thing being up, in the right state, on the right port.
  *
- * So the boundary that is faked is the one the framework says to fake: HTTP, and nothing
- * else. The router is real, the guards are real, the session is real, the components are
- * real, and every response below is a real HTTP shape — a `Set-Cookie` cannot be faked from
- * JavaScript, so `sessionOf` is a variable instead, and that is the one place this diverges
- * from the server it stands in for.
+ * The boundary that is faked is the one the framework says to fake, which is HTTP and
+ * nothing else. The router is real, the guards are real, the session is real, the
+ * components are real, and every response below is a real HTTP shape. A `Set-Cookie`
+ * cannot be faked from JavaScript, so `sessionOf` is a variable instead, and that is the
+ * one place this diverges from the server it stands in for.
  *
  * What it does reproduce, because the suite asserts on it:
  *
@@ -195,8 +194,9 @@ export function installFakeServer(options = {}) {
       requested.push(`${method} ${url.pathname}`);
 
       // Read here rather than in `answer`, because a `Request` body is a stream and
-      // reading it is asynchronous — this is the only layer that can await. The clone
-      // leaves the original intact for the calls that fall through to the real fetch.
+      // reading it is asynchronous, and this is the only layer that can await. The
+      // clone leaves the original intact for the calls that fall through to the real
+      // fetch.
       const body =
         input instanceof Request
           ? await input.clone().text()
@@ -207,8 +207,9 @@ export function installFakeServer(options = {}) {
       const handled = answer(url, method, body);
       if (handled !== undefined) return handled;
 
-      // Anything else — templates, translations, the manifest — is a real file on this
-      // origin and is fetched for real. A stub that answered those would be testing itself.
+      // Anything else, such as templates, translations and the manifest, is a real
+      // file on this origin and is fetched for real. A stub that answered those would
+      // be testing itself.
       return present(realFetch)(input, init);
     }
   );
@@ -394,9 +395,10 @@ function answer(url, method, bodyText) {
    * Customers, including the write path.
    *
    * The 422 shape is reproduced rather than simplified, because it is what the form is
-   * written against: a per-field code the screen resolves to a sentence and places under
-   * the field. Uniqueness is the rule worth having here — it is the one no client can
-   * check, so it is the one that proves the round trip is what puts the error on screen.
+   * written against, a per-field code the screen resolves to a sentence and places under
+   * the field. Uniqueness is the rule worth having here, because it is the one no client
+   * can check and therefore the one that proves the round trip is what puts the error on
+   * screen.
    */
   if (path === '/api/customers' && method === 'GET') {
     return refuse('sales:read') ?? json({ rows: CUSTOMERS, total: CUSTOMERS.length });
@@ -517,13 +519,13 @@ function readCredentials(bodyText) {
 
 /**
  * The rules the customer form is written against, reproduced far enough to be worth
- * asserting on: the fields that must be present, one format, and the uniqueness checks
- * no client can perform. Codes, never sentences — the screen resolves them.
+ * asserting on. The fields that must be present, one format, and the uniqueness checks
+ * no client can perform. Codes rather than sentences, because the screen resolves them.
  *
- * The contact rules are addressed by path — `contacts.1.email` — because that is the
- * shape the real server answers with and the shape the form resolves. `duplicate` is
- * the one worth reproducing: it is about the *set* of rows, so it is the rule that
- * proves a 422 against a repeating row lands under the right row.
+ * The contact rules are addressed by path, such as `contacts.1.email`, because that is
+ * the shape the real server answers with and the shape the form resolves. `duplicate` is
+ * the one worth reproducing, because it is about the set of rows and therefore the rule
+ * that proves a 422 against a repeating row lands under the right row.
  *
  * @param {Record<string, unknown>} body
  * @param {string | null} id The row being updated, excluded from uniqueness.

@@ -14,7 +14,7 @@ import { NotFoundPage } from './pages/not-found-page.js';
  *                  needs a network request to tell you a URL is wrong is worse than
  *                  one that costs two kilobytes.
  *   lazy           `load` resolving the class, Angular's `loadComponent`. Everything
- *                  else. No entry names a tag — the class carries it.
+ *                  else. No entry names a tag, because the class carries it.
  *   layout         a parent with a component, such as `shell-layout` and the two
  *                  detail screens. It stays mounted while its children come and go.
  *   componentless  a parent with children and no component, such as `sales`,

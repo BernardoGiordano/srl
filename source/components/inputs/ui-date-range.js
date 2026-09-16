@@ -65,7 +65,7 @@ export class UiDateRange extends SignalElement {
   /** `YYYY-MM-DD`, inclusive. */
   since = '';
 
-  /** `YYYY-MM-DD`, inclusive — the last day the user wants counted. */
+  /** `YYYY-MM-DD`, inclusive, so the last day the user wants counted. */
   until = '';
 
   invalid = false;

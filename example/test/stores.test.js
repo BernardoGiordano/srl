@@ -8,13 +8,12 @@ import { MemoryTokenStore } from '../src/auth/memory-store.js';
 /**
  * The real store adapters, against a stubbed origin.
  *
- * Until review 3 these three files had no direct coverage at all: the remote-host
- * suite used a fake session, and every test that touched authentication touched
- * an object that could not fail the way these can. What went untested was
- * precisely the ingress — what each store does with a response it did not write.
+ * With a fake session in the remote-host suite, every test that touches
+ * authentication touches an object that cannot fail the way these can, and the ingress
+ * goes untested. The ingress is what each store does with a response it did not write.
  *
- * The suite runs the same four questions past all three, because the answers must
- * not depend on which storage strategy a deployment chose:
+ * The suite runs the same four questions past all three, because the answers must not
+ * depend on which storage strategy a deployment chose.
  *
  *   1. does a malformed success payload become a session?          (it must not)
  *   2. is a refused grant distinguishable from an unreachable server?

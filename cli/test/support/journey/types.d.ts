@@ -40,7 +40,7 @@ export interface ComboboxReading {
   options: number;
   /** The labels of the options carrying `aria-selected`. */
   chosen: string[];
-  /** What the control's input shows — a single-choice combobox's answer when closed. */
+  /** What the control's input shows, such as a single-choice combobox's answer when closed. */
   value: string;
 }
 
@@ -65,7 +65,7 @@ export interface TableReading {
   scrollTop: number | null;
   scrollHeight: number | null;
   viewport: number | null;
-  /** Checked selection boxes among the rendered rows — not the size of the selection. */
+  /** Checked selection boxes among the rendered rows, rather than the selection's size. */
   checked: number;
 }
 

@@ -40,7 +40,7 @@ export class UiSidebarToggle extends SignalElement {
   /** Accessible name. Pass `t('…')`; this collection ships no strings of its own. */
   label = '';
 
-  /** An empty label removes `aria-label` rather than emptying it — see `dom.js`. */
+  /** An empty label removes `aria-label` rather than emptying it. See `dom.js`. */
   get labelAttr() {
     return optionalAttr(this.label);
   }
