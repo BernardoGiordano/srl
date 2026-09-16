@@ -1,18 +1,18 @@
 /**
  * What the library publishes, derived from the library's own manifest.
  *
- * The package is the library's own directory — `source/` in this repository,
+ * The package is the library's own directory, `source/` in this repository and
  * node_modules/@srljs/core in a repository that installed it. Its package.json
- * declares the mounts a browser sees, the bare specifier prefixes source is
- * written against, and the vendored runtime dependencies. This module is the only
- * thing that reads that manifest, and everything else — the dev server, the
- * test-runner origin, the benchmark origin, the verifier, the build, the
- * deployment — asks here rather than restating the table.
+ * declares the mounts a browser sees, the bare specifier prefixes source is written
+ * against, and the vendored runtime dependencies. This module is the only thing that
+ * reads that manifest. The dev server, the test-runner origin, the benchmark origin,
+ * the verifier, the build and the deployment all ask here rather than restating the
+ * table.
  *
- * The split from cli/layout.mjs is the point of the file: the package's facts
- * live here, the repository's live there, and only the second are true of this
- * repository in particular. ADR-0033. That is what gives a consumer outside this
- * repository something to import, and makes extracting the library a file move.
+ * The split from cli/layout.mjs is what this file is for. The package's facts live
+ * here, the repository's live there, and only the second are true of this repository
+ * in particular. ADR-0033. That gives a consumer outside this repository something
+ * to import, and makes extracting the library a file move.
  *
  * Zero dependencies, and the manifest is read synchronously at load, so importing
  * this module gives constants rather than promises and works before `npm install`
@@ -43,15 +43,14 @@ function neighbour() {
 /**
  * The library's directory when this package was installed from the registry.
  *
- * `@srljs/cli` is published separately from `@srljs/core` — the build needs Vite,
- * parse5 and tsc, and a browser consumer of the library must not install them —
- * so in an installed tree the two are siblings under node_modules and neither
- * candidate above exists. The resolver knows where the peer went; asking it is
- * the only thing that survives npm's hoisting, pnpm's store and a linked
- * checkout alike.
+ * `@srljs/cli` is published separately from `@srljs/core`, because the build needs
+ * Vite, parse5 and tsc and a browser consumer of the library must not install them.
+ * In an installed tree the two are siblings under node_modules and neither candidate
+ * above exists. The resolver knows where the peer went, and asking it is the only
+ * thing that survives npm's hoisting, pnpm's store and a linked checkout alike.
  *
- * Empty rather than throwing when there is no peer: a standalone checkout has
- * none, and the neighbour candidates are the answer there.
+ * Empty rather than throwing when there is no peer, because a standalone checkout
+ * has none and the neighbour candidates are the answer there.
  */
 function installedPeer() {
   try {
@@ -62,7 +61,8 @@ function installedPeer() {
 }
 
 /**
- * The package root: the directory whose package.json carries an `srl` field.
+ * The package root, which is the directory whose package.json carries an `srl`
+ * field.
  *
  * The checkout candidates come first. A repository that vendors or submodules the
  * library and also has it installed has two copies, and the one its own tooling
@@ -96,7 +96,7 @@ export const MANIFEST = found.manifest;
 /**
  * URL prefix -> directory. What a browser sees of the package, absolute on disk.
  *
- * Order is the manifest's, and it matters: resolution takes the first prefix that
+ * Order is the manifest's, and it matters. Resolution takes the first prefix that
  * matches, so a mount nested inside another must be declared before it.
  */
 export const MOUNTS = /** @type {Array<[string, string]>} */ (
@@ -107,7 +107,7 @@ export const MOUNTS = /** @type {Array<[string, string]>} */ (
 );
 
 /**
- * A package-relative directory as the URL it is served at: `lib/core` ->
+ * A package-relative directory as the URL it is served at, so `lib/core` becomes
  * `/lib/core/`. Throws rather than guessing, because a prefix pointing at a
  * directory no mount covers is an interface that 404s in a browser and nowhere
  * earlier.
@@ -159,8 +159,8 @@ export const VENDOR = join(LIB, 'vendor');
 /**
  * What a file is served as, by extension.
  *
- * Part of the package's interface rather than of any one server: two servers on
- * one origin (the dev server and the benchmark origin) must agree that `.js` is
+ * Part of the package's interface rather than of any one server. Two servers on one
+ * origin, the dev server and the benchmark origin, must agree that `.js` is
  * JavaScript, or one of them measures a page the other cannot run. nginx reads
  * its own copy from mime.types, which is the same table by another name.
  */
@@ -209,7 +209,7 @@ export function mountedFile(url) {
 
 /**
  * Resolve a root-absolute browser URL to a file, the way the dev server and the
- * deployment do: the package's mounts first, then the application.
+ * deployment do. The package's mounts come first, then the application.
  *
  * @param {string} appDir
  * @param {string} url
@@ -223,8 +223,8 @@ export function urlToFile(appDir, url) {
 }
 
 /**
- * The reverse: the URL a file is served at, for the given application. Returns
- * null for a file no browser can reach.
+ * The reverse, giving the URL a file is served at for the given application.
+ * Returns null for a file no browser can reach.
  *
  * @param {string} appDir
  * @param {string} file
@@ -257,8 +257,8 @@ export function extractImportMap(html, where) {
 }
 
 /**
- * Every vendored URL an HTML document actually references: import map targets,
- * plus classic `<script src>` tags, which carry their hash as an attribute
+ * Every vendored URL an HTML document actually references. That is import map
+ * targets, plus classic `<script src>` tags, which carry their hash as an attribute
  * instead.
  *
  * @param {string} html
@@ -284,14 +284,14 @@ export function vendorReferences(html, where) {
 }
 
 /**
- * The registry half of the interface: one emitted bundle per entry.
+ * The registry half of the interface, one emitted bundle per entry.
  *
  * `imports` names the specifier prefixes a bundle is a barrel over, and `extends`
  * names the bundle whose prefixes stay external to it. Both are prefixes rather
  * than directories so that this table and `srl.imports` cannot describe different
  * sets of files.
  *
- * Each bundle is four files: the JavaScript a consumer runs, minified and not, and
+ * Each bundle is four files, the JavaScript a consumer runs, minified and not, and
  * the declaration beside each. `exports` names the readable pair by subpath and
  * reaches the minified one through `./dist/*`, where a resolver substitutes `.d.ts`
  * for the `.js` it was given. ADR-0066.
@@ -346,9 +346,9 @@ export const BUNDLES = Object.entries(
 });
 
 /**
- * The declaration tree, package-relative: one `.d.ts` per module under the prefixes,
- * in the prefixes' own layout. The bundle barrels resolve through it, and
- * tsconfig.base.json maps each prefix into it. ADR-0066, ADR-0066.
+ * The declaration tree, package-relative, with one `.d.ts` per module under the
+ * prefixes and in the prefixes' own layout. The bundle barrels resolve through it,
+ * and tsconfig.base.json maps each prefix into it. ADR-0066.
  */
 export const DECLARATION_TREE = 'dist/types';
 
@@ -371,14 +371,14 @@ function requirePrefixDir(bundle, prefix) {
 /**
  * The `exports` map the manifest implies.
  *
- * Derived rather than authoritative: package.json states `exports` literally,
+ * Derived rather than authoritative. package.json states `exports` literally,
  * because npm reads that file and not this one, and tools/checks/verify-deps.mjs
- * compares the two. A bundle added to `srl.bundles` and forgotten in `exports`
- * fails a check instead of shipping a package whose registry consumers cannot
- * reach half of it.
+ * compares the two. A bundle added to `srl.bundles` and forgotten in `exports` fails
+ * a check instead of shipping a package whose registry consumers cannot reach half
+ * of it.
  *
- * The raw `lib/` and `components/` trees are deliberately *not* here. They ship —
- * they are what the import-map consumer loads — but every module in them names
+ * The raw `lib/` and `components/` trees are deliberately absent. They ship, and
+ * they are what the import-map consumer loads, but every module in them names
  * `@core/` and friends, so an `exports` entry pointing a bundler at one would
  * advertise a subpath that throws on its first import. The bundles are that
  * consumer's entry, and `./dist/*` reaches the minified pair by name.
@@ -417,12 +417,12 @@ export const IMPORT_MAP_FILE = join(LIB, 'importmap.json');
 export const IMPORT_MAP_URL = `${mountedUrl(MANIFEST.srl.mounts['/lib/'])}importmap.json`;
 
 /**
- * The import-map fragment every application on this library carries: the
- * vendored dependencies with the hashes of the bytes actually in lib/vendor,
- * then the library's own prefixes.
+ * The import-map fragment every application on this library carries. It holds the
+ * vendored dependencies with the hashes of the bytes actually in lib/vendor, then
+ * the library's own prefixes.
  *
- * An application's own entries — its remotes, its `/src/` — are not here and
- * never can be: the fragment is what the library publishes, and the map is the
+ * An application's own entries, such as its remotes and its `/src/`, are not here
+ * and never can be. The fragment is what the library publishes and the map is the
  * application's, which is why this is a fragment rather than the whole file.
  *
  * @returns {Promise<{ imports: Record<string, string>, integrity: Record<string, string> }>}
@@ -444,9 +444,9 @@ export async function importMapFragment() {
 }
 
 /**
- * The fragment as the bytes on disk: committed, so a consumer with no Node at
- * all can read it, and fetchable at `/lib/importmap.json` by one that would
- * rather assemble its map at runtime.
+ * The fragment as the bytes on disk. Committed, so a consumer with no Node at all
+ * can read it, and fetchable at `/lib/importmap.json` by one that would rather
+ * assemble its map at runtime.
  *
  * @returns {Promise<string>}
  */

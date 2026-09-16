@@ -3,33 +3,29 @@
  *
  *   node cli/project-model/index.mjs [--app example] [--element ui-table] [--json]
  *
- * WHAT IT OWNS
+ * It owns which custom elements exist, the class and module that declare each one,
+ * public inputs and internal state across inheritance, events they dispatch,
+ * projection buckets their markup renders, which tags each may name, which templates
+ * exist and which definition claims them, which names templates may use without an
+ * import, and every declaration static analysis cannot read. Applications and their
+ * mounts come from cli/layout.mjs, and this module consumes them rather than
+ * re-deriving physical layout.
  *
- * Which custom elements exist, the class and module that declare each one, public inputs
- * and internal state across inheritance, events they dispatch, projection buckets their
- * markup renders, which tags each may name, which templates exist and which definition
- * claims them, which names templates may use without an import, and every declaration
- * static analysis cannot read. Applications and their mounts come from cli/layout.mjs;
- * this module consumes them rather than re-deriving physical layout.
+ * Three tools need these answers, and separately they agree only by luck. ADR-0038,
+ * ADR-0093. One model also gives an AI agent or an editor the same answer the build
+ * uses, where `--json` is the whole index and `--element` is one element and its
+ * dependencies.
  *
- * WHY IT EXISTS
+ * It deliberately does not model routes, injection tokens or remote grants.
+ * Custom-element and template identity is the fact three consumers already needed,
+ * and the rest would be a model with one consumer, which is a data structure looking
+ * for a reason.
  *
- * Three tools answered these questions separately and agreed only by luck. ADR-0038,
- * ADR-0093.
- * One model also gives an AI agent or an editor the same answer the build uses:
- * `--json` is the whole index, `--element` is one element and its dependencies.
- *
- * WHAT IT DELIBERATELY DOES NOT MODEL
- *
- * Routes, injection tokens and remote grants. Custom-element and template identity is the
- * fact three consumers already needed; the rest would be a model with one consumer, which
- * is a data structure looking for a reason.
- *
- * Message references are carried, and message *meaning* is not: a module record says
+ * Message references are carried, and message meaning is not. A module record says
  * which keys its source names and where, because the parse that finds an element
- * definition is already reading those call sites. What a key resolves to, which bundle
- * owns it and whether it exists belong to cli/message-catalog/, which reads this model
- * rather than parsing the project a second time.
+ * definition is already reading those call sites. What a key resolves to, which
+ * bundle owns it and whether it exists belong to cli/message-catalog/, which reads
+ * this model rather than parsing the project a second time.
  */
 
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
@@ -75,9 +71,10 @@ import { parseModule } from './parse.mjs';
  * Every path in the model is absolute, because its consumers open files. The JSON
  * projection is where paths become repository-relative and sortable.
  *
- * `roots` exists for the model's own tests, which point it at a fixture project instead of
- * this repository. Every consumer uses the default: the library, the shared collection and
- * the application, which is the dependency direction the verifier enforces.
+ * `roots` exists for the model's own tests, which point it at a fixture project
+ * instead of this repository. Every consumer uses the default, which is the library,
+ * the shared collection and the application, in the dependency direction the
+ * verifier enforces.
  *
  * @param {Application} app
  * @param {{ roots?: string[] }} [options]
@@ -89,10 +86,11 @@ export async function readProject(app, options = {}) {
   const prefixes = importPrefixes(app, indexHtml);
   const entry = entryModule(app, indexHtml);
 
-  // Tests included: a fixture that registers an element is part of what the page defines,
-  // and a checker that cannot see it reports the fixture's own markup as unknown elements.
-  // `.mjs` included: the editor clients open it and the template checker reads it, so a
-  // module this walk skips is a module whose elements do not exist to any consumer.
+  // Tests included, because a fixture that registers an element is part of what the
+  // page defines and a checker that cannot see it reports the fixture's own markup as
+  // unknown elements. `.mjs` included, because the editor clients open it and the
+  // template checker reads it, so a module this walk skips is a module whose elements
+  // do not exist to any consumer.
   /** @type {string[]} */
   const files = [];
   for (const root of roots) files.push(...(await walk(root, /\.m?js$/u)));
@@ -126,8 +124,9 @@ export async function readProject(app, options = {}) {
     for (const entry of parsed.dynamic) {
       diagnostics.push({
         kind: 'dynamic',
-        // A suite declaring something unreadable is a suite doing its job: several assert
-        // that the runtime rejects a definition a static tool could never have accepted.
+        // A suite declaring something unreadable is a suite doing its job, since
+        // several assert that the runtime rejects a definition a static tool could
+        // never have accepted.
         severity: isTestSource(parsed.path, roots) ? 'note' : entry.severity,
         file: parsed.path,
         message: entry.message,
@@ -176,9 +175,9 @@ export async function readProject(app, options = {}) {
 
       const existing = elements.get(definition.tag);
       if (existing !== undefined) {
-        // The runtime refuses this outright — a tag is one component's identity — so a
-        // second claim is a rename that left the old declaration behind, or two modules
-        // that will fight over whichever loads first.
+        // The runtime refuses this outright, because a tag is one component's
+        // identity. A second claim is a rename that left the old declaration
+        // behind, or two modules that will fight over whichever loads first.
         diagnostics.push({
           kind: 'duplicate-tag',
           severity: isTestSource(parsed.path, roots) ? 'note' : 'error',
@@ -203,9 +202,9 @@ export async function readProject(app, options = {}) {
     });
   }
 
-  // `uses` resolves the way the browser resolves it: through the import that brought the
-  // class in, or the declaring module for a local class. Second pass, because an entry
-  // may name a class declared in a file that had not been read yet.
+  // `uses` resolves the way the browser resolves it, through the import that brought
+  // the class in, or the declaring module for a local class. Second pass, because an
+  // entry may name a class declared in a file that had not been read yet.
   for (const { record, uses } of pending) {
     const imports = modules.get(record.module)?.imports;
     for (const className of uses) {
@@ -239,9 +238,9 @@ export async function readProject(app, options = {}) {
   // And the elements a module makes exist by importing them for the side effect.
   //
   // `uses` is how a component declares another component, and it is not available
-  // for a plain `customElements.define` element: `uses` resolves each entry to a
-  // component definition and throws on a class that has none. For those, running
-  // the module is the definition, so the import is the declaration — and without
+  // for a plain `customElements.define` element, because `uses` resolves each entry
+  // to a component definition and throws on a class that has none. For those,
+  // running the module is the definition, so the import is the declaration. Without
   // this the checker reports the element as missing from a `uses` list that could
   // not accept it, which is advice that breaks the application at runtime.
   for (const record of elements.values()) {
@@ -304,11 +303,11 @@ const REACTIVE_METHODS = [
 /**
  * The methods an element inherits from a root the walk stops at.
  *
- * Not a list of names the framework dislikes: it is the one place where a class this model
- * does not parse still contributes callable members, and a field covering one of them is
- * as fatal as a field covering `render`. Both interfaces are published and stable, so the
- * entries do not drift the way a rule of thumb would. A method an element declares itself
- * is read from its source, never from here.
+ * Not a list of names the framework dislikes. It is the one place where a class this
+ * model does not parse still contributes callable members, and a field covering one of
+ * them is as fatal as a field covering `render`. Both interfaces are published and
+ * stable, so the entries do not drift the way a rule of thumb would. A method an
+ * element declares itself is read from its source, never from here.
  *
  * @type {Map<string, Set<string>>}
  */
@@ -459,7 +458,7 @@ function resolveElementSurfaces(elements, parsedModules) {
  * The fields of one class that cover a method of the same name.
  *
  * A field is installed with [[Define]], so it creates an own property that hides the
- * method instead of overriding it. Nothing complains: the definition is accepted, the
+ * method instead of overriding it. Nothing complains. The definition is accepted, the
  * element registers, and the first call reaches a string. This is the diagnostic the
  * runtime raises on the first instance, moved to the line that declared the field.
  * ADR-0115.
@@ -682,8 +681,8 @@ async function readTemplates(app, elements, roots) {
       path,
       url: fileToUrl(app.dir, path),
       claimedBy: claims.get(path) ?? null,
-      // A suite's fixture markup is fetched by a test in the browser, so it stays a real
-      // file — but shipping it inside an application's bundle would put test bytes in
+      // A suite's fixture markup is fetched by a test in the browser, so it stays a
+      // real file. Shipping it inside an application's bundle would put test bytes in
       // production.
       fixture: isTestSource(path, roots),
     });
@@ -694,9 +693,10 @@ async function readTemplates(app, elements, roots) {
 /**
  * The import-map prefixes that name source in this repository, as directories.
  *
- * Read from the application's own import map rather than hardcoded, because the map is
- * what the browser resolves against: a prefix added there reaches every static tool with
- * no second edit. Vendored bare specifiers are skipped — they name files, not prefixes.
+ * Read from the application's own import map rather than hardcoded, because the map
+ * is what the browser resolves against. A prefix added there reaches every static tool
+ * with no second edit. Vendored bare specifiers are skipped, because they name files
+ * rather than prefixes.
  *
  * @param {Application} app
  * @param {string} indexHtml
@@ -708,8 +708,9 @@ function importPrefixes(app, indexHtml) {
   const prefixes = {};
   for (const [specifier, url] of Object.entries(imports)) {
     if (!specifier.endsWith('/') || !url.startsWith('/')) continue;
-    // `resolve` rather than the raw join: a prefix maps to a directory, and a trailing
-    // separator would make the same directory two different strings to compare against.
+    // `resolve` rather than the raw join, because a prefix maps to a directory and a
+    // trailing separator would make the same directory two different strings to
+    // compare against.
     prefixes[specifier] = resolve(urlToFile(app.dir, url));
   }
   return prefixes;
@@ -748,8 +749,9 @@ export function missingTemplates(model) {
  * Stylesheets a definition declares that are not on disk.
  *
  * The browser refuses to define such an Element and the build stops on it, so the
- * verifier names it before either does. An Element with no template is left out: its
- * stylesheet has nothing to reach, which is the error reported against it instead.
+ * verifier names it before either does. An Element with no template is left out,
+ * because its stylesheet has nothing to reach and that is the error reported against
+ * it instead.
  *
  * @param {ProjectModel} model
  * @returns {ElementRecord[]}
@@ -763,10 +765,10 @@ export function missingStylesheets(model) {
 /**
  * Markup beside a component module that no definition claims.
  *
- * Always a leftover from a rename or a deletion, and invisible: the old file keeps being
- * served, keeps passing every check that reads it, and renders nowhere. Only a
- * module-sibling name counts — an `.html` that is not any module's sibling is a partial
- * or a fixture, not an abandoned template.
+ * Always a leftover from a rename or a deletion, and invisible. The old file keeps
+ * being served, keeps passing every check that reads it, and renders nowhere. Only a
+ * module-sibling name counts, because an `.html` that is not any module's sibling is a
+ * partial or a fixture rather than an abandoned template.
  *
  * @param {ProjectModel} model
  * @returns {TemplateRecord[]}
@@ -783,7 +785,8 @@ export function orphanTemplates(model) {
 }
 
 /**
- * The templates an application ships: everything reachable, minus test fixtures.
+ * The templates an application ships, which is everything reachable minus test
+ * fixtures.
  *
  * @param {ProjectModel} model
  * @returns {TemplateRecord[]}
@@ -795,11 +798,11 @@ export function shippedTemplates(model) {
 }
 
 /**
- * The model as JSON: sorted, repository-relative, and stable across machines.
+ * The model as JSON, sorted, repository-relative and stable across machines.
  *
- * Stability is the point. This is what a README table, an editor and an agent read, so two
- * runs on two checkouts must produce identical bytes — no absolute path, no `Map`
- * iteration order, no timestamps.
+ * Stability is what makes it usable. A README table, an editor and an agent all read
+ * this, so two runs on two checkouts must produce identical bytes, with no absolute
+ * path, no `Map` iteration order and no timestamps.
  *
  * @param {ProjectModel} model
  * @returns {ProjectIndex}
@@ -883,8 +886,9 @@ export function projectIndex(model) {
 /**
  * One element and everything a caller has to know to use it, as text.
  *
- * The question an agent or an editor asks first — "what is <ui-table>, where is it, what
- * can I bind, what does its markup need" — answered without reading a 1,300-line module.
+ * The question an agent or an editor asks first, which is what `<ui-table>` is, where
+ * it is, what can be bound and what its markup needs, answered without reading a
+ * 1,300-line module.
  *
  * @param {ProjectModel} model
  * @param {string} tag
@@ -967,11 +971,11 @@ export function projectErrors(model) {
 }
 
 /**
- * Test source: a suite, or anything inside a `test/` directory of the project it belongs
- * to.
+ * Test source, meaning a suite or anything inside a `test/` directory of the project
+ * it belongs to.
  *
- * Relative to the root the file was found under, never absolute, and that is not a
- * detail: this repository keeps the model's own fixture projects in `cli/test/fixtures`,
+ * Relative to the root the file was found under, never absolute, and that matters.
+ * This repository keeps the model's own fixture projects in `cli/test/fixtures`,
  * so an absolute-path check calls every file in them test source and downgrades every
  * error the fixtures exist to produce. The same trap waits for any checkout under a
  * directory somebody named `test`.

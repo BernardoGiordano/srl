@@ -5,10 +5,10 @@
  * TypeScript file beside its component module, and the ordinary compiler API
  * checks that file against the same tsconfig and JSDoc types as the JavaScript.
  * Expressions are parsed by source/lib/core/template/expression-parser.js, and the
- * dialect itself — the attribute tables, the directive syntax, the sink/security
- * map — comes from source/lib/core/template/dialect.js. Both are shared with the runtime
- * evaluator, so this tool is an emitter for one grammar rather than a second
- * copy of it. Anything this file states about the dialect on its own is a
+ * dialect comes from source/lib/core/template/dialect.js, which holds the attribute
+ * tables, the directive syntax and the sink and security map. Both are shared with
+ * the runtime evaluator, so this tool is an emitter for one grammar rather than a
+ * second copy of it. Anything this file states about the dialect on its own is a
  * divergence waiting to happen.
  *
  * Findings are values. `checkTemplateSource()` returns `Diagnostic[]` with the file,
@@ -77,13 +77,13 @@ const MATHML_ELEMENTS = new Set(
 /**
  * Attributes any element may carry: HTML's global content attributes, plus `role`.
  *
- * `aria-*` and `data-*` are handled by prefix. `part` and `exportparts` are deliberately
- * absent — every component here renders into light DOM, so a part name addresses nothing
- * and a dead one should be reported like any other.
+ * `aria-*` and `data-*` are handled by prefix. `part` and `exportparts` are
+ * deliberately absent, because every component here renders into light DOM, so a part
+ * name addresses nothing and a dead one should be reported like any other.
  *
- * This is a statement about HTML rather than about the dialect, which is why it lives here
- * and not in `dialect.js`: the runtime never validates an attribute name, so shipping the
- * table to the browser would be bytes no evaluator reads.
+ * This is a statement about HTML rather than about the dialect, which is why it lives
+ * here and not in `dialect.js`. The runtime never validates an attribute name, so
+ * shipping the table to the browser would be bytes no evaluator reads.
  */
 const GLOBAL_ATTRIBUTES = new Set(
   `accesskey autocapitalize autocorrect autofocus class contenteditable dir draggable
@@ -113,10 +113,10 @@ const GLOBAL_ATTRIBUTES = new Set(
  * Tags every template may name without declaring anything, and the attributes each one
  * takes.
  *
- * Only `<x-content>`, and it is not a component: it is the projection marker the
- * dialect itself defines, the way `*if` is part of the dialect. Every real
- * element — including `<x-outlet>` and `<x-route-outlet>` — has a definition and
- * has to be imported by the component whose markup names it.
+ * Only `<x-content>`, and it is not a component. It is the projection marker the
+ * dialect itself defines, the way `*if` is part of the dialect. Every real element,
+ * including `<x-outlet>` and `<x-route-outlet>`, has a definition and has to be
+ * imported by the component whose markup names it.
  *
  * `name` is the bucket a marker projects, read with `getAttribute` in projection.js rather
  * than declared as a reactive property, so the project model cannot know about it and this
@@ -290,15 +290,16 @@ function parseAttributes(source, absolute, from) {
 /**
  * The project's own view of its components, in the shape the shim builder needs.
  *
- * Discovery is not this tool's job any more: `cli/project-model/` reads
- * `defineComponent({ tag, element, module, template, uses })` — the same record
- * `@core/elements/component.js` builds at runtime — and the checker asks it which elements exist.
- * That is what keeps the checker from having its own opinion about the project, and it is
- * why a definition the model cannot read is a verification failure rather than an element
- * this tool silently does not know about.
+ * Discovery is not this tool's job. `cli/project-model/` reads
+ * `defineComponent({ tag, element, module, template, uses })`, the same record
+ * `@core/elements/component.js` builds at runtime, and the checker asks it which
+ * elements exist. That keeps the checker from having its own opinion about the
+ * project, and it is why a definition the model cannot read is a verification failure
+ * rather than an element this tool silently does not know about.
  *
- * The one thing added here is the dialect's own intrinsic: `<x-content>` is a projection
- * marker rather than a component, so it belongs to the language and not to the model.
+ * The one thing added here is the dialect's own intrinsic. `<x-content>` is a
+ * projection marker rather than a component, so it belongs to the language and not to
+ * the model.
  *
  * @param {Application} app
  * @returns {Promise<{ components: Component[], elements: Map<string, ElementType>, globals: Map<string, TemplateGlobal> }>}
@@ -620,12 +621,12 @@ class ShimBuilder {
    * that are ordinary markup.
    *
    * A fragment becomes an assignment of an arrow function to the named property,
-   * which is how the body gets checked against the element that will call it: the
-   * property's declared signature contextually types every parameter, so a
-   * consumer that changes what it passes breaks the pages that wrote a fragment
-   * for it. A parameter written `row of people` gets a type of its own instead,
-   * because a component generic over its rows — a table — can only declare
-   * `unknown`, and the page is the one that knows better. ADR-0104.
+   * which is how the body gets checked against the element that will call it. The
+   * property's declared signature contextually types every parameter, so a consumer
+   * that changes what it passes breaks the pages that wrote a fragment for it. A
+   * parameter written `row of people` gets a type of its own instead, because a
+   * component generic over its rows, such as a table, can only declare `unknown`
+   * and the page is the one that knows better. ADR-0104.
    *
    * @param {ElementNode} node
    * @param {Map<string, string>} scope
@@ -733,7 +734,7 @@ class ShimBuilder {
       sources.set(param.name, sourceId);
     }
 
-    // Mapped, unlike a plain property binding: a fragment names its property in
+    // Mapped, unlike a plain property binding. A fragment names its property in
     // the directive head rather than in brackets, so an unknown name has an offset
     // worth reporting and `<template>` is the wrong place to point at.
     const target = `__element[${JSON.stringify(head.property)}]`;
@@ -765,17 +766,18 @@ class ShimBuilder {
   /**
    * Does this element react to the attribute the markup writes?
    *
-   * A property binding to a name the class does not have is a type error and always was.
-   * An *attribute* was invisible: `<ui-table empty-label="No rows">` set a string on an
-   * element that observes `emptylabel` — or nothing at all, once the property became
-   * standard text — and the only symptom was a missing label. Renaming a public property
-   * left every caller compiling and silently inert.
+   * A property binding to a name the class does not have is a type error. An
+   * attribute would otherwise be invisible. `<ui-table empty-label="No rows">` sets a
+   * string on an element that observes `emptylabel`, or nothing at all, and the only
+   * symptom is a missing label. Renaming a public property would leave every caller
+   * compiling and silently inert.
    *
-   * Custom elements only. The project model knows what each one observes, from
-   * `static properties` and `static observedAttributes` both; nothing here knows the
+   * Custom elements only. The project model knows what each one observes, from both
+   * `static properties` and `static observedAttributes`. Nothing here knows the
    * attribute set of `<input>`, so a native element's attributes stay unchecked. An
-   * element whose surface could not be read statically (`observedAttributes: null`) is
-   * skipped for the same reason: silence beats an error nobody can act on.
+   * element whose surface could not be read statically, with
+   * `observedAttributes: null`, is skipped for the same reason, because silence beats
+   * an error nobody can act on.
    *
    * @param {ElementNode} node
    * @param {Attribute} attr As written, brackets and all, for the message.
@@ -886,8 +888,8 @@ class ShimBuilder {
         // `-1` is emitted without the parentheses, and that is not cosmetic.
         // TypeScript gives a numeric literal type to `-` applied directly to a
         // numeric literal and to nothing else, so `-(1)` is `number` where `-1` is
-        // `-1`. A handler typed `(direction: 1 | -1)` — an ordinary way to write a
-        // move-up/move-down pair — would reject `(move-up)="move(row, -1)"` and
+        // `-1`. A handler typed `(direction: 1 | -1)`, an ordinary way to write a
+        // move-up and move-down pair, would reject `(move-up)="move(row, -1)"` and
         // accept `(move-down)="move(row, 1)"`, which reads as a bug in the template
         // rather than in the checker.
         return node.operator === '-' && node.operand.kind === 'literal' && typeof node.operand.value === 'number'
@@ -912,12 +914,11 @@ class ShimBuilder {
   /**
    * Is this element allowed here?
    *
-   * "Allowed here" rather than "defined somewhere", which is the check this used
-   * to make. A tag defined anywhere in the repository passed, so a template could
-   * name a component whose module its application never imported and the only
-   * symptom was an inert element on one route. What makes a tag available is the
-   * component's own `uses` list — the same list that makes the element exist in the
-   * browser — so the two agree by construction.
+   * "Allowed here" rather than "defined somewhere". A tag defined anywhere in the
+   * repository would let a template name a component whose module its application
+   * never imported, with an inert element on one route as the only symptom. What
+   * makes a tag available is the component's own `uses` list, the same list that
+   * makes the element exist in the browser, so the two agree by construction.
    *
    * @param {ElementNode} node
    */
@@ -1017,11 +1018,11 @@ function lineAndColumn(source, at) {
  * The compiler, built once per process.
  *
  * Building a program from scratch costs about 2.5 seconds, and this is called once
- * per template. Three things are reused: the parsed tsconfig, the parsed source files,
- * and the previous program's structure via `oldProgram`. ADR-0039.
+ * per template. Three things are reused, the parsed tsconfig, the parsed source files,
+ * and the previous program's structure through `oldProgram`. ADR-0039.
  *
- * The source-file cache is keyed by modified time, so a file edited on disk between two
- * calls is re-read — which matters for the editor seam more than for the CLI.
+ * The source-file cache is keyed by modified time, so a file edited on disk between
+ * two calls is re-read, which matters for the editor seam more than for the CLI.
  *
  * @typedef {{
  *   options: ts.CompilerOptions,
@@ -1048,10 +1049,10 @@ function compilerState() {
   const configFile = resolve(REPO, 'tsconfig.json');
 
   // Before anything else, because the alternative is worse than useless. A missing
-  // config used to arrive as one TypeScript diagnostic per template, counted in the
-  // "N template type error(s)" total — so a repository with no tsconfig.json was told
-  // its templates had type errors, once per application, and the actual problem was a
-  // file that is not there. This is setup, not a finding.
+  // config otherwise arrives as one TypeScript diagnostic per template, counted in
+  // the "N template type error(s)" total, so a repository with no tsconfig.json is
+  // told its templates have type errors, once per application, when the actual
+  // problem is a file that is not there. This is setup rather than a finding.
   if (!existsSync(configFile)) {
     throw new Error(
       `No tsconfig.json at ${REPO}.\n\n` +
@@ -1183,7 +1184,7 @@ function compilerProgram(rootPaths, generated, overrides = new Map()) {
   );
   // TypeScript may reuse an old source file without asking the host for it, so a program
   // built while a buffer differed from disk is only reusable for that same buffer text.
-  // The condition is the overlay itself rather than its absence: identical text means
+  // The condition is the overlay itself rather than its absence. Identical text means
   // every file the old program retained is still the text this check is about, and an
   // empty overlay after a non-empty one is a change like any other. ADR-0090.
   const program = ts.createProgram({
@@ -1215,12 +1216,13 @@ function sameOverlay(left, right) {
 /**
  * Discard the cached compiler.
  *
- * The parsed `tsconfig.json` is part of what ADR-0039 caches: the options, the path
+ * The parsed `tsconfig.json` is part of what ADR-0039 caches, so the options, the path
  * mappings and the root file names are read once per process. A CLI run ends before
  * that can go stale, but the language server outlives the configuration it parsed, so
- * the editor seam needs a way to say that the file it came from changed. Callers that
- * only changed source should not use this: it also discards the parsed source files and
- * the previous program, which is the cold rebuild ADR-0039 exists to avoid.
+ * the editor seam needs a way to say that the file it came from changed. A caller that
+ * only changed source should not use this, because it also discards the parsed source
+ * files and the previous program, which is the cold rebuild ADR-0039 exists to
+ * avoid.
  */
 export function invalidateCompiler() {
   compiler = undefined;
@@ -1310,8 +1312,8 @@ export function templateExpressionMembers(input) {
     if (fragment === undefined) continue;
 
     // The property's declared signature is what types an unannotated local, which
-    // is the rule the checker applies too — it gets there by assigning an arrow to
-    // the property and letting contextual typing do it, because it is also
+    // is the rule the checker applies too. The checker gets there by assigning an
+    // arrow to the property and letting contextual typing do it, because it is also
     // verifying the assignment. Here only the types are wanted.
     const holderId = builder.id('completion_holder');
     const fragmentId = builder.id('completion_fragment');
@@ -1464,17 +1466,17 @@ function fromCompiler(diagnostic, at) {
 }
 
 /**
- * Check one in-memory template. This is the editor/tooling seam: a caller can
- * validate unsaved markup without creating a shim on disk, and gets findings it
- * can place — a file, a line and a column each — rather than sentences to parse.
+ * Check one in-memory template. This is the editor and tooling seam. A caller
+ * validates unsaved markup without creating a shim on disk, and gets findings it can
+ * place, each with a file, a line and a column, rather than sentences to parse.
  *
  * `available` is the component's `uses` list already resolved to tags. Omitted, it
- * defaults to every element in `elements`, which is what an editor checking
- * unsaved markup wants: the file being edited may not declare its dependency yet.
+ * defaults to every element in `elements`, which is what an editor checking unsaved
+ * markup wants, because the file being edited may not declare its dependency yet.
  *
  * `cancellation` lets a caller abandon a check whose answer no longer matters. The
  * typecheck is one synchronous call, so an interactive caller that cannot wait for it
- * has no other way to get the thread back; the token throws out of the compiler, and
+ * has no other way to get the thread back. The token throws out of the compiler, and
  * this function throws `ts.OperationCanceledException` on to its caller.
  *
  * @param {{
@@ -1533,11 +1535,11 @@ export function checkTemplateSource(input) {
  * Whether a component's own template is this repository's to check.
  *
  * The project model reads the library and the shared collection alongside the
- * application, and it has to: a template that names `<ui-table>` is only checkable
- * against the element `ui-table` actually declares. What comes out of that is the
- * *elements* every template may use, not a work list.
+ * application, and it has to, because a template that names `<ui-table>` is only
+ * checkable against the element `ui-table` actually declares. What comes out of that
+ * is the elements every template may use, rather than a work list.
  *
- * In a checkout the two coincide — the library is in the repository, and checking its
+ * In a checkout the two coincide. The library is in the repository, and checking its
  * templates here is checking them where they are written. Installed from the registry
  * they do not. Those templates belong to a package and were checked in its own
  * repository before it was published, and a consumer's program types that package

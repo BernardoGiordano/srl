@@ -3,40 +3,35 @@
  *
  * `cacheClass()` in `build.mjs` decides `immutable` or `revalidate` for every emitted
  * file, `verifyPayload` refuses a build that leaves one unknown, and `artifact.json`
- * carries the answer to four readers: the release, the HTTP verifier, the benchmark's
- * budgets — and, until this module existed, nobody in the browser. A policy stated
- * once at build time and thrown away at the network boundary is the shape this
- * generator closes.
+ * carries the answer to the release, the HTTP verifier and the benchmark's budgets.
+ * This generator carries the same answer into the browser, so a policy stated once at
+ * build time is not thrown away at the network boundary.
  *
- * WHY GENERATED RATHER THAN WRITTEN
- *
- * The usual arrangement is a bundler plugin that walks the output directory and
- * writes its own file list. That is a second derivation of a fact this repository
- * already derives, admits and validates, and the two drift the first time a naming
- * rule changes on one side. Here the whole input is the report the build just wrote,
- * so the worker cannot precache a URL the artifact does not contain, and it cannot
- * miss one the entry document already preloads: both lists come from `entryClosure`,
- * the same function `entryHints` and `groupTemplates` answer with.
- *
- * WHAT IT DELIBERATELY DOES NOT CACHE
+ * It is generated rather than written. The usual arrangement is a bundler plugin that
+ * walks the output directory and writes its own file list, which is a second
+ * derivation of a fact this repository already derives, admits and validates. The two
+ * drift the first time a naming rule changes on one side. Here the whole input is the
+ * report the build just wrote, so the worker cannot precache a URL the artifact does
+ * not contain and cannot miss one the entry document already preloads. Both lists come
+ * from `entryClosure`, the same function `entryHints` and `groupTemplates` answer
+ * with.
  *
  * A Remote's bytes belong to whoever deployed that Remote (ADR-0016, ADR-0017,
- * ADR-0026). A Remote publishes under `/remotes/<name>/<version>/`, on its own
- * cadence, and a shell that cached it would be holding a copy of a release it does
- * not own past the moment its deployer replaced it. So the fetch handler answers for
- * exactly two shapes — the shell's own hash-named `/assets/`, and the four fixed
- * URLs the shell revalidates — and returns without responding to everything else,
- * which leaves API calls, the event stream and every Remote on the network where
- * they were.
+ * ADR-0026). A Remote publishes under `/remotes/<name>/<version>/` on its own cadence,
+ * and a shell that cached it would hold a copy of a release it does not own past the
+ * moment its deployer replaced it. The fetch handler therefore answers for exactly two
+ * shapes, the shell's own hash-named `/assets/` and the four fixed URLs the shell
+ * revalidates, and returns without responding to everything else. API calls, the event
+ * stream and every Remote stay on the network.
  *
  * The same ownership decides what activation may delete. An origin can hold caches
- * this Application never wrote — a second Application deployed beside it, a Remote,
- * a cache a page opened itself — so the worker retires the names under its own
+ * this Application never wrote, such as a second Application deployed beside it, a
+ * Remote, or a cache a page opened itself. The worker retires the names under its own
  * `srl:<app>:` prefix and leaves every other name where it found it.
  *
- * Pure: facts in, source out. A precache list is asserted without running Vite over
- * a real application, which is what `entry-hints.mjs` established for the document
- * half of the same question. ADR-0088.
+ * Pure, with facts in and source out. A precache list is asserted without running Vite
+ * over a real application, which is what `entry-hints.mjs` established for the
+ * document half of the same question. ADR-0088.
  */
 
 import { createHash } from 'node:crypto';
@@ -47,7 +42,7 @@ import { entryClosure } from './artifact-report.mjs';
 
 /**
  * Where the worker is emitted, and the URL it must be registered from. Not
- * hash-named, and it cannot be: a registration names one URL for the lifetime of an
+ * hash-named, and it cannot be. A registration names one URL for the lifetime of an
  * origin, and a browser that could not find last week's URL would keep last week's
  * worker. It is `revalidate` for the same reason `index.html` is.
  */
@@ -63,30 +58,30 @@ const DOCUMENT = '/index.html';
 
 /**
  * The fixed-URL files startup reads, in the order it reads them. Each is
- * `revalidate` in `cacheClass()`, which is the same statement in HTTP terms: its URL
+ * `revalidate` in `cacheClass()`, which is the same statement in HTTP terms. Its URL
  * never changes, so a cached copy has to be checked before it is believed.
  *
- * `build.json` is here rather than excluded, and the distinction matters: network
- * first means a running tab still learns about a new release from the network
- * (`@core/application/release.js`), while an offline tab reads the release it
- * started with instead of failing.
+ * `build.json` is here rather than excluded, and the distinction matters. Network
+ * first means a running tab still learns about a new release from the network through
+ * `@core/application/release.js`, while an offline tab reads the release it started
+ * with instead of failing.
  */
 const REVALIDATE = [DOCUMENT, '/app.manifest.json', '/build.json'];
 
 /**
  * The facts a worker is derived from. A whole `ShellArtifactReport` satisfies the
- * first three; so does a literal in a test, which is why the subset is named.
+ * first three, and so does a literal in a test, which is why the subset is named.
  *
- * `templateGroups` is the manifest's half of ADR-0081 rather than the report's — the
- * report says which templates exist, the manifest says which chunk names each — and
+ * `templateGroups` is the manifest's half of ADR-0081 rather than the report's. The
+ * report says which templates exist and the manifest says which chunk names each, and
  * the build holds both at the moment it calls this. `null` is source delivery, which
  * has no chunks to group by and therefore no entry group to precache.
  *
  * `stylesheet` is the document's own compiled CSS, which `verifyBrowserRoot` has
  * already proved is hash-named, unique and loaded by the entry document. It is not a
- * chunk and reaches no module graph, so nothing else in the build would have named
- * it; without it the offline shell renders unstyled until a later visit happens to
- * put the file in the cache.
+ * chunk and reaches no module graph, so nothing else in the build would have named it.
+ * Without it the offline shell renders unstyled until a later visit happens to put the
+ * file in the cache.
  *
  * @typedef {Pick<ShellArtifactReport, 'app' | 'entry' | 'chunks'> & {
  *   templateGroups: Readonly<Record<string, readonly string[]>> | null,
@@ -97,17 +92,16 @@ const REVALIDATE = [DOCUMENT, '/app.manifest.json', '/build.json'];
 /**
  * Everything the worker precaches at install time, as absolute URLs.
  *
- * Four groups and no fifth: the document, its stylesheet, the module closure the
+ * Four groups and no fifth. The document, its stylesheet, the module closure the
  * entry document already names in a `modulepreload`, and the markup those modules
  * define. That is exactly the set a cold start transfers before its first paint, so
- * an install adds no request a first load did not already make — it stores what the
+ * an install adds no request a first load did not already make. It stores what the
  * browser fetched anyway under a name a second load can find offline.
  *
- * The stylesheet is in the precache rather than left to the fetch handler because
- * the handler cannot reach it: a first load requests the CSS from the document,
- * before this worker is installed and controlling the page, so first-use caching
- * would not store it until the *second* visit and offline would not work until the
- * third.
+ * The stylesheet is in the precache rather than left to the fetch handler, because
+ * the handler cannot reach it. A first load requests the CSS from the document, before
+ * this worker is installed and controlling the page, so first-use caching would not
+ * store it until the second visit and offline would not work until the third.
  *
  * Route chunks, locale bundles and every other immutable file are absent on purpose.
  * They are cached on first use by the fetch handler, which is the difference between
@@ -131,9 +125,9 @@ export function precacheList(facts) {
 /**
  * The worker's source, ready to be written to `public/sw.js`.
  *
- * Classic script rather than a module: `register()` defaults to `type: 'classic'`,
- * and a module worker would be one more thing an adopter's registration call has to
- * agree with the build about.
+ * Classic script rather than a module, because `register()` defaults to
+ * `type: 'classic'` and a module worker would be one more thing an adopter's
+ * registration call has to agree with the build about.
  *
  * @param {WorkerFacts} facts
  * @returns {string}
@@ -143,8 +137,8 @@ export function serviceWorkerSource(facts) {
   // The cache turns over exactly when the bytes in it do. Naming it after the
   // release would turn it over on every deploy including the ones that changed
   // nothing a visitor downloads, and a build of an uncommitted tree has no release
-  // to name it after at all — `ArtifactRelease` is null on both halves there, by
-  // design. The list is already the answer: every entry but the document is
+  // to name it after at all, because `ArtifactRelease` is null on both halves there
+  // by design. The list is already the answer. Every entry but the document is
   // hash-named, so a changed byte anywhere in the entry closure is a changed name.
   const version = createHash('sha256').update(precache.join('\n')).digest('hex').slice(0, 16);
 
@@ -167,18 +161,18 @@ self.addEventListener('install', (event) => {
 });
 
 // Which of an origin's caches this worker may delete. One Application, and an
-// Application owns the names it wrote: \`srl:<app>:<digest>\`. Everything else on
-// the origin belongs to somebody else — another Application deployed here, a
-// Remote under its own publication base, a cache a page opened itself — and a
-// worker that deleted every name it did not recognise would be throwing away data
-// it never wrote. Retiring the predecessor is the whole job.
+// Application owns the names it wrote, which are \`srl:<app>:<digest>\`. Everything
+// else on the origin belongs to somebody else, such as another Application deployed
+// here, a Remote under its own publication base, or a cache a page opened itself. A
+// worker that deleted every name it did not recognise would throw away data it never
+// wrote. Retiring the predecessor is the whole job.
 function retired(names) {
   return names.filter((name) => name !== CACHE && name.startsWith(OWNED));
 }
 
 // No skipWaiting. A tab running last week's modules must not have this week's
-// worker answer its requests: the two disagree about which hash names what, and
-// the swap belongs to a moment the application chooses. See
+// worker answer its requests, because the two disagree about which hash names what
+// and the swap belongs to a moment the application chooses. See
 // @core/application/release.js, which is how a tab learns there is one to choose.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -230,8 +224,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // A navigation is answered by the shell whatever path it names: the router owns
-  // every path on this origin, so an offline deep link is the application booting
+  // A navigation is answered by the shell whatever path it names, because the router
+  // owns every path on this origin. An offline deep link is the application booting
   // and resolving that URL itself.
   if (request.mode === 'navigate') {
     event.respondWith(shell(request));
@@ -248,9 +242,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else — the API, the event stream, and every Remote under its own
-  // publication base — goes to the network untouched. Not responding is the point:
-  // bytes this artifact did not build are not this worker's to hold.
+  // Everything else goes to the network untouched, which covers the API, the event
+  // stream and every Remote under its own publication base. Not responding is the
+  // point, because bytes this artifact did not build are not this worker's to hold.
 });
 `;
 }
