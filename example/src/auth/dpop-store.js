@@ -14,19 +14,17 @@ import { readTokenResponse } from './memory-store.js';
  * the `TokenStore` seam, the two error types and `sessionFrom()`, and asserts
  * nothing about the wire.
  *
- * READ THIS BEFORE CHOOSING THIS STRATEGY
+ * Read this before choosing this strategy. The private key is `extractable: false` and
+ * lives as a live `CryptoKey` in IndexedDB, so an attacker with script execution on
+ * this origin cannot steal it. They do not need to, because they can call
+ * `crypto.subtle.sign()` with the same key handle and have the browser mint proofs for
+ * them. "Non-extractable" is not the same claim as "XSS-safe", and no configuration of
+ * this file changes that. ADR-0025.
  *
- * The private key is `extractable: false` and lives as a live `CryptoKey` in
- * IndexedDB, so an attacker with script execution on this origin cannot steal it.
- * They do not need to: they can call `crypto.subtle.sign()` with the same key
- * handle and have the browser mint proofs for them. "Non-extractable" is not the
- * same claim as "XSS-safe", and no configuration of this file changes that.
- * ADR-0025.
- *
- * Use this to defeat token theft — a captured token is useless without the key,
- * proofs are bound to one method and URI, and exfiltration off-origin is
- * impossible — alongside a strict CSP, Subresource Integrity and Trusted Types.
- * If XSS is the threat you actually need to close, use the BFF strategy instead.
+ * Use this to defeat token theft, alongside a strict CSP, Subresource Integrity and
+ * Trusted Types. A captured token is useless without the key, proofs are bound to one
+ * method and URI, and exfiltration off-origin is impossible. If XSS is the threat you
+ * actually need to close, use the BFF strategy instead.
  *
  * @implements {TokenStore}
  */
@@ -204,9 +202,9 @@ export class DpopTokenStore {
     // access token yet. This is how the authorization server learns the key to
     // bind the issued token to.
     //
-    // `request.url` rather than the configured endpoint: manifest admission
-    // normalizes every destination to a root-relative path, and RFC 9449's `htu`
-    // is an absolute URI. Reading it back off the Request resolves it against the
+    // `request.url` rather than the configured endpoint, because manifest admission
+    // normalizes every destination to a root-relative path and RFC 9449's `htu` is an
+    // absolute URI. Reading it back off the Request resolves it against the
     // document exactly once, and against the same base the fetch below uses, so
     // the proof cannot be bound to a URL other than the one it travels to.
     request.headers.set('DPoP', await this.#createProof('POST', request.url, null));
@@ -231,7 +229,7 @@ export class DpopTokenStore {
     }
 
     // Cleared before admission, assigned after it, for the reason
-    // memory-store.js gives: a token kept through a failed admission would go on
+    // memory-store.js gives. A token kept through a failed admission would go on
     // authorizing requests for a session the client has already ended.
     this.#accessToken = null;
     const admitted = readTokenResponse(await readPayload(response, where), where);
@@ -301,9 +299,9 @@ async function loadKeyPair() {
   }
 
   // Structured clone round-trips a CryptoKey with its internal slots intact, so
-  // what comes back out is still non-extractable. Verify rather than assume: a key
-  // that reads back as extractable means something rewrote this record, and it
-  // must not be trusted for signing.
+  // what comes back out is still non-extractable. Verify rather than assume, because a
+  // key that reads back as extractable means something rewrote this record and must not
+  // be trusted for signing.
   if (candidate.privateKey.extractable) {
     await deleteKeyPair();
     return null;

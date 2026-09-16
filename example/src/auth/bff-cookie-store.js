@@ -16,14 +16,13 @@ import {
  * Backend-for-frontend. The recommended architecture, and the only one here that
  * actually removes tokens from the browser's threat model.
  *
- * THIS FILE IS APPLICATION CODE, DELIBERATELY
- *
- * Every wire fact below — the three paths, the JSON bodies, the field names in
- * the response, the `X-CSRF-Token` header — is a contract with *this*
- * application's backend, and the library has no business asserting any of it.
- * What the library supplies is the `TokenStore` seam, the two error types, and
- * `sessionFrom()`. Copy this file into your own application and change the parts
- * your server disagrees with; nothing in `source/lib/` needs to know.
+ * This file is application code, deliberately. Every wire fact below is a contract
+ * with this application's backend, including the three paths, the JSON bodies, the
+ * field names in the response and the `X-CSRF-Token` header, and the library has no
+ * business asserting any of it. What the library supplies is the `TokenStore` seam, the
+ * two error types and `sessionFrom()`. Copy this file into your own application and
+ * change the parts your server disagrees with. Nothing in `source/lib/` needs to
+ * know.
  *
  * A same-origin backend performs the OAuth flow, holds the access and refresh
  * tokens in server-side session state, and proxies API calls. The browser gets
@@ -31,14 +30,13 @@ import {
  * readable CSRF token to prove requests originate from the app rather than from
  * a cross-site form post.
  *
- * Look at `authorize()` below: it adds a CSRF header and nothing else. There is
- * no token to attach, because the browser attaches the cookie and this code never
- * possesses a credential. An XSS payload on this origin can make authenticated
- * requests, which is unavoidable in any browser architecture, but it cannot
- * exfiltrate anything reusable elsewhere, cannot mint proofs, and cannot obtain a
- * token that outlives the cookie.
+ * `authorize()` below adds a CSRF header and nothing else. There is no token to
+ * attach, because the browser attaches the cookie and this code never possesses a
+ * credential. An XSS payload on this origin can make authenticated requests, which is
+ * unavoidable in any browser architecture, but it cannot exfiltrate anything reusable
+ * elsewhere, cannot mint proofs, and cannot obtain a token that outlives the cookie.
  *
- * What it costs: a backend, one network hop, and session state to operate.
+ * It costs a backend, one network hop, and session state to operate.
  *
  * Server contract expected:
  *   POST   {base}/login    credentials in, Set-Cookie + CSRF token out
@@ -118,9 +116,9 @@ export class BffCookieTokenStore {
   }
 
   /**
-   * The backend refreshes on its own schedule, transparently, as part of proxying
-   * a call. From the browser's side "refresh" is just: is the session still
-   * alive?
+   * The backend refreshes on its own schedule, transparently, as part of proxying a
+   * call. From the browser's side "refresh" asks only whether the session is still
+   * alive.
    *
    * @returns {Promise<Session | null>}
    */
@@ -129,8 +127,8 @@ export class BffCookieTokenStore {
   }
 
   /**
-   * Adds a CSRF header and nothing else. There is no token to attach: the browser
-   * sends the HttpOnly cookie, and this code never possesses a credential.
+   * Adds a CSRF header and nothing else. There is no token to attach, because the
+   * browser sends the HttpOnly cookie and this code never possesses a credential.
    *
    * Not `async`, because there is nothing to await. The interface returns a
    * Promise so that callers need not know which strategy they are talking to.

@@ -8,13 +8,11 @@
  *   DELETE /auth/login    clears the cookie and forgets the session
  *   GET    /auth/session  the current session, or 401
  *
- * WHY THIS EXISTS RATHER THAN A FAKE
+ * JavaScript cannot set a cookie JavaScript may not read, so an in-browser fake cannot
+ * demonstrate the strategy this application uses. This file is the whole of it, about a
+ * hundred lines, roughly the honest cost of that architecture.
  *
- * JavaScript cannot set a cookie JavaScript may not read, so an in-browser fake
- * cannot demonstrate the strategy this application uses. This file is the whole
- * of it: about a hundred lines, roughly the honest cost of that architecture.
- *
- * WHAT THE BROWSER GETS
+ * The browser gets two things.
  *
  *   sid    an opaque session id in an HttpOnly, SameSite=Strict cookie. No
  *          JavaScript on the origin can read it, so an XSS payload cannot copy it
@@ -24,17 +22,15 @@
  *          cross-site form post, so every mutating request must carry it in
  *          `X-CSRF-Token`.
  *
- * `Secure` is deliberately absent: this server is http://localhost and a Secure
- * cookie would never be stored, which would look exactly like a broken login. In
- * production it is mandatory, and the flag is set below where a deployment would
- * flip it.
+ * `Secure` is deliberately absent, because this server is http://localhost and a
+ * Secure cookie would never be stored, which would look exactly like a broken login. In
+ * production it is mandatory, and the flag is set below where a deployment would flip
+ * it.
  *
- * WHAT IS SHORT-LIVED, AND WHY
- *
- * `apiValidUntil` reproduces a real BFF's access-token expiry: API requests past it
- * are refused with a real 401, and `GET /auth/session` — what the store's `refresh()`
- * calls — extends it. That is the path `authorizedFetch` retries through, so the
- * example exercises refresh-and-retry rather than describing it.
+ * `apiValidUntil` reproduces a real BFF's access-token expiry. API requests past it are
+ * refused with a real 401, and `GET /auth/session`, which is what the store's
+ * `refresh()` calls, extends it. That is the path `authorizedFetch` retries through, so
+ * the example exercises refresh-and-retry rather than describing it.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -104,8 +100,9 @@ export function parseCookies(header) {
 }
 
 /**
- * The session a request belongs to, or null. Expired sessions are dropped here
- * rather than by a sweeper: one map, one place that decides a session is over.
+ * The session a request belongs to, or null. Expired sessions are dropped here rather
+ * than by a sweeper, so there is one map and one place that decides a session is
+ * over.
  *
  * @param {import('node:http').IncomingMessage} request
  * @returns {ServerSession | null}
@@ -123,8 +120,8 @@ export function sessionOf(request) {
 }
 
 /**
- * The body the store reads: `sub`, `name`, `scopes`, `expiresAt`, `csrfToken`.
- * Nothing else, and in particular no token — the whole point of the strategy is
+ * The body the store reads, which is `sub`, `name`, `scopes`, `expiresAt` and
+ * `csrfToken`. Nothing else, and in particular no token, because the strategy exists so
  * that there is no credential in this response.
  *
  * @param {ServerSession} session
@@ -170,8 +167,8 @@ export function login(credentials) {
 }
 
 /**
- * What the store's `refresh()` reaches: the BFF renewing its access token behind
- * the cookie. Nothing about the exchange is visible to the browser, which is the
+ * What the store's `refresh()` reaches, which is the BFF renewing its access token
+ * behind the cookie. Nothing about the exchange is visible to the browser, which is the
  * property being demonstrated.
  *
  * @param {ServerSession} session
@@ -192,9 +189,9 @@ export function logout(request) {
 }
 
 /**
- * Is this request allowed to mutate? A cross-site form post carries the cookie —
- * that is what SameSite mitigates and what this backs up — but it cannot read the
- * CSRF token out of a JSON response body, so it cannot set the header.
+ * Is this request allowed to mutate? A cross-site form post carries the cookie, which
+ * is what SameSite mitigates and what this backs up, but it cannot read the CSRF token
+ * out of a JSON response body, so it cannot set the header.
  *
  * @param {import('node:http').IncomingMessage} request
  * @param {ServerSession} session
