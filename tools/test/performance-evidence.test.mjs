@@ -13,11 +13,11 @@ import { checkPerformanceGuide, readEvidence } from '../checks/performance-check
  * What a performance number is allowed to claim.
  *
  * The harness already decides whether a run failed. These tests are about the second
- * question, the one a reader asks: of the numbers this repository publishes, which are
- * held by something and which are merely true of one afternoon on one laptop. Each case
- * is a way that distinction was lost before the evidence module existed — a median from
- * an incomparable machine printed like any other, a workload nobody has run since it was
- * declared, a guide restating a baseline it no longer matched.
+ * question, the one a reader asks. Of the numbers this repository publishes, which are
+ * held by something and which are merely true of one afternoon on one laptop? Each case
+ * is a way that distinction gets lost, such as a median from an incomparable machine
+ * printed like any other, a workload nobody has run since it was declared, or a guide
+ * restating a baseline it stopped matching.
  *
  * @import { BaselineFile, WorkloadRecord } from '../benchmark/types.js'
  */

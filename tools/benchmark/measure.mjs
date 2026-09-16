@@ -416,8 +416,8 @@ export function compare(current, baseline, policy) {
       } else {
         // How much slower the machine was when this suite ran than when the baseline
         // recorded it. 1.4 means everything here is expected to take 40% longer for
-        // reasons that are not code. Only time scales with it — a request count and a
-        // byte count do not, so they are compared as recorded.
+        // reasons that are not code. Only time scales with it, because a request
+        // count and a byte count do not, so they are compared as recorded.
         const speed = policy.speedBySuite?.[record.suite] ?? policy.speed ?? 1;
         const expected =
           unit === 'ms' ? baselineStats.median * speed : baselineStats.median;
@@ -462,8 +462,8 @@ function ratio(from, to) {
 }
 
 /**
- * The comparisons that must fail a gated run: a regression past the threshold, or
- * an absolute product budget exceeded.
+ * The comparisons that must fail a gated run, which are a regression past the
+ * threshold and an absolute product budget exceeded.
  *
  * @param {readonly Comparison[]} comparisons
  * @returns {Comparison[]}

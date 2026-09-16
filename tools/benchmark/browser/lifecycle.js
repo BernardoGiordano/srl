@@ -1,15 +1,15 @@
 /**
  * Mount and release cycles, for the workloads whose answer is a heap reading.
  *
- * These are shaped differently from the other browser modules: each export does a
- * whole batch of cycles and then removes everything it created, because the
- * measurement is taken from Node *between* batches — collect garbage, read the
- * heap, read the retained node and listener counts, run the next batch. A page
- * cannot do any of those three for itself, so the loop cannot live here.
+ * These are shaped differently from the other browser modules. Each export does a
+ * whole batch of cycles and then removes everything it created, because the measurement
+ * is taken from Node between batches. Collect garbage, read the heap, read the retained
+ * node and listener counts, run the next batch. A page cannot do any of those three for
+ * itself, so the loop cannot live here.
  *
- * The contract each export keeps: when it returns, nothing it built is still in the
+ * Each export keeps one contract. When it returns, nothing it built is still in the
  * document, no router is attached, and no listener it added is still registered. A
- * function that cannot honour that has found a leak, which is the point.
+ * function that cannot honour that has found the leak these workloads look for.
  */
 
 import { html } from 'lit';
@@ -128,7 +128,7 @@ export async function outletSwaps(count) {
 
   let swaps = 0;
   for (let turn = 0; turn < count; turn += 1) {
-    // The loser: a load that resolves a task later, by which time the winner has
+    // The loser, a load that resolves a task later, by which time the winner has
     // already been requested.
     target.value = {
       load: () =>

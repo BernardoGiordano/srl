@@ -5,27 +5,25 @@
  *   node tools/checks/performance-check.mjs --write     rewrite the generated sections
  *   node tools/checks/performance-check.mjs --file X    operate on X instead of the guide
  *
- * WHY THIS EXISTS
- *
- * A performance number is copied into prose once and then outlives the run that produced
- * it. The guide's envelope table said 88 ms, 51 requests and Chrome 150 while the
- * checked-in baseline said 84.6 ms, 57 requests and Chrome 151, and nothing in the
- * repository could notice: the table was typed. Every row here is derived from
- * `tools/benchmark/evidence.mjs` instead, from the same baselines the gate compares
- * against, so a number in the guide cannot disagree with the number the harness holds.
+ * A performance number copied into prose once outlives the run that produced it. A
+ * typed envelope table can say 88 ms, 51 requests and Chrome 150 while the checked-in
+ * baseline says 84.6 ms, 57 requests and Chrome 151, and nothing in the repository
+ * notices. Every row here is derived from `tools/benchmark/evidence.mjs` instead, from
+ * the same baselines the gate compares against, so a number in the guide cannot
+ * disagree with the number the harness holds.
  *
  * It also generates what a table of medians cannot say on its own. Which machine and
  * which browser produced them. Which of them a later run actually fails on, and which are
  * reported only. What is declared and unmeasured. And whether anything automated runs the
- * gate at all — read from the workflows rather than assumed, because "the gate is green"
+ * gate at all, read from the workflows rather than assumed, because "the gate is green"
  * means very little when the gate runs on one laptop by hand.
  *
  * Prose stays hand-written. Only the blocks between the markers are owned here, and the
  * marker grammar is `generated.mjs`'s. Diagnostics are returned rather than printed, so a
  * suite can assert which section drifted. ADR-0072.
  *
- * No browser, no network: it reads two baseline files, the budgets, the workload registry
- * and the workflows. ADR-0099.
+ * No browser and no network. It reads two baseline files, the budgets, the workload
+ * registry and the workflows. ADR-0099.
  */
 
 import { readFile, readdir, writeFile } from 'node:fs/promises';
@@ -203,7 +201,7 @@ function provenanceSection(documents) {
 }
 
 /**
- * One row per workload: the number it is quoted by.
+ * One row per workload, holding the number it is quoted by.
  *
  * @param {readonly EvidenceDocument[]} documents
  * @returns {string}
@@ -232,7 +230,8 @@ function envelopeSection(documents) {
 }
 
 /**
- * Everything else a workload measured: requests, bytes, chain depth, startup steps, heap.
+ * Everything else a workload measured, such as requests, bytes, chain depth, startup
+ * steps and heap.
  *
  * @param {readonly EvidenceDocument[]} documents
  * @returns {string}
@@ -254,7 +253,7 @@ function factsSection(documents) {
 }
 
 /**
- * Workload ids, or — past the point where a list stops being read — how many and from
+ * Workload ids, or, past the point where a list stops being read, how many and from
  * where. The families are the id prefixes, so a reader can reproduce the list from the
  * registry rather than scroll one cell of a table.
  *
@@ -321,8 +320,8 @@ function gatingSection(documents) {
     ),
   );
 
-  // Every declared limit, including one on a workload nothing has measured: a limit that
-  // holds nothing is the entry a reader most needs to see.
+  // Every declared limit, including one on a workload nothing has measured, because a
+  // limit that holds nothing is the entry a reader most needs to see.
   /** @type {Map<string, EvidenceGate['limits'][number]>} */
   const limits = new Map();
   for (const evidence of documents) {

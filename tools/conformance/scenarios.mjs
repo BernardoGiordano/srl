@@ -1,9 +1,10 @@
 /**
  * What an installed editor has to do, stated once for every editor. ADR-0097.
  *
- * A scenario is data, not code: an `ask` an adapter knows how to make, the document and
- * position it is made at, and what the answer has to contain. Positions are found by
- * searching the fixture's own text, so a scaffold that gains a line does not move them.
+ * A scenario is data rather than code. It is an `ask` an adapter knows how to make, the
+ * document and position it is made at, and what the answer has to contain. Positions are
+ * found by searching the fixture's own text, so a scaffold that gains a line does not
+ * move them.
  */
 
 /** @import { Scenario } from './types.js' */

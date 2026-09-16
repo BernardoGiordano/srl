@@ -1,16 +1,15 @@
 /**
  * Router workloads, measured entirely through router attachment.
  *
- * Nothing here times `compilePath` or `flattenRoutes`. They are private to the
- * router now, and this file never reached for them even while they were exported:
- * a workload built on them would have been a caller to migrate the moment matching
- * moved behind an index, and its numbers would read as a regression for having
- * measured a shape that no longer existed. What an application can observe is
- * `attachRouter` and `navigate`, so that is what has a budget.
+ * Nothing here times `compilePath` or `flattenRoutes`. They are private to the router,
+ * and a workload built on them would be a caller to migrate the moment matching moved
+ * behind an index, with numbers that read as a regression for having measured a shape
+ * that has since changed. What an application can observe is `attachRouter` and
+ * `navigate`, so that is what has a budget.
  *
  * Route trees are generated from a leaf count so the same workload answers "does
  * matching scale" at 10, 100 and 1,000 leaves. The answer decides whether a route
- * index is worth building at all — see ADR-0004, which records that it is not yet.
+ * index is worth building at all. ADR-0004 records that it is not yet.
  */
 
 import { html } from 'lit';
@@ -51,7 +50,7 @@ let defined = false;
 
 /**
  * Define the three views once per page. `customElements.define` is permanent, so
- * this cannot be per sample, and `template: false` keeps a template fetch out of a
+ * this cannot be per sample. `template: false` keeps a template fetch out of a
  * measurement about routing.
  *
  * @returns {Promise<void>}
@@ -166,7 +165,7 @@ export const attach = {
 /**
  * Navigate to one route in a tree of a stated size.
  *
- * `target` picks which: first, middle and last say whether match order costs
+ * `target` picks which one. First, middle and last say whether match order costs
  * anything, and the other three exercise the paths a literal table cannot answer.
  *
  * @type {import('./support.js').Workload}
@@ -225,10 +224,10 @@ export const navigate_to = {
  * Navigate back and forth between two child routes under one layout, `cycles`
  * times.
  *
- * The workload that catches a layout being rebuilt per navigation: the layout
- * counts its own constructions, and the check fails if a sibling switch built a
- * second one. Sibling retention is a behaviour the router tests already assert;
- * here it is the correctness gate that makes the timing mean something.
+ * The workload that catches a layout being rebuilt per navigation. The layout counts
+ * its own constructions, and the check fails if a sibling switch built a second one.
+ * Sibling retention is a behaviour the router tests already assert, and here it is the
+ * correctness gate that makes the timing mean something.
  *
  * @type {import('./support.js').Workload}
  */

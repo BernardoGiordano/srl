@@ -1,9 +1,9 @@
 /**
- * One run, two outputs: something a person reads and something a machine compares.
+ * One run, two outputs. Something a person reads and something a machine compares.
  *
  * Both from the same numbers, in the same call, because a report that is regenerated
- * separately from the JSON eventually disagrees with it. The human half is grouped
- * by suite with medians and p95s side by side; the machine half is the file the next
+ * separately from the JSON eventually disagrees with it. The human half is grouped by
+ * suite with medians and p95s side by side, and the machine half is the file the next
  * run compares against and the one that gets checked in as a baseline.
  *
  * Units and coverage both come from `evidence.mjs`, so the report a person reads and the
@@ -78,7 +78,7 @@ export function renderReport(run) {
       `${calibration.spread.arithmetic.toFixed(2)}x / ${calibration.spread.layout.toFixed(2)}x ` +
       'during the run',
   );
-  // Both factors, because they answer different questions: a machine that is uniformly
+  // Both factors, because they answer different questions. A machine that is uniformly
   // slower moves both, and a machine that is only busy in the renderer moves one.
   const recorded = run.baseline?.calibration;
   if (recorded?.overall !== undefined) {
@@ -96,8 +96,8 @@ export function renderReport(run) {
       .join('  ')}`,
   );
   // A missing baseline reads as "not gated" like every other reason a run does not
-  // gate, rather than as a milder sentence of its own: an origin that has never had a
-  // baseline file is the most ungated a run can be, and it used to say the least.
+  // gate, rather than as a milder sentence of its own. An origin that has never had a
+  // baseline file is the most ungated a run can be.
   if (run.baseline === null || run.reason !== null) {
     lines.push(`  not gated: ${run.reason ?? 'there is no baseline to compare against.'}`);
   }
@@ -161,7 +161,7 @@ export function renderReport(run) {
       `${String(regressions.length)} over budget, ${String(run.failures.length)} failed, ` +
       `${(run.elapsedMs / 1000).toFixed(1)} s`,
   );
-  // What the run proved, which is a different count from what it measured: an
+  // What the run proved, which is a different count from what it measured, because an
   // incomparable machine still produces every median and gates none of them.
   lines.push(standingLine(run.evidence));
   lines.push('');
@@ -172,11 +172,11 @@ export function renderReport(run) {
 /**
  * The run, as the file the next one compares against.
  *
- * The directory is created rather than required: an application-owned baseline lives
+ * The directory is created rather than required. An application-owned baseline lives
  * beside the application repository's own `benchmark/`, and the first run that records
- * one is by definition the run where that directory does not exist yet. It used to end
- * in an ENOENT stack trace, which reads as a broken harness rather than as the one step
- * that opens a gate.
+ * one is by definition the run where that directory does not exist yet. Requiring it
+ * ends in an ENOENT stack trace, which reads as a broken harness rather than as the one
+ * step that opens a gate.
  *
  * @param {string} path
  * @param {BaselineFile} file

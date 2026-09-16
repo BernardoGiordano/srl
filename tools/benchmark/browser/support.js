@@ -1,13 +1,11 @@
 /**
  * The sample loop, inside the page.
  *
- * Node decides how many samples a workload gets and what to do with them; the
- * loop itself runs here, because a round trip over the DevTools protocol per
- * sample would cost more than the workload. ADR-0045.
+ * Node decides how many samples a workload gets and what to do with them, and the loop
+ * itself runs here, because a round trip over the DevTools protocol per sample would
+ * cost more than the workload. ADR-0045.
  *
- * WHAT A WORKLOAD IS
- *
- * Four functions, three of them optional:
+ * A workload is four functions, three of them optional.
  *
  *   prepare(args)          once per page. Import modules, define elements.
  *   setup(scope, args)     once per sample, untimed. Build the fixture.
@@ -16,16 +14,14 @@
  *   teardown(state, scope)  untimed. Release anything `scope` cannot.
  *
  * `check` is not optional and not decorative. Every workload here has a cheap
- * observable answer — a row count, a matched path, a rendered cell — and a sample
- * whose answer is wrong is thrown away as a failure rather than reported as a fast
- * run. Enforced twice: here per sample, and again in Node, where `aggregate`
+ * observable answer, such as a row count, a matched path or a rendered cell, and a
+ * sample whose answer is wrong is thrown away as a failure rather than reported as a
+ * fast run. It is enforced twice, here per sample and again in Node, where `aggregate`
  * refuses a workload with any failed sample. ADR-0045.
  *
- * WHY EACH SAMPLE GETS A FRESH SCOPE
- *
- * `scope` hands out a container that is removed after the sample, with its Lit
- * root explicitly cleared, which is what releases the signal effects a standalone
- * `render()` owns. ADR-0045.
+ * Each sample gets a fresh scope. `scope` hands out a container that is removed after
+ * the sample, with its Lit root explicitly cleared, which is what releases the signal
+ * effects a standalone `render()` owns. ADR-0045.
  */
 
 import { nothing, render } from 'lit';
@@ -51,7 +47,7 @@ import { nothing, render } from 'lit';
 /**
  * Run one workload and return its samples, warmups already discarded.
  *
- * A sample that throws ends the loop: the first failure is the informative one,
+ * A sample that throws ends the loop, because the first failure is the informative one
  * and thirty repetitions of the same stack are noise in a report somebody has to
  * read.
  *
@@ -107,10 +103,10 @@ export async function runWorkload(workload, options) {
 /**
  * One sample, for the workloads that need a page of their own.
  *
- * Anything that permanently changes the page is in this shape rather than in the
- * loop above: `customElements.define` cannot be undone, so a second sample in the
- * same page would be measuring a registry the first sample filled. Node opens a
- * fresh page per sample and calls this once.
+ * Anything that permanently changes the page is in this shape rather than in the loop
+ * above. `customElements.define` cannot be undone, so a second sample in the same page
+ * would be measuring a registry the first sample filled. Node opens a fresh page per
+ * sample and calls this once.
  *
  * @param {Workload} workload
  * @param {{ args?: Record<string, unknown> }} options
@@ -147,8 +143,8 @@ function createScope() {
   return {
     container,
     release() {
-      // The Lit root first: clearing it is what tells async directives to drop
-      // their signal effects. Removing the element without it leaves the effects
+      // The Lit root first, because clearing it is what tells async directives to
+      // drop their signal effects. Removing the element without it leaves the effects
       // subscribed to signals the next sample will write to.
       render(nothing, container);
       container.remove();
@@ -157,8 +153,8 @@ function createScope() {
 }
 
 /**
- * Let the browser finish what the sample started: a frame for layout and paint,
- * then a task boundary so microtask-scheduled renders land before the next timing
+ * Let the browser finish what the sample started, with a frame for layout and paint
+ * and then a task boundary, so microtask-scheduled renders land before the next timing
  * begins.
  *
  * @returns {Promise<void>}
@@ -193,9 +189,9 @@ export async function rendered(element) {
  * Microtasks first, frames second, and that order is the whole point. A signal
  * write reaches the DOM in a microtask, so a workload that waited for a frame
  * would report ~16 ms for a 2 ms update and every framework comparison built on it
- * would be wrong. The frame fallback exists for the updates that genuinely need a
- * task boundary — a `<ui-table>` re-render after a page change — and is entered
- * only once the microtask budget is spent.
+ * would be wrong. The frame fallback exists for the updates that genuinely need a task
+ * boundary, such as a `<ui-table>` re-render after a page change, and is entered only
+ * once the microtask budget is spent.
  *
  * @param {() => boolean} done
  * @param {string} what
@@ -246,10 +242,10 @@ function describe(cause) {
 
 /* ── Fixture data ──────────────────────────────────────────────────────────
  *
- * Shared rather than per workload so that a filter workload and a render workload
- * at the same row count are working on the same shape of data. Deterministic, and
- * seeded from the index rather than from a random source: two runs of the same
- * workload must do the same amount of work, or the p95 is measuring the fixture.
+ * Shared rather than per workload so that a filter workload and a render workload at
+ * the same row count are working on the same shape of data. Deterministic, and seeded
+ * from the index rather than from a random source, because two runs of the same
+ * workload must do the same amount of work or the p95 is measuring the fixture.
  */
 
 /**

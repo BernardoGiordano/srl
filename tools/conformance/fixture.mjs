@@ -22,8 +22,8 @@ import { applicationManifest, install, srl } from '../fixtures/installed-layout.
 export const APP = 'app';
 
 /**
- * A Lit component, for the one thing an srl adapter must not do: answer inside somebody
- * else's template dialect. ADR-0090.
+ * A Lit component, for the one thing an srl adapter must not do, which is answer inside
+ * somebody else's template dialect. ADR-0090.
  */
 const WIDGET = `import { LitElement, html } from 'lit';
 

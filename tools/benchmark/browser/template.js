@@ -1,13 +1,13 @@
 /**
- * Template runtime workloads: compiling markup, updating one binding, and moving
- * keyed rows around.
+ * Template runtime workloads, covering compiling markup, updating one binding, and
+ * moving keyed rows around.
  *
  * These are the workloads that decide whether "templates are compiled at runtime"
- * costs anything worth talking about. Compilation happens once per template per
- * page, so its absolute cost matters at startup and nowhere else; the update and
- * keyed-list workloads are the ones that run while somebody is looking at the
- * screen, and they are measured through the DOM rather than through the compiler's
- * own bookkeeping — a fast update that did not reach an element is not an update.
+ * costs anything worth talking about. Compilation happens once per template per page,
+ * so its absolute cost matters at startup and nowhere else. The update and keyed-list
+ * workloads are the ones that run while somebody is looking at the screen, and they
+ * are measured through the DOM rather than through the compiler's own bookkeeping,
+ * because a fast update that did not reach an element is not an update.
  *
  * Every source here is generated from a count, so the same workload runs at 10
  * bindings or 200 and the report can say which one regressed.
@@ -23,8 +23,8 @@ import { expect, makeRows, waitFor } from './support.js';
 
 /**
  * A template with `bindings` unrelated interpolations, one attribute binding and
- * one event binding, which is the shape of a real screen: mostly text, a few
- * attributes, one or two handlers.
+ * one event binding, which is the shape of a real screen, mostly text with a few
+ * attributes and one or two handlers.
  *
  * @param {number} bindings
  * @returns {string}
@@ -74,8 +74,8 @@ export const compile = {
 };
 
 /**
- * Render a compiled template of a stated size into a fresh container: the other
- * half of what a component pays on first paint.
+ * Render a compiled template of a stated size into a fresh container, which is the
+ * other half of what a component pays on first paint.
  *
  * @type {import('./support.js').Workload}
  */
@@ -101,10 +101,10 @@ export const first_render = {
  * Change one signal in a template that holds many unrelated bindings, and wait for
  * that text node to change.
  *
- * The measurement the fine-grained reactivity claim rests on: if the cost of this
+ * The measurement the fine-grained reactivity claim rests on. If the cost of this
  * scales with the number of bindings in the template rather than staying flat, the
- * signal path is not doing what the design says it does. Run at two binding counts
- * and compare.
+ * signal path is not doing what the design says it does. Run at two binding counts and
+ * compare.
  *
  * @type {import('./support.js').Workload}
  */
@@ -138,8 +138,8 @@ export const update_one_binding = {
 };
 
 /**
- * The keyed `*for` list, in the five shapes a list actually takes: built, changed
- * in place, reversed, cut down and grown back.
+ * The keyed `*for` list, in the five shapes a list actually takes, which are built,
+ * changed in place, reversed, cut down and grown back.
  *
  * One workload with a `mutation` argument rather than five near-copies, because
  * every one of them is "swap the array behind a signal and wait for the DOM", and

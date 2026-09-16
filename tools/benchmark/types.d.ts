@@ -1,12 +1,11 @@
 /**
  * The benchmark harness's own vocabulary.
  *
- * Node and browser halves both read these: a workload module served to Chrome
- * produces `BenchmarkSample`s, and the runner in Node turns them into
- * `WorkloadRecord`s. Keeping the shapes in one declaration file is what stops the
- * two halves from disagreeing about what a sample is — the JSON that crosses
- * between them is not type-checked at the boundary, so the declaration is the
- * only thing that can hold them together.
+ * Node and browser halves both read these. A workload module served to Chrome produces
+ * `BenchmarkSample`s, and the runner in Node turns them into `WorkloadRecord`s. Keeping
+ * the shapes in one declaration file stops the two halves from disagreeing about what a
+ * sample is. The JSON that crosses between them is not type-checked at the boundary, so
+ * the declaration is the only thing that can hold them together.
  */
 
 /** Workload families, reported and filterable separately. */
@@ -29,7 +28,7 @@ export type Mode = 'local' | 'ci';
  * `browser` runs the whole sample loop inside one page, which is the cheapest and
  * least noisy option and therefore the default. `page` gets one fresh page per
  * sample, for anything that measures a load or needs a heap reading between
- * phases. `node` never opens a browser at all: tooling timings are child
+ * phases. `node` never opens a browser at all, because tooling timings are child
  * processes.
  */
 export type Driver = 'browser' | 'page' | 'node';
@@ -205,8 +204,8 @@ export interface BudgetFile {
   maxRunSpread: number;
   ciMaxSeconds: number;
   /**
-   * workload id -> metric -> absolute limit. Needs user approval to populate, and
-   * carries no duration: only `chainDepth`, which is a count of round trips and
+   * workload id to metric to absolute limit. Needs user approval to populate, and
+   * carries no duration, only `chainDepth`, which is a count of round trips and
    * therefore independent of the machine that measured it. ADR-0082.
    */
   product: Record<string, Record<string, number>>;
@@ -333,7 +332,7 @@ export interface BenchmarkPage {
 /**
  * What one measured number is worth as proof.
  *
- * `limited` has an absolute product budget: it is compared raw, on any machine.
+ * `limited` has an absolute product budget and is compared raw, on any machine.
  * `gated` is compared against a baseline, scaled by how fast the machine was.
  * `reported` is measured and nothing fails when it moves, which is what an
  * incomparable run, an absent baseline entry and an ungated unit all produce.

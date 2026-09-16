@@ -1,11 +1,11 @@
 /**
  * The published bundles, checked against the bytes that would be uploaded.
  *
- * Every assertion here is about the emitted file rather than the configuration
- * that produced it. The failure this guards is one the repository's other suites
- * cannot see: they run the library from source through an import map, which is
- * exactly the resolution a registry consumer does not have, so a bundle could
- * resolve nothing and every other test would still pass.
+ * Every assertion here is about the emitted file rather than the configuration that
+ * produced it. The failure this guards is one the repository's other suites cannot see.
+ * They run the library from source through an import map, which is exactly the
+ * resolution a registry consumer does not have, so a bundle could resolve nothing and
+ * every other test would still pass.
  */
 
 import assert from 'node:assert/strict';
@@ -30,8 +30,8 @@ import {
 // because the build is the expensive part and every assertion below reads the same
 // output. Somewhere else, because the build empties its output first and
 // `source/dist/` is what `tools/checks/verify-deps.mjs` reads to decide whether
-// `exports` points at files that exist — the two files run in parallel, and a
-// half-second window with no `dist/` failed that gate on a rule the repository
+// `exports` points at files that exist. The two files run in parallel, and a
+// half-second window with no `dist/` fails that gate on a rule the repository
 // satisfies. Nothing here is about where the bytes landed.
 const OUT = await mkdtemp(join(tmpdir(), 'srl-bundles-'));
 after(() => rm(OUT, { force: true, recursive: true }));
@@ -55,13 +55,13 @@ for (const file of [...BUNDLE_FILES, ...BUNDLE_DECLARATIONS]) {
  * the same reason every question about the JavaScript is asked of the emitted bytes.
  *
  * The two `dependencies` are the exception, and they are mapped rather than resolved
- * because of where the bytes are: the suite builds into a temporary directory with
- * no `node_modules` above it, while a consumer who installed this package has both
- * of them beside it. Only the names the manifest declares, so a bundle that reached
+ * because of where the bytes are. The suite builds into a temporary directory with no
+ * `node_modules` above it, while a consumer who installed this package has both of them
+ * beside it. Only the names the manifest declares are mapped, so a bundle that reached
  * for a third package fails here.
  *
  * `skipLibCheck` is off on purpose. It is on almost everywhere else because a
- * dependency's declarations are not this repository's problem; here the tree is the
+ * dependency's declarations are not this repository's problem. Here the tree is the
  * artifact under test, and skipping it would pass a tree whose every file was wrong.
  */
 const declarations = ts.createProgram(
@@ -87,9 +87,9 @@ const declarations = ts.createProgram(
 );
 
 /**
- * The names one emitted declaration offers, asked of the checker rather than read
- * out of the text: a barrel is `export *` statements, and what those forward is a
- * question only resolution answers.
+ * The names one emitted declaration offers, asked of the checker rather than read out
+ * of the text. A barrel is `export *` statements, and what those forward is a question
+ * only resolution answers.
  *
  * @param {string} file
  * @returns {string[]}
@@ -106,9 +106,9 @@ function declaredExports(file) {
 }
 
 /**
- * Every module specifier a file actually imports, parsed rather than matched: the
+ * Every module specifier a file actually imports, parsed rather than matched. The
  * unminified bundle keeps the JSDoc it was built from, and `@import { X } from
- * '@core/…'` in a comment is documentation, not an import.
+ * '@core/…'` in a comment is documentation rather than an import.
  *
  * @param {string} name
  * @param {string} text
@@ -143,11 +143,11 @@ function specifiersOf(name, text) {
 }
 
 /**
- * The two halves of the template contract, read out of the emitted file: the paths
- * `defineComponent` will resolve, and the paths the seeding registers.
+ * The two halves of the template contract, read out of the emitted file. Those are the
+ * paths `defineComponent` will resolve and the paths the seeding registers.
  *
- * `isStringLiteralLike` rather than `isStringLiteral` on purpose — the minifier
- * rewrites quoted strings as untagged template literals, and a check that only knew
+ * `isStringLiteralLike` rather than `isStringLiteral` on purpose, because the minifier
+ * rewrites quoted strings as untagged template literals and a check that only knew
  * about quotes would pass the readable file and silently skip the minified one.
  *
  * @param {string} name
@@ -190,9 +190,9 @@ function templateKeys(name, text) {
 }
 
 /**
- * The names an emitted file exports and the names it imports from a sibling: the
- * two halves of the door, read out of the bytes rather than from the tables that
- * produced them.
+ * The names an emitted file exports and the names it imports from a sibling, the two
+ * halves of the door, read out of the bytes rather than from the tables that produced
+ * them.
  *
  * @param {string} name
  * @param {string} text
@@ -257,7 +257,7 @@ void test('a bundle imports nothing the consumer has not installed', () => {
         vendored.includes(specifier),
         `${file} imports ${specifier}, which is not a vendored runtime dependency`,
       );
-      // `lit/directives/repeat.js` is a subpath of the `lit` package: the install
+      // `lit/directives/repeat.js` is a subpath of the `lit` package, and the install
       // that satisfies it is the one named in `dependencies`.
       const owner = specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
       assert.ok(
@@ -322,8 +322,8 @@ void test('every declared template is seeded, in the minified file as well', () 
     }
   }
 
-  // Without this the test passes on a build that inlined nothing at all: every
-  // `declared` list would be empty and every loop body would be skipped.
+  // Without this the test passes on a build that inlined nothing at all, because
+  // every `declared` list would be empty and every loop body would be skipped.
   assert.equal(inlined, 2, 'expected the collection inlined in both its readable and minified file');
 });
 
@@ -407,8 +407,8 @@ void test('the published declarations resolve with no import map and no aliases'
       'package that type-checks here and fails on the consumer that installs it',
   );
 
-  // Without this the test passes on a tree of empty files: every diagnostic list would
-  // be empty and nothing would have been resolved at all.
+  // Without this the test passes on a tree of empty files, because every diagnostic
+  // list would be empty and nothing would have been resolved at all.
   for (const bundle of BUNDLES) {
     assert.ok(
       declaredExports(bundle.declaration).length >= 20,
@@ -433,9 +433,11 @@ void test('a declaration offers every name its bundle exports and none it marks 
   for (const bundle of BUNDLES) {
     const offered = new Set(declaredExports(bundle.declaration));
 
-    // A superset rather than the same list: a JSDoc `@typedef` is a name the type
+    // A superset rather than the same list, because a JSDoc `@typedef` is a name the
+    // type
     // layer offers and the runtime has nowhere to put, and a consumer wanting to
-    // annotate a variable needs it. The other direction is the failure — a value a
+    // annotate a variable needs it. The other direction is the failure, where a value
+    // a
     // consumer can import and cannot type.
     for (const name of surfaceOf(bundle.file, textOf(bundle.file)).exported) {
       assert.ok(offered.has(name), `${bundle.declaration} does not declare ${name}`);

@@ -1,7 +1,7 @@
 /**
  * One parity report over every installed editor a run could drive. ADR-0097.
  *
- * The point of the table is the column that is empty: a scenario VS Code answers and
+ * The table exists for the column that is empty. A scenario VS Code answers and
  * WebStorm cannot is a real difference between what the two plugins are known to do, and
  * it should be visible rather than implied by which workflow happened to run.
  */
@@ -57,7 +57,7 @@ export function parity(runs, scenarios) {
 }
 
 /**
- * What the run found, as findings: a failure is a refusal, an editor nobody could drive
+ * What the run found, as findings. A failure is a refusal, an editor nobody could drive
  * is a warning, and each editor that ran says how much of the list it answered.
  *
  * @param {AdapterRun[]} runs

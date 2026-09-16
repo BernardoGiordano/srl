@@ -84,7 +84,8 @@ const ASKS = {
     const document = await open(scenario.root ?? 'one', scenario.document);
     const revert = scenario.edit === undefined ? null : await edit(document, scenario.edit);
     try {
-      // A completion is a round trip: once it has answered, the server has this buffer.
+      // A completion is a round trip, so once it has answered the server has this
+      // buffer.
       await ask('vscode.executeCompletionItemProvider', document.uri, new vscode.Position(0, 0));
       const found = await attempt(
         () => published(document.uri),
@@ -168,8 +169,8 @@ const ASKS = {
     if (!source.includes(scenario.write.replace)) {
       throw new Error(`no ${JSON.stringify(scenario.write.replace)} in ${target}`);
     }
-    // Written with the editor closed over this file: the server learns about it through
-    // the watchers it registered, or not at all.
+    // Written with the editor closed over this file, so the server learns about it
+    // through the watchers it registered or not at all.
     fs.writeFileSync(target, source.replace(scenario.write.replace, scenario.write.with));
 
     const document = await open(scenario.root ?? 'one', scenario.document);
@@ -186,8 +187,9 @@ const ASKS = {
   },
 
   async trace(scenario) {
-    // Window scope: a language client reads `<id>.trace.server` without a resource, so
-    // the level belongs to the window even though the channel it writes is per folder.
+    // Window scope, because a language client reads `<id>.trace.server` without a
+    // resource, so the level belongs to the window even though the channel it writes is
+    // per folder.
     await vscode.workspace
       .getConfiguration('srl')
       .update('trace.server', 'verbose', vscode.ConfigurationTarget.Workspace);
@@ -233,7 +235,8 @@ function traced() {
   /** @type {string[]} */
   const found = [];
   // The channel is written under a directory named for the extension, a file named for
-  // the channel, or both, depending on the version: match the path rather than guess.
+  // the channel, or both, depending on the version. Match the path rather than
+  // guess.
   const walk = (/** @type {string} */ directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const full = path.join(directory, entry.name);

@@ -1,9 +1,9 @@
 /**
  * The scenario list and the parity report, without an editor.
  *
- * A conformance run costs an editor download and several minutes, so the things that can
- * be wrong about it before one starts — a scenario nothing can answer, two scenarios with
- * one id, a report that hides a failure — are checked here. ADR-0097.
+ * A conformance run costs an editor download and several minutes, so the things that
+ * can be wrong about it before one starts are checked here. Those are a scenario nothing
+ * can answer, two scenarios with one id, and a report that hides a failure. ADR-0097.
  */
 
 import assert from 'node:assert/strict';
@@ -97,7 +97,7 @@ void test('the report gives each editor a column and each scenario a row', () =>
   const table = parity(reached(), only(['session.start', 'rename.tag']));
   assert.match(table, /\| Scenario \| vscode minimum \| webstorm installed \|/u);
   assert.match(table, /\| `rename\.tag` \| \*\*fail\*\* \| n\/a \|/u);
-  // The gap between the two editors is the point of the table, so the reason one of them
+  // The gap between the two editors is what the table is for, so the reason one of them
   // could not answer is in it.
   assert.match(table, /not answerable from outside the IDE/u);
 });

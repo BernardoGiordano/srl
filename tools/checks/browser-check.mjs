@@ -5,24 +5,22 @@
  *   node tools/checks/browser-check.mjs --write      rewrite the generated sections
  *   node tools/checks/browser-check.mjs --file X     operate on X instead of the guide
  *
- * WHY THIS EXISTS
- *
  * "Supported browsers: Chrome, Firefox, Safari" is a sentence anyone can type, and a
  * reader has no way to tell it from a sentence somebody earned. This page's table is
- * derived instead — from `tools/browser/journeys.json`, which a recorded run of the
+ * derived instead, from `tools/browser/journeys.json`, which a recorded run of the
  * journey writes, and from the engine registry the suite itself iterates. An engine that
- * stopped running disappears from the matrix on the next recording rather than on the day
- * somebody remembers.
+ * stopped running disappears from the matrix on the next recording rather than on the
+ * day somebody remembers.
  *
  * It also generates the two things a matrix cannot say on its own. What the journey
- * actually did, step by step, so "passed" has a referent. And what is not covered: the
- * engines with no recorded run, the screen readers nobody has driven, and the parts of the
- * application the journey never visits.
+ * actually did, step by step, so "passed" has a referent. And what is not covered, which
+ * is the engines with no recorded run, the screen readers nobody has driven, and the
+ * parts of the application the journey never visits.
  *
- * Prose stays hand-written; the marker grammar is `generated.mjs`'s and the diagnostics
+ * Prose stays hand-written. The marker grammar is `generated.mjs`'s, and the diagnostics
  * are returned rather than printed. ADR-0072, ADR-0116.
  *
- * No browser and no network: it reads two JSON files and the workflows.
+ * No browser and no network. It reads two JSON files and the workflows.
  */
 
 import { readFile, readdir, writeFile } from 'node:fs/promises';
@@ -66,9 +64,9 @@ async function readJson(path) {
 /**
  * Whether anything that runs on its own runs the suite the journey is in.
  *
- * Read from the workflows rather than assumed, for the same reason the performance guide
- * reads its own gate: "it runs in CI" is the difference between a claim that decays and
- * one that does not, and it is a fact about a file.
+ * Read from the workflows rather than assumed, for the same reason the performance
+ * guide reads its own gate. "It runs in CI" is the difference between a claim that
+ * decays and one that does not, and it is a fact about a file.
  *
  * @returns {Promise<boolean | null>}
  */
@@ -87,7 +85,7 @@ async function automated() {
 }
 
 /**
- * The engines, each with whatever the last recording found — including the ones it found
+ * The engines, each with whatever the last recording found, including the ones it found
  * nothing for.
  *
  * @param {JourneyRecord | null} record

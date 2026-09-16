@@ -1,9 +1,9 @@
 /**
  * VS Code, downloaded, installed from the packed VSIX, and driven. ADR-0097.
  *
- * Two editions: the oldest the extension claims to support and the current stable one. A
- * claim in `engines.vscode` that nothing runs against is a claim, and the two versions
- * are where the platform's API drift shows up.
+ * Two editions, the oldest the extension claims to support and the current stable one.
+ * A claim in `engines.vscode` that nothing runs against is only a claim, and the two
+ * versions are where the platform's API drift shows up.
  *
  * Each run gets its own user-data and extensions directory, so what the editor knows is
  * the fixture and the extension, and nothing a developer's own profile carries.
@@ -51,7 +51,7 @@ export function covers(_scenario) {
  * @param {Fixture} fixture
  * @param {Scenario[]} scenarios
  * @param {{ editions?: string[] }} [options] which editions to drive, when a caller wants
- *   one of them: a CI matrix runs them as separate jobs.
+ *   one of them, since a CI matrix runs them as separate jobs.
  * @returns {Promise<AdapterRun[]>}
  */
 export async function drive(fixture, scenarios = SCENARIOS, options = {}) {
@@ -114,7 +114,7 @@ async function one(fixture, scenarios, packed, edition, version) {
       )}\n`,
     );
 
-    // Everything but the one scenario that is about the editor no longer running.
+    // Everything but the one scenario that is about the editor having stopped.
     const inside = scenarios.filter((scenario) => scenario.ask !== 'orphans');
     const out = join(profile, 'results.json');
     const planPath = join(profile, 'plan.json');
@@ -172,8 +172,8 @@ async function one(fixture, scenarios, packed, edition, version) {
 }
 
 /**
- * What the editor left behind. The probe cannot answer this one: it stops existing with
- * the process whose cleanup is under test.
+ * What the editor left behind. The probe cannot answer this one, because it stops
+ * existing with the process whose cleanup is under test.
  *
  * @param {Fixture} fixture
  * @param {Scenario[]} scenarios
@@ -197,7 +197,8 @@ function orphans(fixture, scenarios) {
 /* ── The editor ────────────────────────────────────────────────────────── */
 
 /**
- * The two versions under test: the minimum `engines.vscode` admits, and current stable.
+ * The two versions under test, the minimum `engines.vscode` admits and current
+ * stable.
  *
  * @returns {Promise<Array<{ edition: string, version: string }>>}
  */
@@ -229,9 +230,9 @@ function target() {
 }
 
 /**
- * One version, downloaded once and kept. The archive is not integrity-checked: it is a
- * tool this run drives, never a byte that ships, and the pinned URL is the update
- * service's own.
+ * One version, downloaded once and kept. The archive is not integrity-checked, because
+ * it is a tool this run drives rather than a byte that ships, and the pinned URL is the
+ * update service's own.
  *
  * @param {string} version
  * @returns {Promise<{ electron: string, cli: string }>}
@@ -262,8 +263,8 @@ async function editorAt(version) {
 }
 
 /**
- * The two things a run needs out of an extracted editor: the executable to spawn, and the
- * CLI script it runs under `ELECTRON_RUN_AS_NODE` to install an extension.
+ * The two things a run needs out of an extracted editor, the executable to spawn and
+ * the CLI script it runs under `ELECTRON_RUN_AS_NODE` to install an extension.
  *
  * Both are found rather than named. The macOS executable has been called `Electron` and
  * `Code` in versions this run drives, and the Linux directory carries the architecture,

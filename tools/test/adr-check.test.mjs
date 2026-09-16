@@ -12,8 +12,8 @@ import { checkAdrs, readRecords } from '../checks/adr-check.mjs';
  *
  * A record's number is what source comments cite, so the two properties worth pinning
  * are that a citation always resolves and that a record cannot be half-formed. Every
- * malformed case is built in a temporary directory: a suite that writes a broken record
- * into docs/adr to prove the check sees it is a suite that leaves the repository failing
+ * malformed case is built in a temporary directory, because a suite that writes a
+ * broken record into docs/adr to prove the check sees it leaves the repository failing
  * its own check.
  */
 
@@ -51,7 +51,7 @@ async function fixture(files) {
 /**
  * Every refusal a directory produces, as its codes and as one blob of text.
  *
- * Both, because the two say different things: the code is the contract a suite should
+ * Both, because the two say different things. The code is the contract a suite should
  * pin, and the wording is what a person reads at three in the morning.
  *
  * @param {string} dir
@@ -135,8 +135,8 @@ void test('a missing field or section fails', async () => {
 });
 
 void test('every problem in one record is reported in one run', async () => {
-  // The reason a malformed record is a list of findings rather than a throw: a record
-  // missing three sections should take one run to fix, not three.
+  // Why a malformed record is a list of findings rather than a throw. A record missing
+  // three sections should take one run to fix rather than three.
   const dir = await fixture({
     '0042-a-decision.md': WELL_FORMED.replace('## Decision\n', '').replace('## Consequences\n', ''),
   });

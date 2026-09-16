@@ -6,26 +6,25 @@
  *   node tools/checks/readme-check.mjs --write    rewrite the generated sections
  *   node tools/checks/readme-check.mjs --file X   operate on X instead of the default
  *
- * WHY THIS EXISTS
- *
- * The reference pages carry tables of tags, modules, templates and `uses` relationships.
- * Restating those by hand is how a manual starts lying: an element renamed in one commit
- * stays right in the source and wrong in the document nobody re-read. Every fact in a
- * generated block comes from the same model the template checker and the verifier read,
- * so the document cannot hold a second opinion about what exists.
+ * The reference pages carry tables of tags, modules, templates and `uses`
+ * relationships. Restating those by hand is how a manual starts lying, because an
+ * element renamed in one commit stays right in the source and wrong in the document
+ * nobody re-read. Every fact in a generated block comes from the same model the
+ * template checker and the verifier read, so the document cannot hold a second opinion
+ * about what exists.
  *
  * The default target is a page rather than the README because the README is an interface
  * and a generated index is not part of one. `--file` is how any other page
  * carries a block.
  *
- * Prose stays hand-written. Only the blocks between the markers are owned here:
+ * Prose stays hand-written. Only the blocks between the markers are owned here.
  *
  *   <!-- generated:elements -->  … <!-- /generated:elements -->
  *
- * The marker grammar, and what it refuses, belong to `generated.mjs`: this file owns the
- * tables, not the mechanics of a page that carries them.
+ * The marker grammar, and what it refuses, belong to `generated.mjs`. This file owns the
+ * tables rather than the mechanics of a page that carries them.
  *
- * No network, no npm install: it reads source and writes one file.
+ * No network and no npm install. It reads source and writes one file.
  */
 
 import { writeFile } from 'node:fs/promises';
@@ -46,8 +45,9 @@ const DEFAULT_TARGET = 'docs/reference/project-index.md';
 /**
  * Element records the collection and the library publish, without test source.
  *
- * A fixture element defined inside a suite is part of what the page defines — the checker
- * needs it — and is not part of anybody's interface, so it is documented nowhere.
+ * A fixture element defined inside a suite is part of what the page defines, because
+ * the checker needs it, and is not part of anybody's interface, so it is documented
+ * nowhere.
  *
  * @param {ProjectModel} model
  */
@@ -79,8 +79,9 @@ async function sections() {
 
   const documented = models;
 
-  // Elements under source/ are identical in every application: the library and the
-  // collection are one copy on one origin. The first model answers for all of them.
+  // Elements under source/ are identical in every application, because the library and
+  // the collection are one copy on one origin. The first model answers for all of
+  // them.
   const reference = models[0];
   if (reference === undefined) throw new Error('No application found to read.');
 
@@ -94,8 +95,9 @@ async function sections() {
       record.uses.length === 0 ? '—' : record.uses.map((use) => `\`${use.tag ?? use.className}\``).join(', '),
       record.surfaceKnown ? String(record.properties.length) : `${String(record.properties.length)}+`,
       record.surfaceKnown ? String(record.state.length) : `${String(record.state.length)}+`,
-      // Not the same count: a property may declare `attribute: false`, and an element that
-      // is configuration rather than a component declares attributes and no properties.
+      // Not the same count, because a property may declare `attribute: false` and an
+      // element that is configuration rather than a component declares attributes and
+      // no properties.
       record.observedAttributes === null ? '?' : String(record.observedAttributes.length),
       record.eventsKnown ? String(record.events.length) : `${String(record.events.length)}+`,
       record.slots === null ? '?' : String(record.slots.length),
@@ -143,9 +145,9 @@ export async function checkReadme(options = {}) {
   const file = options.file ?? join(REPO, DEFAULT_TARGET);
   const text = await readText(file);
   const write = options.write === true;
-  // The absolute path, spelled by cli/diagnostics rather than here: a page inside the
-  // repository is reported relative to it and one outside keeps its full path, and that
-  // is one rule for every check rather than a `show()` helper per tool.
+  // The absolute path, spelled by cli/diagnostics rather than here. A page inside the
+  // repository is reported relative to it and one outside keeps its full path, which is
+  // one rule for every check rather than a `show()` helper per tool.
   const { out, drifted, diagnostics } = rewriteGenerated(text, await sections(), {
     file,
     write,

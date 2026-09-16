@@ -4,7 +4,7 @@
  * The delivery workloads walk one application's lazy routes and talk to one
  * application's backend. Both are that application's facts, so the harness reads them
  * from `<app>/benchmark.json` rather than holding a table that names somebody's
- * screens:
+ * screens.
  *
  *   {
  *     "backend": "test/fake-server.js",
@@ -13,8 +13,9 @@
  *                            "module": "<app>/src/pages/settings-page.js" }
  *   }
  *
- * Opt-in, and silent when absent: an application that ships no declaration contributes
- * no artifact workloads and gets no fake backend behind its origin. That is what keeps
+ * Opt-in, and silent when absent. An application that ships no declaration contributes
+ * no artifact workloads and gets no fake backend behind its origin. That is what
+ * keeps
  * one application's route names out of another's numbers, and it is why adding the
  * second artifact pilot is a file in that application rather than an edit here.
  */

@@ -256,8 +256,8 @@ async function domCounters(session) {
 }
 
 /**
- * Watch what the page fetches: how many requests, how many encoded bytes, and
- * anything that tried to leave this origin.
+ * Watch what the page fetches, counting requests and encoded bytes and noting anything
+ * that tried to leave this origin.
  *
  * `Network.enable` rather than request interception, because interception turns the
  * cache off. Cache state comes back on the response event, so a warm load reports

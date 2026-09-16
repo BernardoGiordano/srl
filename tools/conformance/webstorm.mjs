@@ -2,20 +2,20 @@
  * WebStorm, with the packed plugin installed, opening the fixture projects. ADR-0097.
  *
  * A JetBrains IDE gives an outside observer no way to ask for a completion, so this
- * adapter answers the session scenarios only: whether an installed plugin starts the
- * project's own toolchain, stays quiet about projects that are not srl, and leaves
- * nothing running. The rest of the scenarios are reported `unavailable` rather than
- * silently dropped, which is what makes the gap between the two editors readable.
+ * adapter answers the session scenarios only. Those are whether an installed plugin
+ * starts the project's own toolchain, stays quiet about projects that are not srl, and
+ * leaves nothing running. The rest of the scenarios are reported `unavailable` rather
+ * than silently dropped, which is what makes the gap between the two editors readable.
  *
- * It needs an IDE installed and licensed, so it runs locally rather than in CI:
+ * It needs an IDE installed and licensed, so it runs locally rather than in CI.
  *
  *   npm run conformance -- --webstorm
  *
  * `SRL_WEBSTORM_HOME` names the directory holding `MacOS/` or `bin/` when the IDE is not
- * where this looks. The plugins, system and log directories are the run's own, so the only
- * plugin loaded is the one under test; the configuration directory is the IDE's own,
- * because that is where its licence is, and a run therefore leaves the same trace in it
- * that opening a project by hand would. `SRL_WEBSTORM_CONFIG` names another one.
+ * where this looks. The plugins, system and log directories are the run's own, so the
+ * only plugin loaded is the one under test. The configuration directory is the IDE's
+ * own, because that is where its licence is, so a run leaves the same trace in it that
+ * opening a project by hand would. `SRL_WEBSTORM_CONFIG` names another one.
  */
 
 import { execFile, spawn } from 'node:child_process';
@@ -56,8 +56,8 @@ export function covers(scenario) {
 }
 
 /**
- * One installation, so an edition filter says nothing here: the version is whatever is on
- * this machine.
+ * One installation, so an edition filter says nothing here. The version is whatever is
+ * on this machine.
  *
  * @param {Fixture} fixture
  * @param {Scenario[]} scenarios
@@ -128,8 +128,8 @@ async function one(scenario, fixture, home, settings) {
     return { id: scenario.id, status: 'pass', detail: '' };
   }
 
-  // One project per window: the serving roots are opened one at a time, which is what a
-  // WebStorm window is. Multi-root belongs to the other editor.
+  // One project per window, so the serving roots are opened one at a time, which is
+  // what a WebStorm window is. Multi-root belongs to the other editor.
   for (const root of scenario.expect.serving ?? []) {
     const missing = await opened(home.launcher, env, fixture, root, root, PATIENCE);
     if (missing !== null) return { id: scenario.id, status: 'fail', detail: missing };
@@ -141,10 +141,10 @@ async function one(scenario, fixture, home, settings) {
  * Open one project, watch for the server it should or should not start, and close the IDE
  * again. Returns null when the expectation held, or the sentence that says it did not.
  *
- * The plugin acts on a file being opened, and a project opened from the command line has
- * no editor tab. The IDE's own URL protocol is what opens one: it is answered by the
- * running instance, so it is fired on every turn of the loop rather than after a guess at
- * how long an IDE takes to start.
+ * The plugin acts on a file being opened, and a project opened from the command line
+ * has no editor tab. The IDE's own URL protocol is what opens one, answered by the
+ * running instance, so it is fired on every turn of the loop rather than after a guess
+ * at how long an IDE takes to start.
  *
  * @param {string} launcher
  * @param {NodeJS.ProcessEnv} env
@@ -185,8 +185,8 @@ async function opened(launcher, env, fixture, root, serving, patience) {
  * Ask the running IDE to open a file in this project. `jetbrains://web-storm/navigate`
  * names the project by directory name, which is what the IDE calls it.
  *
- * Failure is not reported: until the IDE is listening there is nothing to answer, and the
- * caller is already watching for the outcome that matters.
+ * Failure is not reported, because until the IDE is listening there is nothing to
+ * answer and the caller is already watching for the outcome that matters.
  *
  * @param {string} project
  * @returns {Promise<void>}
@@ -201,7 +201,8 @@ async function navigate(project) {
 /* ── The installation ──────────────────────────────────────────────────── */
 
 /**
- * The IDE to drive: `SRL_WEBSTORM_HOME`, or the usual place for this platform.
+ * The IDE to drive, either `SRL_WEBSTORM_HOME` or the usual place for this
+ * platform.
  *
  * @returns {Promise<{ launcher: string, version: string, data: string, properties: string[] } | null>}
  */
@@ -222,8 +223,8 @@ async function locate() {
       launcher,
       version: `${product.version} (${product.buildNumber})`,
       data: product.dataDirectoryName,
-      // Both spellings: the launcher reads the product's own prefix, and IDEA_PROPERTIES
-      // is the one every JetBrains IDE still honours.
+      // Both spellings, because the launcher reads the product's own prefix and
+      // IDEA_PROPERTIES is the one every JetBrains IDE still honours.
       properties: [`${product.envVarBaseName}_PROPERTIES`, 'IDEA_PROPERTIES'],
     };
   }
@@ -239,12 +240,13 @@ async function packed() {
 }
 
 /**
- * A profile of this run's own: empty plugins, system and log directories, so the only
- * plugin loaded is the one under test and nothing it writes lands in a real workspace.
+ * A profile of this run's own, with empty plugins, system and log directories, so the
+ * only plugin loaded is the one under test and nothing it writes lands in a real
+ * workspace.
  *
- * The configuration directory is not one of them. It holds the IDE's licence, and an IDE
- * that cannot find one shows a dialog instead of opening the project, which would make
- * every scenario fail for a reason that is not the plugin's.
+ * The configuration directory is not one of them. It holds the IDE's licence, and an
+ * IDE that cannot find one shows a dialog instead of opening the project, which would
+ * make every scenario fail for a reason that is not the plugin's.
  *
  * @param {string} profile
  * @param {{ data: string, properties: string[] }} home

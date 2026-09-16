@@ -1,15 +1,16 @@
 /**
  * Memory and lifecycle workloads.
  *
- * Everything here answers one question: does releasing something actually release
- * it? The plan's exit criterion is "no monotonic retained-node or retained-listener
- * growth", and monotonic is the operative word — a single before/after pair cannot
- * tell a leak from a page that grew once and stayed put. So each sample runs its
- * cycles in batches and reads three counters between them, and a sample whose
- * counters climb in every batch fails no matter how fast it was.
+ * Everything here answers one question. Does releasing something actually release it?
+ * The exit criterion is no monotonic retained-node or retained-listener growth, and
+ * monotonic is the operative word, because a single before-and-after pair cannot tell a
+ * leak from a page that grew once and stayed put. Each sample therefore runs its cycles
+ * in batches and reads three counters between them, and a sample whose counters climb
+ * in every batch fails no matter how fast it was.
  *
- * The counters come from the DevTools protocol, after two forced collections: used
- * JavaScript heap, retained DOM nodes, retained event listeners. Forcing collection
+ * The counters come from the DevTools protocol, after two forced collections. They are
+ * used JavaScript heap, retained DOM nodes and retained event listeners. Forcing
+ * collection
  * is confined to these workloads. Doing it inside a timed loop elsewhere would
  * measure the collector, which is the mistake that makes most homegrown memory
  * benchmarks unreadable.
@@ -81,8 +82,8 @@ function leaks(series, noise) {
 }
 
 /**
- * One sample: `cycles` mount/release cycles of one kind, in batches, with counters
- * between them.
+ * One sample, which is `cycles` mount and release cycles of one kind, in batches, with
+ * counters between them.
  *
  * @param {NodeWorkloadContext} context
  * @param {{ name: string, cycles: number, expect: (answer: any) => string | undefined }} options
@@ -157,10 +158,9 @@ async function repeatCycles(context, options) {
  * Mount a full table, read the heap while it is mounted, release it, collect, and
  * read the heap again.
  *
- * The two figures the first measurements reported (ADR-0037), now with a stated
- * sample count. `recovered` is
- * the derived one that matters: heap after release, against the baseline taken
- * before anything was mounted.
+ * The two figures the first measurements reported (ADR-0037), now with a stated sample
+ * count. `recovered` is the derived one that matters, the heap after release against
+ * the baseline taken before anything was mounted.
  *
  * @param {NodeWorkloadContext} context
  * @param {number} rows

@@ -1,17 +1,16 @@
 /**
- * Definition-scale workloads: what a page pays for having many components.
+ * Definition-scale workloads, measuring what a page pays for having many components.
  *
  * The claim under test is that a buildless application can carry a real component
  * inventory. Two costs decide it, and they are reported as separate metrics of one
- * sample because they are only meaningful together:
+ * sample because they are only meaningful together.
  *
  *   define       registering N components through `defineComponent`.
  *   instantiate  creating and connecting instances once the registry holds N.
  *
- * The second is the one that could surprise: if element creation slowed down as
- * the registry grew, a 5,000-component application would pay for its size on every
- * render rather than once at startup. Measuring only the definitions would hide
- * exactly that.
+ * The second is the one that could surprise. If element creation slowed down as the
+ * registry grew, a 5,000-component application would pay for its size on every render
+ * rather than once at startup, and measuring only the definitions would hide that.
  *
  * `customElements.define` is permanent, so each sample needs a page of its own.
  * That is why this module is driven one sample at a time from Node.
@@ -30,7 +29,7 @@ const INSTANCES = 100;
  * Register `count` components, then build `INSTANCES` of the last one.
  *
  * Definitions are awaited one at a time rather than in parallel, because that is
- * what a module graph does: each component module ends with its own
+ * what a module graph does, because each component module ends with its own
  * `await defineComponent(...)`, and the next module's body does not run until it
  * resolves.
  *

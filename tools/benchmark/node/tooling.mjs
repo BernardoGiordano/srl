@@ -1,5 +1,5 @@
 /**
- * Tooling workloads: what the static checks cost.
+ * Tooling workloads, measuring what the static checks cost.
  *
  * These belong in the same gate as the runtime ones because they are the same
  * promise. "Ordinary development does not require a persistent compiler" is an
@@ -9,8 +9,8 @@
  *
  * The binaries are invoked directly rather than through `npm run`, because a
  * measurement of `npm` starting is not a measurement of the checker. Exit status is
- * checked before the timing counts: a typecheck that failed is fast for the wrong
- * reason.
+ * checked before the timing counts, because a typecheck that failed is fast for the
+ * wrong reason.
  */
 
 import { spawn } from 'node:child_process';

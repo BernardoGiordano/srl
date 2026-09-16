@@ -4,21 +4,20 @@
  *   <!-- generated:elements -->  … <!-- /generated:elements -->
  *
  * A page carries hand-written prose and, between markers, blocks a tool owns. The rule
- * is the same wherever it is used: prose is written, blocks are derived, and a block that
- * no longer matches what its generator produces is drift rather than a difference of
- * opinion. Two tools now own blocks — the project index and the performance guide — and
- * the marker grammar has to mean one thing on both pages, so it lives here rather than in
+ * is the same wherever it is used. Prose is written, blocks are derived, and a block
+ * that stops matching what its generator produces is drift rather than a difference of
+ * opinion. Two tools own blocks, the project index and the performance guide, and the
+ * marker grammar has to mean one thing on both pages, so it lives here rather than in
  * whichever check needed it first.
  *
- * WHAT IT REFUSES
+ * It refuses a missing marker, a duplicate marker, an unterminated block, and a
+ * generated name the calling tool does not produce. All four mean the document and its
+ * generator disagree about what is generated, which is the failure this exists to make
+ * loud.
  *
- * A missing marker, a duplicate marker, an unterminated block, and a generated name the
- * calling tool does not produce. All four mean the document and its generator disagree
- * about what is generated, which is the failure this exists to make loud.
- *
- * Every refusal is a `Diagnostic`, never printed here: reporting belongs to the calling
- * tool through cli/diagnostics, so a suite can assert which marker was wrong rather than
- * that something was. ADR-0072.
+ * Every refusal is a `Diagnostic` and none is printed here. Reporting belongs to the
+ * calling tool through cli/diagnostics, so a suite can assert which marker was wrong
+ * rather than that something was. ADR-0072.
  */
 
 import { error, info } from '../../cli/diagnostics/index.mjs';
@@ -31,8 +30,8 @@ const OPEN = /<!-- generated:([a-z-]+) -->/gu;
  * Split a document into its generated blocks.
  *
  * A marker this cannot make sense of is a diagnostic rather than a throw, and the
- * blocks it did read are still returned: a document with two broken markers should
- * report both in one run.
+ * blocks it did read are still returned, because a document with two broken markers
+ * should report both in one run.
  *
  * @param {string} text
  * @param {string} where
