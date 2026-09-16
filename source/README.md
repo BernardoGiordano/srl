@@ -1,21 +1,24 @@
 # @srljs/core
 
-**srl** (**s**ource **r**uns **l**ive) is an Angular inspired SDK for lightweight, buildless,
-reactive SPAs. Signals, a template dialect that is statically checked without a compiler,
-routing, forms, i18n, auth and micro-frontends — plus a component collection built on them.
+**srl** (**s**ource **r**uns **l**ive) is an Angular-inspired SDK for lightweight,
+buildless, reactive single-page applications. It gives you signals, a template dialect
+that is statically checked without a compiler, routing, forms, i18n, auth and
+micro-frontends, plus a component collection built on all of it.
 
-Development stays usable without a persistent compiler. Production optimisation and static
-verification remain optional, deterministic steps.
+The browser loads your source files directly. Production optimisation and static
+verification are separate, optional, deterministic steps.
 
 Full documentation, the guides and the decision records are in
 [the repository](https://github.com/BernardoGiordano/srl).
 
-## Two ways to install it, and they are not the same shape
+## Two ways to install
 
-### A browser with an import map — what this library is for
+The two shapes are not the same. The first is what this library is for.
 
-Nothing is bundled and nothing is compiled. Serve the package's two directories on your
-origin and paste the import map fragment it publishes.
+### A browser with an import map
+
+Nothing is bundled and nothing is compiled. Serve the package's two directories from your
+origin and paste the import-map fragment it publishes.
 
 ```
 node_modules/@srljs/core/lib/          ->  /lib/
@@ -29,9 +32,9 @@ node_modules/@srljs/core/components/   ->  /components/
 <script type="module" src="/src/main.js"></script>
 ```
 
-The fragment carries the integrity hashes of the vendored runtime dependencies, computed
-from the bytes in `lib/vendor`, so a page gets the library's own map rather than a copy
-somebody typed. Source then imports the way the library itself does:
+The fragment carries integrity hashes for the vendored runtime dependencies, computed from
+the bytes in `lib/vendor`, so a page gets the library's own map rather than a copy somebody
+typed. Your source then imports the way the library itself does.
 
 ```js
 import { defineComponent } from '@core/elements/component.js';
@@ -41,29 +44,31 @@ import { UiTable } from '@components/data/ui-table.js';
 
 ### Node or a bundler
 
-No import map exists, so the bare prefixes above resolve to nothing. Two pre-resolved
-bundles are published for that case:
+No import map exists there, so the bare prefixes above resolve to nothing. Two
+pre-resolved bundles cover that case.
 
 ```js
 import { defineComponent, SignalElement } from '@srljs/core';
 import { UiTable } from '@srljs/core/components';
 ```
 
-`@srljs/core/components` imports `@srljs/core` rather than inlining it, so one page holds one
-custom element registry. Minified builds are `@srljs/core/dist/srl-core.min.js` and
-`@srljs/core/dist/srl-components.min.js`; each imports the minified other.
+`@srljs/core/components` imports `@srljs/core` rather than inlining it, so one page holds
+one custom element registry. Minified builds are `@srljs/core/dist/srl-core.min.js` and
+`@srljs/core/dist/srl-components.min.js`, and each imports the minified other.
 
 Component templates are inlined into the components bundle, so a bundled application makes
-no template request. The buildless path fetches each `.html` beside its module instead,
-and both run the same compiler over the same bytes.
+no template request. The buildless path fetches each `.html` beside its module instead.
+Both run the same compiler over the same bytes.
 
-Both paths are typed, from one set of JSDoc in the `.js` files the browser runs.
+## Types
 
-The bundles carry their own declarations: `import { defineComponent } from '@srljs/core'`
-is typed with no configuration, because `exports` names a `.d.ts` beside each bundle.
+Both paths are typed from one set of JSDoc, written in the `.js` files the browser runs.
+
+The bundles carry their own declarations, so `import { defineComponent } from '@srljs/core'`
+is typed with no configuration. `exports` names a `.d.ts` beside each bundle.
 
 The buildless path needs the table that resolves `@core/…` for tsc, which this package
-publishes:
+publishes.
 
 ```json
 {
@@ -80,6 +85,7 @@ declarations of the modules the browser loads, from one table rather than a copy
 ```js
 import { defineComponent } from '@core/elements/component.js';
 import { SignalElement } from '@core/elements/signal-element.js';
+import { UiAvatar } from '@components/shell/ui-avatar.js';
 
 export class UsersPage extends SignalElement {
   get rows() { return inject(USER_SERVICE).users; }
@@ -90,7 +96,7 @@ await defineComponent({
   tag: 'users-page',
   element: UsersPage,
   module: import.meta.url,   // the template is this module's sibling .html
-  uses: [UiCard],            // the elements this template names, as classes
+  uses: [UiAvatar],          // the elements this template names, as classes
 });
 ```
 
@@ -98,16 +104,26 @@ await defineComponent({
 <h1>{{ t('users.title') }}</h1>
 <button (click)="reload()">{{ t('users.reload') }}</button>
 
-<ui-card *for="user of rows; key: user.id">{{ user.name }}</ui-card>
+<ui-avatar *for="user of rows; key: user.id" [name]="user.name"></ui-avatar>
+```
+
+## Building and deploying
+
+`@srljs/cli` is the toolchain — the scaffold, the dev server, the template checker, the
+language server and the release pipeline. It is a separate package, and nothing in it is
+needed to run an application.
+
+```bash
+npm install --save-dev @srljs/cli
 ```
 
 ## Runtime dependencies
 
 Two, declared as dependencies and also committed into `lib/vendor` so the buildless path
-needs no install: **lit** 3.3.3 (BSD-3-Clause) and **@preact/signals-core** 1.14.4 (MIT).
-`lib/vendor` additionally carries **@tailwindcss/browser** 4.3.3 (MIT) for development
-pages that compile utilities in the browser; nothing imports it. Notices are in
-`lib/vendor/LICENSES.md` and provenance in `lib/vendor/provenance.json`.
+needs no install. They are **lit** 3.3.3 (BSD-3-Clause) and **@preact/signals-core** 1.14.4
+(MIT). `lib/vendor` additionally carries **@tailwindcss/browser** 4.3.3 (MIT) for
+development pages that compile utilities in the browser, and nothing imports it. Notices
+are in `lib/vendor/LICENSES.md`, provenance in `lib/vendor/provenance.json`.
 
 ## License
 

@@ -1,109 +1,132 @@
-# srl
+<h1 align="center">srl</h1>
 
-**srl** (**s**ource **r**uns **l**ive) is an Angular inspired SDK to create lightweight, buildless and reactive SPAs.
+<p align="center">
+  <strong>s</strong>ource <strong>r</strong>uns <strong>l</strong>ive — an Angular-inspired SDK for
+  lightweight, buildless, reactive single-page applications.
+</p>
 
-Development stays usable without a persistent compiler, while production optimisation and static verification remain optional, deterministic steps.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@srljs/core"><img alt="npm" src="https://img.shields.io/npm/v/@srljs/core?label=%40srljs%2Fcore"></a>
+  <a href="https://www.npmjs.com/package/@srljs/cli"><img alt="npm" src="https://img.shields.io/npm/v/@srljs/cli?label=%40srljs%2Fcli"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <img alt="Node 22+" src="https://img.shields.io/badge/node-%3E%3D22-brightgreen">
+</p>
 
-Everything expensive is opt-in and behaviour-preserving: the CSS generation step, the template bundle, a comment strip. Nothing is required to run the application.
+<p align="center">
+  <a href="https://srl-example.santella.dev">Live demo</a> ·
+  <a href="docs/getting-started.md">Getting started</a> ·
+  <a href="docs/guide/">Guide</a> ·
+  <a href="docs/architecture.md">Architecture</a> ·
+  <a href="docs/adr/">Decisions</a>
+</p>
 
-**Note**: this SDK has been designed, built and tested with some help from AI coding assistants. This repository is structured to serve as insightful documentation for both humans and AI coding assistants, to speed up the generation and the prototyping of new software.
+---
+
+The browser loads your source files directly, through an import map. There is no bundler,
+no transpiler and no watcher between the file you save and the page that runs it. You get
+signals, a template dialect that is statically checked without a compiler, routing, forms,
+i18n, auth and micro-frontends, plus a component collection built on all of it.
+
+Optimisation is a separate, optional step. Minification, the template bundle and the
+generated CSS all run at release time and preserve behaviour, so nothing in that pipeline
+is required to run your application.
+
+## Why
+
+| | |
+|---|---|
+| **Nothing to install to run it** | The page loads `.js` and `.html` as they are on disk. `npm install` is for the tools. |
+| **What you debug is what you wrote** | No source maps, no compiled output, no build step to reason about. |
+| **Templates are checked anyway** | The checker and the language server read the same AST, so a typo in a binding is an error before it is a blank screen. |
+| **Angular shapes, web platform primitives** | Custom elements, signals and the real DOM. `defineComponent`, `inject`, guards and outlets will look familiar. |
+| **One decision per file** | The [decision records](docs/adr/) say why each seam sits where it does, cited from the source by number. |
 
 ## Live demo
 
 The example application runs at **[srl-example.santella.dev](https://srl-example.santella.dev)**.
 
-It is served as vanilla, unminified source: the same files that are in `example/` and
-`source/`, loaded directly by the browser through an import map. No bundler, no minifier,
-no transpiler in between, so every file the demo runs is readable in the browser's
-devtools exactly as it is checked into this repository.
+It is served as unminified source, the same files that sit in `example/` and `source/`,
+loaded by the browser through an import map. Open devtools and every file the demo runs
+reads exactly as it is checked into this repository.
 
-## Repository structure
+## Install
 
-```
-source/             the published package, @srljs/core: its own package.json declares
-                    what it publishes, and extracting it is a file move
-source/lib/         the framework: core, auth, host, vendored deps, its own suite
-source/components/  the shared collection: the frame of an internal application
-example/            the example application: four sections, auth over a real backend,
-                    micro-frontends, i18n
-cli/                the published toolchain, @srljs/cli: the application scaffold, dev
-                    server, project model, template checker, artifact build and release.
-                    Its own package.json, the same way source/ has one
-editors/            thin VS Code and WebStorm clients over the toolchain's language server
-tools/              this repository's own tools, published nowhere: the vendor refresh,
-                    the bundle build, the interface and docs checks, the benchmarks
-```
-
-## Install it
-
-Two shapes, and the first is the point.
+**In a browser with an import map.** Serve the package's two directories from your origin
+and paste the import-map fragment it publishes.
 
 ```html
-<!-- a browser with an import map: serve the package's lib/ and components/, paste
-     node_modules/@srljs/core/lib/importmap.json, and import @core/… as the library does -->
+<script type="importmap">
+  <!-- node_modules/@srljs/core/lib/importmap.json -->
+</script>
+<script type="module" src="/src/main.js"></script>
 ```
 
 ```js
-// Node or a bundler, which have no import map: two pre-resolved bundles
+import { defineComponent } from '@core/elements/component.js';
+import { UiAvatar } from '@components/shell/ui-avatar.js';
+```
+
+**In Node or a bundler**, where no import map exists, two pre-resolved bundles cover the
+same surface.
+
+```js
 import { defineComponent, SignalElement } from '@srljs/core';
 import { UiTable } from '@srljs/core/components';
 ```
 
-Why there are two, and what the second costs, is
-[ADR-0066](docs/adr/0066-the-package-serves-two-audiences.md). The package's own README
-is [source/README.md](source/README.md), and what changed between versions is
-[the changelog](CHANGELOG.md).
+[ADR-0066](docs/adr/0066-the-package-serves-two-audiences.md) explains why there are two
+shapes and what the second one costs. The package's own README is
+[source/README.md](source/README.md).
 
-A repository that *deploys* an application installs the toolchain beside the library, and
-then owns none of it:
+## Build and deploy
+
+A repository that ships an application installs the toolchain beside the library.
 
 ```bash
 npm install --save-dev @srljs/cli
-srl new web        # the nine files a correct application is, written by the toolchain
-srl build --app web
+srl new web          # the nine files a correct application is, written for you
+srl serve --app web  # static dev server, watch and live reload
+srl build --app web  # the production artifact, with its report
 ```
 
-`@srljs/cli` is this repository's `cli/` directory, published: the dev server, the project
-model, the template checker, the artifact build and the release pipeline. It is separate
-from the library because the build needs Vite, parse5 and tsc, and a page that loads the
-framework as source must not have to install a bundler
+`@srljs/cli` is this repository's `cli/` directory, published separately. It holds the
+scaffold, the dev server, the project model, the template checker, the language server and
+the release pipeline. It is a second package because the build needs Vite, parse5 and tsc,
+and a page that loads the framework as source must not have to install a bundler
 ([ADR-0067](docs/adr/0067-the-toolchain-is-a-second-package.md)). Its README is
 [cli/README.md](cli/README.md).
 
-## Run it
+## Run this repository
 
 ```bash
-npm run example                                 # the application, http://localhost:8100
-node cli/dev/serve.mjs --open                   # any application, statically, http://localhost:8000
+npm run example    # the example application, http://localhost:8100
+npm run start      # any application, served statically, http://localhost:8000
 ```
 
-Nothing is installed to run the application: the browser loads the files directly.
-`npm install` is for the tools — typecheck, lint, tests, benchmarks.
-
-Full walkthrough: [getting started](docs/getting-started.md).
+Neither needs an install to serve the application, because the browser loads the files
+directly. `npm install` is what the tools need — typecheck, lint, tests, benchmarks.
 
 ## A component, end to end
 
-An application's `main.js` is one call:
+An application's `main.js` is one call.
 
 ```js
 import { startHostedApplication } from '@host/runtime.js';
 
 await startHostedApplication({
   configure: () => configureTheme({ defaultTheme: 'system' }),
-  providers: (manifest) => {
-    provide(AUTH_SESSION, () => new AuthSession(new BffCookieTokenStore('/auth')));
-  },
+  providers: () => provide(AUTH_SESSION, () => new AuthSession(new BffCookieTokenStore('/auth'))),
   ready: () => inject(AUTH_SESSION).init(),
   root: { load: () => import('./app-root.js').then((m) => m.AppRoot) },
 });
 ```
 
-A component is one declaration:
+A component is one declaration.
 
 ```js
 import { defineComponent } from '@core/elements/component.js';
-import { UiCard } from '@app/ui/ui-card.js';
+import { SignalElement } from '@core/elements/signal-element.js';
+import { UiAvatar } from '@components/shell/ui-avatar.js';
 
 export class UsersPage extends SignalElement {
   get rows() { return inject(USER_SERVICE).users; }       // returns the signal
@@ -115,52 +138,61 @@ await defineComponent({
   tag: 'users-page',
   element: UsersPage,
   module: import.meta.url,   // the template is this module's sibling .html
-  uses: [UiCard],            // the elements this template names, as classes
+  uses: [UiAvatar],          // the elements this template names, as classes
 });
 ```
 
-Its template is the sibling `.html`, and it is checked against the class without a
-build:
+Its template is the sibling `.html`, checked against the class without a build.
 
 ```html
 <h1>{{ t('users.title') }}</h1>
 <button [?disabled]="isLoading" (click)="reload()">{{ t('users.reload') }}</button>
 
-<ui-card *for="user of rows; key: user.id">{{ user.name }}</ui-card>
+<ui-avatar *for="user of rows; key: user.id" [name]="user.name"></ui-avatar>
 ```
 
-The repo provides more documentation for [defining a component](docs/guide/components.md) and
-describing [the template language](docs/guide/templates.md).
+More on [defining a component](docs/guide/components.md) and
+[the template language](docs/guide/templates.md).
 
-## Check it
+## Repository layout
+
+| Directory | What it holds |
+|---|---|
+| `source/` | The published package, `@srljs/core`. Its own `package.json` declares what ships. |
+| `source/lib/` | The framework — core, auth, host, vendored dependencies, its own suite. |
+| `source/components/` | The shared collection, the frame of an internal application. |
+| `example/` | The example application — four sections, auth over a real backend, micro-frontends, i18n. |
+| `cli/` | The published toolchain, `@srljs/cli`. Scaffold, dev server, project model, checkers, build, release. |
+| `editors/` | Thin VS Code and WebStorm clients over the toolchain's language server. |
+| `tools/` | This repository's own tools, published nowhere — vendor refresh, bundle build, interface and docs checks, benchmarks. |
+
+## Checks
 
 ```bash
-npm run check                 # typecheck + templates + lint + tool tests + vendor + package + verify + docs + browser tests
-APP=example npm test          # the library, the collection and that application's suite
-npm run benchmark:ci          # the performance gate, against the checked-in baseline
+npm run check          # typecheck, templates, lint, tool tests, vendor, package, verify, docs, browser tests
+APP=example npm test   # the library, the collection and that application's suite
+npm run benchmark:ci   # the performance gate, against the checked-in baseline
 ```
 
-What each command refuses, and what to run after changing what, is in
-[getting started](docs/getting-started.md).
+[Getting started](docs/getting-started.md) lists what each command refuses and what to run
+after changing what.
 
 ## Documentation
 
-The README is the interface. The manual is `docs/`, and the reasoning is `docs/adr/`.
+The README is the interface. `docs/` is the manual, and `docs/adr/` is the reasoning.
 
 | Where | What is in it |
 |---|---|
 | [Getting started](docs/getting-started.md) | Run, check, test, and what to run after changing X |
 | [Architecture map](docs/architecture.md) | Glossary, the dependency rule, the seams and what proves each |
 | [Invariants](docs/invariants.md) | What a change may not break, and the check that enforces it |
-| [Guide](docs/guide/) | Startup, components, templates, routing, i18n, preferences, auth, the collection, performance, delivery, testing, supported browsers |
-| [Editor support](docs/guide/editor-support.md) | VS Code, WebStorm and generic LSP setup; diagnostics, completion, navigation and refactoring |
+| [Guide](docs/guide/) | Startup, components, templates, routing, i18n, preferences, auth, the collection, performance, delivery, testing, browsers |
+| [Editor support](docs/guide/editor-support.md) | VS Code, WebStorm and generic LSP setup; diagnostics, completion, navigation, refactoring |
 | [Reference](docs/reference/) | The generated project index, the source layout, the Angular map |
 | [Decision records](docs/adr/) | One decision per file, cited from source by number |
-| [Changelog](CHANGELOG.md) | What changed in the published interface, and what a bump means |
 
-Every generated table is built from `cli/project-model/`, the one AST pass over the
-source that the template checker, the dependency verifier and the template bundler also
-read:
+Every generated table comes from `cli/project-model/`, the single AST pass over the source
+that the template checker, the dependency verifier and the template bundler also read.
 
 ```bash
 npm run docs:check      # a generated table drifted from the source
@@ -169,23 +201,28 @@ npm run docs:adr        # a malformed record, or a citation resolving to nothing
 npm run docs:browsers   # the support matrix drifted from the recorded journey run
 ```
 
-Where each kind of knowledge belongs is [the documentation
-policy](docs/documentation.md), which is itself enforced.
+[The documentation policy](docs/documentation.md) says where each kind of knowledge
+belongs, and it is itself enforced.
 
 ## License
 
 MIT, in [LICENSE](LICENSE).
 
-Three runtime dependencies are vendored into `source/lib/vendor` and redistributed with
-this repository: **lit** 3.3.3 (BSD-3-Clause), **@preact/signals-core** 1.14.4 (MIT) and,
-for development only, **@tailwindcss/browser** 4.3.3 (MIT). Their notices are in
+Three runtime dependencies are vendored into `source/lib/vendor` and redistributed here.
+**lit** 3.3.3 (BSD-3-Clause), **@preact/signals-core** 1.14.4 (MIT) and, for development
+only, **@tailwindcss/browser** 4.3.3 (MIT). Their notices are in
 [source/lib/vendor/LICENSES.md](source/lib/vendor/LICENSES.md), where `npm run vendor`
-checks them against the `LICENSE` of the pinned version in `node_modules`, and where each
-file came from is in
+checks them against the `LICENSE` of the pinned version in `node_modules`. Where each file
+came from is recorded in
 [source/lib/vendor/provenance.json](source/lib/vendor/provenance.json). A production
-artifact carries its own generated `THIRD_PARTY_LICENSES.md` instead; both are described
-in [delivery](docs/guide/delivery.md#third-party-notices).
+artifact carries its own generated `THIRD_PARTY_LICENSES.md` instead, and
+[delivery](docs/guide/delivery.md#third-party-notices) describes both.
 
 ## Credits
 
-I've been presented the idea of a buildless SDK/framework for faster prototyping and development some time ago by coworkers; this is my shot at it, given my familiarity with Angular's ecosystem.
+Coworkers put the idea of a buildless SDK for faster prototyping in front of me a while
+back. This is my shot at it, coming from Angular.
+
+This SDK was designed, built and tested with help from AI coding assistants. The repository
+is deliberately structured to read well for both humans and coding assistants, which is why
+the decision records are as prominent as the guides.

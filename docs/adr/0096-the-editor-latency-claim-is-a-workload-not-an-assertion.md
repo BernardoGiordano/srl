@@ -6,8 +6,8 @@
 
 ## Context
 
-ADR-0090 and ADR-0090 both ended with a measurement they could not make. The
-responsiveness they exist for was one assertion inside a correctness test: a single
+ADR-0090 ended with a measurement it could not make. The
+responsiveness it exists for was one assertion inside a correctness test: a single
 completion, sent behind two queued validations, asserted to answer in under 1000 ms. That
 is a hundred times the latency an editor needs and one sample wide, so it could not tell a
 1 ms answer from a 900 ms one, and it was the only place the claim was written down.
