@@ -109,7 +109,7 @@ describe('operations application', () => {
     // the developer's browser is set to.
     history.replaceState(null, '', '/login?lang=en');
 
-    // The real entry point, in order: manifest, providers, session restore, then
+    // The real entry point, in order. Manifest, providers, session restore, then
     // <app-root>.
     await import('../src/main.js');
 
@@ -232,7 +232,7 @@ describe('operations application', () => {
     await goto('/sales/orders');
     const before = requested.length;
 
-    // Two components ask for this record on this navigation: the layout for its header
+    // Two components ask for this record on this navigation, the layout for its header
     // and the index tab for the customer block. The application record module owns one
     // retained resource for both, so the screen starts one read.
     await goto('/sales/orders/OR-00002');

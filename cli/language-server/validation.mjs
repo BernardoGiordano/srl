@@ -7,7 +7,7 @@
  * document or says it was cancelled. ADR-0090.
  *
  * Cancellation cannot be a message, because a message is only read between checks. It
- * is a shared integer holding the highest check the parent no longer wants, which the
+ * is a shared integer holding the highest check the parent has abandoned, which the
  * compiler's own token reads while it works.
  *
  * Nothing here decides when to check. `analysis.mjs` owns that and owns this thread's

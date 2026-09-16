@@ -32,7 +32,7 @@ const NOTES_MAX = 280;
 const CONTACTS_MAX = 5;
 
 /**
- * One customer: read it, edit it, or create it. Three modes, one screen.
+ * One customer, read, edited or created. Three modes, one screen.
  *
  * The screen is built on `@core/forms` and `<ui-field>`, so what is left below is the
  * part that is actually about customers. Which rules apply, what the server is asked,
@@ -613,7 +613,7 @@ function nonNegativeAmount(value) {
 }
 
 /**
- * The form's own shape: strings, because that is what controls hold, and a list
+ * The form's own shape. Strings, because that is what controls hold, and a list
  * of three-string rows for the contacts. The conversion to the API's types
  * happens once, in `toInput`.
  *
@@ -637,7 +637,7 @@ function toValues(customer) {
     since: customer.since,
     revenue: String(customer.revenue),
     notes: customer.notes,
-    // Copied rather than passed through: `reset` adopts these as the baseline
+    // Copied rather than passed through, because `reset` adopts these as the baseline
     // the dirty check compares against, and a baseline sharing objects with the
     // response would move whenever the response did.
     contacts: customer.contacts.map((contact) => ({ ...contact })),

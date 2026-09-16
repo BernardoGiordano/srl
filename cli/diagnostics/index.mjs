@@ -35,8 +35,8 @@ const LABELS = /** @type {Record<Severity, string>} */ ({
 const LABEL_WIDTH = 5;
 
 /**
- * A path as a diagnostic states it: repository-relative and `/`-separated, or
- * absolute when the file is outside the repository.
+ * A path as a diagnostic states it, repository-relative and `/`-separated, or absolute
+ * when the file is outside the repository.
  *
  * A check that has an absolute path should hand it over as-is rather than shortening
  * it first. Doing it here keeps one answer to how a path is spelled in a report,

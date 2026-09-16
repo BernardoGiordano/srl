@@ -5,7 +5,8 @@ import { assert, present, settled, unmountAll } from '../../source/lib/test/harn
 import { installFakeEventSource, installFakeServer, requested } from './fake-server.js';
 
 /**
- * The customer form: the application's write path, end to end in a real browser.
+ * The customer form, which is the application's write path, end to end in a real
+ * browser.
  *
  * What is asserted here is what a form actually does, rather than that the framework
  * works.

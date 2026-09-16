@@ -16,7 +16,7 @@ import { BillingRoot } from './billing-root.js';
  * shares no dependency with the shell at all. The contrast between the two import lists
  * is why both ship.
  *
- * To deploy this independently: publish the folder to a versioned path on the shell's
+ * To deploy this independently, publish the folder to a versioned path on the shell's
  * origin, then update `remotes[].url`, its digest in `app.manifest.json` and the pins in
  * `index.html`. The shell picks it up on the next page load, templates and translations
  * included, because both resolve against `import.meta.url`.

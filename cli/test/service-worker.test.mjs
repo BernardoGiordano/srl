@@ -178,7 +178,8 @@ void test('it never claims a Remote, an API call or a write', () => {
 });
 
 void test('it does not skip waiting, so a running tab keeps the worker it started with', () => {
-  // On the call, not the word: the generated source says in a comment why it does
+  // On the call rather than the word, because the generated source says in a comment
+  // why it does
   // not make one, and that comment is the thing a later reader needs most.
   assert.ok(!/skipWaiting\s*\(/u.test(serviceWorkerSource(facts())));
 });

@@ -1474,7 +1474,7 @@ function fromCompiler(diagnostic, at) {
  * defaults to every element in `elements`, which is what an editor checking unsaved
  * markup wants, because the file being edited may not declare its dependency yet.
  *
- * `cancellation` lets a caller abandon a check whose answer no longer matters. The
+ * `cancellation` lets a caller abandon a check whose answer stopped mattering. The
  * typecheck is one synchronous call, so an interactive caller that cannot wait for it
  * has no other way to get the thread back. The token throws out of the compiler, and
  * this function throws `ts.OperationCanceledException` on to its caller.

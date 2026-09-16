@@ -27,10 +27,10 @@ const ICONS = {
     'M17.6 15.2c2.1.7 3.4 2.4 3.4 4.8',
   ],
 
-  // Axes and a rising line: the analytics remote.
+  // Axes and a rising line, for the analytics remote.
   analytics: ['M4 4v16h16', 'M7 15l3.5-4 3 2.5L19 7', 'M15.5 7H19v3.5'],
 
-  // Invoice with a currency mark: the billing remote.
+  // Invoice with a currency mark, for the billing remote.
   billing: ['M6 3h12v18l-3-2-3 2-3-2-3 2z', 'M9 8h6', 'M9 12h6', 'M9 16h3'],
 
   // Sliders.

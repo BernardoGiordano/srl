@@ -1,5 +1,6 @@
 /**
- * Live project analysis: what is current, what is stale, what runs next, and where it runs.
+ * Live project analysis. What is current, what is stale, what runs next, and where it
+ * runs.
  *
  * It owns the lifetime of every open document, the set of documents whose answers are
  * stale, which documents a change makes stale, when the project model is re-read, when

@@ -162,7 +162,7 @@ export class OrdersPage extends SignalElement {
   };
 
   /**
-   * Return the number used to sort and filter the formatted amount.
+   * The number the formatted amount is sorted and filtered by.
    *
    * @param {unknown} row
    */
