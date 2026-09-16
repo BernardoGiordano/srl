@@ -1,40 +1,38 @@
 /**
  * One application origin. Node only, zero dependencies.
  *
- * "Serve one srl application" is a small, exact set of rules: resolve a URL
- * through an ordered mount table, refuse anything that climbs out of a mount,
- * answer a directory with its `index.html`, fall back to the application document
- * for a navigation, and name the type by extension. Four servers in this
- * repository implemented that set separately — `cli/dev/serve.mjs`,
- * `tools/benchmark/origin.mjs`, `cli/test/support/artifact-origin.mjs` and the
- * mount middleware in `web-test-runner.config.mjs` — and the traversal guard was
- * copy-pasted between them. ADR-0075.
+ * Serving one srl application is a small, exact set of rules. Resolve a URL through
+ * an ordered mount table, refuse anything that climbs out of a mount, answer a
+ * directory with its `index.html`, fall back to the application document for a
+ * navigation, and name the type by extension. Four servers in this repository need
+ * that set, which are `cli/dev/serve.mjs`, `tools/benchmark/origin.mjs`,
+ * `cli/test/support/artifact-origin.mjs` and the mount middleware in
+ * `web-test-runner.config.mjs`. ADR-0075.
  *
- * This module owns the rules. Each of the four states only what makes it
- * different, through four options:
+ * This module owns the rules. Each of the four states only what makes it different,
+ * through four options.
  *
  *   route       the adapter's own endpoints, consulted before anything static
  *   transform   a body to send instead of the file's bytes
  *   headers     extra response headers for a static hit
  *   fallback    the document a navigation with no file gets
  *
- * Conditional requests are this module's rather than an option, because they are
- * a rule about files and not a policy: a file streamed from disk is sent with an
+ * Conditional requests are this module's rather than an option, because they are a
+ * rule about files rather than a policy. A file streamed from disk is sent with an
  * `ETag`, and an `If-None-Match` naming it is answered 304. Whether a browser ever
- * asks is the adapter's `headers` — `no-store` means it never will, `no-cache`
- * means it will on every reload. ADR-0081.
+ * asks is the adapter's `headers`, where `no-store` means it never will and
+ * `no-cache` means it will on every reload. ADR-0081.
  *
- * THERE IS NO PROXY OPTION, and there must not be one. The development server's
- * `--proxy` is load-bearing (ADR-0075) and it is one adapter's concern: it lives
- * in that adapter's `route`, which is consulted before the method check and before
- * the mounts for exactly the reason a proxy needs — a `POST /api/session` must not
- * be answered 405 by a server that is right to refuse a `POST` of a stylesheet. An
- * origin whose interface grew a `proxy` parameter would be carrying one caller's
+ * There is no proxy option, and there must not be one. The development server's
+ * `--proxy` matters (ADR-0075) and it is one adapter's concern. It lives in that
+ * adapter's `route`, which is consulted before the method check and before the
+ * mounts for exactly the reason a proxy needs, because a `POST /api/session` must
+ * not be answered 405 by a server that is right to refuse a `POST` of a stylesheet.
+ * An origin whose interface grew a `proxy` parameter would carry one caller's
  * deployment in every caller's signature.
  *
- * Published, unlike the four servers it replaces. A repository that installs the
- * toolchain gets `@srljs/core/testing/harness.js` and, until now, nothing to run
- * it against.
+ * Published, unlike the four servers it stands in for. A repository that installs
+ * the toolchain gets `@srljs/core/testing/harness.js`, and this is what runs it.
  */
 
 import { createReadStream } from 'node:fs';
@@ -58,17 +56,17 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
  * A validator for the bytes of one file on disk, so a caller that states a
  * revalidating cache policy gets 304s instead of whole bodies.
  *
- * Derived from size and mtime rather than from a hash, which is what nginx does
- * and for the same reason: answering a conditional request must not cost reading
- * the file the answer says not to send. Weak, because that is what a validator
- * built from metadata honestly is — and `If-None-Match` is compared weakly in any
- * case, so nothing is lost by saying so.
+ * Derived from size and mtime rather than from a hash, which is what nginx does and
+ * for the same reason. Answering a conditional request must not cost reading the
+ * file the answer says not to send. Weak, because that is what a validator built
+ * from metadata is, and `If-None-Match` is compared weakly in any case, so nothing
+ * is lost by saying so.
  *
- * Only the streamed path gets one. A `transform` returns bytes this module did
- * not read, and stat cannot speak for them: a body that also depends on the
- * adapter's configuration would be revalidated against a file whose mtime that
- * configuration does not change. A transform that wants revalidation states its
- * own `ETag` in `Representation.headers`, where it knows what it built.
+ * Only the streamed path gets one. A `transform` returns bytes this module did not
+ * read, and stat cannot speak for them. A body that also depends on the adapter's
+ * configuration would be revalidated against a file whose mtime that configuration
+ * does not change. A transform that wants revalidation states its own `ETag` in
+ * `Representation.headers`, where it knows what it built.
  *
  * @param {import('node:fs').Stats} stats
  * @returns {string}
@@ -81,7 +79,7 @@ function entityTag(stats) {
  * Whether an `If-None-Match` header names the tag we would send.
  *
  * The list form and `*` are both what a browser can legitimately send, and the
- * comparison is the weak one RFC 9110 requires for this header: `W/"x"` and `"x"`
+ * comparison is the weak one RFC 9110 requires for this header. `W/"x"` and `"x"`
  * are the same entity for the purpose of deciding not to send it again.
  *
  * @param {string | undefined} header
@@ -100,14 +98,13 @@ function noneMatch(header, etag) {
  * Which mount claims a path, and what is left of the path after the prefix.
  *
  * Pure string work over an already-decoded path, so the same table serves a file
- * server and the test runner's URL rewrite — the one consumer that maps a prefix
- * to another prefix rather than to a directory.
+ * server and the test runner's URL rewrite, which is the one consumer that maps a
+ * prefix to another prefix rather than to a directory.
  *
- * Matching is on a segment boundary. A prefix ending in `/` matches by being one,
- * so `/libraries` cannot be taken for `/lib/`; a prefix that is a whole path —
- * `/app.manifest.json`, which the test runner has — matches itself and nothing it
- * happens to be a substring of. `/` matches everything and is why it is declared
- * last.
+ * Matching is on a segment boundary. A prefix ending in `/` matches by being one, so
+ * `/libraries` cannot be taken for `/lib/`. A prefix that is a whole path, such as
+ * the test runner's `/app.manifest.json`, matches itself and nothing it happens to
+ * be a substring of. `/` matches everything, which is why it is declared last.
  *
  * @param {string} pathname Root-absolute and already percent-decoded.
  * @param {ReadonlyArray<Mount>} mounts
@@ -130,12 +127,11 @@ export function resolveMount(pathname, mounts) {
  * The file a URL path resolves to inside one of the mounts, or null when there is
  * no honest answer.
  *
- * The traversal check is not theatre, and having several mounts rather than one
- * does not weaken it: the candidate is re-checked against the directory it
- * resolved into, so `GET /lib/../../.ssh/id_rsa` leaves that mount and is refused
- * rather than climbing out of the repository. Refused, too, rather than crashing:
- * a malformed percent escape and an embedded NUL are both requests a caller can
- * send and neither is a 500.
+ * Having several mounts rather than one does not weaken the traversal check. The
+ * candidate is re-checked against the directory it resolved into, so
+ * `GET /lib/../../.ssh/id_rsa` leaves that mount and is refused rather than climbing
+ * out of the repository. A malformed percent escape and an embedded NUL are refused
+ * too, because both are requests a caller can send and neither is a 500.
  *
  * @param {string} pathname
  * @param {ReadonlyArray<Mount>} mounts
@@ -160,11 +156,12 @@ export function toFile(pathname, mounts) {
 }
 
 /**
- * Send one body, the way the static path does: a type, a cache policy, a length.
+ * Send one body the way the static path does, with a type, a cache policy and a
+ * length.
  *
  * Exported for the `route` hooks, which answer requests this module never resolves
- * to a file — a generated harness page, an injected test module, a canned 401 —
- * and should not each grow their own three-header helper.
+ * to a file, such as a generated harness page, an injected test module or a canned
+ * 401. None of them should grow its own three-header helper.
  *
  * @param {ServerResponse} response
  * @param {{ status?: number, type: string, body: Buffer, headers?: Record<string, string> }} what
@@ -229,8 +226,8 @@ export function createOrigin(options) {
    * @returns {Promise<void>}
    */
   async function handle(request, response) {
-    // A fixed base: only the path and the query are this server's business, and a
-    // caller's Host header must not decide which file is read.
+    // A fixed base, because only the path and the query are this server's business
+    // and a caller's Host header must not decide which file is read.
     const url = new URL(request.url ?? '/', 'http://origin.invalid');
 
     if (route !== null && (await route(request, response, url))) return;
@@ -273,18 +270,18 @@ export function createOrigin(options) {
     const headers = {
       'Content-Type': contentType(file),
       ...NO_STORE,
-      // Before the adapter's, so an adapter that wants a validator of its own —
-      // for a body it built — states one and wins.
+      // Before the adapter's, so an adapter that wants a validator of its own for
+      // a body it built states one and wins.
       ...(representation === null ? { ETag: entityTag(stats) } : {}),
       ...headersFor(url.pathname, file),
       ...representation?.headers,
     };
 
-    // The whole point of sending a validator, and it is checked for whichever
-    // validator is in play — the file's, or one a transform stated for the bytes it
-    // built. Content-Type is dropped because a 304 carries no representation to
-    // type; everything else the 200 would have said about caching this URL still
-    // holds and is repeated, which is what RFC 9110 asks for.
+    // Why a validator is sent at all, and it is checked for whichever validator is
+    // in play, the file's or one a transform stated for the bytes it built.
+    // Content-Type is dropped because a 304 carries no representation to type.
+    // Everything else the 200 would have said about caching this URL still holds and
+    // is repeated, which is what RFC 9110 asks for.
     const { ETag: etag } = headers;
     if (etag !== undefined && noneMatch(request.headers['if-none-match'], etag)) {
       const { 'Content-Type': _typed, ...validating } = headers;
@@ -313,10 +310,10 @@ export function createOrigin(options) {
 /**
  * The same origin, bound to a port.
  *
- * The listen-and-close dance was written three times too — bind, ask which port
- * that was, refuse a non-TCP address, close all connections before closing the
- * server — and getting the last part wrong is a suite that hangs after its
- * assertions have passed.
+ * The listen-and-close dance is the same everywhere. Bind, ask which port that was,
+ * refuse a non-TCP address, and close all connections before closing the server.
+ * Getting the last part wrong is a suite that hangs after its assertions have
+ * passed.
  *
  * @param {OriginOptions} options
  * @param {ListenOptions} [listenOptions]

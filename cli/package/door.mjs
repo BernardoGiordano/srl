@@ -1,30 +1,30 @@
 /**
- * The door: which of a module's exports the registry consumer is offered.
+ * The door, meaning which of a module's exports the registry consumer is offered.
  *
- * A bundle is a barrel over every module under a specifier prefix, and the barrel
- * is derived rather than written so that a layer added once reaches every consumer
- * (ADR-0033, ADR-0066). Derived *from what* was "every top-level export", and a
- * module exports a name for two different reasons: because an application is meant
- * to call it, and because the module next door — or a suite, or the template
- * checker — has to reach in. So `import '@srljs/core'` autocompleted to 144 names,
- * several of which the source itself documents as test-only or internal, and a
- * consumer had no way to tell which five modules they were actually meant to use.
+ * A bundle is a barrel over every module under a specifier prefix, and the barrel is
+ * derived rather than written so that a layer added once reaches every consumer
+ * (ADR-0033, ADR-0066). A module exports a name for two different reasons, because
+ * an application is meant to call it, and because the module next door, a suite or
+ * the template checker has to reach in. Deriving the barrel from every top-level
+ * export makes `import '@srljs/core'` autocomplete to 144 names, several of which
+ * the source documents as test-only or internal, and leaves a consumer no way to
+ * tell which five modules they were meant to use.
  *
- * The derivation stays and gains one input: a module marks an export `@internal`
- * and it stops being part of the door. Per name and declared beside the
- * declaration, the way `srl.bundles.exclude` is per directory and declared in the
- * manifest — so a new layer still reaches everyone by default, while a name written
- * for a test does not. ADR-0066.
+ * The derivation stays and takes one more input. A module marks an export
+ * `@internal` and it stops being part of the door. That is per name and declared
+ * beside the declaration, the way `srl.bundles.exclude` is per directory and
+ * declared in the manifest, so a new layer still reaches everyone by default while a
+ * name written for a test does not. ADR-0066.
  *
  * `@internal` is not `private`. The browser consumer loads modules by path and sees
  * every export it always did, `cli/checks/template-check.mjs` still imports the
  * dialect from `@srljs/core/lib/core/template/dialect.js`, and nothing inside the
- * library changes: bundle members resolve each other by file, not through the
- * barrel. It is the flat namespace of the bundle that is curated, because that is
- * the only surface on which a name reads as a promise.
+ * library changes, because bundle members resolve each other by file rather than
+ * through the barrel. It is the flat namespace of the bundle that is curated,
+ * because that is the only surface on which a name reads as a promise.
  *
- * Parsing only — no disk, no resolution, no manifest — so the rule is a function of
- * a string and tests without a build.
+ * Parsing only, with no disk, no resolution and no manifest, so the rule is a
+ * function of a string and tests without a build.
  */
 
 import ts from 'typescript';
@@ -46,12 +46,12 @@ const MARKER = 'internal';
 /**
  * Whether the doc comment written directly above a statement marks it.
  *
- * "Directly above" is load-bearing rather than pedantic. TypeScript attaches every
- * JSDoc block that precedes a statement to it, blank lines included, so a module
- * whose *header* carried the tag would silently mark its first export and nothing
- * else. A header in this library is always separated from the code by a blank line;
- * requiring adjacency is what makes that convention the difference between "this
- * module is internal" — which is not a thing you can say here — and "this
+ * "Directly above" carries weight rather than being pedantic. TypeScript attaches
+ * every JSDoc block that precedes a statement to it, blank lines included, so a
+ * module whose header carried the tag would silently mark its first export and
+ * nothing else. A header in this library is always separated from the code by a
+ * blank line. Requiring adjacency turns that convention into the difference between
+ * "this module is internal", which is not a thing you can say here, and "this
  * declaration is".
  *
  * @param {ts.Statement} statement
@@ -100,14 +100,14 @@ export function moduleDoor(source, file) {
 /**
  * The names one top-level statement exports, or none.
  *
- * The marker is read from the statement's JSDoc, so the unit is the statement:
+ * The marker is read from the statement's JSDoc, so the unit is the statement.
  * `export const A = 1, B = 2` under one `@internal` marks both, which is what a
  * reader of that comment would expect. Splitting the pair is how you mark one.
  *
- * The three forms this refuses are all forms that would make the door quietly wrong
- * rather than loudly absent — a name forwarded from a file that is not read here, a
- * default a barrel over many modules cannot forward anyway, a binding whose name is
- * a pattern. None exist in the library today, and an error at the build is the
+ * The three forms this refuses would each make the door quietly wrong rather than
+ * loudly absent. They are a name forwarded from a file that is not read here, a
+ * default a barrel over many modules cannot forward anyway, and a binding whose name
+ * is a pattern. None exist in the library today, and an error at the build is the
  * cheapest place to find out that one has been written.
  *
  * @param {ts.Statement} statement
@@ -162,18 +162,18 @@ function exportedNames(statement, file) {
 }
 
 /**
- * The entry module a bundle is built from: one statement per member.
+ * The entry module a bundle is built from, one statement per member.
  *
  * `export *` where a member keeps nothing back, which is the usual case and the one
  * worth keeping. Two members exporting the same name is a build error there rather
- * than a silently missing export, and the one case that looks like a collision —
- * `parseExpression` in both `expression.js` and `expression-parser.js` — is a
+ * than a silently missing export. The one case that looks like a collision,
+ * `parseExpression` in both `expression.js` and `expression-parser.js`, is a
  * re-export of a single binding, which `export *` resolves to itself.
  *
  * A member that marks something gets its remaining names listed instead, because
  * there is no `export * except`. A member that keeps everything back is still
- * imported: it is in this bundle because something under the prefix needs it, and
- * dropping the statement would drop its side effects with it.
+ * imported, because it is in this bundle since something under the prefix needs it,
+ * and dropping the statement would drop its side effects with it.
  *
  * Absolute paths, and the caller's order, so the emitted entry is stable byte for
  * byte across machines.
@@ -195,17 +195,18 @@ export function barrelSource(members) {
 }
 
 /**
- * The same barrel for the type layer: one statement per member, over that member's
+ * The same barrel for the type layer, one statement per member, over that member's
  * declaration rather than its module.
  *
- * The door is read once and answers both halves, which is the point of putting this
- * beside `barrelSource`. A bundle whose declarations offered a different set of names
+ * The door is read once and answers both halves, which is why this sits beside
+ * `barrelSource`. A bundle whose declarations offered a different set of names
  * than its JavaScript would be a package that autocompletes one surface and runs
  * another, and the two lists cannot drift while they come from one `ModuleDoor`.
  *
- * A member that keeps everything back is dropped rather than imported for effect. The
- * statement `barrelSource` keeps is there for a side effect — a `customElements.define`
- * at the bottom of a module — and a declaration file has none.
+ * A member that keeps everything back is dropped rather than imported for effect.
+ * The statement `barrelSource` keeps is there for a side effect, such as a
+ * `customElements.define` at the bottom of a module, and a declaration file has
+ * none.
  *
  * @param {Array<{ file: string, door: ModuleDoor }>} members `file` is the specifier as written.
  * @returns {string}
@@ -224,7 +225,7 @@ export function declarationBarrelSource(members) {
 }
 
 /**
- * What one module's door offers: its exports, minus the ones it marks.
+ * What one module's door offers, which is its exports minus the ones it marks.
  *
  * @param {ModuleDoor} door
  * @returns {string[]}

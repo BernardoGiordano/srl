@@ -3,31 +3,27 @@
  *
  *   node cli/checks/message-check.mjs [--app example] [--json] [--write]
  *
- * WHAT IT OWNS
+ * It owns which bundles an application ships and which sources each one answers for,
+ * every key a bundle declares, every key the source names in JavaScript and in markup
+ * with the position of the literal, and what a reference resolves to. A reference
+ * resolves to a message, a plural family, a set of keys claimed by a computed prefix,
+ * or nothing.
  *
- * Which bundles an application ships and which sources each one answers for, every key a
- * bundle declares, every key the source names — in JavaScript and in markup, with the
- * position of the literal — and what a reference resolves to: a message, a plural family,
- * a set of keys claimed by a computed prefix, or nothing.
+ * Comparing catalogs with catalogs answers the wrong question. Reading every locale
+ * file and asking whether the translations agree with the default one finds a key
+ * renamed in one language, and cannot find the thing that actually reaches a user, a
+ * reference nothing answers. `t('orders.titel')` passes every catalog comparison and
+ * renders `orders.titel` in the page, in every language.
  *
- * WHY IT EXISTS
+ * Three consumers need the same answer, the repository verifier, `srl check messages`
+ * in an installed application, and the editor underlining the key as it is typed.
+ * Each would otherwise interpret a catalog itself. Flattening, the `$` comment rule,
+ * plural families and which bundle a file's references belong to are stated here
+ * once. ADR-0117.
  *
- * Catalogs were compared with catalogs. `npm run verify` read every locale file and asked
- * whether the translations agreed with the default one, which finds a key renamed in one
- * language and cannot find the thing that actually reaches a user: a reference nothing
- * answers. `t('orders.titel')` passed every check in the repository and rendered
- * `orders.titel` in the page, in every language.
- *
- * Three consumers need the same answer — the repository verifier, `srl check messages` in
- * an installed application, and the editor underlining the key as it is typed — and each
- * would otherwise interpret a catalog itself. Flattening, the `$` comment rule, plural
- * families and which bundle a file's references belong to are stated here once. ADR-0117.
- *
- * WHAT IT DELIBERATELY DOES NOT DO
- *
- * Translate, format, or choose a locale. It never deletes a key: a computed reference is
- * reported as the claim it is, and an entry no reference names is a warning, because a
- * catalog is also written to by hand.
+ * It does not translate, format, or choose a locale, and it never deletes a key. A
+ * computed reference is reported as the claim it is, and an entry no reference names
+ * is a warning, because a catalog is also written to by hand.
  */
 
 import { writeFile } from 'node:fs/promises';
@@ -54,9 +50,9 @@ import { parseSource } from '../project-model/parse.mjs';
  */
 
 /**
- * The part of an application's manifest this module reads. The whole document is admitted
- * by `@core/remotes/manifest-policy.js` where that matters — at startup, and in the
- * verifier's own admission — so nothing here validates it a second time.
+ * The part of an application's manifest this module reads. The whole document is
+ * admitted by `@core/remotes/manifest-policy.js` where that matters, at startup and in
+ * the verifier's own admission, so nothing here validates it a second time.
  *
  * @typedef {{
  *   i18n?: { defaultLocale?: string, supportedLocales?: string[], bundles?: string[] },
@@ -66,17 +62,17 @@ import { parseSource } from '../project-model/parse.mjs';
 
 /**
  * `{name}` in a pattern. The second statement of the grammar in
- * `source/lib/core/localization/i18n.js`, which cannot be imported from Node — it reaches
- * for signals and the import map — so the two are pinned against each other by
- * cli/test/message-catalog.test.mjs rather than by hope.
+ * `source/lib/core/localization/i18n.js`, which cannot be imported from Node because it
+ * reaches for signals and the import map. cli/test/message-catalog.test.mjs pins the
+ * two against each other.
  */
 const PLACEHOLDER = /\{(\w+)\}/gu;
 
 /**
  * A key written as a string, or the start of one. The same shape
- * cli/project-model/parse.mjs collects from JavaScript, for the same weaker question — is
- * this key named anywhere at all. A string ending in a dot is a family: whatever follows
- * it is computed, and every key under it counts as named.
+ * cli/project-model/parse.mjs collects from JavaScript, for the same weaker question of
+ * whether this key is named anywhere at all. A string ending in a dot is a family, so
+ * whatever follows it is computed and every key under it counts as named.
  */
 const DOTTED = /^[A-Za-z_$][\w$-]*(?:\.[\w$-]+)*\.[\w$-]*$/u;
 
@@ -128,13 +124,14 @@ export async function readMessages(app, model) {
 /**
  * Whether a file's message references are this application's to answer for.
  *
- * A suite owns its own message table: `configureI18n` takes whatever a test hands it, and
- * a suite about fallback asks for a key it has deliberately not declared. Vendored bytes
- * are nobody's authored source, and a minified module full of one-letter functions has a
- * `t` that is not this one. The model carries both; the rules skip them.
+ * A suite owns its own message table. `configureI18n` takes whatever a test hands it,
+ * and a suite about fallback asks for a key it has deliberately not declared. Vendored
+ * bytes are nobody's authored source, and a minified module full of one-letter
+ * functions has a `t` that is not this one. The model carries both, and the rules skip
+ * them.
  *
- * Decided on the path relative to the root the file is under — the application, the
- * library or the collection — rather than to the repository. An absolute path is
+ * Decided on the path relative to the root the file is under, meaning the application,
+ * the library or the collection, rather than to the repository. An absolute path is
  * somebody's checkout, and a repository that happens to sit under a directory called
  * `test` is not a repository of tests.
  *
@@ -176,9 +173,10 @@ async function readManifest(app) {
 /**
  * The bundles an application ships, and the sources each answers for.
  *
- * Read from the manifest rather than from whatever `i18n` directories exist, because the
- * manifest is what the browser loads: a folder of translations nothing registers is not a
- * bundle, and a bundle pattern naming nothing is a finding rather than an absence.
+ * Read from the manifest rather than from whatever `i18n` directories exist, because
+ * the manifest is what the browser loads. A folder of translations nothing registers is
+ * not a bundle, and a bundle pattern naming nothing is a finding rather than an
+ * absence.
  *
  * A remote's bundle answers for the remote's own directory. The shell's answers for
  * everything, because every locale the shell registers is in the table before a remote
@@ -293,13 +291,14 @@ async function readCatalog(path, locale) {
 }
 
 /**
- * The document's own punctuation: where every key is written, and where every object
- * ends.
+ * The document's own punctuation, meaning where every key is written and where every
+ * object ends.
  *
- * A scan rather than a parse, because the file has already been through `JSON.parse` and
- * what is left to find is position. Both answers come from one pass: a finding points at
- * the line that declares a key, and an extraction inserts a new key inside the object
- * that already holds its siblings instead of reformatting the file around it.
+ * A scan rather than a parse, because the file has already been through `JSON.parse`
+ * and what is left to find is position. Both answers come from one pass. A finding
+ * points at the line that declares a key, and an extraction inserts a new key inside
+ * the object that already holds its siblings instead of reformatting the file around
+ * it.
  *
  * @param {string} text
  * @returns {{ keys: Map<string, number>, objects: Map<string, { end: number, entries: number }> }}
@@ -368,9 +367,9 @@ function scanCatalog(text) {
  * every dotted string it writes down.
  *
  * The markup scan and the expression grammar are the template checker's and the
- * dialect's. A template that does not parse is the checker's finding to report and not
- * this module's: an unreadable expression yields no reference rather than a second
- * syntax error in a different voice.
+ * dialect's. A template that does not parse is the checker's finding to report rather
+ * than this module's, so an unreadable expression yields no reference rather than a
+ * second syntax error in a different voice.
  *
  * @param {string} path
  * @param {string} [text] The buffer to read instead of the file, for an unsaved edit.
@@ -390,8 +389,9 @@ async function templateReferences(path, text) {
     try {
       ast = parseExpression(expression, path);
     } catch {
-      // A template mid-edit, or an expression the checker is already refusing. One voice
-      // per failure: no reference here, and no second syntax error from this module.
+      // A template mid-edit, or an expression the checker is already refusing. One
+      // voice per failure, so no reference here and no second syntax error from this
+      // module.
       return;
     }
     for (const literal of expressionLiterals(ast)) literals.add(literal);
@@ -486,7 +486,7 @@ function children(node) {
 }
 
 /**
- * Every dotted string an expression writes: `[.label-key]="'stat.up'"` names a message
+ * Every dotted string an expression writes. `[.label-key]="'stat.up'"` names a message
  * that the call resolving it cannot be seen from.
  *
  * @param {ExprNode} node
@@ -529,7 +529,8 @@ function messageCalls(node) {
 }
 
 /**
- * The key an expression names: written out, or the static start of a computed one.
+ * The key an expression names, written out or as the static start of a computed
+ * one.
  *
  * @param {ExprNode} node
  * @returns {{ key: string | null, prefix: string | null }}
@@ -607,9 +608,10 @@ function positionOf(source, offset) {
  * The bundles a file's references may resolve against, nearest first.
  *
  * A file inside a remote reaches its own bundle and the shell's, because the shell
- * registered its translations before the remote was fetched. A file outside every remote
- * reaches only the shell's: a remote loads on navigation, so a shell key answered by a
- * remote's bundle is a key that renders correctly after one route and raw before it.
+ * registered its translations before the remote was fetched. A file outside every
+ * remote reaches only the shell's. A remote loads on navigation, so a shell key
+ * answered by a remote's bundle renders correctly after one route and raw before
+ * it.
  *
  * @param {MessageModel} messages
  * @param {string} file
@@ -656,8 +658,8 @@ export function resolveMessage(messages, reference) {
 }
 
 /**
- * Every key a reference claims: the one it names, its plural family, or the keys under
- * the prefix a computed reference starts from.
+ * Every key a reference claims, which is the one it names, its plural family, or the
+ * keys under the prefix a computed reference starts from.
  *
  * @param {MessageModel} messages
  * @param {MessageReference} reference
@@ -683,11 +685,11 @@ function claimedKeys(messages, reference, bundle) {
 /**
  * Every message rule, as findings.
  *
- * An unanswered reference is an error: it reaches a user as a raw key, in every language,
- * and nothing else reports it. A key nothing names is a warning, because a catalog is
- * written by hand and a key may be one release ahead of the screen that will show it. A
- * computed reference is neither — it is reported for what it claims, so that a report
- * says why forty keys count as used.
+ * An unanswered reference is an error, because it reaches a user as a raw key in every
+ * language and nothing else reports it. A key nothing names is a warning, because a
+ * catalog is written by hand and a key may be one release ahead of the screen that will
+ * show it. A computed reference is neither, and is reported for what it claims, so that
+ * a report says why forty keys count as used.
  *
  * @param {MessageModel} messages
  * @returns {Diagnostic[]}
@@ -817,12 +819,13 @@ export function messageFindings(messages) {
 }
 
 /**
- * Whether any source writes this key down outside a call: as a property, a constant, a
+ * Whether any source writes this key down outside a call, as a property, a constant, a
  * branch of a lookup table, or the family a template head names.
  *
- * The strong rule — a reference resolves to nothing — reads call sites only, because that
- * is the question with a wrong answer in the page. This is the weak one, and it decides
- * whether to say a catalog entry looks abandoned, so it errs towards silence.
+ * The strong rule, that a reference resolves to nothing, reads call sites only, because
+ * that is the question with a wrong answer in the page. This is the weak one, and it
+ * decides whether to say a catalog entry looks abandoned, so it errs towards
+ * silence.
  *
  * @param {Set<string>} literals
  * @param {string} key
@@ -841,7 +844,7 @@ function isNamed(literals, key) {
 /**
  * What is wrong with a set of references, and nothing about the catalog as a whole.
  *
- * Split out because this is the half an editor can answer for one unsaved file: the key
+ * Split out because this is the half an editor can answer for one unsaved file. The key
  * under the cursor either resolves or it does not, while "no source names this entry" is
  * a question about every file in the application and belongs to a run of the check.
  *
@@ -881,9 +884,9 @@ export function referenceFindings(messages, references) {
 /**
  * Every message one buffer names, read from the text rather than from the file.
  *
- * What the editor needs: a key is misspelled while it is being typed, and the file on
+ * What the editor needs. A key is misspelled while it is being typed, and the file on
  * disk still holds the version that worked. The catalogs are the saved ones, which is
- * correct — a bundle is not being edited in this buffer.
+ * correct, because a bundle is not being edited in this buffer.
  *
  * @param {ProjectModel} model
  * @param {string} file
@@ -1024,10 +1027,11 @@ function isPluralVariant(key, base) {
  * Every key a reference asks for that no bundle answers, grouped by the bundle that
  * should hold it.
  *
- * The nearest bundle owns it: a reference inside a remote is the remote's own copy, and
- * everything else is the application's. A key whose parent is already a message — asking
- * for `orders.title.long` where `orders.title` is a sentence — is reported rather than
- * written, because one of the two has to lose and neither choice is this tool's.
+ * The nearest bundle owns it, so a reference inside a remote goes to the remote's own
+ * copy and everything else to the application's. A key whose parent is already a
+ * message, such as `orders.title.long` where `orders.title` is a sentence, is reported
+ * rather than written, because one of the two has to lose and neither choice is this
+ * tool's.
  *
  * @param {MessageModel} messages
  * @returns {Array<{ bundle: MessageBundle, keys: string[], conflicts: string[] }>}
@@ -1058,14 +1062,14 @@ export function missingMessages(messages) {
 /**
  * Write the missing keys into each default-locale bundle, and return what was added.
  *
- * An insertion rather than a rewrite: the entry goes inside the object that already holds
- * its siblings, and every byte a translator or a reviewer put in the file — the ordering,
- * the blank lines between sections, the `$comment` notes — stays where it was. Running
- * this twice adds nothing the second time.
+ * An insertion rather than a rewrite. The entry goes inside the object that already
+ * holds its siblings, and every byte a translator or a reviewer put in the file stays
+ * where it was, including the ordering, the blank lines between sections and the
+ * `$comment` notes. Running this twice adds nothing the second time.
  *
- * The value is the key itself, which is what the page already shows. That is deliberate:
- * an empty string is a message that renders nothing, and a missing sentence should look
- * missing until somebody writes it.
+ * The value is the key itself, which is what the page already shows. That is
+ * deliberate, because an empty string is a message that renders nothing and a missing
+ * sentence should look missing until somebody writes it.
  *
  * @param {MessageModel} messages
  * @returns {Promise<Array<{ path: string, added: string[] }>>}
@@ -1155,8 +1159,9 @@ function insertions(catalog, keys) {
     const object = catalog.objects.get(ancestor);
     if (object === undefined) continue;
 
-    // Indented like its siblings, and inserted directly after the last entry: the newline
-    // and the indentation before the closing brace are already in the file.
+    // Indented like its siblings and inserted directly after the last entry, because
+    // the newline and the indentation before the closing brace are already in the
+    // file.
     const line = catalog.text.lastIndexOf('\n', object.end);
     const closing = /^[ \t]*/u.exec(catalog.text.slice(line + 1))?.[0] ?? '';
     const indent = `${closing}  `;

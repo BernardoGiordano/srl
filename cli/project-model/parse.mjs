@@ -1,23 +1,24 @@
 /**
  * One JavaScript module, read once.
  *
- * Element identity starts at top level: classes, imports, `defineComponent({ ... })`,
- * `customElements.define('x-y', Class)` and `registerTemplateGlobals({ ... })`. Element
- * meaning also includes static property fields/getters, events dispatched by instance
- * methods, and the instance methods and fields a class declares under its own name.
- * This module turns one file into those authored facts and nothing else — no
- * template ownership, no cross-module inheritance resolution, no diagnostics about the
- * project as a whole. Those need every file, so they live in index.mjs.
+ * Element identity starts at top level, in classes, imports,
+ * `defineComponent({ ... })`, `customElements.define('x-y', Class)` and
+ * `registerTemplateGlobals({ ... })`. Element meaning also includes static property
+ * fields and getters, events dispatched by instance methods, and the instance methods
+ * and fields a class declares under its own name.
+ *
+ * This module turns one file into those authored facts and nothing else. It decides no
+ * template ownership, resolves no cross-module inheritance and reports no diagnostics
+ * about the project as a whole. Those need every file, so they live in index.mjs.
  *
  * An AST rather than a regular expression, and a declaration whose tag, class or
  * template is computed is reported as `dynamic` rather than skipped. ADR-0038.
  *
- * THE CACHE
- *
- * Keyed by path, size and mtime. One process that reads the same file twice — the
- * template checker validating unsaved markup against a model it already built, both
- * applications' models in one verifier run — parses it once. TypeScript's own parse of a
- * 1,300-line component is the expensive part, not the disk read.
+ * The cache is keyed by path, size and mtime. One process that reads the same file
+ * twice parses it once, which covers the template checker validating unsaved markup
+ * against a model it already built, and both applications' models in one verifier run.
+ * TypeScript's own parse of a 1,300-line component is the expensive part, not the disk
+ * read.
  */
 
 import { stat } from 'node:fs/promises';
@@ -100,10 +101,10 @@ import { readText } from '../layout.mjs';
  */
 
 /**
- * `standardText` is the shared collection's namespaced lookup: it builds
- * `ui.<namespace>.<name>` and resolves it through the same table, so a collection key is
- * authored in an application's bundle like any other. Matched on the resolved import
- * rather than on the name, because the name is ordinary.
+ * `standardText` is the shared collection's namespaced lookup. It builds
+ * `ui.<namespace>.<name>` and resolves it through the same table, so a collection key
+ * is authored in an application's bundle like any other. Matched on the resolved
+ * import rather than on the name, because the name is ordinary.
  */
 const COLLECTION_TEXT = 'components/internal/text.js';
 
@@ -111,9 +112,9 @@ const COLLECTION_TEXT = 'components/internal/text.js';
 const I18N = 'core/localization/i18n.js';
 
 /**
- * A key written as a string, or the start of one: `orders.title`, `audit.action.`. Used
- * for the weaker question — is this key named anywhere — and never for deciding that one
- * exists.
+ * A key written as a string, or the start of one, such as `orders.title` or
+ * `audit.action.`. Used for the weaker question of whether this key is named anywhere,
+ * and never for deciding that one exists.
  */
 const DOTTED = /^[A-Za-z_$][\w$-]*(?:\.[\w$-]+)*\.[\w$-]*$/u;
 
@@ -126,10 +127,10 @@ const cache = new Map();
 /**
  * Parse one module, or return the parse from last time if the file has not changed.
  *
- * `prefixes` participates in the cache key only through the resolved import targets, and
- * those are stable for a repository: the same file parsed for example1 and for example2
- * resolves `@core/` to the same directory. `@app/` is the exception and is why the key
- * includes it.
+ * `prefixes` participates in the cache key only through the resolved import targets,
+ * and those are stable for a repository, because the same file parsed for example1 and
+ * for example2 resolves `@core/` to the same directory. `@app/` is the exception, and
+ * is why the key includes it.
  *
  * @param {string} file Absolute path.
  * @param {Record<string, string>} prefixes Import-map prefix -> absolute directory.
@@ -150,7 +151,7 @@ export async function parseModule(file, prefixes) {
 }
 
 /**
- * Parse text that is not what the file holds: an editor's unsaved buffer.
+ * Parse text that is not what the file holds, such as an editor's unsaved buffer.
  *
  * Not cached, because the cache is keyed on what the file says and this text is what it
  * will say. The editor asks per keystroke and pays one parse for it, which is the same
@@ -205,12 +206,12 @@ function read(path, source, prefixes) {
       const target = resolveSpecifier(statement.moduleSpecifier, path, prefixes);
       if (target === undefined) continue;
 
-      // `import './md-body.js'` — no clause at all, and the import is the whole
-      // point of the statement: running the module is what calls
-      // `customElements.define`, and so what makes the element exist. Recorded
-      // separately because for a plain custom element it is the only declaration
-      // there is: `uses` takes component definitions and throws on a class that
-      // has none, so such an element can never appear in one.
+      // `import './md-body.js'` has no clause at all, and the import is the
+      // statement. Running the module calls `customElements.define`, which is what
+      // makes the element exist. Recorded separately because for a plain custom
+      // element it is the only declaration there is. `uses` takes component
+      // definitions and throws on a class that has none, so such an element can
+      // never appear in one.
       if (statement.importClause === undefined) {
         parsed.sideEffectImports.add(target);
         continue;
@@ -234,11 +235,12 @@ function read(path, source, prefixes) {
       else if (callName === 'registerTemplateGlobals') readGlobals(node, parsed);
       else readMessageReference(node, parsed, tree);
     }
-    // A dotted string anywhere in the module: `labelKey: 'dashboard.panel.live'` names a
-    // message as surely as `t()` does, and the call that resolves it is handed a variable.
-    // A template head is the same fact about a family — `` `audit.action.${entry.action}` ``
-    // names every key under it. Enough to answer "does any source name this key"; never
-    // enough to conclude one exists, which is what the reference sites above are for.
+    // A dotted string anywhere in the module. `labelKey: 'dashboard.panel.live'` names
+    // a message as surely as `t()` does, and the call that resolves it is handed a
+    // variable. A template head is the same fact about a family, so
+    // `` `audit.action.${entry.action}` `` names every key under it. Enough to answer
+    // "does any source name this key", and never enough to conclude one exists, which
+    // is what the reference sites above are for.
     if (ts.isStringLiteralLike(node) && DOTTED.test(node.text)) parsed.literals.add(node.text);
     if (ts.isTemplateExpression(node) && DOTTED.test(node.head.text)) {
       parsed.literals.add(node.head.text);
@@ -292,7 +294,7 @@ function readDefineComponent(node, parsed, tree) {
 
   for (const property of argument.properties) {
     if (!ts.isPropertyAssignment(property)) {
-      // A spread or a shorthand: whatever it contributes is not visible here.
+      // A spread or a shorthand, so whatever it contributes is not visible here.
       unreadable.push('a property that is not a plain `name: value` assignment');
       continue;
     }
@@ -352,14 +354,15 @@ function readDefineComponent(node, parsed, tree) {
 }
 
 /**
- * A bare registration: a test fixture, or a class this repository does not own. Read
- * because the checker still has to know the tag exists, but it carries no template and
- * no `uses`.
+ * A bare registration, such as a test fixture or a class this repository does not own.
+ * Read because the checker still has to know the tag exists, though it carries no
+ * template and no `uses`.
  *
- * A computed one is a note rather than an error, and the reason is that this *is* the
- * mechanism: `defineComponent` itself ends in `customElements.define(tag, element)`, the
- * projection marker registers itself the same way, and a remote registers a class it was
- * handed. None of them has a template or a `uses` list for a static tool to lose.
+ * A computed one is a note rather than an error, because this is the mechanism.
+ * `defineComponent` itself ends in `customElements.define(tag, element)`, the
+ * projection marker registers itself the same way, and a remote registers a class it
+ * was handed. None of them has a template or a `uses` list for a static tool to
+ * lose.
  *
  * @param {ts.CallExpression} node
  * @param {ParsedModule} parsed
@@ -414,15 +417,16 @@ function readGlobals(node, parsed) {
 /**
  * A call that names a message, as written.
  *
- * Three callees are the message function: `t` imported from the library, `t` that the
- * module declares itself — which is how a remote forwards to `host.i18n.t()` — and the
- * host contract's own `host.i18n.t`. A `t` imported from somewhere else is somebody
- * else's function and is left alone.
+ * Three callees are the message function. They are `t` imported from the library, `t`
+ * that the module declares itself, which is how a remote forwards to `host.i18n.t()`,
+ * and the host contract's own `host.i18n.t`. A `t` imported from somewhere else is
+ * somebody else's function and is left alone.
  *
  * A computed key is kept rather than dropped, with whatever static prefix it starts
- * from: `t('billing.view.' + name)` claims `billing.view.*`, which is what keeps those
- * catalog entries from reading as unused and what a report can name. A conditional is
- * two references, because both branches are written down and either may be misspelled.
+ * from, so `t('billing.view.' + name)` claims `billing.view.*`. That keeps those
+ * catalog entries from reading as unused and gives a report something to name. A
+ * conditional is two references, because both branches are written down and either may
+ * be misspelled.
  *
  * @param {ts.CallExpression} node
  * @param {ParsedModule} parsed
@@ -463,7 +467,8 @@ function readMessageReference(node, parsed, tree) {
 }
 
 /**
- * The expressions that may each be the key: one, or both branches of a conditional.
+ * The expressions that may each be the key, which is one of them, or both branches of
+ * a conditional.
  *
  * @param {ts.Expression} node
  * @returns {ts.Expression[]}
@@ -492,8 +497,8 @@ function collectionKey(namespace, name) {
 }
 
 /**
- * The key a first argument names: the whole of it when it is written out, the part before
- * the first computed piece otherwise.
+ * The key a first argument names. The whole of it when it is written out, and the part
+ * before the first computed piece otherwise.
  *
  * @param {ts.Expression} node
  * @returns {{ key: string | null, prefix: string | null }}
@@ -532,9 +537,9 @@ function staticKey(node) {
 }
 
 /**
- * The parameters a call passes, when it passes an object literal. `null` is "written, and
- * not readable from here" — a spread or a variable — and no placeholder conclusion may be
- * drawn from it.
+ * The parameters a call passes, when it passes an object literal. `null` means
+ * "written, and not readable from here", such as a spread or a variable, and no
+ * placeholder conclusion may be drawn from it.
  *
  * @param {ts.Expression | undefined} node
  * @returns {{ params: string[] | null, count: boolean }}
@@ -564,21 +569,24 @@ function messageParams(node) {
  * every module is parsed, in index.mjs.
  *
  * Two declarations produce it, and an element may use either. `static properties` is
- * Lit's, and it names *properties*; the attribute each one observes is `attribute: 'x'`
+ * Lit's and it names properties. The attribute each one observes is `attribute: 'x'`
  * when written, nothing when `attribute: false` or `state: true`, and otherwise the
- * property name lowercased — `ReactiveElement`'s own rule, which is why `emptyLabel`
- * answers to `emptylabel` and never to `empty-label`. `static observedAttributes` is the
- * platform's, used here by elements that are configuration rather than components
- * (`<ui-table-column>`), and it names attributes directly.
+ * property name lowercased. That is `ReactiveElement`'s own rule, which is why
+ * `emptyLabel` answers to `emptylabel` and never to `empty-label`.
+ * `static observedAttributes` is the platform's, used here by elements that are
+ * configuration rather than components, such as `<ui-table-column>`, and it names
+ * attributes directly.
  *
- * `attributes: null` means the declaration exists but cannot be read — a spread, a
- * computed options object, a name from a constant. Null is not the same as empty: no tool
- * may conclude an attribute is dead from a surface it could not read.
+ * `attributes: null` means the declaration exists but cannot be read, because of a
+ * spread, a computed options object or a name from a constant. Null is not the same as
+ * empty, and no tool may conclude an attribute is dead from a surface it could not
+ * read.
  *
- * The instance members are read too, and for one question only: whether a field covers a
- * method of the same name. A field is installed with [[Define]], so it hides the method
- * rather than overriding it, and the call that reaches the field's value fails far from
- * the line that declared it. index.mjs resolves that across inheritance. ADR-0115.
+ * The instance members are read too, for one question only, which is whether a field
+ * covers a method of the same name. A field is installed with [[Define]], so it hides
+ * the method rather than overriding it, and the call that reaches the field's value
+ * fails far from the line that declared it. index.mjs resolves that across inheritance.
+ * ADR-0115.
  *
  * @param {ts.ClassDeclaration} declaration
  * @param {ts.SourceFile} tree
@@ -679,10 +687,11 @@ function elementSurface(declaration, tree) {
 /**
  * One instance member, as either a method name or a field.
  *
- * Methods and fields only. A `get`/`set` pair is neither: it is not callable, so nothing
- * calls it, and a field over one is the reactive-property shape the runtime repairs.
- * Private and computed names are skipped — neither can be resolved across modules, and a
- * name no tool can spell is one no tool should report a collision for.
+ * Methods and fields only. A `get` and `set` pair is neither, because it is not
+ * callable, so nothing calls it, and a field over one is the reactive-property shape
+ * the runtime repairs. Private and computed names are skipped, since neither can be
+ * resolved across modules and a name no tool can spell is one no tool should report a
+ * collision for.
  *
  * @param {ts.ClassElement} member
  * @param {ts.SourceFile} tree
@@ -706,7 +715,7 @@ function readInstanceMember(member, tree, methods, fields) {
 }
 
 /**
- * Whether a field's value is a function: true, false, or null when no static read can
+ * Whether a field's value is a function. True, false, or null when no static read can
  * say.
  *
  * Null is the answer for an identifier, a call or anything else whose value is decided
@@ -745,9 +754,9 @@ function fieldCallability(initializer) {
 }
 
 /**
- * Meaning of one `static properties` entry. Unknown is kept as unknown: an options
- * object assembled elsewhere may contain `state: true`, so calling it public would leak
- * internal state through every consumer of the model.
+ * Meaning of one `static properties` entry. Unknown is kept as unknown, because an
+ * options object assembled elsewhere may contain `state: true`, and calling it public
+ * would leak internal state through every consumer of the model.
  *
  * @param {string} property
  * @param {ts.Expression} options
@@ -980,7 +989,8 @@ function sourcePosition(tree, node) {
 
 /**
  * Turn an import specifier into the file it names, for the prefixes an application's
- * import map declares. A bare specifier — `lit` — names nothing in this repository.
+ * import map declares. A bare specifier such as `lit` names nothing in this
+ * repository.
  *
  * @param {ts.Expression} specifier
  * @param {string} file

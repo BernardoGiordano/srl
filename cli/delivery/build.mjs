@@ -1,12 +1,12 @@
 /**
  * Build one application's experimental production browser artifact.
  *
- * This is the first slice of the production-artifact module: it owns application
- * selection, source resolution, chunking, minification, template identity, production
- * CSS/HTML, admitted runtime data, deterministic metadata and atomic output replacement.
- * Release transport remains separate and consumes only the verified report and bytes.
+ * This module owns application selection, source resolution, chunking,
+ * minification, template identity, production CSS and HTML, admitted runtime data,
+ * deterministic metadata and atomic output replacement. Release transport is
+ * separate and consumes only the verified report and bytes.
  *
- * Vite is implementation. Callers get one function and one artifact report; they do
+ * Vite is implementation. Callers get one function and one artifact report, and do
  * not supply Vite configuration or learn its output object.
  */
 
@@ -62,25 +62,25 @@ const CACHE = {
 const HASHED_JAVASCRIPT = /-[A-Za-z0-9_-]{8}\.js$/u;
 
 /**
- * How a built application's templates reach the browser. All three emit the same
- * thing — one immutable, hash-named file per template — and differ only in how the
- * browser learns which URLs it needs, which is the whole cost. A component names
+ * How a built application's templates reach the browser. All three emit one
+ * immutable, hash-named file per template, and differ only in how the browser
+ * learns which URLs it needs. That difference is the whole cost. A component names
  * its own template, so a URL is unknowable until that component's module has
- * arrived; nine components in one chunk are otherwise nine requests in a row.
+ * arrived, and nine components in one chunk are otherwise nine requests in a row.
  *
  *   split       The manifest names every template and startup starts them all, so
  *               discovery is done before the first component module evaluates. The
- *               default: it is the wrong trade only at zero latency.
- *   split-lazy  The manifest names none of them and each component fetches its own,
- *               which is ADR-0081 exactly. A visitor downloads the markup of the
- *               routes they open and nothing else, and pays a round trip per
- *               component to find out what that is.
+ *               default, and the wrong trade only at zero latency.
+ *   split-lazy  The manifest names none of them and each component fetches its own.
+ *               A visitor downloads the markup of the routes they open and nothing
+ *               else, and pays a round trip per component to find out what that is.
  *   bundle      Additionally emits the single `templates-<hash>.json` the manifest
- *               points at, seeded at startup. One request and the fewest bytes —
- *               fifty separately compressed files share no dictionary — against a
- *               cache entry that any one template's change invalidates whole.
+ *               points at, seeded at startup. One request and the fewest bytes,
+ *               since fifty separately compressed files share no dictionary,
+ *               against a cache entry that any one template's change invalidates
+ *               whole.
  *
- * ADR-0081, ADR-0081.
+ * ADR-0081.
  */
 const TEMPLATE_DELIVERY = new Set(['split', 'split-lazy', 'bundle']);
 
@@ -93,16 +93,16 @@ const TEMPLATE_DELIVERY = new Set(['split', 'split-lazy', 'bundle']);
  * @typedef {'split' | 'split-lazy' | 'bundle'} TemplateDelivery
  * @typedef {{ commit?: string | null, sourceDateEpoch?: number | null }} ReleaseInput
  *
- * One retained Remote release, as composition receives it: the report written beside
- * the published bytes, plus the directory it was read from.
+ * One retained Remote release, as composition receives it. That is the report
+ * written beside the published bytes, plus the directory it was read from.
  * @typedef {RemoteReleaseReport & { root: string }} RetainedRemoteRelease
  *
- * What composition needs from one Remote, and the two documents that carry it — the
- * artifact report `srl build --remote` returns, and the retained release report
- * `remote-release.mjs` writes beside a published one. Both name the Remote and carry
- * its transport descriptor; everything else about it, the mount and what it requires
- * and is granted, comes from the shell's own manifest and is never read from the
- * Remote's own paperwork.
+ * What composition needs from one Remote, and the two documents that carry it. Those
+ * are the artifact report `srl build --remote` returns and the retained release
+ * report `remote-release.mjs` writes beside a published one. Both name the Remote
+ * and carry its transport descriptor. Everything else about it, meaning the mount
+ * and what it requires and is granted, comes from the shell's own manifest and is
+ * never read from the Remote's own paperwork.
  * @typedef {RemoteArtifactReport | RetainedRemoteRelease} RemoteInput
  *
  * @typedef {{ app: BuildApplication, outDir?: string, release?: ReleaseInput, remotes?: ReadonlyArray<RemoteInput>, templates?: TemplateDelivery }} BuildOptions
@@ -172,9 +172,10 @@ export async function buildArtifact({
         // One stylesheet, whichever chunk imported an Element's rules, so a lazy route
         // is styled offline and the document links everything it will need. ADR-0119.
         cssCodeSplit: false,
-        // The engine's own preloading stays off: it injects hints from the document
-        // it is given, and this build hands it one that is still a source file. The
-        // hints are written afterwards, from the emitted graph. ADR-0080.
+        // The engine's own preloading stays off. It injects hints from the
+        // document it is given, and this build hands it one that is still a source
+        // file. The hints are written afterwards, from the emitted graph.
+        // ADR-0080.
         modulePreload: false,
         outDir: publicDir,
         sourcemap: false,
@@ -214,7 +215,7 @@ export async function buildArtifact({
       delivery,
     );
     const localeFiles = await emitLocaleFiles(app, publicDir, source.admitted.i18n);
-    // The join the manifest used to throw away: which chunk names each template.
+    // The join the manifest needs, which is the chunk that names each template.
     // Both halves have been in scope since `chunkRelationships` ran. ADR-0081.
     const templateGroups =
       templateOutput.delivery === 'split'
@@ -246,9 +247,9 @@ export async function buildArtifact({
       withEntryHints(await readFile(htmlPath, 'utf8'), { entry, chunks, security }),
     );
     const stylesheet = await verifyBrowserRoot(app, publicDir, templates.stylesheets());
-    // Last write into the artifact, and before the inventory: the worker names the
-    // document's stylesheet, which the check above is what proves the document
-    // loads, and it is itself one more file the build then hashes, cache-classes and
+    // Last write into the artifact, and before the inventory. The worker names the
+    // document's stylesheet, which the check above proves the document loads, and
+    // the worker is itself one more file the build hashes, cache-classes and
     // verifies. A generated file that skipped that would be the one byte in the
     // artifact nothing proved. ADR-0088.
     await writeFile(
@@ -475,8 +476,9 @@ export async function buildRemoteArtifact({
         license: { fileName: 'THIRD_PARTY_LICENSES.md' },
         minify: 'oxc',
         cssCodeSplit: false,
-        // A Remote has no document of its own — the shell owns the one that carries
-        // the hints — so there is nothing here for the engine to inject into. ADR-0080.
+        // A Remote has no document of its own, because the shell owns the one that
+        // carries the hints, so there is nothing here for the engine to inject
+        // into. ADR-0080.
         modulePreload: false,
         outDir: publicDir,
         sourcemap: false,
@@ -548,12 +550,12 @@ export async function buildRemoteArtifact({
       locales,
       // Only a bundle is an asset the shell has to fetch before the remote's first
       // component renders, so it is the only one that becomes a `templates` key.
-      // Split templates are fetched by the components themselves, from this remote's
-      // own base — but under `split` the descriptor names them anyway, because the
-      // URLs are the discovery a component cannot do before its own module has
+      // Split templates are fetched by the components themselves, from this
+      // remote's own base. Under `split` the descriptor names them anyway, because
+      // the URLs are the discovery a component cannot do before its own module has
       // arrived, and the shell starts them alongside the entry module. Empty under
-      // the other two, where the markup is either already on its way or deliberately
-      // left to be discovered. ADR-0081, ADR-0081.
+      // the other two, where the markup is either already on its way or
+      // deliberately left to be discovered. ADR-0081.
       templateFiles: remoteTemplates.files,
       ...(remoteTemplates.bundle === null ? {} : { templates: remoteTemplates.bundle }),
     };
@@ -735,8 +737,8 @@ async function verifyCompositionReleases(app, reports) {
 
 /**
  * A retained release report, told apart from a Remote's own artifact report by the
- * one field whose shape differs: an artifact names its browser root with a string,
- * a release describes where the release went.
+ * one field whose shape differs. An artifact names its browser root with a string,
+ * and a release describes where the release went.
  *
  * @param {RemoteInput} report
  * @returns {report is RetainedRemoteRelease}
@@ -803,14 +805,14 @@ function sharedOutputs(app, chunks, entries) {
 }
 
 /**
- * What a delivery announces to the runtime: a bundle to seed from, a list of files
- * to start, or neither.
+ * What a delivery announces to the runtime, which is a bundle to seed from, a list
+ * of files to start, or neither.
  *
  * One function, because the shell's manifest and a Remote's descriptor answer the
- * same question and must not drift — a Remote whose markup the shell never starts,
+ * same question and must not drift. A Remote whose markup the shell never starts,
  * or starts twice, is a difference nothing else in the build would catch. They
- * spell the answer differently (`templateBundle` against a Remote's `templates`),
- * so the naming stays at the two call sites and only the facts are shared.
+ * spell the answer differently, `templateBundle` against a Remote's `templates`, so
+ * the naming stays at the two call sites and only the facts are shared.
  *
  * The branch is on `delivery` rather than on whether a bundle URL came back,
  * because the two split modes emit byte-identical artifacts and differ only here.
@@ -829,28 +831,28 @@ function templateAnnouncement(templates, base = '/') {
 /**
  * Group the emitted templates by the chunk whose modules name them.
  *
- * The join was already in the process and thrown away. `TemplateAsset.module` is the
- * absolute path of the module that called `defineComponent`, `chunkRelationships` has
- * already reduced every module of every chunk to the same repository-relative name,
- * and nothing had ever put the two beside each other. So the manifest flattened fifty
- * URLs into one list sorted by tag, and a list with no shape leaves the runtime one
- * move: start all of it, at equal priority, before any route is known.
+ * Both halves of the join are already in the process. `TemplateAsset.module` is the
+ * absolute path of the module that called `defineComponent`, and
+ * `chunkRelationships` has already reduced every module of every chunk to the same
+ * repository-relative name. Without the join the manifest flattens fifty URLs into
+ * one list sorted by tag, and a list with no shape leaves the runtime one move,
+ * which is to start all of it at equal priority before any route is known.
  *
- * Two kinds of group, and the split is the point. `entry` is every template named by
- * a module the entry document already preloads — the entry chunk, its static closure,
- * and the chunks it imports dynamically together with theirs. That is exactly the set
- * `entryHints` names, deliberately: the templates a first paint needs are the ones
- * whose code the document was already fetching. Everything else is one group per
- * chunk, keyed `chunk:<emitted path>`, so a consumer that knows which chunk it is
- * about to fetch can start that chunk's markup beside it rather than an application's
- * worth of markup at boot.
+ * There are two kinds of group. `entry` is every template named by a module the
+ * entry document already preloads, meaning the entry chunk, its static closure, and
+ * the chunks it imports dynamically together with theirs. That is exactly the set
+ * `entryHints` names, deliberately, because the templates a first paint needs are
+ * the ones whose code the document was already fetching. Everything else is one
+ * group per chunk, keyed `chunk:<emitted path>`, so a consumer that knows which
+ * chunk it is about to fetch can start that chunk's markup beside it rather than an
+ * application's worth of markup at boot.
  *
- * `entry` sorts first so the flattened list a consumer derives from these groups still
- * begins with the templates that matter soonest.
+ * `entry` sorts first, so the flattened list a consumer derives from these groups
+ * still begins with the templates that matter soonest.
  *
  * A naming module no chunk claims is a build failure. The alternative is a template
- * that belongs to no group and is therefore announced nowhere, which is ADR-0081's
- * serial chain back again on one component and invisible from outside. ADR-0081.
+ * that belongs to no group and is therefore announced nowhere, which puts ADR-0081's
+ * serial chain back on one component and hides it from outside. ADR-0081.
  *
  * @param {BuildApplication} app
  * @param {TemplateAsset[]} assets
@@ -860,10 +862,10 @@ function templateAnnouncement(templates, base = '/') {
  */
 function groupTemplates(app, assets, chunks, entry) {
   // The entry closure, by the rule `entryHints` names in the document and the
-  // generated worker precaches: static imports transitively, plus the dynamic imports
-  // the entry chunk itself makes — the root module, which `startApplication` always
-  // reaches — and their static closures. Route chunks are dynamic imports of the
-  // root, not of the entry, so they stay out of it.
+  // generated worker precaches. That is static imports transitively, plus the
+  // dynamic imports the entry chunk itself makes, which is the root module
+  // `startApplication` always reaches, plus their static closures. Route chunks are
+  // dynamic imports of the root rather than of the entry, so they stay out of it.
   const preloaded = new Set(entryClosure(entry, chunks));
   if (preloaded.size === 0) {
     throw artifactError(app, 'templates', `entry chunk ${entry} is not one of the emitted chunks.`);
@@ -907,24 +909,24 @@ function groupTemplates(app, assets, chunks, entry) {
  * The runtime manifest, with the remotes this build composed and whichever template
  * key the chosen delivery answers for.
  *
- * At most one of the two keys, and both are *replaced* rather than passed through:
- * an application that once configured `/templates.json` by hand would otherwise
- * ship a manifest naming a file this artifact does not contain, and a startup step
- * that fetches it, misses, and quietly costs a round trip.
+ * At most one of the two keys, and both are replaced rather than passed through.
+ * An application that configured `/templates.json` by hand would otherwise ship a
+ * manifest naming a file this artifact does not contain, and a startup step that
+ * fetches it, misses, and quietly costs a round trip.
  *
  *   bundle      `templateBundle`, the one JSON startup seeds the whole cache from.
  *   split       `templateFiles`, every emitted template named by the URL its
  *               component will ask for, so startup can put them in flight together
  *               instead of the browser learning each one from the module that just
- *               arrived. A list of the files, not a copy of them.
+ *               arrived. A list of the files rather than a copy of them.
  *   split-lazy  Neither. The files are there and nothing announces them, so each is
- *               discovered by the component that needs it — ADR-0081 unchanged.
+ *               discovered by the component that needs it.
  *
  * The branch is on `delivery` rather than on whether a bundle URL came back,
  * because the two split modes emit byte-identical artifacts and differ only here.
- * ADR-0081, ADR-0081.
+ * ADR-0081.
  *
- * `i18n.bundleFiles` arrives the same way and for the same reason: it names files
+ * `i18n.bundleFiles` arrives the same way and for the same reason. It names files
  * this build emitted, so a value found in the source document describes some other
  * artifact and is replaced rather than merged. ADR-0083.
  *
@@ -949,9 +951,9 @@ async function emitApplicationManifest(app, publicDir, source, templates, groups
   );
   const localized = { ...rest, i18n: { ...i18n, bundleFiles: localeFiles } };
   const announced = templateAnnouncement(templates);
-  // Three shapes, one per delivery mode, and the artifact says which by which key it
-  // carries. `split` says `templateGroups` and nothing else: the flat list was the
-  // same URLs with the shape removed, so emitting both would be one copy of the truth
+  // Three shapes, one per delivery mode, and the artifact says which by the key it
+  // carries. `split` says `templateGroups` and nothing else. A flat list is the same
+  // URLs with the shape removed, so emitting both would ship one copy of the truth
   // and one copy of what the runtime is meant to stop doing with it. ADR-0081.
   const manifest =
     announced.bundle !== null
@@ -1187,20 +1189,20 @@ async function productionCss(app, stage, entry) {
 }
 
 /**
- * The utility classes an application's own shell names: every plain class token
- * on `<html>` and `<body>` in its index.html.
+ * The utility classes an application's own shell names, meaning every plain class
+ * token on `<html>` and `<body>` in its index.html.
  *
- * What the compiled stylesheet is checked against, and derived from the
- * application rather than named in this file, because the class one application
- * happens to put on its body is not a fact about the tool. The check itself is
- * for the trap in docs/guide/delivery.md: a Tailwind run whose `@source` globs
- * resolved against the wrong directory emits a stylesheet, exits 0, and has
- * scanned nothing — a build that looks like it worked and a site with no styles.
- * The shell's own classes are the ones every page of that application renders,
- * so a stylesheet carrying none of them cannot have read the application.
+ * What the compiled stylesheet is checked against, derived from the application
+ * rather than named in this file, because the class one application happens to put
+ * on its body is not a fact about the tool. The check exists for the trap in
+ * docs/guide/delivery.md. A Tailwind run whose `@source` globs resolved against the
+ * wrong directory emits a stylesheet, exits 0, and has scanned nothing, which looks
+ * like a build that worked and a site with no styles. The shell's own classes are
+ * the ones every page of that application renders, so a stylesheet carrying none of
+ * them cannot have read the application.
  *
- * Tokens with a variant or an opacity — `sm:flex`, `text-ink/50` — are left out:
- * they are escaped in the emitted selector, and matching them would mean
+ * Tokens with a variant or an opacity, such as `sm:flex` or `text-ink/50`, are left
+ * out. They are escaped in the emitted selector, and matching them would mean
  * reproducing Tailwind's escaping here to test something the plain tokens beside
  * them already answer.
  *
@@ -1244,10 +1246,10 @@ async function compileProductionCss(
       cwd: REPO,
     });
   } catch (error) {
-    // The compiler's own message, not just "it failed". A missing `@import`, an unknown
-    // `@source` glob and a syntax error in the application's stylesheet all arrive here,
-    // and the useful half is on the child's stderr — which `execFile` puts on the error
-    // object and nowhere a caller would look.
+    // The compiler's own message rather than just "it failed". A missing `@import`,
+    // an unknown `@source` glob and a syntax error in the application's stylesheet
+    // all arrive here, and the useful half is on the child's stderr, which
+    // `execFile` puts on the error object and nowhere a caller would look.
     throw artifactError(
       app,
       'css',
@@ -1257,11 +1259,11 @@ async function compileProductionCss(
   }
 
   const source = await readFile(temporary, 'utf8');
-  // One of them, not all: the shell may well name a class of its own alongside
-  // the utilities, and one utility emitted is already proof that the scan read
-  // the application. An empty list means the shell names no plain utility at
-  // all, which is a stylesheet this check has nothing to say about rather than
-  // a failure — the four checks around it still apply.
+  // One of them rather than all, because the shell may name a class of its own
+  // alongside the utilities and one utility emitted already proves the scan read
+  // the application. An empty list means the shell names no plain utility at all,
+  // which is a stylesheet this check has nothing to say about rather than a
+  // failure. The four checks around it still apply.
   const scanned =
     requiredUtilities.length === 0 ||
     requiredUtilities.some((name) => source.includes(`.${name}`));
@@ -1416,8 +1418,8 @@ async function productionRemoteCss(app, remoteDir, stage, entry) {
   const remoteSource = remoteDir.split(sep).join('/');
   source += `\n@source '${remoteSource}';\n`;
   await writeFile(input, source);
-  // Not the shell's classes: this stylesheet is compiled from one remote's
-  // sources alone, and the body the shell renders is not among them. What every
+  // Not the shell's classes, because this stylesheet is compiled from one remote's
+  // sources alone and the body the shell renders is not among them. What every
   // remote in the collection does draw is muted text.
   const compiled = await compileProductionCss(
     app,
@@ -1496,9 +1498,10 @@ function productionHtml(app) {
             removed.theme += 1;
             return true;
           }
-          // The palette is a second link and a second fact: the compiled stylesheet
-          // carries both sheets, so an artifact that still asks the origin for one of
-          // them is a request that will 404 in the deployed shape.
+          // The palette is a second link and a second fact. The compiled
+          // stylesheet carries both sheets, so an artifact that still asks the
+          // origin for one of them makes a request that 404s in the deployed
+          // shape.
           if (
             node.tagName === 'link' &&
             htmlAttribute(node, 'href') === '/components/theme-default.css'
@@ -1585,21 +1588,21 @@ function htmlAttribute(node, name) {
  * Emit every locale bundle as an immutable, hash-named file, and return the mapping
  * from the URL the manifest declares to the file that answers for it.
  *
- * Locale bundles were the last payload class that could not be immutable. Everything
- * under `assets/` is hash-named and served for a year; `/i18n/en.json` was served
- * `private, no-cache`, so every load revalidated it — and it is startup step 4, on the
- * critical path, before the first render. The reason was recorded here as a comment:
- * locale URLs stay stable "until a runtime mapping exists". This is that mapping, and
- * it goes where the runtime already reads its locales from. ADR-0083.
+ * Everything under `assets/` is hash-named and served for a year. A locale bundle
+ * at a stable URL like `/i18n/en.json` has to be served `private, no-cache`, so
+ * every load revalidates it, and it sits in startup step 4, on the critical path,
+ * before the first render. This mapping makes locale bundles immutable too, and it
+ * goes where the runtime already reads its locales from. ADR-0083.
  *
  * The emitted path mirrors the declared one beneath `assets/`, so `/i18n/en.json`
  * becomes `/assets/i18n/en-<hash>.json`. Uniqueness is inherited from a URL the
  * manifest has already admitted rather than invented here, and the existing
  * `immutable` rule covers the result without a per-asset exception.
  *
- * Every declared bundle must exist. The runtime tolerates a missing one — a locale
- * half-translated is a normal state while translating — but an artifact that shipped
- * without a file its own manifest names would tolerate it silently, forever.
+ * Every declared bundle must exist. The runtime tolerates a missing one, because a
+ * half-translated locale is a normal state while translating, but an artifact that
+ * shipped without a file its own manifest names would tolerate it silently,
+ * forever.
  *
  * @param {BuildApplication} app
  * @param {string} publicDir
@@ -1836,8 +1839,9 @@ function verifyScopedRules(app, css, styled) {
 const ELEMENT_STYLESHEET = '\0element-stylesheet:';
 
 /**
- * Inject explicit built template URLs into every bundled `defineComponent` call. Source
- * stays untouched; only Vite's in-memory module text changes. TypeScript AST ranges make
+ * Inject explicit built template URLs into every bundled `defineComponent` call.
+ * Source stays untouched, and only Vite's in-memory module text changes. TypeScript
+ * AST ranges make
  * object formatting irrelevant and keep strings or comments containing the same words
  * out of the transform.
  *
@@ -2017,9 +2021,9 @@ function templateTransform(app, model, base) {
  * One template, minified, named after the bytes that will actually be served.
  *
  * The hash is of the emitted markup rather than of the authored file, because the
- * name is a cache key for what the browser receives: hashing the source would
- * hold a URL still while its bytes changed the day the minifier did.
- * `minifyTemplate` proves the two parse to the same tree (ADR-0070).
+ * name is a cache key for what the browser receives. Hashing the source would hold
+ * a URL still while its bytes changed the day the minifier did. `minifyTemplate`
+ * proves the two parse to the same tree (ADR-0070).
  *
  * @param {BuildApplication} app
  * @param {import('../project-model/types.js').ElementRecord} record
@@ -2048,15 +2052,15 @@ async function templateAsset(app, record, base) {
 }
 
 /**
- * Emit one immutable file per template, and — under `bundle` delivery — the single
+ * Emit one immutable file per template, plus, under `bundle` delivery, the single
  * JSON keyed by those final URLs that the runtime manifest points at. Reading the
  * emitted bytes back before publication makes stale or malformed markup a build
  * failure rather than a blank route.
  *
- * The per-template files are the delivery under every mode, not a fallback: a
- * component names its own template URL and fetches it when its chunk loads. What
+ * The per-template files are the delivery under every mode rather than a fallback.
+ * A component names its own template URL and fetches it when its chunk loads. What
  * the three modes decide is who says those URLs out loud and when, which is what
- * `emitApplicationManifest` reads this `delivery` back out for. ADR-0081, ADR-0081.
+ * `emitApplicationManifest` reads this `delivery` back out for. ADR-0081.
  *
  * @param {BuildApplication} app
  * @param {string} stage
@@ -2082,7 +2086,8 @@ async function emitTemplateFiles(app, stage, assets, base, delivery) {
   const files = assets.map((asset) => asset.path);
   const bytes = assets.reduce((total, asset) => total + Buffer.byteLength(asset.source), 0);
   // Both split modes emit exactly this and nothing more. They diverge in the
-  // manifest, not in the artifact: the same fifty files, announced or not.
+  // manifest rather than in the artifact, so the same fifty files either way,
+  // announced or not.
   if (delivery !== 'bundle') {
     return { delivery, bundle: null, url: null, count: assets.length, bytes, files };
   }
@@ -2232,12 +2237,12 @@ function isBare(specifier) {
  * internals, which the import map has nothing to say about and Vite resolves the
  * ordinary way.
  *
- * Living under node_modules is the signal, and the library is the exception: when the
- * package was installed from the registry rather than checked out beside the
+ * Living under node_modules is the signal, and the library is the exception. When
+ * the package was installed from the registry rather than checked out beside the
  * application, every module of it sits under node_modules and every one of them
- * imports `@core/` — the prefixes only the import map resolves. Excluding it here on
- * the strength of its path would leave the framework's own imports to a resolver that
- * cannot see the map, which fails the build on the first `@core/` it meets.
+ * imports `@core/`, the prefixes only the import map resolves. Excluding it here on
+ * the strength of its path would leave the framework's own imports to a resolver
+ * that cannot see the map, which fails the build on the first `@core/` it meets.
  *
  * @param {string | undefined} importer
  * @returns {boolean}
@@ -2375,19 +2380,19 @@ async function inventory(directory) {
 
 /**
  * How long one emitted file may be cached, decided by where it sits and how it is
- * named. Two rules and an allowlist: anything hash-named under `assets/` is immutable
- * because its URL changes with its bytes, the document, the two small JSON files
- * startup reads and the service worker are revalidated because their URLs never
- * change, and everything else is `unknown`, which `verifyPayload` refuses.
+ * named. Two rules and an allowlist cover it. Anything hash-named under `assets/` is
+ * immutable because its URL changes with its bytes. The document, the two small JSON
+ * files startup reads and the service worker are revalidated because their URLs
+ * never change. Everything else is `unknown`, which `verifyPayload` refuses.
  *
- * `sw.js` is in the second group for the reason it cannot be in the first: a
+ * `sw.js` is in the second group for the reason it cannot be in the first. A
  * registration names one URL for the lifetime of an origin, so the worker is the one
  * script here whose name may not move with its bytes. ADR-0088.
  *
- * The `i18n/` clause is a Remote's, not an application's: a shell emits its locale
- * bundles hash-named under `assets/` (ADR-0083), while a Remote's are published under
- * a base that already carries its release, so the file inside its artifact keeps the
- * URL its descriptor declares.
+ * The `i18n/` clause is a Remote's rather than an application's. A shell emits its
+ * locale bundles hash-named under `assets/` (ADR-0083), while a Remote's are
+ * published under a base that already carries its release, so the file inside its
+ * artifact keeps the URL its descriptor declares.
  *
  * @param {string} path
  * @returns {CacheClass | 'unknown'}
@@ -2419,10 +2424,10 @@ function cacheClass(path) {
  */
 function verifyPayload(app, files, templates, chunks, localeFiles) {
   // Every `.js` in the artifact is a chunk the engine emitted and the report
-  // describes, with one exception this build writes itself: the service worker is a
+  // describes, with one exception this build writes itself. The service worker is a
   // classic script at a fixed URL, in no import map and in no module graph, so the
-  // hash-naming and one-file-per-chunk rules below are not true of it and must not be
-  // asked of it. It is checked instead by being required output. ADR-0088.
+  // hash-naming and one-file-per-chunk rules below are not true of it and must not
+  // be asked of it. It is checked instead by being required output. ADR-0088.
   const javascript = files.filter(
     (file) => file.path.endsWith('.js') && file.path !== `${PUBLIC}/${WORKER}`,
   );
@@ -2486,9 +2491,10 @@ function verifyPayload(app, files, templates, chunks, localeFiles) {
     }
     verifyHexHash(app, fileByPath, `${PUBLIC}/${template}`, /-([0-9a-f]{16})\.html$/u);
   }
-  // A mapping is a promise the runtime keeps: it fetches what this says and nothing
-  // else, so a URL here that names no file, or names one whose bytes moved out from
-  // under its hash, is a locale that silently loads empty behind a year-long cache.
+  // A mapping is a promise the runtime keeps, because it fetches what this says and
+  // nothing else. A URL here that names no file, or names one whose bytes moved out
+  // from under its hash, is a locale that silently loads empty behind a year-long
+  // cache.
   for (const [declared, emitted] of Object.entries(localeFiles)) {
     if (!/^\/assets\/(?:[^/]+\/)*[^/]+-[0-9a-f]{16}\.[a-z0-9]+$/u.test(emitted)) {
       throw artifactError(app, 'verify', `locale bundle is not hash-named: ${emitted}`);
@@ -2546,9 +2552,9 @@ function contentHash(source) {
 }
 
 /**
- * The same URL with the digest in its final path segment: `/i18n/en.json` and a hash
- * give `/i18n/en-<hash>.json`. The directory structure is kept, so a name is unique
- * for the reason the URL it came from was.
+ * The same URL with the digest in its final path segment, so `/i18n/en.json` and a
+ * hash give `/i18n/en-<hash>.json`. The directory structure is kept, so a name is
+ * unique for the reason the URL it came from was.
  *
  * @param {string} url
  * @param {string} hash

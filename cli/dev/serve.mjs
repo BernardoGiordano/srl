@@ -1,26 +1,26 @@
 /**
- * The development server: one adapter over `cli/origin/`, plus the two things a
+ * The development server. One adapter over `cli/origin/`, plus the things a
  * development server has that no other origin does.
  *
- * Zero dependencies so that `npm start` works on a fresh clone, and not a
- * dependency of the application: any static server that can mount two directories
- * on one origin serves the same folders with no Node at all. The template
- * announcement below is the one thing that wants a parsed project, and it imports
- * the model lazily and declines rather than failing when it cannot: a clone with
- * no `node_modules` still gets a server, one round trip per template slower.
+ * Zero dependencies, so `npm start` works on a fresh clone, and not a dependency of
+ * the application. Any static server that can mount two directories on one origin
+ * serves the same folders with no Node at all. The template announcement below is
+ * the one thing that wants a parsed project. It imports the model lazily and
+ * declines rather than failing when it cannot, so a clone with no `node_modules`
+ * still gets a server, one round trip per template slower.
  *
  *   node cli/dev/serve.mjs [--app <name>] [--port 8000] [--no-watch] [--open]
  *                          [--proxy <prefix>=<origin>]...
  *
- * `--app` names a directory in the repository root: the application to serve at
- * /. Required when the repository holds more than one, and unnecessary when it
- * holds one. Everything else about the layout is fixed, because the URLs are
- * baked into each application's import map and into the deployment.
+ * `--app` names a directory in the repository root, the application to serve at /.
+ * Required when the repository holds more than one, and unnecessary when it holds
+ * one. Everything else about the layout is fixed, because the URLs are baked into
+ * each application's import map and into the deployment.
  *
  * The mounts, the traversal refusal, the directory index and the history fallback
- * are not here: they are `cli/origin/index.mjs`, which the benchmark origin and
- * the artifact test origin serve through as well. ADR-0075. What is here is the
- * part that is only true of development:
+ * live in `cli/origin/index.mjs`, which the benchmark origin and the artifact test
+ * origin serve through as well. ADR-0075. What is here is the part that is only
+ * true of development.
  *
  *   updates       what changed on disk, as the URL the browser knows it by, so an
  *                 edited `.html` file is re-rendered into the hosts showing it and
@@ -30,22 +30,22 @@
  *                 into the file, so the bytes this server sends and the bytes
  *                 nginx sends are the same in production.
  *   --proxy       forwards a URL prefix to a backend instead of serving it from
- *                 disk, which is what lets an application with an API develop on
- *                 one origin — the arrangement it is deployed into — rather than
- *                 on two. ADR-0075.
+ *                 disk, which lets an application with an API develop on one
+ *                 origin, the arrangement it is deployed into, rather than on two.
+ *                 ADR-0075.
  *   templates     `app.manifest.json` is announced with `templateFiles`, computed
  *                 from `cli/project-model/` the way the build computes it from
  *                 what it emitted. Same manifest key, same runtime step, same
- *                 `prefetchTemplates`; the only difference between development and
+ *                 `prefetchTemplates`. The only difference between development and
  *                 production is which module wrote the list.
  *                 `cli/delivery/source-manifest.mjs`.
  *   revalidation  `no-cache` rather than the origin's `no-store` default, which
- *                 turns a reload's forty module bodies and fifty templates from
- *                 whole bodies into 304s. `cli/origin/` sends the `ETag` and
- *                 answers the `If-None-Match`; what is stated here is only that
- *                 the browser is allowed to ask. ADR-0081.
+ *                 turns a reload's forty module bodies and fifty templates into
+ *                 304s. `cli/origin/` sends the `ETag` and answers the
+ *                 `If-None-Match`, and what is stated here is only that the
+ *                 browser is allowed to ask. ADR-0081.
  *
- * `serveApplication` is the seam: it takes an application and its proxies and
+ * `serveApplication` is the seam. It takes an application and its proxies and
  * returns a bound origin, so the behaviour below is assertable in-process rather
  * than by spawning this file and parsing its stdout.
  */
@@ -94,16 +94,15 @@ function proxyFor(pathname, proxies) {
  * Forward one request upstream and stream the answer back, headers and status
  * untouched.
  *
- * Untouched is the point. Set-Cookie arrives with whatever Path, SameSite and
- * HttpOnly the backend chose, a 401 stays a 401, and a redirect is followed by
- * the browser rather than by this server — the application sees what it will see
- * through nginx. The one header rewritten is Host, which has to name the upstream
- * for a backend that routes on it.
+ * Untouched is what makes it useful. Set-Cookie arrives with whatever Path,
+ * SameSite and HttpOnly the backend chose, a 401 stays a 401, and a redirect is
+ * followed by the browser rather than by this server, so the application sees what
+ * it will see through nginx. The one header rewritten is Host, which has to name the
+ * upstream for a backend that routes on it.
  *
- * The request body is piped rather than buffered, so an upload is not held in
- * this process's memory, and the method is passed through: the static branch
- * answers 405 to anything but GET, which is correct for files and wrong for an
- * API.
+ * The request body is piped rather than buffered, so an upload is not held in this
+ * process's memory. The method is passed through, because the static branch answers
+ * 405 to anything but GET, which is correct for files and wrong for an API.
  *
  * @param {IncomingMessage} request
  * @param {ServerResponse} response
@@ -128,9 +127,9 @@ function forward(request, response, origin, log) {
     },
   );
 
-  // A backend that is not running is the ordinary case — it is a separate process
-  // a developer starts separately — so it reads as one line naming the origin
-  // nothing answered on, not a stack trace.
+  // A backend that is not running is the ordinary case, since it is a separate
+  // process a developer starts separately. It reads as one line naming the origin
+  // nothing answered on, rather than a stack trace.
   upstream.on('error', (cause) => {
     log('  502  %s  %s', request.url ?? '/', String(cause));
     if (!response.headersSent) {
@@ -182,8 +181,9 @@ export async function serveApplication(options) {
 
   /**
    * The watcher, the batching and the two update URLs, over the same mount table the
-   * origin resolves forward. Null when not watching, which is what a suite wants: a
-   * recursive watch of the repository is the slowest thing this function can start.
+   * origin resolves forward. Null when not watching, which is what a suite wants,
+   * because a recursive watch of the repository is the slowest thing this function
+   * can start.
    */
   const updates = watching ? startUpdateSession({ mounts, log }) : null;
 
@@ -196,24 +196,24 @@ export async function serveApplication(options) {
        * Revalidation rather than the origin's `no-store`.
        *
        * `no-store` is the safe default for an origin that knows nothing about its
-       * caller, and it is the wrong one here: it deletes the browser cache, so the
-       * second reload costs exactly what the first did — every module and every
+       * caller, and it is the wrong one here. It deletes the browser cache, so the
+       * second reload costs exactly what the first did, every module and every
        * template as a whole body. `no-cache` keeps the entry and requires the
        * browser to revalidate it before use, which is a 304 for everything the
        * developer did not touch and a 200 for the file they did.
        *
-       * The stale-module failure `no-store` was guarding against needs the
-       * validator to lie, and it is built from size and mtime: an edit changes at
+       * The stale-module failure `no-store` guards against needs the validator to
+       * lie, and the validator is built from size and mtime, so an edit changes at
        * least one of them. A checkout that restores an old mtime at an identical
-       * size is the residue, and it is a `touch` away — which is a trade worth
-       * making for the two thirds of a reload this returns.
+       * size is the residue, and it is a `touch` away. That is a trade worth making
+       * for the two thirds of a reload this returns.
        */
       headers: () => ({ 'Cache-Control': 'no-cache' }),
 
       /**
-       * Two documents are not the file on disk: the entry, which carries the
-       * reload client while watching, and the manifest, which carries the template
-       * list the build would have written. Every other byte is streamed.
+       * Two documents are not the file on disk. The entry carries the reload
+       * client while watching, and the manifest carries the template list the build
+       * would have written. Every other byte is streamed.
        */
       transform: async (file) => {
         if (file === manifest.file) return manifest.representation();
@@ -226,7 +226,7 @@ export async function serveApplication(options) {
         if (updates !== null && (await updates.route(request, response, url))) return true;
 
         // Ahead of the method check and the history fallback, both of which are
-        // rules about files: a POST to /api/session must reach the backend, and a
+        // rules about files. A POST to /api/session must reach the backend, and a
         // GET of a path the backend owns must 404 from the backend rather than
         // quietly return index.html.
         const proxy = proxyFor(url.pathname, proxies);
@@ -244,17 +244,17 @@ export async function serveApplication(options) {
     },
   );
 
-  // On the same signal as the update session, and for the same reason: watching
+  // On the same signal as the update session, and for the same reason. Watching
   // means a human is about to load this page, and the model's first build is ~200 ms
   // of importing a compiler. A suite that asks for a server without one is asking
-  // for a server, not for a warm cache.
+  // for a server rather than for a warm cache.
   if (updates !== null) manifest.warm();
 
   return {
     url: running.url,
     port: running.port,
     mounts,
-    // The server no longer outlives its watchers. Closing the origin first refuses
+    // The server must not outlive its watchers. Closing the origin first refuses
     // new connections, and closing the session ends the open event streams, which
     // are the connections that would otherwise never close on their own.
     close: async () => {
@@ -282,10 +282,10 @@ function flag(name, fallback) {
 }
 
 /**
- * Every value given for a repeatable flag, in the order given. `--proxy` is the
- * only one: an application can have more than one backend, and the alternative —
- * one flag holding a comma-separated list — puts a second parser in a string
- * whose contents are already URLs.
+ * Every value given for a repeatable flag, in the order given. `--proxy` is the only
+ * one, because an application can have more than one backend and the alternative, one
+ * flag holding a comma-separated list, puts a second parser in a string whose
+ * contents are already URLs.
  *
  * @param {string} name
  * @returns {string[]}
@@ -305,18 +305,18 @@ function flags(name) {
  * `--proxy /api/=http://127.0.0.1:8001`, repeatable.
  *
  * An application with a backend needs it on this origin rather than a second one.
- * A session cookie is returned only to the origin that set it, so a dev server
- * that cannot forward /api/ leaves two options, and both have the application
- * developed against an arrangement it does not ship: a CORS and third-party-cookie
- * dance that production never performs, or a hand-written server beside this one
- * that re-implements the mounts in order to add ten lines of proxy.
+ * A session cookie is returned only to the origin that set it, so a dev server that
+ * cannot forward /api/ leaves two options and both develop the application against an
+ * arrangement it does not ship. One is a CORS and third-party-cookie dance that
+ * production never performs. The other is a hand-written server beside this one that
+ * re-implements the mounts in order to add ten lines of proxy.
  *
- * Routes only, no rewriting. In production the same prefixes are a location block
- * in nginx, and a flag that could rewrite paths would be a second routing table to
- * keep in step with that one.
+ * Routes only, no rewriting. In production the same prefixes are a location block in
+ * nginx, and a flag that could rewrite paths would be a second routing table to keep
+ * in step with that one.
  *
- * Refused at startup rather than at the first request: a typo in an origin is a
- * startup error, not a 502 half an hour later.
+ * Refused at startup rather than at the first request, because a typo in an origin is
+ * a startup error rather than a 502 half an hour later.
  *
  * @returns {Proxy[]}
  */
