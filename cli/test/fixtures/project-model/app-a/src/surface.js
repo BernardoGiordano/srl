@@ -2,7 +2,7 @@
 
 import { SurfaceBase } from './surface-base.mjs';
 
-// Lit's way: properties, each mapping to an attribute by its own rule.
+// Lit's way, with properties each mapping to an attribute by its own rule.
 export class Surface extends SurfaceBase {
   static get properties() {
     return {

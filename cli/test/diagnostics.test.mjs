@@ -19,10 +19,10 @@ import { REPO } from '../layout.mjs';
 /**
  * The reporting seam.
  *
- * Six checks share this module, so what it decides it decides for all of them: how a
+ * Six checks share this module, so what it decides it decides for all of them. How a
  * path is spelled, which severity fails the run, which stream a refusal goes to, and
- * what the JSON document promises a consumer. Each of those is a rule that used to be
- * copied per check. ADR-0072.
+ * what the JSON document promises a consumer. Each of those is a rule that would
+ * otherwise be copied per check. ADR-0072.
  */
 
 void test('a finding carries what it was given, and nothing it was not', () => {
@@ -51,14 +51,15 @@ void test('a finding carries what it was given, and nothing it was not', () => {
 });
 
 void test('a path inside the repository is shortened, and one outside is not', () => {
-  // The reason this is here and not in each check: six of them had their own `show()`.
+  // Why this is here rather than in each check, where six of them would carry their
+  // own `show()`.
   assert.equal(
     error('x', 'y', { file: join(REPO, 'source', 'lib', 'core', 'reactive.js') }).file,
     'source/lib/core/reactive.js',
   );
 
-  // A relative path is the caller's own spelling — an editor seam is handed
-  // `fixture.html` and should get it back.
+  // A relative path is the caller's own spelling, so an editor seam handed
+  // `fixture.html` gets it back.
   assert.equal(error('x', 'y', { file: 'fixture.html' }).file, 'fixture.html');
 
   const outside = '/elsewhere/entirely/file.js';

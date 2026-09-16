@@ -19,13 +19,14 @@ import { clearParseCache, parseModule } from '../project-model/parse.mjs';
 /**
  * The project model's invariants, over a fixture project rather than this repository.
  *
- * Every case here is one the three tools that used to answer these questions separately
- * could get wrong: a definition whose template is declared rather than a sibling, a `uses`
- * entry naming a class nothing defines, two modules claiming one tag, markup left behind
- * by a rename, a computed tag no static tool can read. The fixture project states each of
- * them once, so a change to discovery has one place to be verified against.
+ * Every case here is one that three tools answering these questions separately could
+ * get wrong. A definition whose template is declared rather than a sibling, a `uses`
+ * entry naming a class nothing defines, two modules claiming one tag, markup left
+ * behind by a rename, a computed tag no static tool can read. The fixture project
+ * states each of them once, so a change to discovery has one place to be verified
+ * against.
  *
- * The fixtures are deliberately not compiled or linted — see the exclusions in
+ * The fixtures are deliberately not compiled or linted, and the exclusions are in
  * tsconfig.json and eslint.config.js. A declaration that no static tool can read cannot
  * also be a file that satisfies every static tool.
  */
@@ -98,12 +99,12 @@ void test('markup no definition claims is an orphan, and a fixture template is n
   const model = await fixtureProject(APP_A);
   const orphans = orphanTemplates(model).map((template) => template.path);
 
-  // headless.html sits beside a module that declares `template: false`: the leftover of a
-  // rename, which is exactly the invisible case.
+  // headless.html sits beside a module that declares `template: false`, the leftover
+  // of a rename, which is exactly the invisible case.
   assert.deepEqual(orphans, [join(APP_A.dir, 'src', 'headless.html')]);
 
   // A suite's own fixture markup is claimed by nothing either, but it is not beside a
-  // module the application ships, so it is not an orphan — and it never ships.
+  // module the application ships, so it is not an orphan, and it never ships.
   const shipped = shippedTemplates(model).map((template) => template.url);
   assert.ok(!shipped.includes('/src/test/fixture-element.html'), shipped.join(' '));
   assert.ok(shipped.includes('/src/child.html'));
@@ -162,14 +163,15 @@ void test('a declaration static analysis cannot read is an error, not a silent s
     /something other than an object literal/u,
   );
 
-  // The bare registration is the mechanism, not a declaration: a note, and no tag.
+  // The bare registration is the mechanism rather than a declaration, so it is a note
+  // with no tag.
   const notes = dynamic.filter((diagnostic) => diagnostic.severity === 'note');
   assert.ok(notes.length >= 1);
   assert.equal(model.elements.get('fx-computed'), undefined);
 
-  // Test source declares invalid things on purpose. That may never fail a build — and the
-  // check that decides it is relative to the project root, because this fixture project
-  // itself lives under a directory called `test`.
+  // Test source declares invalid things on purpose, and that may never fail a build.
+  // The check that decides it is relative to the project root, because this fixture
+  // project itself lives under a directory called `test`.
   const fromTests = model.diagnostics.filter((diagnostic) =>
     diagnostic.file.includes(join('src', 'test')),
   );
@@ -256,9 +258,9 @@ void test('public inputs, internal state and template globals come from declarat
 void test('what an element observes is read from either declaration, or reported unknown', async () => {
   const model = await fixtureProject(APP_A);
 
-  // Lit's rule, three ways: the default attribute is the property name lowercased, an
-  // explicit `attribute` replaces it, and `attribute: false` or `state: true` means the
-  // property cannot be reached from markup at all.
+  // Lit's rule, three ways. The default attribute is the property name lowercased, an
+  // explicit `attribute` replaces it, and `attribute: false` or `state: true` means
+  // the property cannot be reached from markup at all.
   assert.deepEqual(model.elements.get('fx-surface')?.observedAttributes, [
     'data-collapsed',
     'empty-label',
@@ -374,7 +376,7 @@ void test('a side-effect import makes a plain custom element available to the te
   // `uses` resolves each entry to a component definition and throws on a class that
   // has none, so a plain `customElements.define` element can never appear in one.
   // Importing its module is therefore the only declaration there is, and the model
-  // has to read it — otherwise the template checker reports the element as missing
+  // has to read it. Otherwise the template checker reports the element as missing
   // from a list that could not have accepted it, and following that advice throws.
   const model = await fixtureProject(APP_A);
   const host = model.elements.get('fx-side-effect-host');
@@ -384,8 +386,8 @@ void test('a side-effect import makes a plain custom element available to the te
     `fx-plain is available to it, got ${host.usesTags.join(', ')}`,
   );
 
-  // And only for the module that imports it: availability is per component, the same
-  // way `uses` is.
+  // And only for the module that imports it, because availability is per component,
+  // the same way `uses` is.
   const other = model.elements.get('fx-host');
   assert.ok(other !== undefined);
   assert.ok(!other.usesTags.includes('fx-plain'), 'not available to a component that does not import it');

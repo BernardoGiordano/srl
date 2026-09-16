@@ -118,10 +118,9 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.deepEqual(manifest.remotes, composed);
 
     // Under split delivery the manifest names every template and no bundle, which
-    // is what lets startup put them in flight instead of the browser learning each
-    // URL from the component module that just arrived — and it names them grouped by
-    // the chunk that holds each naming module, so the entry closure can go first.
-    // ADR-0081, ADR-0081.
+    // lets startup put them in flight instead of the browser learning each URL from
+    // the component module that just arrived. It names them grouped by the chunk that
+    // holds each naming module, so the entry closure can go first. ADR-0081.
     const shellTemplates = /** @type {{ files: string[] }} */ (
       /** @type {Record<string, unknown>} */ (shell).templates
     );
@@ -132,7 +131,7 @@ void test('example composes independently verified Remote artifacts', async () =
       Object.values(groups).flat().sort(),
       shellTemplates.files.map((path) => `/${path}`).sort(),
     );
-    // `entry` first, and a real group rather than an empty ceremonial one: startup
+    // `entry` first, and a real group rather than an empty ceremonial one. Startup
     // step 3 starts exactly this, so a build that grouped everything under a route
     // chunk would leave the first paint discovering its own markup.
     assert.equal(Object.keys(groups)[0], 'entry');
@@ -152,7 +151,7 @@ void test('example composes independently verified Remote artifacts', async () =
     );
     // Every locale bundle is emitted hash-named under `assets/`, so it is served
     // immutable like everything else there, and the manifest says which file each
-    // declared URL is served from — a hash cannot live in a `{locale}` pattern, and
+    // declared URL is served from. A hash cannot live in a `{locale}` pattern, and
     // startup step 4 is on the critical path. ADR-0083.
     const bundleFiles = /** @type {Record<string, string>} */ (manifest.i18n.bundleFiles);
     assert.deepEqual(
@@ -430,7 +429,7 @@ void test('the manifest announces templates the way the delivery says to', async
     assert.deepEqual(lazy.manifest.templateFiles, []);
     assert.equal(lazy.manifest.templateGroups, undefined);
 
-    // `bundle` names the one JSON and no list: seeding fills the cache from bytes
+    // `bundle` names the one JSON and no list. Seeding fills the cache from bytes
     // already in hand, so a prefetch beside it would request markup nothing reads.
     assert.equal(lazy.manifest.templateFiles.length, 0);
     assert.equal(bundled.manifest.templateFiles, undefined);
@@ -492,8 +491,8 @@ void test('a template is one immutable file, and a bundle only when asked for', 
     assert.deepEqual(splitTemplates.files, bundledTemplates.files);
 
     // The two split modes emit byte-identical artifacts. Everything that separates
-    // them is in what the descriptor announces, which is the assertion below —
-    // if they ever diverge here, one of them is emitting a file the other is not.
+    // them is in what the descriptor announces, which is the assertion below. If they
+    // ever diverge here, one of them is emitting a file the other is not.
     assert.equal(lazyTemplates.delivery, 'split-lazy');
     assert.equal(lazyTemplates.bundle, null);
     assert.equal(lazyTemplates.url, null);
@@ -536,9 +535,9 @@ void test('a template is one immutable file, and a bundle only when asked for', 
       splitTemplates.files.map((path) => `${String(split.base)}${path}`).sort(),
     );
     assert.equal(splitRemote.templates, undefined);
-    // `split-lazy` announces nothing at all: no bundle to seed from and no list to
-    // start, so every template is discovered by the component that needs it, which
-    // is ADR-0081 unchanged and the reason the mode exists.
+    // `split-lazy` announces nothing at all, with no bundle to seed from and no list
+    // to start, so every template is discovered by the component that needs it. That
+    // is why the mode exists. ADR-0081.
     assert.deepEqual(lazyRemote.templateFiles, []);
     assert.equal(lazyRemote.templates, undefined);
     assert.deepEqual(bundledRemote.templateFiles, []);

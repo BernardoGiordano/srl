@@ -12,13 +12,12 @@ import { extractImportMap } from '../package/interface.mjs';
 /**
  * What a development server announces about templates.
  *
- * The rule being pinned is a parity one, and it has no other guard: a built
- * artifact's manifest carries `templateFiles` and the source manifest a developer
- * is served did not, so `startApplication`'s templates step ran in production and
- * nowhere else. Nothing failed when that was true — the application worked, one
- * round trip per component per reload — which is why it lasted, and why the
- * assertions here are about the manifest a browser receives rather than about any
- * function that helps build it.
+ * The rule being pinned is a parity one, and it has no other guard. A built
+ * artifact's manifest carries `templateFiles`, and a source manifest without one
+ * leaves `startApplication`'s templates step running in production and nowhere else.
+ * Nothing fails when that is true, because the application works at one round trip
+ * per component per reload, which is why the assertions here are about the manifest a
+ * browser receives rather than about any function that helps build it.
  *
  * Each case is one way the announcement can be wrong while still looking right:
  *
@@ -35,9 +34,9 @@ import { extractImportMap } from '../package/interface.mjs';
  */
 
 /**
- * The example application, served on an ephemeral port with no watching: a suite
- * has nothing to reload and a recursive watch of the repository is the slowest
- * thing this file could do.
+ * The example application, served on an ephemeral port with no watching. A suite has
+ * nothing to reload, and a recursive watch of the repository is the slowest thing
+ * this file could do.
  *
  * @param {{ name: string, dir: string }} app
  * @param {(base: string) => Promise<void>} run
@@ -73,8 +72,8 @@ void test('the served manifest names every template the application ships', asyn
     assert.ok(files.includes('/src/app-root.html'), files.join(' '));
     assert.ok(files.includes('/components/data/ui-table.html'), files.join(' '));
 
-    // Sorted and unique: the runtime rejects a repeat, and a stable order is what
-    // makes two runs comparable.
+    // Sorted and unique, because the runtime rejects a repeat and a stable order is
+    // what makes two runs comparable.
     assert.deepEqual(files, [...files].sort((left, right) => left.localeCompare(right)));
     assert.equal(new Set(files).size, files.length);
   });
@@ -136,8 +135,9 @@ void test('the announced manifest is one the runtime admits', async () => {
 void test('the manifest revalidates, and every other file carries the file validator', async () => {
   const app = await example();
   await withServer(app, async (base) => {
-    // Generated, so its validator is of its own bytes rather than the file's — the
-    // one document on the page that would otherwise be a whole body every reload.
+    // Generated, so its validator is of its own bytes rather than the file's. It is
+    // the one document on the page that would otherwise be a whole body every
+    // reload.
     const manifest = await fetch(`${base}/app.manifest.json`);
     const generated = manifest.headers.get('etag') ?? '';
     assert.match(generated, /^".+"$/u);
@@ -148,8 +148,8 @@ void test('the manifest revalidates, and every other file carries the file valid
       304,
     );
 
-    // And a template, which is streamed: `no-cache` is what makes the browser ask
-    // at all, and asking is what turns a reload into 304s.
+    // And a template, which is streamed. `no-cache` is what makes the browser ask at
+    // all, and asking is what turns a reload into 304s.
     const template = await fetch(`${base}/components/data/ui-table.html`);
     const etag = template.headers.get('etag') ?? '';
     assert.match(etag, /^W\/".+"$/u);
@@ -163,9 +163,9 @@ void test('the manifest revalidates, and every other file carries the file valid
 });
 
 /**
- * A directory that is an application only as far as the server needs: an entry
- * document and a manifest. Nothing here is parsed by the project model, which is
- * the point of both cases below.
+ * A directory that is an application only as far as the server needs, with an entry
+ * document and a manifest. Nothing here is parsed by the project model, which is what
+ * both cases below are about.
  *
  * @param {Record<string, unknown>} manifest
  * @param {(app: { name: string, dir: string }) => Promise<void>} run
@@ -197,7 +197,7 @@ void test('an application that configured a bundle is left alone', async () => {
 
 void test('a project the model cannot read costs the announcement, not the server', async () => {
   // No index.html for the model to read the import map out of, which is the same
-  // shape of failure as a half-typed module: the announcement declines and the file
+  // shape of failure as a half-typed module. The announcement declines and the file
   // on disk is served unchanged.
   const dir = await mkdtemp(join(tmpdir(), 'srl-announce-'));
   try {

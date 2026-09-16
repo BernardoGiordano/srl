@@ -9,9 +9,9 @@ import { resolveMount, serveOrigin, toFile } from '../origin/index.mjs';
 /**
  * The rules every server over `cli/origin/` shares, asserted once.
  *
- * Before this module existed each of them was asserted nowhere: the traversal guard was
- * copy-pasted into four servers and the only suite that exercised any of it drove a real
- * Chrome over a real production build. ADR-0075.
+ * Copied into four servers, the traversal guard would be asserted nowhere, and the
+ * only suite exercising any of it would drive a real Chrome over a real production
+ * build. ADR-0075.
  *
  * A directory tree and `fetch`, no browser and no build:
  *
@@ -19,7 +19,7 @@ import { resolveMount, serveOrigin, toFile } from '../origin/index.mjs';
  *   <root>/app/index.html         the application document, and the history fallback
  *   <root>/app/main.js
  *   <root>/app/nested/index.html  a directory index
- *   <root>/secret.txt             outside every mount, which is the point
+ *   <root>/secret.txt             outside every mount, and the traversal case
  */
 
 /** @param {(fixture: { root: string, mounts: Array<[string, string]>, appDir: string }) => Promise<void>} run */
@@ -173,8 +173,8 @@ void test('anything but GET or HEAD is 405, and route sees it first', async () =
       assert.equal(refused.headers.get('allow'), 'GET, HEAD');
     });
 
-    // The reason `route` is consulted before the method check: a POST to a proxied
-    // API must reach the backend, not the answer that is correct for a file.
+    // Why `route` is consulted before the method check. A POST to a proxied API must
+    // reach the backend rather than the answer that is correct for a file.
     await withOrigin(
       {
         mounts,
@@ -305,7 +305,8 @@ void test('the validator changes with the file, so an edit is a whole body again
 
       await writeFile(file, 'export const reactive = 2;\n');
       // Size is unchanged here, so this is the mtime half of the validator doing the
-      // work — and a filesystem with one-second timestamps needs to see a new second.
+      // work, and a filesystem with one-second timestamps needs to see a new
+      // second.
       await utimes(file, new Date(), new Date(Date.now() + 2000));
 
       const edited = await fetch(`${url}/lib/core/reactive.js`, {
@@ -323,8 +324,9 @@ void test('a transform is not validated by the file, unless it says it is', asyn
     const entry = join(appDir, 'index.html');
     const generated = Buffer.from('<!doctype html><body>generated</body>\n');
 
-    // No ETag of its own: stat describes the file, and a body built from more than
-    // the file would be revalidated against something that does not change with it.
+    // No ETag of its own, because stat describes the file and a body built from more
+    // than the file would be revalidated against something that does not change with
+    // it.
     await withOrigin({ mounts, transform: (file) => (file === entry ? { body: generated } : null) },
       async (url) => {
         const response = await fetch(`${url}/index.html`);

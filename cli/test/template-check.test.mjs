@@ -29,9 +29,10 @@ const child = new Map([
 /**
  * The findings as sentences.
  *
- * The seam answers with `Diagnostic[]` — a code, a file, a line and a column each,
- * which is what an editor underlines. What most of these cases are about is the
- * wording, so they read the messages; the two below this pin the rest of the shape.
+ * The seam answers with `Diagnostic[]`, each carrying a code, a file, a line and a
+ * column, which is what an editor underlines. Most of these cases are about the
+ * wording, so they read the messages, and the two below this pin the rest of the
+ * shape.
  *
  * @param {string} source
  * @returns {string[]}
@@ -114,7 +115,7 @@ void test('types custom event detail from Element metadata', () => {
 });
 
 void test('refuses what the runtime refuses, from the shared dialect', () => {
-  // Three rules the checker used to ignore while template.js enforced them.
+  // Three rules template.js enforces, checked here too.
   assert.match(
     check('<p *for="row of rows" *if="busy">{{ row.name }}</p>').join('\n'),
     /both \*for and \*if/u,
@@ -125,8 +126,9 @@ void test('refuses what the runtime refuses, from the shared dialect', () => {
 });
 
 void test('refuses reserved member names in every operation, as the evaluator does', () => {
-  // Parity, not decoration: the checker used to emit `(host).__proto__ = ...`
-  // as ordinary TypeScript while the evaluator refused only the read.
+  // Parity rather than decoration. Emitted as ordinary TypeScript,
+  // `(host).__proto__ = ...` would pass the checker while the evaluator refused the
+  // read.
   for (const source of [
     '<p>{{ rows.constructor }}</p>',
     '<button (click)="rows.__proto__ = rows"></button>',
@@ -145,9 +147,10 @@ void test('reports unknown tags and keeps comparisons inside interpolations as e
 });
 
 void test('an attribute a custom element does not observe is an error', () => {
-  // The gap this closes: a property binding to a removed name was always a type error,
-  // while `empty-label="No rows"` on an element that observes nothing set a string on the
-  // DOM and rendered nothing. Renaming a public property left every caller compiling.
+  // The gap this closes. A property binding to a removed name is always a type error,
+  // while `empty-label="No rows"` on an element that observes nothing sets a string on
+  // the DOM and renders nothing, so renaming a public property leaves every caller
+  // compiling.
   assert.deepEqual(check('<test-child label="x" [label]="label"></test-child>'), []);
   assert.deepEqual(
     check('<test-child class="p-2" id="a" hidden aria-label="x" data-id="1"></test-child>'),
@@ -170,7 +173,8 @@ void test('an attribute a custom element does not observe is an error', () => {
     'a property that is not reachable as an attribute says how to reach it',
   );
 
-  // Native elements keep every attribute: nothing here knows what <input> accepts.
+  // Native elements keep every attribute, because nothing here knows what <input>
+  // accepts.
   assert.deepEqual(check('<input placeholder="x" list="ids">'), []);
 
   // The projection marker is the dialect's, and `name` is the bucket it projects.
@@ -194,8 +198,8 @@ void test('an attribute a custom element does not observe is an error', () => {
 });
 
 void test('an element the component does not import is an error naming the class to add', () => {
-  // The checker used to accept any tag defined anywhere in the repository, so a
-  // template could name a component its application never imported.
+  // Accepting any tag defined anywhere in the repository would let a template name a
+  // component its application never imported.
   assert.deepEqual(checkWithUses('<test-child></test-child>', ['test-child']), []);
   assert.match(
     checkWithUses('<test-child></test-child>', []).join('\n'),
@@ -206,10 +210,10 @@ void test('an element the component does not import is an error naming the class
 
 void test('a negated numeric literal keeps its literal type', () => {
   // TypeScript gives a numeric literal type to `-` applied directly to a numeric
-  // literal and to nothing else: `-1` is `-1`, and `-(1)` is `number`. Emitting the
-  // parenthesised form made a handler typed `(id, direction: 1 | -1)` reject
-  // `move(1, -1)` while accepting `move(1, 1)` — a checker bug that reads as a bug
-  // in the template, and one every move-up/move-down pair in an application hits.
+  // literal and to nothing else, so `-1` is `-1` and `-(1)` is `number`. The
+  // parenthesised form would make a handler typed `(id, direction: 1 | -1)` reject
+  // `move(1, -1)` while accepting `move(1, 1)`, a checker bug that reads as a bug in
+  // the template and one every move-up and move-down pair in an application hits.
   assert.deepEqual(check('<button (click)="move(1, -1)"></button>'), []);
   assert.deepEqual(check('<button (click)="move(1, 1)"></button>'), []);
 
@@ -229,9 +233,10 @@ void test('a finding carries the code, file, line and column an editor needs', (
 
   assert.deepEqual(rest, [], 'one bad member is one finding');
   assert.equal(found?.severity, 'error');
-  // The TypeScript error number, not the sentence beside it: the wording of
-  // "Property does not exist" is TypeScript's to change and this is not. 2551 is
-  // the did-you-mean variant, which is what a near-miss like `lenght` produces.
+  // The TypeScript error number rather than the sentence beside it, because the
+  // wording of "Property does not exist" is TypeScript's to change and the number is
+  // not. 2551 is the did-you-mean variant, which is what a near-miss like `lenght`
+  // produces.
   assert.equal(found?.code, 'templates/ts2551');
   assert.equal(found?.file, 'fixture.html');
   // The second line of the template, not a position in the generated shim.
@@ -270,9 +275,9 @@ void test('an unsaved JavaScript buffer overrides the file on disk', async () =>
 
 /**
  * `*fragment` bodies are checked in the page that wrote them, against the property
- * they are assigned to. Two things have to hold: the locals get real types, and the
- * body is not silently skipped — a checker that walked past a `<template>` would
- * report nothing at all and look like it passed.
+ * they are assigned to. Two things have to hold. The locals get real types, and the
+ * body is not silently skipped, because a checker that walked past a `<template>`
+ * would report nothing at all and look like it passed.
  */
 void test('checks a fragment body against the property it is assigned to', () => {
   assert.deepEqual(

@@ -17,10 +17,10 @@ import {
 /** @import { RemoteArtifactReport, ShellArtifactReport } from '../delivery/artifact-report.mjs' */
 
 /**
- * The contract, stated rather than built. Every assertion below is about the shape
- * of one document, which is the whole point of the module having an interface: the
- * artifact report used to be checkable only by running Vite over a real application
- * and reading what came out.
+ * The contract, stated rather than built. Every assertion below is about the shape of
+ * one document, which is what the module's interface buys. Without it the artifact
+ * report is checkable only by running Vite over a real application and reading what
+ * came out.
  */
 const IMPORT_MAP_HASH = 'sha256-3q2+7w==';
 
@@ -341,7 +341,7 @@ void test('a report that is not there is a filesystem error, not a contract one'
 });
 
 void test('the entry chain is how far a browser walks, not how far it could walk', () => {
-  // Two routes to `a.js`: one hop from the entry, and a longer way round through
+  // Two routes to `a.js`, one hop from the entry and a longer way round through
   // `b.js`. A browser discovers it on the first, so everything behind it is one
   // level shallower than a longest-path walk would report.
   /** @param {string} path @param {string[]} imports */

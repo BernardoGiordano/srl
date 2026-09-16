@@ -139,10 +139,10 @@ void test('built example mounts independent Billing and Analytics artifacts', as
         if (remote.templates !== undefined) assert.ok(requests.includes(remote.templates));
       }
 
-      // Split delivery, from the browser's side: every template arrives as its own
-      // immutable file and no bundle is fetched (ADR-0081), and the manifest named
-      // all of them so a chunk's markup starts as one batch rather than the browser
-      // learning each URL from the component module that just arrived (ADR-0081).
+      // Split delivery, from the browser's side. Every template arrives as its own
+      // immutable file and no bundle is fetched, and the manifest names all of them
+      // so a chunk's markup starts as one batch rather than the browser learning
+      // each URL from the component module that just arrived. ADR-0081.
       const shellTemplates = /** @type {{ count: number, files: string[] }} */ (shell.templates);
       const fetched = requests.filter((path) => path.startsWith('/assets/templates/'));
       assert.ok(
@@ -154,12 +154,12 @@ void test('built example mounts independent Billing and Analytics artifacts', as
         'a fetched template is not in the artifact report',
       );
       // Which templates the browser fetched is decided by which chunks it loaded,
-      // and that is the whole of ADR-0081: startup starts the `entry` group, and
-      // every other group starts on the first `attachTemplate` out of its own
-      // chunk. So the set to expect is the entry group plus the group of every
-      // chunk this session actually requested — a template outside it is one the
-      // visitor paid for without ever loading the code that renders it, and a
-      // template missing from it is a group that was dropped rather than deferred.
+      // which is the whole of ADR-0081. Startup starts the `entry` group, and every
+      // other group starts on the first `attachTemplate` out of its own chunk. The
+      // set to expect is therefore the entry group plus the group of every chunk
+      // this session actually requested. A template outside it is one the visitor
+      // paid for without ever loading the code that renders it, and a template
+      // missing from it is a group that was dropped rather than deferred.
       const manifest = JSON.parse(
         await readFile(join(String(shell.root), String(shell.public), 'app.manifest.json'), 'utf8'),
       );
@@ -190,7 +190,7 @@ void test('built example mounts independent Billing and Analytics artifacts', as
         [...expected].sort(),
         'the browser did not fetch exactly the templates of the chunks it loaded',
       );
-      // And the narrowing is real rather than a tautology: this session opened the
+      // The narrowing is real rather than a tautology. This session opened the
       // shell and two Remotes, and the screens it never opened cost it nothing.
       assert.ok(
         expected.size < announced.length,
@@ -282,11 +282,11 @@ void test('split-lazy announces nothing, so a visitor fetches only what they ope
       );
       assert.deepEqual(errors, []);
 
-      // The mode's whole purpose, and the property ADR-0081 decided: the shell
-      // renders having fetched the markup it needed and none of the rest. Asserting
-      // a strict subset rather than an exact count, because which templates the
-      // landing route pulls in is the application's business and would make this a
-      // test of `example`'s route table.
+      // The mode's purpose, and the property ADR-0081 decided. The shell renders
+      // having fetched the markup it needed and none of the rest. A strict subset
+      // rather than an exact count, because which templates the landing route pulls
+      // in is the application's business and would make this a test of `example`'s
+      // route table.
       const emitted = /** @type {{ count: number, files: string[] }} */ (
         /** @type {Record<string, unknown>} */ (shell).templates
       );
@@ -361,16 +361,16 @@ void test('an activation retires the shell’s own old cache and leaves the orig
       );
 
       // The name the emitted worker will claim, read from the file the build wrote.
-      // `previous` is the same application one release ago: same prefix, a digest of
-      // a precache list that no longer exists.
+      // `previous` is the same application one release ago, with the same prefix and
+      // a digest of a precache list this build does not carry.
       const current = /const CACHE = "([^"]+)"/u.exec(await readFile(join(publicDir, 'sw.js'), 'utf8'))?.[1];
       assert.ok(current !== undefined, 'the emitted worker names its cache');
       const previous = `${current.slice(0, current.lastIndexOf(':') + 1)}0123456789abcdef`;
       assert.notEqual(previous, current);
 
       // What else an origin holds. Another Application deployed here, a Remote that
-      // caches its own bytes, and a cache the page opened itself — none of them
-      // written by this artifact, so none of them this worker's to delete.
+      // caches its own bytes, and a cache the page opened itself. None of them was
+      // written by this artifact, so none is this worker's to delete.
       const foreign = ['srl:another-app:0123456789abcdef', 'remote-billing:v1', 'user-owned-cache'];
       await page.evaluate(async (names) => {
         for (const name of names) {
@@ -381,11 +381,11 @@ void test('an activation retires the shell’s own old cache and leaves the orig
 
       // `register()` is a Trusted Types sink and the artifact ships
       // `require-trusted-types-for 'script'`, so the registration a page makes is the
-      // registration `registerServiceWorker()` makes: through the `srl-worker` policy
-      // the build's CSP names. The library's own call is bundled into a chunk and
-      // unreachable by URL from here, so the policy is opened in the page — what this
-      // asserts is that the emitted CSP permits it, which is what silently stopped a
-      // registration before the name was there.
+      // registration `registerServiceWorker()` makes, through the `srl-worker`
+      // policy the build's CSP names. The library's own call is bundled into a chunk
+      // and unreachable by URL from here, so the policy is opened in the page. What
+      // this asserts is that the emitted CSP permits it, which is what silently
+      // stops a registration when the name is missing.
       assert.match(
         /** @type {{ csp: string }} */ (shell.security).csp,
         /trusted-types [^;]*\bsrl-worker\b/u,
@@ -417,8 +417,8 @@ void test('an activation retires the shell’s own old cache and leaves the orig
         'the activation deleted caches this artifact never wrote',
       );
 
-      // Names surviving is not the claim — the bytes are. A cache the worker kept but
-      // emptied would pass every assertion above.
+      // The bytes are the claim rather than the surviving names. A cache the worker
+      // kept but emptied would pass every assertion above.
       const intact = await page.evaluate(
         async (names) =>
           Promise.all(
@@ -431,7 +431,7 @@ void test('an activation retires the shell’s own old cache and leaves the orig
       );
       assert.deepEqual(intact, foreign);
 
-      // And the install half of the same lifecycle: the offline shell is in the cache
+      // The install half of the same lifecycle. The offline shell is in the cache
       // the activation kept.
       const precached = await page.evaluate(
         async (name) => (await (await caches.open(name)).match('/index.html')) !== undefined,

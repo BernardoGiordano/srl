@@ -10,8 +10,8 @@ import { apps } from '../layout.mjs';
 /**
  * `srl serve --proxy`, against a real upstream over a real socket.
  *
- * The behaviour worth pinning is not "a request arrives" — it is everything the
- * static branch of that server would otherwise do to an API request, and each of
+ * The behaviour worth pinning is everything the static branch of that server would
+ * otherwise do to an API request, rather than whether a request arrives. Each of
  * these has a wrong answer that looks like an application bug rather than a server
  * one:
  *
@@ -20,15 +20,15 @@ import { apps } from '../layout.mjs';
  *   an upstream 404        turned into index.html by the history fallback, so a
  *                          missing endpoint reads as JSON.parse failing on '<'
  *   Set-Cookie             the BFF session, and a session is only returned to the
- *                          origin that set it — the reason to proxy at all
+ *                          origin that set it, which is the reason to proxy at all
  *   /apiary                caught by a /api prefix that matched on characters
  *   a backend not running  the ordinary case, and it has to say so
  *
  * Imported rather than spawned. `serveApplication` takes the application and its
  * proxies and binds an ephemeral port, so a case states its own backend instead of
- * inheriting flags from a child process and waiting for a startup line on its
- * stdout. ADR-0075. One case is still spawned, and has to be: a malformed `--proxy`
- * is refused with an exit code, and an exit code needs a process.
+ * inheriting flags from a child process and waiting for a startup line on its stdout.
+ * ADR-0075. One case is still spawned and has to be, because a malformed `--proxy` is
+ * refused with an exit code and an exit code needs a process.
  */
 
 const SERVE = fileURLToPath(new URL('../dev/serve.mjs', import.meta.url));
@@ -67,9 +67,9 @@ async function upstream() {
 }
 
 /**
- * The example application, served on an ephemeral port with the given proxies and
- * no watching: a suite has nothing to reload and a recursive watch of the
- * repository is the slowest thing this file could do.
+ * The example application, served on an ephemeral port with the given proxies and no
+ * watching. A suite has nothing to reload, and a recursive watch of the repository is
+ * the slowest thing this file could do.
  *
  * @param {Array<{ prefix: string, origin: string }>} proxies
  */

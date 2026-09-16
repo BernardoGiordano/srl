@@ -29,17 +29,17 @@ export interface Diagnostic {
   severity: Severity;
   /**
    * A stable identifier for the kind of finding, namespaced by the check that
-   * produces it: `deps/undeclared-specifier`, `templates/ts2339`. Wording
-   * changes; this does not, so it is what a test, a filter or a suppression
+   * produces it, such as `deps/undeclared-specifier` or `templates/ts2339`. Wording
+   * changes and this does not, so it is what a test, a filter or a suppression
    * names.
    */
   code: string;
   /** One human sentence, or several lines when the remedy needs them. */
   message: string;
   /**
-   * The subject the finding belongs to — an application name, `library`,
-   * `toolchain` — or null when it belongs to the repository as a whole. The text
-   * adapter uses it as a heading; a JSON consumer uses it to group.
+   * The subject the finding belongs to, such as an application name, `library` or
+   * `toolchain`, or null when it belongs to the repository as a whole. The text
+   * adapter uses it as a heading, and a JSON consumer uses it to group.
    */
   group: string | null;
   /**

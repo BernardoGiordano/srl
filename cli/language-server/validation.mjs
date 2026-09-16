@@ -1,17 +1,18 @@
 /**
- * The validation lane: one thread whose only work is diagnostics.
+ * The validation lane, one thread whose only work is diagnostics.
  *
  * A template check is one synchronous compiler call, so the thread that runs it is the
  * thread that stops answering. This one is not the protocol thread. Overlays arrive as
- * messages and are applied in order; a check answers with the diagnostics for one
- * document, or says it was cancelled. ADR-0090.
+ * messages and are applied in order, and a check answers with the diagnostics for one
+ * document or says it was cancelled. ADR-0090.
  *
- * Cancellation cannot be a message, because a message is only read between checks. It is
- * a shared integer holding the highest check the parent no longer wants, which the
+ * Cancellation cannot be a message, because a message is only read between checks. It
+ * is a shared integer holding the highest check the parent no longer wants, which the
  * compiler's own token reads while it works.
  *
  * Nothing here decides when to check. `analysis.mjs` owns that and owns this thread's
- * lifetime; this file is the isolated half of one module, not an interface of its own.
+ * lifetime. This file is the isolated half of one module rather than an interface of
+ * its own.
  */
 
 import { parentPort, workerData } from 'node:worker_threads';
@@ -33,8 +34,9 @@ const service = new SrlLanguageService();
 /**
  * Messages are handled in arrival order, and the first of them is the project read.
  *
- * An overlay that arrives while a check runs must be applied after it, not interleaved
- * with it: the check's answer describes the text it started from.
+ * An overlay that arrives while a check runs is applied after it rather than
+ * interleaved with it, because the check's answer describes the text it started
+ * from.
  *
  * @type {Promise<void>}
  */
@@ -82,8 +84,8 @@ async function check(id, uri) {
   const cancellation = token(id);
   try {
     const diagnostics = await service.diagnostics(uri, { cancellation });
-    // Asked again after the check: a token the compiler stopped polling before the end
-    // still means the answer is about text nobody is looking at.
+    // Asked again after the check, because a token the compiler stopped polling
+    // before the end still means the answer is about text nobody is looking at.
     if (cancellation.isCancellationRequested()) port.postMessage({ id, cancelled: true });
     else port.postMessage({ id, diagnostics });
   } catch (cause) {
@@ -97,8 +99,8 @@ function token(id) {
   return {
     isCancellationRequested: () => Atomics.load(abandoned, 0) >= id,
     throwIfCancellationRequested() {
-      // Not an Error, and it has to not be: the compiler recognises its own cancellation
-      // by this type, and anything else travels as a template finding instead.
+      // Not an Error, and it has to not be, because the compiler recognises its own
+      // cancellation by this type and anything else travels as a template finding.
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       if (this.isCancellationRequested()) throw new ts.OperationCanceledException();
     },

@@ -21,12 +21,13 @@ import { clearParseCache } from '../project-model/parse.mjs';
 /**
  * What a message reference means, over a fixture application rather than this repository.
  *
- * Every case here is one the repository's own checks could not see: a key written in
- * JavaScript that no bundle declares, the same mistake in markup, a plural family reached
- * through `count` alone, a placeholder a call forgets, a key a remote declares and the
- * shell may not borrow, and a computed key whose entries must not read as abandoned.
+ * Every case here is one a catalog-against-catalog comparison cannot see. A key
+ * written in JavaScript that no bundle declares, the same mistake in markup, a plural
+ * family reached through `count` alone, a placeholder a call forgets, a key a remote
+ * declares and the shell may not borrow, and a computed key whose entries must not read
+ * as abandoned.
  *
- * The fixture is deliberately not compiled or linted — see the exclusions in
+ * The fixture is deliberately not compiled or linted, and the exclusions are in
  * tsconfig.json and eslint.config.js. It declares a typo on purpose, and a file that
  * satisfies every static tool cannot also be a file that states one.
  */

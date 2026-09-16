@@ -26,8 +26,8 @@ port.on('message', (message) => {
       port.postMessage({ id: message.id, cancelled: true });
       return;
     }
-    // Blocks this thread, which is the point: it wakes on the parent's notify, and
-    // re-reads the word every 10 ms regardless.
+    // Blocks this thread deliberately. It wakes on the parent's notify, and re-reads
+    // the word every 10 ms regardless.
     Atomics.wait(abandoned, 0, Atomics.load(abandoned, 0), 10);
   }
   port.postMessage({

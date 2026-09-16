@@ -10,10 +10,11 @@ import { applicationFiles, emitApplication } from '../scaffold/application.mjs';
 /**
  * The application shape.
  *
- * Nine files, each of them a contract enforced somewhere else in this toolchain: the
+ * Nine files, each of them a contract enforced somewhere else in this toolchain. The
  * eight facts the production HTML transform requires, an import map that must carry the
  * library's fragment, two JavaScript chunks, a manifest the library admits, a stylesheet
- * that reaches the installed package, a tsconfig extending the published base. The probe
+ * that reaches the installed package, and a tsconfig extending the published base. The
+ * probe
  * in tools/checks/pack-check.mjs proves the whole set builds; what is asserted here is
  * the shape itself, which needs no install, no tarball and no subprocess. ADR-0073.
  */
@@ -68,8 +69,8 @@ void test('the shape is nine files, and the eight document facts are in the docu
 void test('the import map is the library fragment, pasted, and the script hashed', () => {
   const html = applicationFiles(FACTS).get('web/index.html') ?? '';
 
-  // Pasted rather than assembled: a specifier or a hash written here would be a second
-  // copy of the library's own interface, free to drift from it.
+  // Pasted rather than assembled, because a specifier or a hash written here would be
+  // a second copy of the library's own interface, free to drift from it.
   assert.match(
     html,
     /<script type="importmap">\n\{\n {2}"imports": \{\n {4}"@core\/": "\/lib\/core\/"/u,
@@ -162,8 +163,8 @@ void test('an existing directory is refused whole, and an existing tsconfig is k
     const html = await readFile(join(root, 'web', 'index.html'), 'utf8');
     assert.match(html, /<app-root><\/app-root>/u);
 
-    // A second run overwrites nothing: a merge would leave a repository in a shape
-    // neither the command nor its author described.
+    // A second run overwrites nothing, because a merge would leave a repository in a
+    // shape neither the command nor its author described.
     const again = await emitApplication(root, { name: 'web' });
     assert.deepEqual(
       errors(again).map((diagnostic) => diagnostic.code),
