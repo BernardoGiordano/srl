@@ -32,7 +32,7 @@
       "$comment": "Built on the shell's own stack: imports lit, the signal library and two elements from the shared collection by the specifiers index.html declares. Public, granted nothing, routed through the host context like every other remote.",
       "name": "billing",
       "url": "/remotes/billing/remote-entry.js",
-      "integrity": "sha384-E5eqKtGjo78yF0+SPoZq6Mzz7Rg8MEavpNn/qdAhXBzeujy57OZ12Xqp0SScrzWC",
+      "integrity": "sha384-HLqnaLov5aGmpi9pIJrYqry6OKZktl4L14V6QsdX2WDBgPWtgEORGo3NnFakHqg0",
       "shared": [
         "@core/elements/component.js",
         "@core/elements/signal-element.js",
@@ -50,7 +50,7 @@
       "$comment": "Shares nothing with the shell: no bare specifiers, no Lit, no signals. It reaches the session only through the capabilities granted below, and the server checks the same scope on every request it makes.",
       "name": "analytics",
       "url": "/remotes/analytics/remote-entry.js",
-      "integrity": "sha384-gikXl5fGQ0JSt91gbIGS5QeVey8/CZ/dOXzGvDIIuh350ltSRN/++0TlTFf+R13O",
+      "integrity": "sha384-f7Or3eTbD0Jfw0+P1NyIiAPgoJ37CcCWoZg7k659VzFESxpqXQ+b/KTVnkkbie1U",
       "locales": [
         "/remotes/analytics/i18n/{locale}.json"
       ],

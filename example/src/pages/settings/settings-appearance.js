@@ -9,26 +9,9 @@ import { AppBadge } from '../../ui/app-badge.js';
 import { AppNotice } from '../../ui/app-notice.js';
 
 /**
- * Appearance: the theme, the language, and the stored UI state behind both.
- *
- * WHAT THE THEME PICKER IS
- *
- * `theme` is the preference (`system`, `light`, `dark`, `ocean`); `resolvedTheme` is what
- * `system` resolved to. Both are signals, so this screen renders from them and re-renders
- * when the operating system's own setting changes underneath it — which is the case a
- * component holding its own copy of the choice gets wrong.
- *
- * WHAT THE RESET BUTTON IS FOR
- *
- * Every non-auth preference in this application goes through
- * `@core/preferences/persistence.js`: the sidebar's collapsed state, four tables' column
- * layouts, three filters' values, the theme and the locale. Nothing calls `localStorage`
- * directly — `npm run verify` fails the build if anything in the library or the collection
- * does — which is why one screen can offer to clear all of it, and why the list below is
- * the honest inventory rather than a guess.
- *
- * The ids are written down here because they are this application's: an owner plus an id
- * is the whole key shape, and the owners are the components' own names.
+ * Let users choose a theme or language and clear saved UI state. The picker reads
+ * theme signals, so a system theme change updates the screen. Stored state uses
+ * the preference service and the application ids listed below.
  */
 export class SettingsAppearance extends SignalElement {
   /** Which reset ran, for the confirmation line. Empty means none yet. */
@@ -78,9 +61,7 @@ export class SettingsAppearance extends SignalElement {
   }
 
   /**
-   * Clear the table and filter state this application stores, leaving the theme and the
-   * locale alone: someone resetting a column layout has not asked to be put back into
-   * English.
+   * Clear table and filter state while keeping the chosen theme and language.
    */
   resetTables() {
     for (const id of ['sales-orders', 'sales-customers', 'inventory-products', 'inventory-movements', 'people-employees']) {
@@ -92,8 +73,7 @@ export class SettingsAppearance extends SignalElement {
     this.clearedKey.value = 'settings.clearedTables';
   }
 
-  /** Clear the sidebar's collapsed state. Takes effect on the next load, by design:
-   * writing it back now would fight the element that owns it. */
+/** Clear sidebar state for the next load. */
   resetSidebar() {
     removePreference('ui-sidebar', 'example.sidebar');
     this.clearedKey.value = 'settings.clearedSidebar';

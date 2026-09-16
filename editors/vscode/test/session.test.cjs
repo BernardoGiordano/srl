@@ -11,22 +11,18 @@ test('a session owns its client, its settings, and its own restart', async (cont
 
     assert.equal(world.created.length, 1);
     const [created] = world.created;
-    // `<id>.trace.server` is the key a language client reads, and `srl.trace.server` is
-    // the key the package contributes. An id of `srl-0` reaches neither.
+    // The client id must match the contributed trace setting.
     assert.equal(created.id, 'srl');
     assert.equal(created.serverOptions.command, 'node');
     assert.deepEqual(created.serverOptions.options.cwd, '/app');
     assert.equal(created.serverOptions.options.env.SRL_ROOT, '/app');
     assert.match(created.clientOptions.outputChannelName, /app/u);
-    // Absolute globs, not `RelativePattern`s: the client round-trips this selector
-    // through the protocol, which drops a relative pattern and leaves every folder's
-    // providers claiming every folder's files. ADR-0097.
+    // Absolute globs keep providers inside their workspace folder. ADR-0097.
     assert.deepEqual(
       created.clientOptions.documentSelector.map((filter) => filter.pattern),
       ['/app/**/*.html', '/app/**/*.{js,mjs}'],
     );
-    // The server registers the watchers it needs, scoped to its own project. A second
-    // watcher here is the duplicate reload the adapter used to cause.
+    // The server owns its project watchers.
     assert.equal(created.clientOptions.synchronize, undefined);
     assert.equal(world.sessions.keys.length, 1);
   });
@@ -75,7 +71,7 @@ test('a session owns its client, its settings, and its own restart', async (cont
     assert.deepEqual(world.sessions.keys, []);
     assert.deepEqual(world.log, ['start app', 'stop app']);
 
-    // A folder with no session left is not an error, and must not stop a client twice.
+    // Do not stop a client twice.
     await world.sessions.stop(one.uri.toString());
     assert.deepEqual(world.log, ['start app', 'stop app']);
   });
@@ -102,7 +98,7 @@ test('a session owns its client, its settings, and its own restart', async (cont
       'No srl language server is running in this window. Open a project that installs @srljs/cli.',
     ]);
 
-    // A folder that already got the specific message is not told the general one too.
+    // Keep the specific message for this folder.
     const declared = build({ locate: () => ({ server: null, declared: true }) });
     await declared.sessions.restart([folder('app')]);
     assert.equal(declared.warnings.length, 1);
@@ -173,8 +169,7 @@ function folder(name) {
 }
 
 /**
- * A window the sessions can run in: the pieces of VS Code they touch, a client that
- * records its own lifecycle, and the answers `locate` gives.
+ * Provide the VS Code calls and client lifecycle used by these session tests.
  *
  * @param {{ locate?: () => { server: string | null, declared: boolean }, failStart?: boolean }} [options]
  */

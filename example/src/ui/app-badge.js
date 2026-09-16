@@ -2,17 +2,7 @@ import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 
 /**
- * A status pill.
- *
- * `tone` maps a state onto a colour group, and the mapping is a getter rather than a
- * conditional in the template for the reason `ui-card` gives: mapping a variant onto a
- * group of utility classes is logic, and logic in the `.js` file is logic tsc can see.
- * It is also why `classMap` appears nowhere in this project — its keys go through
- * `DOMTokenList`, so each has to be one token, and a Tailwind pair like
- * `bg-amber-100 text-amber-800` throws.
- *
- * The word inside is projected, not derived, because the word is a translated string
- * and this element has no business knowing which key spells "shipped".
+ * Map a status tone to its utility classes. Callers project the translated label.
  */
 export class AppBadge extends SignalElement {
   static properties = {

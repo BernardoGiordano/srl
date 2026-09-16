@@ -17,36 +17,14 @@ import { ApiError } from '@core/http/client.js';
 /** @import { AccountUser } from '../../services/admin-service.js' */
 
 /**
- * The refusal `rowSelectable` hands the table when nothing may be chosen. Hoisted so
- * its identity is stable: a new function per render would invalidate the table's page
- * selection cache on every paint.
+ * Keep the refusal callback stable across renders.
  */
 const refuseRow = () => false;
 
 /**
- * Account administration: the screen with a write path.
- *
- * `users:read` guards the route; `users:write` gates the buttons. Two scopes rather than
- * one, because "can see who has an account" and "can suspend an account" are different
- * questions and an operator answers yes to the first and no to the second.
- *
- * THE PART WORTH COPYING
- *
- * The action button is rendered for everyone and disabled with a reason for those who may
- * not use it. Hiding it would be easier and worse: a control that vanishes for reasons the
- * user cannot see is indistinguishable from a broken page, and the support conversation
- * that follows is "it works for me". The server enforces the scope regardless — a 403
- * comes back with `insufficient_scope` and lands in the notice above the table.
- *
- * The list is re-read after a write rather than patched locally. Optimistic updates are a
- * legitimate choice, but they need a rollback path, and this screen's write is one field on
- * one row: two round trips are cheaper than the machinery, and the rows belong to the
- * resource — a screen that reached in to edit them would own a second copy of the list.
- *
- * The bulk bar is what `ui-table`'s selection is for. The table owns which rows are chosen
- * and keeps them keyed through sorting and paging; this screen owns what choosing them
- * means, which is one PATCH per account and a re-read. The keys are the whole selection —
- * the table never claims to have chosen records it was never given.
+ * Show accounts to readers and enable writes for users with `users:write`. The
+ * table keeps selection by row key. This screen sends the writes and reloads the
+ * list, while the server checks the write scope.
  */
 export class SettingsUsers extends SignalElement {
   #users = resource(
@@ -80,11 +58,7 @@ export class SettingsUsers extends SignalElement {
   }
 
   /**
-   * Whether a row may be chosen at all.
-   *
-   * A getter rather than a stable field, because the answer changes with the session
-   * and with a write in flight, and the table only re-reads a property whose identity
-   * moved. `undefined` means every row is available; `refuseRow` means none is.
+   * Update row selection when scope or write state changes.
    */
   get rowSelectable() {
     return this.canWrite && !this.busy ? undefined : refuseRow;
@@ -119,12 +93,8 @@ export class SettingsUsers extends SignalElement {
   }
 
   /**
-   * The bulk write: one PATCH per account, in order, then one re-read.
-   *
-   * Sequential rather than parallel because the audit trail should read in the order
-   * the operator chose, and because a server that rate-limits a burst would turn a
-   * bulk action into a partial one for reasons the screen cannot explain. A failure
-   * leaves the selection standing, so retrying is one click rather than a re-selection.
+   * Write selected accounts in order, then reload the list. Keep the selection
+   * after a failure so the user can retry.
    *
    * @param {'active' | 'suspended'} status
    */
@@ -171,10 +141,7 @@ export class SettingsUsers extends SignalElement {
   /* ── Cells ──────────────────────────────────────────────────────────────── */
 
   /**
-   * A renderer may return any node, including one of this application's own components:
-   * `AppBadge` is imported above, so its module has evaluated and the tag is defined by
-   * the time this runs. That import is the dependency — `uses` is the same statement for
-   * elements the *template* names, and this one is named by JavaScript.
+   * Render `AppBadge` after its module has defined the element.
    *
    * @param {unknown} row
    */
@@ -202,8 +169,7 @@ export class SettingsUsers extends SignalElement {
   };
 
   /**
-   * The action cell. Built imperatively because it is a control rather than text, and
-   * because its disabled state and its title depend on the row and the session together.
+   * Build the action control from the row and session state.
    *
    * @param {unknown} row
    */

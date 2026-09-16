@@ -14,8 +14,7 @@
   ></app-notice>
 
   <!--
-    Four tiles from one payload. `[.value]` and `[.delta]` are property bindings:
-    an attribute would arrive as a string and the tile would format the string.
+    Pass numeric KPI values as properties.
   -->
   <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
     <app-stat
@@ -46,9 +45,7 @@
       </div>
 
       <!--
-        `&panel` hands the outlet the signal itself rather than its current value, so
-        the outlet subscribes directly and choosing a panel re-renders nothing here.
-        Each panel's module is fetched the first time it is selected.
+        The outlet follows `&panel` and loads a panel module when selected.
       -->
       <x-outlet [.target]="&panel"></x-outlet>
     </app-card>

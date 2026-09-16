@@ -1,14 +1,14 @@
 # Application startup
 
-An application's `main.js` is one call. The library owns the order of startup, and the
-application supplies only the decisions that are its own.
+An application starts with one call in `main.js`. It supplies configuration and
+providers; the library runs the startup steps in order.
 
 ```js
 import { startHostedApplication } from '@host/runtime.js';
 
 await startHostedApplication({
   configure: () => configureTheme({ defaultTheme: 'system' }),
-  providers: (manifest) => {
+  providers: () => {
     provide(AUTH_SESSION, () => new AuthSession(new BffCookieTokenStore('/auth')));
   },
   ready: () => inject(AUTH_SESSION).init(),
@@ -16,66 +16,49 @@ await startHostedApplication({
 });
 ```
 
-There are two entry points, and one question picks between them. Does this application
-mount micro-frontends?
+Use `startApplication` from `@core/application/runtime.js` when an application
+has no remotes. `startHostedApplication` adds the default `REMOTE_HOST`
+provider before the application's providers run. The example uses it for its
+remotes, and an application can replace that provider with its own policy.
 
-`startApplication` from `@core/application/runtime.js` is the sequence itself.
-`startHostedApplication` from `@host/runtime.js` is that sequence plus the default
-`REMOTE_HOST` adapter, installed before the application's own `providers` hook so an
-application with a different capability policy can still replace it. The example calls
-the second because it mounts remotes. An application that mounts none calls the first and
-never loads the host layer.
+Every hook is optional. The library awaits each step before moving to the next.
 
-Every hook is optional, and each is awaited before the next runs.
-
-| Step | What it is for |
+| Step | Work |
 |---|---|
-| `configure` | Synchronous configuration that must precede everything, such as themes and the storage adapter |
-| `manifest` | Fetch `app.manifest.json` and admit it as policy. The admitted copy is installed, never written to a global |
-| `templates` | Warm the template cache from whichever key the manifest carries ([ADR-0081](../adr/0081-templates-are-delivered-by-chunk.md)) |
-| `locale` | Awaited before first render, so nothing flashes untranslated |
-| `providers` | The application's own injector bindings |
-| `ready` | Anything that must settle before the root mounts, such as `AuthSession.init()` |
-| `root` | Mount the root element, verifying that the module actually defined it |
+| `configure` | Apply synchronous settings such as themes and preference storage. |
+| `manifest` | Fetch and admit `app.manifest.json`. |
+| `templates` | Start loading templates according to the manifest. |
+| `locale` | Load the initial language before rendering. |
+| `providers` | Install application services in the injector. |
+| `ready` | Settle work needed before mounting, such as session restoration. |
+| `root` | Load, define, and mount the root element. |
 
-## What the templates step does
+## Template loading
 
-The manifest carries one of three keys, and each starts the cache differently.
+The manifest chooses how templates enter the cache.
 
-- `templateBundle` is fetched and seeded. A missing bundle makes the boot slower rather
-  than failing it.
-- `templateGroups`, which `--templates split` emits by default, has its `entry` group
-  started rather than awaited, so the markup a first paint needs is in flight before the
-  first component module evaluates. The other groups are registered here and each starts
-  on the first `attachTemplate` out of its own chunk, which puts a group behind whatever
-  guard stood in front of the code that names it.
-- `templateFiles` is what a development manifest carries, because it has no chunks to
-  group by. It is started whole.
+- `templateBundle` fetches a combined bundle. A missing bundle slows startup
+  but does not stop it.
+- `templateGroups` starts the entry group early. Other groups start when a
+  component in their chunk first asks for a template.
+- `templateFiles` starts the development templates without chunk grouping.
 
-Under `--templates split-lazy` the manifest carries none of them and the step does not
-run.
+With `--templates split-lazy`, the manifest carries none of these keys and the
+step has no template work.
 
-## Reading the timings
+## Timings and failure
 
-The return value lists the steps that ran, each with the milliseconds it took.
+The return value lists the steps that ran and their durations.
 
 ```js
 const started = await startHostedApplication({ /* … */ });
-started.steps; // [{ name: 'configure', duration: 0.6 }, { name: 'manifest', duration: 3.4 }, …]
+started.steps; // [{ name: 'configure', duration: 0.6 }, …]
 ```
 
-Every step also emits a `srl:startup:<step>` [User Timing][user-timing] measure, so a
-profiler, a field beacon and the benchmark harness read the same durations without
-holding this return value. A boot is seven steps deep, and until each published its own
-number a regression inside one of them was invisible in the total
-([ADR-0084](../adr/0084-a-startup-step-publishes-its-own-duration.md)).
+Each step also emits a `srl:startup:<step>`
+[User Timing](https://developer.mozilla.org/en-US/docs/Web/API/Performance_API/User_timing)
+measure. Profilers and benchmarks can read it without the return value.
 
-## Failure
-
-Any failure is rethrown as `ApplicationStartupError`, which names the step and keeps the
-original error as `cause`. The root check goes through the same `@core/elements/mount.js`
-path an outlet target, a route level and a remote root use, and takes its tag from the
-class `load` resolved, so the page's root element and the startup spec cannot name two
-different things.
-
-[user-timing]: https://developer.mozilla.org/en-US/docs/Web/API/Performance_API/User_timing
+`ApplicationStartupError` names the failed step and preserves the original
+error as `cause`. Root mounting uses the same definition check as routes and
+outlets.

@@ -1,6 +1,6 @@
 # UI preference persistence
 
-Every non-auth UI preference crosses one synchronous, versioned boundary:
+The preference service stores UI settings through one synchronous, versioned API.
 
 ```js
 import {
@@ -16,53 +16,38 @@ const state = loadPreference('search-panel', 'orders');
 removePreference('search-panel', 'orders');
 ```
 
-Table columns, filter values, sidebar collapse, the theme and the locale all go through
-it. Nothing else in `source/lib` or `source/components` calls `localStorage`, and
-`npm run verify` fails the build when something does — the theme used to keep its own
-key, so an application that configured its own store got that store for the table and
-not for the theme. That inconsistency is now a verification failure rather than a bug
-report, checked from the project model's AST rather than a text search, because four
-modules mention `localStorage` in prose while calling it nowhere.
+Table columns, filters, sidebar state, theme, and locale all use this service.
+`npm run verify` rejects direct `localStorage` calls in the library and
+collection, so an application can replace storage for every UI preference
+at once.
 
-Default storage is `localStorage`, one key per owner/id pair under `ui.component-state`.
-Preference payloads are small and must be restored before first render; IndexedDB would
-make hydration asynchronous without improving capacity or queryability. The prefix keeps
-the name the module had when it was `component-state.js`, because it is written into
-every key already in a browser.
+The default adapter uses `localStorage` and one key per owner and id under
+`ui.component-state`. Synchronous reads restore small settings before first
+render. The prefix stays stable for existing saved preferences.
 
 `configurePreferences({ storage, prefix })` accepts the synchronous
-`getItem`/`setItem`/`removeItem` subset shared by Web Storage and memory adapters.
-`createMemoryStorage()` is the second real adapter — a suite configures it so cases
-cannot inherit each other's preferences, and an embed where storage is blocked by policy
-gets preferences that simply do not outlive the tab.
+`getItem`/`setItem`/`removeItem` subset of Web Storage. `createMemoryStorage()`
+keeps tests isolated and supports an embed that cannot use browser storage.
+Its preferences last only for that page session.
 
-**One failure policy, for every caller**, so none of them writes its own fallback:
+Storage failures follow one policy.
 
-- A read that cannot produce current state returns `undefined`: storage missing or
-  throwing, no value, malformed JSON, a value that is not an envelope, a schema version
-  with no `migrate`, or a `migrate` that throws or declines. Rendering never depends on
-  storage having worked.
-- A write that cannot store returns `false`: storage missing or throwing, quota
-  exceeded, or state that is not JSON-serialisable.
-- Nothing throws for a storage reason. The only exceptions are an empty owner, id or
-  prefix, and a schema version that is not a positive integer — programming errors in the
-  caller, wrong in every environment.
+- A read returns `undefined` when storage is unavailable, data is invalid, or
+  migration cannot produce the requested version.
+- A write returns `false` when storage refuses the value or the value cannot be
+  serialized as JSON.
+- Invalid owner, id, prefix, and schema version arguments throw because they are
+  caller errors.
 
-Every entry carries `schemaVersion` and `savedAt`;
-`loadPreference(owner, id, { schemaVersion, migrate })` handles schema changes without
-unsafe casts. `migrateLegacyKey(owner, id, legacyKey, { accept })` adopts a value an
-earlier build wrote under a bare key, exactly once — it is how the theme and the locale
-moved into this module without resetting anyone's choice. Two rules make that safe:
-`accept` belongs to the caller, because only the theme knows a name is still registered
-and only i18n knows a locale is still supported; and the legacy key is removed whether or
-not its value was accepted, because a migration is not a permanent second lookup.
+Each entry carries `schemaVersion` and `savedAt`.
+`loadPreference(owner, id, { schemaVersion, migrate })` handles schema changes.
+`migrateLegacyKey(owner, id, legacyKey, { accept })` moves a value from an old
+bare key once. The caller decides whether the value is still valid, and the old
+key is removed after the attempt.
 
-**Only preferences belong here.** Never persist tokens, row data or secrets. Auth state
-is a separate seam behind `@auth/`, whose stores never hand out a credential, and the
-verifier keeps the two apart in both directions: `@auth/` may not import this module
-either, because the adapter it would write through is supplied by the application.
-Browser storage is shared by accounts using the same browser profile, so include
-tenant/user scope in an id when settings must not cross account boundaries.
+Store UI preferences here. Authentication uses its own store, and `@auth/`
+cannot import this module. Browser storage is shared within a browser profile,
+so include an account or tenant in the id when preferences must stay separate.
 
 ## Themes
 
@@ -82,32 +67,24 @@ configureTheme({
 setTheme('ocean');
 ```
 
-`theme`, `resolvedTheme` and `availableThemes` are signals, so a picker renders directly
-from them. The selected name is a UI preference like any other and is stored through the
-module above. The resolved name is reflected as `data-theme` on `<html>`, and a
-`themechange` event lets a framework-independent micro-frontend follow along. Custom
-themes may override any property in the `--ui-` namespace; unspecified tokens fall back
-to whichever palette the document links.
+`theme`, `resolvedTheme`, and `availableThemes` are signals. The selected name
+is saved through the preference service. The resolved name appears as
+`data-theme` on `<html>`, and remotes can follow the `themechange` event.
+Custom themes override `--ui-` tokens; other tokens come from the linked palette.
 
-The stylesheets are two files, because the defaults and the colours are replaced on
-different schedules. `source/components/style.css` holds modest zero-specificity defaults
-for the elements a component renders itself and defines no colour at all — it only reads
-`--ui-color-*`. `source/components/theme-default.css` defines those tokens, light and
-dark, in a deliberately achromatic palette. Link both after the import map:
+The component styles and palette are separate files. `style.css` supplies low
+specificity defaults and reads `--ui-color-*` tokens. `theme-default.css`
+defines the light and dark token values. Link both when using the default
+palette.
 
 ```html
 <link rel="stylesheet" href="/components/style.css" />
 <link rel="stylesheet" href="/components/theme-default.css" />
 ```
 
-The second link is the optional one. An application with a brand drops it and defines the
-same token names from its own stylesheet — or registers them as a theme through the module
-above — with nothing in the first file to override, since there is no colour in it. Omit
-both and the components render unpainted, which fails visibly at first paint.
+An application can replace the second link with its own palette or register a
+theme through the module above. Keep the first link for component defaults.
 
-Every rule in `style.css` sits in Tailwind's `components` layer, and every selector is
-wrapped in `:where()`. A Tailwind utility or an ordinary application class therefore wins
-without `!important`, because the layer sorts under every utility and an unlayered
-application rule outranks every layer. The file's first line declares Tailwind's layer
-order, so linking it ahead of Tailwind's browser build still leaves these defaults above
-preflight. Layout, sizing and spacing stay entirely the consumer's.
+Rules in `style.css` use Tailwind's `components` layer and `:where()`
+selectors. Application classes and utilities can override them without
+`!important`. Applications still choose layout, sizing, and spacing.

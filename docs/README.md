@@ -1,45 +1,44 @@
 # Documentation
 
-`README.md` is the interface. It says what this is, how to run it, and shows one working
-component. This directory is the manual behind it, one subject per page, and the page that
-owns a subject owns all of it.
+The root [README](../README.md) introduces srl and shows how to run it.
+These pages cover the library, its tools, and the decisions behind them.
 
 ## Start here
 
 | Page | What is in it |
 |---|---|
-| [Getting started](getting-started.md) | Run, check, test, and what to run after changing X |
-| [Architecture map](architecture.md) | Glossary, the dependency rule, the seams and what proves each |
-| [Invariants](invariants.md) | What a change may not break, and the check that enforces it |
-| [Documentation policy](documentation.md) | Where each kind of knowledge goes, and why |
+| [Getting started](getting-started.md) | Run the example and choose checks for a change. |
+| [Architecture map](architecture.md) | Main modules, dependencies, and boundaries. |
+| [Invariants](invariants.md) | Rules that changes must preserve and the checks that enforce them. |
+| [Documentation policy](documentation.md) | Where to record guides, reference material, and decisions. |
 
 ## Guide
 
 | Page | Subject |
 |---|---|
-| [Application startup](guide/startup.md) | `startApplication`, `startHostedApplication`, the hook order |
-| [Defining a component](guide/components.md) | `defineComponent`, `uses`, the rules that are easy to trip over |
-| [The template language](guide/templates.md) | Bindings, directives, DOM security contexts, static checking |
-| [Editor support](guide/editor-support.md) | VS Code, WebStorm, generic LSP clients and every language feature |
-| [Routing](guide/routing.md) | Route configuration, guards, child layouts, dynamic mounting |
-| [Internationalisation](guide/i18n.md) | Locales, plurals, RTL, the collection's own text |
-| [Preferences](guide/preferences.md) | The persistence boundary, storage adapters, themes |
-| [Auth and remotes](guide/auth-and-remotes.md) | Sessions, token stores, manifest admission, remote grants |
-| [The shared collection](guide/collection.md) | Tables, filters, forms — the contracts `source/components/` publishes |
-| [Performance](guide/performance.md) | The measured envelope, how to read a number, the budgets |
-| [Delivery](guide/delivery.md) | The dev server, vendored dependencies, production, deployment traps |
-| [Writing a test](guide/testing.md) | The rules the suites already learned |
-| [Supported browsers](guide/browser-support.md) | The engines one accessible journey actually ran on, and what it leaves uncovered |
+| [Application startup](guide/startup.md) | Startup APIs and hook order. |
+| [Defining a component](guide/components.md) | Element definitions, dependencies, styles, and data loading. |
+| [The template language](guide/templates.md) | Bindings, directives, DOM security, and static checks. |
+| [Editor support](guide/editor-support.md) | VS Code, WebStorm, and generic LSP setup. |
+| [Routing](guide/routing.md) | Routes, guards, child layouts, and dynamic mounts. |
+| [Internationalisation](guide/i18n.md) | Locales, plurals, RTL, and component text. |
+| [Preferences](guide/preferences.md) | Storage adapters and themes. |
+| [Auth and remotes](guide/auth-and-remotes.md) | Sessions, token stores, manifests, and grants. |
+| [The shared collection](guide/collection.md) | Tables, filters, forms, and other shared components. |
+| [Performance](guide/performance.md) | Measurements, budgets, and how to reproduce them. |
+| [Delivery](guide/delivery.md) | Development server, production build, and deployment. |
+| [Writing a test](guide/testing.md) | Component and browser test patterns. |
+| [Supported browsers](guide/browser-support.md) | Recorded browser runs and their limits. |
 
 ## Reference
 
 | Page | Subject |
 |---|---|
-| [Project index](reference/project-index.md) | Every element, global and application — generated from `cli/project-model/` |
-| [Source layout](reference/source-layout.md) | Every directory, and what may know about what |
-| [Angular to this](reference/angular-to-this.md) | A translation table, not a parity claim |
+| [Project index](reference/project-index.md) | Generated inventory of elements, globals, and applications. |
+| [Source layout](reference/source-layout.md) | Directory ownership and dependencies. |
+| [Angular to this](reference/angular-to-this.md) | Names and patterns familiar to Angular users. |
 
 ## Decision records
 
-[`adr/`](adr/) holds one decision per file, each with a number that never changes. Source
-comments cite them by number, so `ADR-0003` and never a section or a path.
+The [decision records](adr/) explain choices a contributor might otherwise
+reverse. Their numbers stay stable so source comments can cite them.

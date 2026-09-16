@@ -13,11 +13,8 @@ import { ORDER_RECORDS } from '../../state/order-records.js';
 /** @import { OrderRecord } from '../../state/order-records.js' */
 
 /**
- * The index tab: who the order is for.
- *
- * It watches the same settled order record as the layout above. The router hands a child
- * no props, so the application-owned record module is the seam: both route levels ask by
- * id, while one retained resource owns the request, refresh, and final release.
+ * Show the customer for an order. This tab and its layout watch the same retained
+ * order record by id.
  */
 export class OrderSummaryTab extends SignalElement {
   /** The shared record view installed after this element is mounted. */

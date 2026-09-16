@@ -8,16 +8,8 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * What srl does for one open project: whether the project is ready, whether it has already
- * been told about a problem, and what starting the language server means.
- *
- * The replaced path-or-null lookup could not tell a project that is not built on srl from
- * one whose manifest asks for the toolchain and has none installed, so both were silence.
- * Readiness, the message a project gets at most once, and start policy live here instead of
- * around the file-open callback. ADR-0090.
- *
- * The disk, the notifications and the LSP starter are injected, so every outcome is driven
- * by a test without an IDE.
+ * Decide whether one project can start an srl language server. Injected disk,
+ * notifications, and starter let tests cover each result without the IDE.
  */
 final class SrlEditorSession {
   /** The disk the project lives on. */
@@ -39,14 +31,14 @@ final class SrlEditorSession {
     void start(String node, Path server) throws Exception;
   }
 
-  /** What a project was told: nothing, a message it can act on, or a running server. */
+/** The last project status reported to the user. */
   enum Outcome {
     STARTED,
     ABSENT,
     REPORTED
   }
 
-  /** The toolchain copies this session starts, repository copy first to stay version-aligned. */
+/** Candidate toolchain paths, with the project copy first. */
   private static final List<String> CANDIDATES =
       List.of(
           "cli/language-server/server.mjs",
@@ -81,11 +73,8 @@ final class SrlEditorSession {
   }
 
   /**
-   * Serve this project. A project already served is left alone, and a project that is not
-   * built on srl stays silent; the cases its owner can fix are said once each.
-   *
-   * Readiness is read on every open rather than cached: a later file open is this editor's
-   * whole retry path after the dependencies are installed.
+   * Start the server when this project is ready. Check again on each file open so
+   * installing dependencies can make a previously missing server available.
    */
   synchronized Outcome opened(ServerStarter starter) {
     if (started) return Outcome.STARTED;
@@ -116,13 +105,13 @@ final class SrlEditorSession {
     return Outcome.STARTED;
   }
 
-  /** Forget what was started, so a reopened project is decided again from scratch. */
+/** Clear the last start decision when the project closes. */
   synchronized void dispose() {
     started = false;
     reported = null;
   }
 
-  /** Say a message unless it is the one this project was last told. */
+/** Avoid repeating the same project message. */
   private Outcome report(boolean failure, String message) {
     if (!message.equals(reported)) {
       reported = message;
@@ -141,9 +130,7 @@ final class SrlEditorSession {
   }
 
   /**
-   * Whether the project's own manifest asks for srl. A project that names the packages and
-   * has no server on disk has dependencies to install, which is worth saying; a project that
-   * names neither is not an srl project and opening one HTML file in it is not a problem.
+   * Check whether the project's manifest declares srl.
    */
   private boolean declaresSrl() {
     String manifest = files.readString(root.resolve("package.json")).orElse(null);

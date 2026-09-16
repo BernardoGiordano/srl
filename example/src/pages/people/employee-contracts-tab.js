@@ -12,12 +12,7 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
 /** @import { Contract } from '../../services/people-service.js' */
 
 /**
- * Contracts, as a definition list rather than a table.
- *
- * One or two rows per employee, and each row has a shape rather than a set of columns —
- * which is the case a table handles worst. The screen next door uses `ui-table` because it
- * has eighty rows of seven identical fields; this one does not, and choosing per screen is
- * the point.
+ * Show an employee's few contracts as a definition list.
  */
 export class EmployeeContractsTab extends SignalElement {
   #contracts = resource(
@@ -40,9 +35,7 @@ export class EmployeeContractsTab extends SignalElement {
   }
 
   /**
-   * Mounted before the route parameter exists — a tab rendered by a layout whose own
-   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
-   * true, which is what the screen should be showing.
+   * Wait for the route's employee id before fetching contracts.
    */
   load() {
     return (routeParams.value.id ?? '') === '' ? undefined : this.#contracts.reload();

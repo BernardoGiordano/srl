@@ -14,9 +14,7 @@
       <app-badge [tone]="statusTone">{{ statusLabel }}</app-badge>
 
       <!--
-        Rendered for everybody, disabled with a reason for those who may not use it.
-        The server enforces the same scope, so this is usability and not access
-        control.
+        Explain why users without the write scope cannot change status.
       -->
       <button
         type="button"
@@ -55,8 +53,7 @@
     <app-tabs [.items]="tabs" label="{{ t('orders.tabsLabel') }}"></app-tabs>
 
     <!--
-      Where the child route renders. This element and everything above it survive a
-      tab change: only the panel below is replaced.
+      Child tabs render here while the order header stays mounted.
     -->
     <x-route-outlet class="block p-4 sm:p-5"></x-route-outlet>
   </div>

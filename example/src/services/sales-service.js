@@ -7,19 +7,8 @@ import { text, textList } from './values.js';
 /** @import { FilterState } from '@components/data/ui-dynamic-filter.js' */
 
 /**
- * Orders, customers and the dashboard summary.
- *
- * The interesting part of this file is `toOrderParams`. `ui-table` and
- * `ui-dynamic-filter` speak filter *descriptors*; the API speaks query parameters.
- * Something has to translate, and the choice of where is a real one:
- *
- *   - in the page: every screen over this resource repeats it;
- *   - in the components: they would have to know one application's API shape;
- *   - here: the descriptor vocabulary is a framework contract, the parameter names
- *     are this API's, and a service is exactly the seam between the two.
- *
- * So the page stays five lines of query handling, and adding a filter rule is a
- * declaration plus one case below.
+ * Load orders, customers, and the dashboard summary. `toOrderParams` translates
+ * table filter descriptors into this API's query parameters.
  */
 
 /** @type {import('@core/foundation/types.js').InjectionToken<SalesService>} */
@@ -44,9 +33,7 @@ export const SALES_SERVICE = token('SalesService');
  */
 
 /**
- * One person at a customer. Three strings, no id: a contact has no identity of its
- * own on this API — the list is written whole with the customer, so a row is
- * addressed by its position and nothing else needs to name it.
+ * A contact has no id because the API writes the whole list with its customer.
  *
  * @typedef {object} CustomerContact
  * @property {string} name
@@ -71,8 +58,7 @@ export const SALES_SERVICE = token('SalesService');
  */
 
 /**
- * What a client may write. `id` and `openOrders` are absent because the server owns
- * both, and a shape that could carry them is a shape a screen will eventually send.
+ * Writable customer fields. The server owns `id` and `openOrders`.
  *
  * @typedef {object} CustomerInput
  * @property {string} name
@@ -114,7 +100,7 @@ export const SALES_SERVICE = token('SalesService');
  */
 
 /**
- * The shape `ui-table` emits on `query-change`, narrowed to what this service uses.
+ * The fields this service uses from `ui-table`'s `query-change` event.
  *
  * @typedef {object} TableQuery
  * @property {number} page
@@ -169,9 +155,7 @@ export class SalesService {
   }
 
   /**
-   * Needs `sales:write`. The server answers 403 without it, which is what the
-   * detail screen shows rather than hiding the control: a disabled button with a
-   * reason is more useful than a missing one.
+   * Change an order status. The server requires `sales:write`.
    *
    * @param {string} id
    * @param {string} status
@@ -199,11 +183,7 @@ export class SalesService {
   }
 
   /**
-   * Whether another customer already holds this address.
-   *
-   * The same rule the save path enforces, asked while the user types rather than at
-   * submit. `signal` belongs to the field and aborts the check the next keystroke
-   * supersedes, so this method has nothing to say about debouncing or ordering.
+   * Check whether another customer uses this email. The field owns cancellation.
    *
    * @param {string} email
    * @param {string} exclude The customer being edited, which does not clash with itself.
@@ -211,8 +191,7 @@ export class SalesService {
    * @returns {Promise<{ taken: boolean }>}
    */
   emailAvailable(email, exclude, signal) {
-    // A create has no customer to exclude, and an empty `exclude` would be a
-    // parameter the server has to know is not an id. Dropped instead.
+    // Omit `exclude` when creating a customer.
     const query = { email, exclude: exclude === '' ? undefined : exclude };
     return this.#client.get('/customers/email-available', query, signal);
   }
@@ -226,9 +205,7 @@ export class SalesService {
   }
 
   /**
-   * The whole record, not a diff: this API replaces the writable fields it is given,
-   * and a form that edits all of them has nothing to diff against anyway. A screen
-   * that edited one field of many would be the reason to send less.
+   * Replace all writable customer fields.
    *
    * @param {string} id
    * @param {CustomerInput} input
@@ -248,12 +225,7 @@ export class SalesService {
 }
 
 /**
- * Descriptors in, query parameters out.
- *
- * Every rule the orders screen declares appears here once. A descriptor with a key
- * this function does not know is dropped rather than guessed at: sending an unknown
- * parameter to a server that ignores it produces a filter that silently does
- * nothing, which is worse than one that visibly does not exist.
+ * Translate known order filters into query parameters. Unknown keys are omitted.
  *
  * @param {TableQuery} query
  * @returns {Record<string, string | number | undefined | readonly string[]>}
@@ -282,15 +254,12 @@ export function toOrderParams(query) {
       case 'customerId':
         params[key] = values;
         break;
-      // The typeahead's ref. Its values are municipality ids, which is what the
-      // options carry and what the API filters on.
+      // Typeahead values are municipality ids.
       case 'comuneId':
         params.comune = values;
         break;
       case 'placedOn': {
-        // A `daterange` rule stores one half-open interval, `since to until`, with
-        // `until` exclusive. The API takes the same halves under their own names
-        // rather than parsing the joined string a second time.
+        // Keep the date range's exclusive upper bound for the API.
         const [since, until] = text(values[0]).split(RANGE_SEPARATOR);
         if (since !== undefined && since !== '') params.placedFrom = since;
         if (until !== undefined && until !== '') params.placedUntil = until;

@@ -18,37 +18,13 @@ import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
 /** @import { FilterRule, FilterState } from '@components/data/ui-dynamic-filter.js' */
 
 /**
- * Orders: the server-paginated screen.
- *
- * The table never sees more than one page. Every page, page-size, sort or filter change
- * arrives as one `query-change` event, goes out as one request, and comes back as
- * `{ rows, total }` — which is what `pagination="server"` means and why `total-rows` is
- * bound: the table cannot count what it does not have.
- *
- * FOUR THINGS THIS SCREEN IS THE EXAMPLE OF
- *
- *  1. **One in-flight request.** A user who types in a filter and pages twice fires
- *     three queries; the first two are aborted. Without that, the slowest response wins
- *     and the table shows a page nobody asked for.
- *  2. **Six kinds of filter rule, each for its real reason.** `free` for text,
- *     `observer` for a list worth having ready, `children` for one that is already
- *     known, `lazy` for one most sessions never open, `typeahead` for one nothing can
- *     download, `daterange` for a half-open interval.
- *  3. **Persistence that survives a reload.** `state-id` stores the page size, the
- *     sort, the column layout and — with `persist-filters` — the filter values, all
- *     through `@core/preferences/persistence.js`. The first fetch is issued from
- *     `state-restore` rather than from `onMount`, because firing both means one wasted
- *     request against the default state.
- *  4. **Rendered cells with their own sort and filter values.** The total is rendered
- *     as formatted currency, so `sort-value` gives the table the number to sort by.
+ * Fetch one order page for each table query. The resource cancels older requests
+ * when paging, sorting, or filtering changes. Table state restores the layout and
+ * filter values; rows always come from the server.
  */
 export class OrdersPage extends SignalElement {
   /**
-   * The query the next request will carry, and this screen's first-visit defaults.
-   *
-   * A field rather than a parameter threaded through three handlers: the table hands
-   * over a whole query per change, and the resource reads the current one on its way
-   * out — which is also what makes `retry()` one call with nothing to remember.
+   * The query the resource reads for its next request.
    *
    * @type {TableQuery}
    */
@@ -69,27 +45,24 @@ export class OrdersPage extends SignalElement {
   filters = signal(/** @type {readonly FilterState[]} */ ([]));
 
   /**
-   * Rules are computed because every label in them is translated: a language change
-   * produces a new array, and `ui-dynamic-filter` recompiles when the array identity
-   * changes. Storing them in a field would freeze the labels at construction.
+   * Rebuild translated filter labels when the language changes.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<readonly FilterRule[]>}
    */
   #rules = computed(() => {
     const lookups = inject(LOOKUP_SERVICE);
     return [
-      // Every declared column at once, so a free-text entry needs no predicate here
-      // and no knowledge of which columns exist.
+      // Search all declared columns.
       { ref: ANY_COLUMN, type: 'free' },
       {
-        // Short, always wanted: fetched once when the filter connects.
+        // Fetch this short list when the filter connects.
         ref: 'status',
         type: 'observer',
         group: t('orders.status'),
         children: () => lookups.options('status').then((rows) => rows.map(translateStatus)),
       },
       {
-        // Known without asking anybody.
+        // Use the options already in this module.
         ref: 'channel',
         type: 'children',
         group: t('orders.channel'),
@@ -100,7 +73,7 @@ export class OrdersPage extends SignalElement {
         })),
       },
       {
-        // Longer, and most sessions never open it: fetched when its row is clicked.
+        // Fetch this list when the row opens.
         ref: 'city',
         type: 'lazy',
         group: t('orders.city'),
@@ -108,8 +81,7 @@ export class OrdersPage extends SignalElement {
         children: () => lookups.options('city'),
       },
       {
-        // 8,600 municipalities. Never loaded as a list; one search at a time, and
-        // `resolve` is what gives a value restored from storage its label back.
+        // Search municipalities by term and resolve saved ids to labels.
         ref: 'comuneId',
         type: 'typeahead',
         group: t('orders.comune'),
@@ -127,8 +99,7 @@ export class OrdersPage extends SignalElement {
           { label: t('orders.lastQuarter'), value: lastDays(90) },
           { label: t('orders.thisYear'), value: sinceYearStart() },
         ],
-        // No `condition`: a `daterange` rule means a range comparison against the
-        // column named by `ref`, and the service turns it into two query parameters.
+        // The service maps this date range to two API parameters.
       },
     ];
   });
@@ -138,16 +109,12 @@ export class OrdersPage extends SignalElement {
   }
 
   onMount() {
-    // The first page, from this screen's own defaults. `state-restore` fires only when there
-    // is something stored, so a screen that waited for it would show an empty table on a
-    // first visit — and one that ignored it would show page one to somebody who left the
-    // table on page four. Both happen here: this request goes out now, and a restore that
-    // arrives immediately afterwards aborts it and asks for the right page instead.
+    // Load the default page now. Restored state can replace this request.
     void this.#page.reload();
   }
 
   /**
-   * The table's restored state, carrying the query it implies.
+   * Use the query implied by restored table state.
    *
    * @param {Event} event
    */
@@ -162,9 +129,7 @@ export class OrdersPage extends SignalElement {
   }
 
   /**
-   * `ui-table` returns to page one whenever `.filters` changes identity. That is right
-   * for a filter change and wrong for the `filter-ready` that lands once slow rules
-   * have loaded, so an empty state replacing an empty state is ignored.
+   * Ignore an empty filter state that only changes array identity.
    *
    * @param {Event} event
    */
@@ -187,8 +152,7 @@ export class OrdersPage extends SignalElement {
   /* ── Cell rendering ─────────────────────────────────────────────────────── */
 
   /**
-   * A renderer returns text, a DOM node or a Lit template result. Returning a string
-   * keeps it text, which is what makes the escaping question not arise.
+   * Return text for a cell without interpreting it as markup.
    *
    * @param {unknown} row
    */
@@ -198,8 +162,7 @@ export class OrdersPage extends SignalElement {
   };
 
   /**
-   * The number behind the rendered amount. Orthogonal to the renderer on purpose: the
-   * cell says "€ 1.234,50" and this is what sorting and filtering compare.
+   * Return the number used to sort and filter the formatted amount.
    *
    * @param {unknown} row
    */
@@ -215,8 +178,7 @@ export class OrdersPage extends SignalElement {
   renderChannel = (row) => t(`orders.channelValue.${/** @type {Order} */ (row).channel}`);
 
   /**
-   * The row's link. A rendered cell rather than an `interactive` table, because one
-   * cell being a link is honest markup and a clickable row is a `div` pretending.
+   * Render a link in the order's detail cell.
    *
    * @param {unknown} row
    */
@@ -242,10 +204,7 @@ function translateStatus(option) {
 }
 
 /**
- * A half-open interval ending tomorrow, which is what "the last 30 days, including
- * today" is once the end is exclusive. The conversion between inclusive labels and the
- * exclusive bound happens in `ui-date-range` for the custom row; a preset states the
- * stored form directly.
+ * Return the last `days` days, including today, with an exclusive end tomorrow.
  *
  * @param {number} days
  */

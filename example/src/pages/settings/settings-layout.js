@@ -11,18 +11,8 @@ import { AppTabs } from '../../ui/app-tabs.js';
 /** @import { TabItem } from '../../ui/app-tabs.js' */
 
 /**
- * Settings: a layout route nested inside the shell's layout route.
- *
- * Three levels of layout are live on this URL — `shell-layout` holds the chrome, this
- * holds the section's tabs, and the child holds the screen — and the router keeps all
- * three mounted, tearing them down deepest first on the way out. That is the case a
- * flat route table cannot express without every screen re-rendering the section's
- * navigation.
- *
- * The tab strip is filtered by scope for the same reason the sidebar is: two of these
- * screens need entitlements, and offering a tab that lands on `/forbidden` is worse than
- * not offering it. The routes are guarded regardless — `routes.js` puts `requireScope`
- * on both — so a typed URL is refused whatever this list says.
+ * Keep Settings tabs mounted around each child screen. Tabs follow session scopes;
+ * route guards also check direct navigation.
  */
 export class SettingsLayout extends SignalElement {
   /** @type {import('@core/foundation/types.js').ReadonlySignal<readonly TabItem[]>} */

@@ -25,38 +25,16 @@ import { LIVE_FEED } from '../services/live-feed.js';
 /** @import { NavNode } from '../navigation.js' */
 
 /**
- * The application chrome, as a layout route.
- *
- * Every screen inside the application is a child of this route, so this element is
- * mounted once per sign-in and outlives every navigation under it: the sidebar's
- * collapse state, the drawer, the scroll position of the nav and the live connection
- * all survive moving between screens, with nothing persisted and nothing restored.
- *
- * Three things are computed here rather than stored anywhere:
- *
- *  - **the visible navigation**, from the model in `../navigation.js` intersected with
- *    the session's scopes, plus whatever the manifest contributes as remotes. Offering
- *    a link that lands on `/forbidden` is worse than not offering it;
- *  - **the page title and the breadcrumb**, from `currentPath` and the same model. No
- *    route carries a `data: { title }` block and no screen sets a title, so a screen
- *    cannot forget to;
- *  - **the live indicator**, from the feed's own signals.
- *
- * Everything visual is `source/components` plus Tailwind utility classes. Nothing in
- * this file knows how a sidebar collapses, how a drawer closes on navigation or how an
- * accordion decides it is open, and nothing in `source/components` knows this
- * application exists.
+ * Keep the application shell mounted across child navigation. It derives visible
+ * links, titles, and breadcrumbs from the navigation model and session scopes.
+ * The live indicator follows the shared feed.
  */
 export class ShellLayout extends SignalElement {
   /** @type {(() => void) | undefined} */
   #releaseFeed;
 
   /**
-   * The sidebar's tree: this application's sections, then the remotes.
-   *
-   * A computed signal, because both inputs are reactive — the scopes come from the
-   * session and the labels from the message table — so a locale change relabels the
-   * menu and a logged-in scope change reshapes it, with no subscription here.
+   * Build the sidebar from current scopes, translations, and remote entries.
    *
    * @type {import('@core/foundation/types.js').ReadonlySignal<ReadonlyArray<NavNode>>}
    */
@@ -71,11 +49,7 @@ export class ShellLayout extends SignalElement {
     })).filter((group) => group.children.length > 0);
 
     /*
-     * The remotes, from the manifest. `nav.<name>` is the message key, which is the
-     * whole of what a shell has to add for a micro-frontend: no route, no import, no
-     * component. `requires.permissions` is read here only to decide whether to offer
-     * the link — the guard the router runs is built from the same block, so a typed
-     * URL is refused whatever this list says.
+     * Add remote links allowed by the manifest's permissions.
      */
     const remotes = manifest().remotes.filter((remote) =>
       (remote.requires.permissions ?? []).every((permission) => scopes.includes(permission)),
@@ -126,7 +100,7 @@ export class ShellLayout extends SignalElement {
     return availableThemes.value.map((name) => ({ name, label: t(`theme.${name}`) }));
   }
 
-  /** True while the event stream is open. Rendered as a dot, not as a sentence. */
+/** Whether the event stream is open. */
   get live() {
     return inject(LIVE_FEED).connected.value;
   }
@@ -136,11 +110,7 @@ export class ShellLayout extends SignalElement {
   }
 
   /**
-   * The title of the current screen.
-   *
-   * Reads `currentPath`, so it follows navigation with no subscription, and `t()`, so
-   * it follows a language change. Not called `title`: `HTMLElement.title` is taken,
-   * and tsc says so.
+   * Translate the title for the current path. `HTMLElement` already owns `title`.
    */
   get pageTitle() {
     const path = currentPath.value;
@@ -164,15 +134,13 @@ export class ShellLayout extends SignalElement {
       return trail;
     }
 
-    // No href on the group: a section is a heading in this model, not a page. A
-    // breadcrumb that links to a redirect is fine; one that links to a 404 is not.
+    // Groups are headings, not destinations.
     trail.push({ label: t(`nav.${found.group.key}`) });
 
     const leaf = found.leaf;
     if (leaf !== undefined) {
       trail.push({ label: t(`nav.${leaf.key}`), href: leaf.path });
-      // A detail route is inside its list's leaf, so the identifier is the trail's
-      // last step and is not a link: it is where we already are.
+      // Show the detail id as the current, unlinked step.
       const rest = path.slice(leaf.path.length).replace(/^\/|\/$/gu, '');
       const identifier = rest.split('/')[0];
       if (identifier !== undefined && identifier !== '') trail.push({ label: segmentLabel(identifier) });
@@ -202,10 +170,7 @@ export class ShellLayout extends SignalElement {
   }
 
   onMount() {
-    // One connection for the whole authenticated area, held by the layout rather
-    // than by the two screens that display it: both are inside this route, so the
-    // stream stays open across a navigation between them instead of closing and
-    // reopening.
+    // Keep one event stream open while the authenticated shell is mounted.
     this.#releaseFeed = inject(LIVE_FEED).retain();
   }
 
@@ -216,14 +181,7 @@ export class ShellLayout extends SignalElement {
 }
 
 /**
- * The last step of a detail path, which is usually an identifier and occasionally a
- * word.
- *
- * `/sales/orders/SO-1042` ends in data and is shown as it is; `/sales/customers/new`
- * ends in a keyword the route table chose, and showing that raw puts an English
- * fragment in the trail of every locale. A message under `breadcrumb.` is the
- * difference, and `t()` returning the key for anything unlisted is what keeps
- * identifiers out of the bundle.
+ * Translate known detail path words and leave record ids as they are.
  *
  * @param {string} segment
  * @returns {string}
@@ -235,7 +193,7 @@ function segmentLabel(segment) {
 }
 
 /**
- * A remote's label, for a path this application's navigation model does not own.
+ * Find a remote label for a path outside the application navigation tree.
  *
  * @param {string} path
  * @returns {string | undefined}

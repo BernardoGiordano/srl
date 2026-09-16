@@ -8,15 +8,8 @@ import { AppNotice } from '../../ui/app-notice.js';
 import { SALES_SERVICE } from '../../services/sales-service.js';
 
 /**
- * The quarter's target, as a meter.
- *
- * The panel fetches its own data rather than receiving it, which is the point of it
- * being a separate lazily loaded module: nothing about the quarter target is
- * downloaded, requested or rendered until somebody asks for this panel. The dashboard
- * that mounts it knows only how to load it.
- *
- * `<progress>` rather than a div with a width: it is a native meter with a native
- * accessible value, and styling it costs less than reimplementing what it announces.
+ * Fetch the quarter target when the dashboard opens this panel. Native
+ * `<progress>` exposes its value to assistive technology.
  */
 export class TargetsPanel extends SignalElement {
   #quarter = resource(

@@ -1,27 +1,8 @@
 /**
- * The navigation model: one tree, four consumers.
- *
- *   the sidebar    renders it, hiding what the session cannot reach
- *   the router      derives the guarded section paths from it
- *   the breadcrumb  walks it to name where you are
- *   the page title  the same walk, one level shallower
- *
- * Labels are keys, never sentences. `nav.salesOrders` is resolved with `t()` at
- * render time, so a language change relabels the menu with no reload; a translated
- * string stored here would freeze at module evaluation.
- *
- * `scope` is the entitlement a leaf needs. It is used twice on purpose, and the two
- * uses are not redundant:
- *
- *   - the sidebar omits a leaf the session cannot use, because offering a link that
- *     lands on `/forbidden` is a worse experience than not offering it;
- *   - the route guard refuses it anyway, because a hidden link is not access
- *     control — the URL is still typeable, and the server enforces the same scope a
- *     third time.
- *
- * The two micro-frontends are deliberately absent. They are contributed by
- * `app.manifest.json` and appended by the shell at render time, so mounting a remote
- * is a manifest entry plus one message key and no edit here. See `app-root.js`.
+ * The sidebar, router, breadcrumbs, and page title share this navigation tree.
+ * Labels stay as message keys so language changes take effect at render time.
+ * Scopes hide links in the sidebar and guard typed URLs. The server enforces them
+ * for API requests. Remotes join the tree from `app.manifest.json`.
  */
 
 /**
@@ -76,18 +57,13 @@ export const NAVIGATION = [
   },
 ];
 
-/** Every leaf in the tree, flattened. */
+/** All navigation leaves. */
 export function navigationLeaves() {
   return NAVIGATION.flatMap((group) => group.children ?? []);
 }
 
 /**
- * The group and leaf that own a path.
- *
- * A detail route is *inside* its list's leaf — `/sales/orders/OR-00007` belongs to
- * `salesOrders` — so a leaf matches its own path and anything below it. Longest
- * match wins, which is what keeps `/settings/users` from being answered by
- * `/settings`.
+ * Find the longest matching leaf, including detail routes below its path.
  *
  * @param {string} path
  * @returns {{ group: NavNode, leaf: NavNode | undefined } | undefined}

@@ -1,17 +1,7 @@
 /**
- * Icons as path data.
- *
- * The sidebar is rendered from the navigation model, so its icons have to be data
- * too: a component cannot receive markup through an attribute, and injecting an
- * SVG string would need `unsafeHTML`, which is the one Lit directive worth
- * refusing in a project whose templates never touch `innerHTML`.
- *
- * Each icon is a list of subpaths on a 24×24 grid, joined into the `d` of a single
- * `<path>` and stroked with `currentColor`. One path rather than one element per
- * stroke is not a style choice: `*for` compiles its body into a template of its
- * own and Lit parses every template as HTML, so a bare `<path>` outside an `<svg>`
- * becomes an `HTMLUnknownElement` and draws nothing. Path data concatenates, so
- * nothing is lost. Circles are two arcs for the same reason.
+ * The navigation model stores icons as SVG path data. Each icon joins its strokes
+ * into one path because a bare `<path>` in a compiled `*for` body loses its SVG
+ * namespace.
  */
 
 /** @type {Readonly<Record<string, ReadonlyArray<string>>>} */
@@ -80,8 +70,7 @@ const ICONS = {
 };
 
 /**
- * The `d` attribute for one icon. An unknown name draws nothing rather than
- * throwing: an icon is decoration, and a missing one must not take a page down.
+ * Return the path for an icon. Unknown names leave the decoration empty.
  *
  * @param {string | undefined} name
  * @returns {string}

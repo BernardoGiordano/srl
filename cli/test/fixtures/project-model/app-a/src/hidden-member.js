@@ -7,8 +7,7 @@ export class MemberBase extends HTMLElement {
   }
 }
 
-// The authored case. `refresh` is a method on the base class, and a value here covers
-// it.
+// This value hides the base class's refresh() method.
 export class HiddenAuthored extends MemberBase {
   refresh = 'soon';
 }

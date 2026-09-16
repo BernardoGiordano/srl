@@ -7,7 +7,7 @@
     <p class="mt-1 max-w-3xl text-[13.5px] leading-relaxed text-muted">{{ t('billing.lead') }}</p>
   </header>
 
-  <!-- Sub-views the shell's route table knows nothing about. -->
+<!-- The remote owns these subviews. -->
   <div class="flex flex-wrap gap-2">
     <button
       *for="name of views; key: name"
@@ -34,9 +34,7 @@
     </div>
 
     <!--
-      `ui-table` from the shell's collection, inside a micro-frontend. It resolves through
-      the same import map the shell uses, so this is the one table implementation on the
-      page rather than a second copy of one.
+      This remote uses the table shared through the shell's import map.
     -->
     <ui-table
       *if="view === 'invoices'"

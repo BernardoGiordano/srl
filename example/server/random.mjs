@@ -1,10 +1,5 @@
 /**
- * A seeded generator, so the dataset is the same on every boot.
- *
- * `Math.random()` would make every restart a different fixture: a screenshot in a
- * bug report would not reproduce, and the smoke test could not assert a row it
- * expects to exist. The algorithm is mulberry32 — thirty-two bits of state, no
- * dependency, and adequate for shaping example data.
+ * Generate the same example data on every boot with mulberry32.
  *
  * @param {number} seed
  * @returns {{ next: () => number, int: (max: number) => number, pick: <T>(values: readonly T[]) => T }}
@@ -30,9 +25,7 @@ export function createRandom(seed) {
    */
   const pick = (values) => {
     const value = values[int(values.length)];
-    // `noUncheckedIndexedAccess` is on, and the assertion is real: the index is
-    // bounded by the length, so the only way here is an empty array, which is a
-    // caller bug rather than a data condition.
+    // The index is in range when the caller supplies a nonempty array.
     if (value === undefined) throw new Error('pick() on an empty array.');
     return value;
   };

@@ -5,28 +5,15 @@ import { signal } from '@core/foundation/reactive.js';
 /** @import { Movement } from './inventory-service.js' */
 
 /**
- * The live event stream, as signals.
- *
- * `EventSource` is a callback API and the rest of this application is reactive, so
- * exactly one place bridges the two: the handlers below write signals, and every
- * screen that shows live data reads them and subscribes by doing so. No component
- * adds a listener, and no component has to remove one.
- *
- * WHY A REFERENCE COUNT
- *
- * A screen calls `retain()` on mount and the returned function on destroy; the socket
- * opens on the first retain and closes on the last release, so two screens open at
- * once share one connection.
- *
- * Reconnection is the browser's: `EventSource` retries on its own, honouring the
- * `retry:` hint the server sends, and `connected` follows the result so a screen can
- * say so.
+ * Publish SSE events as signals. Screens share one connection by calling `retain()`
+ * on mount and releasing it on destroy. `EventSource` handles reconnects; the
+ * `connected` signal lets screens show the current state.
  */
 
 /** @type {import('@core/foundation/types.js').InjectionToken<LiveFeed>} */
 export const LIVE_FEED = token('LiveFeed');
 
-/** How many movements to keep. A ticker, not a log: the table beside it is the log. */
+/** Recent movements to keep in the ticker. */
 const WINDOW = 12;
 
 /**
@@ -65,8 +52,7 @@ export class LiveFeed {
   }
 
   /**
-   * Open the stream if it is not open, and keep it open until the returned function
-   * is called. Safe to call from `onMount` and to discard in `onDestroy`.
+   * Keep the stream open until the returned release function runs.
    *
    * @returns {() => void}
    */
@@ -76,8 +62,7 @@ export class LiveFeed {
 
     let released = false;
     return () => {
-      // Idempotent: a component that releases twice must not close a connection
-      // another screen is still holding.
+      // A second release must not close another screen's connection.
       if (released) return;
       released = true;
       this.#retained -= 1;
@@ -88,10 +73,7 @@ export class LiveFeed {
   #open() {
     if (this.#source !== undefined) return;
 
-    // No token in the URL. The stream authenticates with the same HttpOnly cookie
-    // every other request uses, which is the one thing `EventSource` — a GET with
-    // no way to set a header — makes easy under the `bff` strategy and awkward
-    // under a bearer-token one.
+    // The browser sends the session cookie with the event stream.
     const source = new EventSource(this.#client.streamUrl('/events'), { withCredentials: true });
     this.#source = source;
 
@@ -100,8 +82,7 @@ export class LiveFeed {
     };
 
     source.onerror = () => {
-      // Not a failure by itself: the browser reports the drop and then reconnects.
-      // A screen shows "reconnecting", which is the truth, rather than an error.
+      // EventSource reconnects after a drop.
       this.connected.value = false;
     };
 
@@ -128,9 +109,7 @@ export class LiveFeed {
 }
 
 /**
- * Anything on the origin can be the source of a frame, so the payload is parsed
- * defensively rather than trusted. A malformed frame is dropped, not thrown: one bad
- * event must not stop the stream.
+ * Drop malformed frames without stopping the stream.
  *
  * @param {Event} event
  * @returns {Record<string, unknown> | null}

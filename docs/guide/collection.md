@@ -1,65 +1,46 @@
-# Shared collection contracts
+# Shared component collection
 
-`source/components` is the frame of an internal business application: the collapsible
-sidebar, the header, the accordion menu, the breadcrumb, the dropdown, the table, the
-filter and the inputs it needs. Reached through the `@components/` prefix:
+`source/components` supplies the shell, tables, filters, form controls, and
+overlays used by an internal application. Import elements through
+`@components/`.
 
 ```js
 import '@components/shell/ui-sidebar.js';
 ```
 
-Every element owns behaviour, semantics and state, and leaves layout to the consumer.
-State is published as `data-*` attributes so a stylesheet can see it:
+Elements own behavior and accessibility state. Applications choose layout and
+classes. State appears in `data-*` attributes so CSS can respond to it.
 
 ```html
-<ui-sidebar class="group/sidebar w-60 transition-[width] data-collapsed:w-[76px]">
+<ui-sidebar class="group/sidebar w-60 data-collapsed:w-[76px]">
   <span class="group-data-collapsed/sidebar:hidden">Settings</span>
 </ui-sidebar>
 ```
 
-That is the whole collapse animation: no JavaScript in the application and no class list
-computed anywhere. Where an element renders a semantic element of its own — the `<a>` in
-`ui-sidebar-item`, the `<button>` in `ui-sidebar-toggle` — its classes come from a
-`*-class` property, because the alternatives were `role="button"` plus keydown handling
-(a worse button) or child selectors like `[&>a]:flex` at every call site. Internals the
-library stylesheet addresses carry stable `data-ui-part` attributes such as `menu-panel`
-and `avatar-fallback`; they are styling hooks, not state.
+| Element | Main responsibility |
+|---|---|
+| `ui-app-shell`, `ui-sidebar`, `ui-sidebar-toggle` | Drawer, collapse, and toggle behavior. |
+| `ui-sidebar-item`, `ui-sidebar-group` | Active route and open section state. |
+| `ui-topbar`, `ui-breadcrumb`, `ui-avatar` | Header semantics, route trail, and image fallback. |
+| `ui-menu`, `ui-dialog` | Dismissal, focus, and top-layer behavior. The dialog uses native `<dialog>`. |
+| `ui-table`, `ui-table-column` | Table semantics, paging, sorting, selection, windowing, and column preferences. |
+| `ui-dynamic-filter`, `ui-date-range` | Filter rules, options, saved values, and date ranges. |
+| `ui-combobox` | Searchable selection, chips, keyboard behavior, and a form-control interface. |
+| `ui-field`, `ui-form-error` | Labels, values, field errors, and container errors. |
 
-| Element | What it owns | What it leaves to you |
-|---|---|---|
-| `ui-app-shell` | mobile drawer state, backdrop, close on Escape and on navigation, `data-drawer-open` | every box and every class |
-| `ui-sidebar` | collapsed state, persistence, `data-collapsed` | width, colour, contents |
-| `ui-sidebar-toggle` | finds the sidebar or the shell's drawer with `closest()`, keeps `aria-expanded` true | the button's classes and icon |
-| `ui-sidebar-item` | is this row the current route, `data-active`, `aria-current` | the row's content and classes |
-| `ui-sidebar-group` | open/closed, auto-open on a matching route, `data-open`, `aria-controls` | trigger content, panel classes |
-| `ui-topbar` | `role="banner"`, `data-stuck` past a scroll offset | everything visual |
-| `ui-breadcrumb` | trail from data, last step not a link, `aria-current` | classes for list, item, link, separator |
-| `ui-avatar` | initials from a name, fallback when the image 404s | shape, size, colours |
-| `ui-menu` | open/closed, close on outside pointer, Escape with focus return, navigation | trigger, panel, positioning |
-| `ui-dialog` | a native `<dialog>` shown modally: top layer, inert page, focus trap and return, blurred backdrop, document scroll lock; Escape and a backdrop click *ask* rather than close, and `mandatory` refuses even to ask | every word in the panel, and the panel's own box through `panel-class` |
-| `ui-table` + `ui-table-column` | native table semantics; client/server/infinite pagination; sort, filters, column chooser, reorder, resize, sticky edges, row windowing, persistence; its own accessible names | data fetching, column declarations, rich-cell renderers, the words behind `ui.table.*` |
-| `ui-combobox` | searchable multi-select: chips, grouped panel in the top layer, keyboard and ARIA, free-text tags, per-row expansions, scroll kept across option changes; the form-control contract, so a form binds it as codes | where options come from, label and placeholder, option and chip content |
-| `ui-field` | one field: the label, the error, the three ARIA attributes that tie them together, the value wiring in both directions, and the disabled state pushed onto the control plus `data-disabled` on itself | the control element itself, its classes, and the words behind `ui.field.*` |
-| `ui-form-error` | the message for a rule about a *set* of values: a group's or an array's own code, resolved from the same `ui.field.*` vocabulary, as a `role="alert"` paragraph that a refused submit can focus | the words behind the codes, the paragraph's classes, and where in the form it sits |
-| `ui-dynamic-filter` | nine rule types compiled into options, one value per ref, persistence, lazy and typeahead loading, the active-filter rail | rule declarations, group and option text, what the emitted state filters |
-| `ui-date-range` | two day fields and a confirm, plus the inclusive/exclusive conversion | the words behind `ui.dateRange.*`, and where to render it |
-| `internal/open-panel.js` | everything an open panel owes: the top layer and the placement (under the anchor, flipped when the room is above, clamped and re-measured), dismissal on an outside pointer and on Escape with focus return, `aria-expanded`/`aria-controls`, and the release | which element triggers what, and whether to decline the placement |
-| `internal/dom.js` | `optionalAttr` (an empty string removes the attribute), `isRtl`/`directionSign`, `nextElementId` | when to reach for any of them |
-| `internal/text.js` | the standard interaction text, one key per string | every word behind those keys |
-| `data/filter-descriptor.js` | what "filtered" means: `ANY_COLUMN`, the `contains`/`equals`/`range` modes, the match each rule type implies, and the row comparison | which element produces filters and which applies them |
+The internal `open-panel.js` module gives menus, comboboxes, and column
+choosers consistent placement, Escape and outside-pointer dismissal, and focus
+return. `filter-descriptor.js` gives filters and tables one matching vocabulary.
+Elements use standard text keys for their own controls; applications supply
+labels for their data.
 
 ## Tables
 
-Columns stay at the use site; data stays application-owned:
+The application owns data and declares columns where it uses them.
 
 ```html
-<ui-table
-  pagination="server"
-  [.rows]="rows"
-  [.total-rows]="total"
-  [.filters]="filters"
-  (query-change)="loadQuery($event)"
->
+<ui-table pagination="server" [.rows]="rows" [.total-rows]="total"
+          [.filters]="filters" (query-change)="loadQuery($event)">
   <ui-table-column key="supplier.name" label="Supplier" sortable></ui-table-column>
   <ui-table-column key="value" label="Value">
     <template *fragment="cell(order of rows)">
@@ -69,101 +50,44 @@ Columns stay at the use site; data stays application-owned:
 </ui-table>
 ```
 
-`pagination="client"` filters, sorts and slices supplied rows. `none` filters and sorts
-without slicing. `server` and `infinite` leave row processing to the consumer. A sortable
-header cycles ascending → descending → clear; `sort-start="desc"` reverses its first
-step.
+| Mode | Who processes rows |
+|---|---|
+| `none` | The table filters and sorts all supplied rows without paging. |
+| `client` | The table filters, sorts, and pages supplied rows. |
+| `server` | The application fetches one page for each query. |
+| `infinite` | The application appends rows when `load-more` fires. |
 
-Every page, page-size, sort or external filter change emits one bubbling `query-change`:
+`query-change` carries page, page size, offset, sort, and filters. Pages start at
+one; offsets start at zero. Filter and sort changes reset the page. A rich
+cell can use a checked `*fragment` or a `renderer(row, index, value)` function.
+`sortValue` and `filterValue` keep raw values separate from displayed markup.
 
-```js
-{ page: 1, pageSize: 20, offset: 0, mode: 'server', sort: { key: 'supplier.name', direction: 'asc' }, filters: [...] }
-```
+Column options are declared on `ui-table-column`. `hideable` enables the
+chooser, `locked` prevents changes, and `sticky="start|end"` pins a column
+with logical insets. Reorder and resize work with pointer and keyboard input.
 
-`page-change`, `sort-change` and `filter-change` emit the same detail for consumers
-needing scoped signals. Filter and sort changes reset the page to one. `infinite` emits
-`load-more` from its intersection sentinel or its accessible button. Pages are one-based,
-offsets zero-based.
+With `selectable`, the table tracks row keys through `rowKey`. Selection
+survives sorting and paging. `selection-change` gives keys and the selected
+rows currently loaded; a server table cannot provide records from pages it has
+not fetched. The application decides what a bulk action means. Selection is
+never saved.
 
-A rich cell is written one of two ways. A `<template *fragment="cell(row of rows)">` inside
-the column is markup, checked in the page that wrote it; `of rows` is what gives `row` a
-type, because the table takes rows of any shape and can only offer `unknown` on its own.
-See [templates](templates.md#fragments). `renderer(row, index, value)` is the computed
-alternative and may return text, a DOM node or a Lit template result. A column carrying
-both renders the fragment.
+`virtualized` renders a window of a page while spacer rows preserve scroll
+extent. It keeps page, selection, query, and ARIA row positions for the full
+page. Enable it for uniform-height rows and give the table a constrained
+viewport. Variable-height rows need another windowing strategy. The
+[performance guide](performance.md) records the measured gain.
 
-Column customisation is opt-in and declarative: `hideable` offers a column in the
-visibility chooser, which also exposes logical start/end pinning and reorder controls;
-`locked` removes all user configuration for one column; header drag handles and
-Left/Right keys reorder; resize handles accept pointer drag and Left/Right keys;
-`sticky="start|end"` uses logical CSS insets, so the same declaration works in LTR and
-RTL. Widths are pixel numbers; sticky offsets use configured, resized or measured widths.
-
-`selectable` adds the selection column. A selection is a set of row keys read through
-`rowKey`, so sorting, paging and filtering leave it alone, and a row the key cannot name
-renders a disabled checkbox rather than a choice that would follow a position
-([ADR-0105](../adr/0105-a-selection-is-a-set-of-row-keys.md)). `selected-keys` is
-consumer-owned like `rows` — assign a new array, because the caches keyed on it compare
-identity. `row-selectable` refuses individual rows, and select-all and shift ranges step
-over what it refuses. The header checkbox covers the current page and reads indeterminate
-when the page is mixed; shift-click extends from the last row clicked.
-
-`selection-change` bubbles `{ keys, rows, scope: 'loaded' }`. `rows` holds the loaded rows
-behind those keys and is shorter than `keys` on a server table, which pages through a
-collection it never holds all of — "every matching record" is the screen's operation, not
-the table's. Keys whose rows are gone are pruned in `client`, `none` and `infinite`, where
-`rows` is the whole collection, and kept in `server`, where an absent key means another
-page. `selectedRows`, `selectionCount` and `clearSelection()` are the imperative side.
-Selection is never persisted. `example/src/pages/settings/settings-users.js` drives a bulk
-suspend from it.
-
-`virtualized` bounds what reaches the DOM to a window of the rows a scrolling viewport can
-show, with a spacer row above and below holding the scroll extent
-([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)). It changes what is
-rendered and nothing else: the page, the selection, the status line and the query still
-cover every row the table was given, and the rendered rows carry `aria-rowindex` against an
-`aria-rowcount` for the whole page. Rendering 10,000 rows whole costs 468.9 ms against a
-16 ms frame budget; windowed, the same rows render in 2.60 ms with 38 of them in the DOM
-([the performance envelope](performance.md)).
-
-It is opt-in because it makes three promises the table cannot check. The rows are uniform
-in height — a windowed table measures one rendered row and sizes every spacer from it, so a
-cell that wraps to two lines gives a scrollbar that lies. The table is its own scroller —
-`viewport-height` writes a `max-height` in pixels, and a stylesheet constraining the
-scroller wins. And columns lay out `table-layout: fixed`, so declared `width` matters more
-here than on a table the browser can size from content it can all see. `row-height` is only
-the estimate the first paint uses.
-
-Focus keeps its kind across a window change: a focused row becomes the edge row of the new
-window, a focused selection checkbox becomes that row's checkbox. A page, sort or filter
-change opens the scroller at its first row; rows arriving in `infinite` mode do not, because
-that is the same list getting longer. `infinite` and `virtualized` together drop the
-intersection sentinel — a bounded scroller keeps it permanently below the fold — and the
-window asks for the next page when it comes within its overscan of the last loaded row.
-
-`state-id` opts the table into the persistence of [preference persistence](preferences.md) (`table-name` is a compatibility
-alias; `state-id` wins). The versioned payload holds page, page size, sort, order, hidden
-columns, widths and sticky positions — never rows, renderers or predicates. Add
-`persist-filters` only when the descriptors are JSON-safe. `table.state`, `saveState()`
-and `resetState()` are the imperative API: `saveState()` writes immediately, while the
-changes the element notices itself are debounced and flushed on disconnect, so holding an
-arrow key on a resize handle is one write rather than one per keypress. The debounce is
-scheduled through `@core/foundation/clock.js`, so a suite reaches the far side of it with
-`clock.flush()` rather than a sleep — see [writing a test here](testing.md). `state-change`,
-`state-restore` and `column-change` expose the same lifecycle as bubbling DOM events; a
-server table issues its initial fetch from `state-restore`'s `event.detail.query`.
-
-Internally, one private presentation projection holds the ordered, visible and
-configurable column lists, the sticky-offset map and two lazy style caches, rebuilt only
-when a presentation input changes. Column revision is tracked separately from
-presentation revision because it keys the processed-row cache: a resize drag must not
-re-filter and re-sort 10,000 rows per pointer move.
+`state-id` saves page size, sort, column order, visibility, widths, and pinning
+through the [preference service](preferences.md). Add `persist-filters` for
+JSON-safe filter descriptors. Rows and selection are never saved.
+`state-restore` provides the query a server table should fetch after restoring.
+`saveState()` writes immediately; normal changes are debounced.
 
 ## Filters
 
-`ui-dynamic-filter` is one control holding every filter a screen offers, plus the rail of
-chips saying which are on. A screen declares rules and consumes state; it does not touch
-options:
+`ui-dynamic-filter` displays a screen's rules and active filter chips. The
+screen declares rules and receives filter descriptors.
 
 ```js
 filter.rules = [
@@ -177,286 +101,105 @@ filter.rules = [
 ];
 ```
 
-| type | options come from | loaded |
-|---|---|---|
-| `boolean`, `option`, `date` | the rule, one option | at once |
-| `children` | an array on the rule | at once |
-| `free` | whatever is typed, as a tag | never |
-| `observer` | a promise | on connect |
-| `lazy` | a promise | when its row is clicked |
-| `typeahead` | a promise per term | while typing, debounced |
-| `daterange` | presets plus a custom range | at once |
+| Rule | Options |
+|---|---|
+| `boolean`, `option`, `date`, `children`, `daterange` | Available from the rule. |
+| `free` | Entered by the user. |
+| `observer` | Loaded when the filter connects. |
+| `lazy` | Loaded when its row opens. |
+| `typeahead` | Searched by term. `resolve` restores labels for saved values. |
 
-`lazy` and `typeahead` both exist because "load everything" stops working at some size:
-`lazy` defers a list that is large but bounded, `typeahead` never loads a list at all,
-which is the only workable answer for an 8,600-entry domain. Each ref holds one value and
-its siblings grey out rather than disappear; `multiple: true` allows several.
+One `ref` holds one value unless `multiple: true` is set. A rule produces
+`equals`, `contains`, or `range` matching as appropriate. The table can
+apply the descriptor directly, and an application can provide a predicate
+when its data needs different matching.
 
-The emitted state is a filter descriptor, so the filter and the table connect with one
-assignment and never import each other — both import `filter-descriptor.js`:
+Date ranges store a half-open interval. The end is exclusive, while the
+control shows inclusive days. A preset marked `default: true` applies when
+nothing is saved without persisting that default.
 
-```js
-onFilters(event) { this.filters.value = event.detail; }
-```
-
-```js
-table.filters = [
-  { key: ANY_COLUMN, value: 'milan' },
-  { key: 'status', value: 'active', match: 'equals' },
-  { key: 'createdAt', value: range, match: 'range' },
-  { value: something, predicate: (row, value) => inside(row.createdAt, value) },
-];
-```
-
-`ANY_COLUMN` searches all declared columns; a column-specific filter reads its dotted
-`key`. `match` is `contains` (case-insensitive, the default), `equals`, or `range` — a
-half-open `since to until` string, the format `ui-date-range` stores. A
-`predicate(row, value, index)` overrides `match` entirely, and table-level
-`filterPredicate(row, filters, index)` takes over when filter state has another shape.
-`ui-table-column.sortValue` and `.filterValue` provide orthogonal values for rendered
-cells.
-
-`match` comes from the rule type, not from the screen: every listed choice means
-`equals` — with `contains`, choosing *Sales* would also select *Pre-Sales* — `free` means
-`contains`, and `daterange` means `range`. `condition` on a rule is optional; omitted, it
-means "match the column named `ref`, the way this rule type matches".
-
-What is chosen is persisted per `name`, and an entry whose option no longer exists is
-dropped on load rather than lingering as a filter nobody can see. A deferred rule with
-something in storage is not deferred: `lazy` fetches its list on load when a persisted
-value belongs to it, and `typeahead` resolves its labels through `resolve`, or by
-searching for each persisted value and keeping the result that *is* it. Skipping either
-does not merely delay a chip — the option does not exist, so the entry is dropped and the
-filter the user left switched on disappears.
-
-Ranges store a **half-open interval**: the stored `until` is exclusive, because the query
-behind it is `since <= x < until`. Every field and every label works in inclusive days,
-and the conversion happens in one place, `ui-date-range`. A preset marked `default: true`
-is selected when nothing is stored and is deliberately not written back, so a default of
-"this week" means this week on every visit. The custom-range row opens its editor inline,
-under itself, rather than in a modal — a modal darkens the page and takes focus to ask a
-question the user asked for by clicking one row.
-
-One interaction worth knowing: `ui-table` returns to page one whenever `.filters` changes
-identity. That is right for a filter change and wrong for the `filter-ready` that arrives
-after a slow lookup, so a consumer that pages before its rules load should ignore a ready
-event carrying no state.
-
-`ui-combobox`'s panel, `ui-table`'s column chooser and `ui-menu`'s dropdown all go through
-`open-panel.js`, which owns what an open panel owes whichever element opened it: dismissal
-on an outside pointer and on Escape with focus back on the trigger, the
-`aria-expanded`/`aria-controls` pair, and the one call that undoes all of it.
-
-The first two are `popover` elements it also positions. The two obvious alternatives both
-fail: a panel in the flow pushes the page down when it opens, and an absolutely positioned
-one is clipped by the first ancestor with `overflow: hidden` — which is every card with
-rounded corners. In the top layer neither applies. `ui-menu` declines the placement with
-`anchor: null` and keeps the rest, because a header dropdown is already placed by the two
-utility classes the consumer wrote ([ADR-0078](../adr/0078-an-open-panel-is-one-module.md)).
+Saved filter values are checked against current options. A `lazy` rule loads
+its list when a saved value needs it. A `typeahead` rule resolves saved ids
+to labels so the active filter remains visible after a reload.
 
 ## Forms
 
-Two layers, split where the DOM starts. `@core/forms` holds the state and knows nothing
-about elements; `<ui-field>` is the element and holds no state of its own. Both exist
-because the alternative was measured first: a nine-field screen written with nothing but
-native inputs and the template dialect cost 321 lines of component JavaScript and 236 of
-markup, about 21 lines per field.
+`@core/forms` owns state and validation. `<ui-field>` connects that state to
+a projected native input or a custom control.
 
 ```js
 import { field } from '@core/forms/field.js';
 import { group } from '@core/forms/group.js';
-import { email, maxLength, required } from '@core/forms/validators.js';
+import { email, required } from '@core/forms/validators.js';
 
 form = group({
-  name: field('', [required(), maxLength(80)]),
+  name: field('', [required()]),
   email: field('', [required(), email()]),
 });
 ```
 
 ```html
-<ui-field name="email" label="{{ t('customer.email') }}" required [.field]="form.fields.email">
-  <input id="cf-email" type="email" class="…" />
+<ui-field name="email" label="{{ t('customer.email') }}" [.field]="form.fields.email">
+  <input type="email" />
 </ui-field>
 ```
 
-A field carries `value`, `touched`, `submitted`, `serverError`, `asyncError` and the
-derived `error`, `visibleError`, `valid`, `dirty`, `disabled` and `pending` — all signals —
-plus `setValue()`, `touch()`, `setDisabled()`, `reset()` and `whenSettled()`. A group
-aggregates them and adds `values`, `markSubmitted()`, `applyErrors()`, `firstInvalid`,
-`disabled`, `setDisabled()`, `patch()` and `reset()`. A group's member may be a field,
-another group, or a `fieldArray` — see [repeating rows](#repeating-rows) below. Seven rules
-are worth knowing because they are decisions rather than mechanics:
+Validators return message codes. A field shows an error after it is touched or
+the form is submitted. Server errors clear when the value changes. Form values
+keep the control's type until the service converts them for its API.
 
-- **A validator returns a code, never a sentence.** `ui-field` resolves it: the
-  collection's own codes through standard text under `ui.field.*`, an application's
-  through the `messages` property. A message frozen at module evaluation could not follow
-  a language change, and a validator that imported `t()` would decide an application's
-  wording from inside the framework.
-- **An error is visible once its field has been left, or once the form has been
-  submitted.** Validity and visibility are different questions, and answering them with
-  one flag is what greets a user with four errors before they have typed anything.
-- **The server outranks every validator, and `setValue` clears its answer.** A 422
-  describes the value that was *sent*; left in place it outlives the correction. It does
-  not make the field invalid either, or the form would refuse the submit that is the only
-  way to find out whether the new value is acceptable.
-- **Values stay in whatever shape the control holds**, usually a string, and are
-  converted once at the service boundary. `Number('')` is `0`, so a form that converts
-  per keystroke cannot tell an empty amount from a deliberate zero.
-- **A rule about several values belongs to the container, and has an element of its own.**
-  `group(fields, [ordered('start', 'end')])` and `fieldArray(create, [], [minRows(1)])` take
-  the same `Validator` a field takes, over the container's value. Its code is shown by
-  `<ui-form-error [.node]="form">` rather than by any field, and `invalidPath` answers `''`
-  for it, which is where `focusInvalidField` sends the caret. It becomes visible after a
-  submit or once every member has been visited — a combination has no single control to be
-  left. A member that is invalid on its own wins both the path and the focus, because a
-  specific control is a better place to send someone than a sentence about the form
-  ([ADR-0102](../adr/0102-a-container-rule-has-an-element-of-its-own.md)).
-- **A rule the server has to answer is `{ async: [...] }` on the field, and the field owns
-  the plumbing.** An `AsyncValidator` is `(value, signal) => Promise<string>`; the field
-  debounces the keystrokes, aborts what the next one supersedes, remembers the value it
-  already has an answer for, and binds the request to `lifetime: () => this.lifetime`. It
-  runs only once every synchronous rule has passed, never for the value the field was built
-  with or one a `reset` installed, and a rejection reports nothing rather than inventing an
-  error. `pending` is a third state and it is not valid, so a submit awaits
-  `form.whenSettled()` before asking `markSubmitted()`
-  ([ADR-0103](../adr/0103-a-field-owns-its-asynchronous-check.md)). An owner that ends ends
-  the check with it: the field stops being pending, holds no answer for the value it was
-  asking about, and drops whatever a validator that ignored the abort says afterwards, so a
-  submit awaiting `whenSettled()` cannot be left waiting on a screen that has gone
-  ([ADR-0114](../adr/0114-an-owner-ending-is-terminal-for-a-check.md)).
-- **A disabled field stops being answerable for, and keeps its value.** Its validators do
-  not run, it reports `valid` and it shows nothing — a rule the user cannot reach and
-  cannot fix must not be what refuses a submit. Angular also drops the value out of the
-  group, and that half is deliberately not copied: `group.values` is what the screen
-  sends, so a form that disables a field for a read-only user would quietly turn its `PUT`
-  into a partial one. `dirty` is unaffected for the same reason. A field disabled on its
-  own stays disabled when the group is enabled — `field.setDisabled()` and
-  `group.setDisabled()` are two sources, so a form switched off while it saves does not
-  switch on the one field a domain rule had switched off all along.
+A group or array can have its own validator. `<ui-form-error>` displays a
+container error without blaming one child. An asynchronous field validator
+receives a signal; the field handles debounce, cancellation, pending state,
+and its owner's lifetime. A submit waits for `form.whenSettled()` before
+checking validity.
+
+Disabled fields keep their values in `group.values`, even though validation
+stops for them. This lets a read-only form keep its full record.
 
 <a id="repeating-rows"></a>
 
-**Repeating rows and nesting.** A member of a group is anything satisfying the
-`FormNode` contract in `@core/forms/types.js`, which is a field, a group, or an array of them.
-There is no `AbstractControl`: `FormNode` is an interface, the three classes are
-unrelated, and `@implements` is what stops them drifting apart.
+A `fieldArray` holds rows with stable keys.
 
 ```js
 import { fieldArray } from '@core/forms/array.js';
 
 form = group({
-  name: field('', [required()]),
-  contacts: fieldArray(() =>
-    group({
-      name: field('', [required()]),
-      email: field('', [required(), email()]),
-    }),
-  ),
+  contacts: fieldArray(() => group({
+    name: field('', [required()]),
+    email: field('', [required(), email()]),
+  })),
 });
-
-form.fields.contacts.push();            // an empty row; the form is now dirty
-form.fields.contacts.removeAt(0);
-form.values;                            // { name: '…', contacts: [{ name: '…', email: '…' }] }
 ```
 
 ```html
 <div *for="row of form.fields.contacts.rows; key: row.key">
-  <ui-field name="contacts.{{ row.index }}.email" [.field]="row.control.fields.email">
-    <input type="email" class="…" />
+  <ui-field name="contacts.{{ row.index }}.email"
+            [.field]="row.control.fields.email">
+    <input type="email" />
   </ui-field>
 </div>
 ```
 
-- **A name is a path, and one convention addresses a control at any depth.**
-  `contacts.1.email` is what `firstInvalid` reports, what `applyErrors` resolves, what a
-  422 from `example/server/api.mjs` carries, and what `<ui-field name>` is bound to — so
-  `focusInvalidField` still finds the control with one `querySelector` and a server error
-  on the second contact puts the caret in the second contact. For a flat form a path is
-  just a field name, which is why nothing about a flat form changed.
-- **`key` is the row's identity, `index` is its position.** Keys are minted per array and
-  never reused. A keyed `*for` tracking the index would see removing the first row as
-  every row below it changing its contents; tracking the key sees one row leave.
-- **Adding or removing a row is an unsaved change.** The dirty baseline is the list of
-  keys, not the number of rows: remove one contact and add another and the count is back
-  where it started while the data is not, so a guard comparing lengths would let the user
-  walk away from the deletion. `reset()` puts the removed rows back at the values they
-  held.
-- **A row added after a submit starts quiet.** `markSubmitted()` makes every error below
-  it visible; a row created afterwards does not inherit that, because three red messages
-  under a row the user just asked for is the greeting the timing rule exists to prevent.
-  The next submit marks it like everything else.
-- **A code naming a container is reported, not placed.** `applyErrors({ contacts:
-  'tooMany' })` returns `contacts` as unmatched. `ui-form-error` gives a container's *own*
-  rule somewhere to live, but a server code carries the clear-on-edit rule with it, and
-  which edit below an array answers a code about the array is a question this library does
-  not decide. Putting it under a row that did not cause it would be worse than telling the
-  screen it could not be placed.
-- **A client-side rule about one row is `applyErrors` too.** "This contact repeats the one
-  above" is `applyErrors({ 'contacts.1.email': 'duplicated' })` — the same address a 422
-  carries, cleared by the edit that answers it. `uniqueBy('email')` on the array says the
-  same thing without naming the row, which is the right shape when the message reads "two
-  contacts share an address" rather than pointing at one.
-- **Disabled reaches rows built later.** A row inherits the array's state, which inherits
-  the form's, so a form switched off while it saves also switches off a contact added
-  while it was saving.
+The row key keeps DOM identity when positions change. The index forms a field
+path such as `contacts.1.email`, shared by `applyErrors()`,
+`firstInvalid`, and `<ui-field name>`. An added or removed row makes the
+array dirty, even if the final row count matches its starting count. Let
+`ui-field` generate control ids inside repeated rows.
 
-An id written into markup is the one thing a repeating row cannot have — the second row
-would carry the same one. Rows leave the `id` off their controls and let `ui-field`
-generate one per instance, which is also what ties the label, the error and
-`aria-describedby` together per row.
+Native inputs work directly. A custom control implements the
+`FormControl` interface in `source/components/inputs/form-control.js`.
+`ui-combobox` does so for code values and focus handling.
 
-The control is projected, not generated: a field that rendered its own `<input>` would
-need a property for every attribute an input has and would still be missing the
-twentieth. Native `<input>`, `<textarea>` and `<select>` need nothing beyond their
-`disabled` property, which `ui-field` sets. Anything else implements the seven-member
-`FormControl` contract in `source/components/inputs/form-control.js` — `formValue`,
-`formEvent`, `focusControl()`, `setInvalid()`, `setDescribedBy()`, `setLabelledBy()`,
-`setDisabled()` — which is how `ui-combobox`
-becomes a form field despite holding options rather than codes and generating the node
-that takes focus. `ui-date-range` deliberately does not implement it: it is an inline
-editor with its own confirm, so its value commits on a button rather than on a change,
-and no screen has wanted one inside a form. That is the trigger to revisit.
+The example customer screen reads view, edit, and create mode from its URL.
+It keeps one form mounted, disables it in view mode, and checks write scope
+before editing. A route `canDeactivate` guard asks about unsaved changes
+when the user leaves the screen.
 
-**Reading and editing are one screen, and the mode is the URL.**
-`example/src/pages/sales/customer-detail-page.js` renders nine fields once:
-`/sales/customers/:id` disables the group and shows an Edit control,
-`/sales/customers/:id?edit=true` enables it, `/sales/customers/new` is the create route.
-Nothing holds an `editing` flag — the mode is a computed over `routeParams`,
-`queryParams` and the session's scopes, so it survives a refresh, it is linkable, and the
-back button leaves edit mode. A query change on an already-matched route is a re-render
-rather than a navigation ([routing](routing.md)), so the form the user is reading is the one that becomes
-editable, with no refetch and no remount.
+## What belongs in the collection
 
-Two things follow from that and are worth knowing before copying the pattern. A query
-parameter cannot be a route guard, so `?edit=true` is checked by the screen against
-`sales:write` and the server enforces the write itself; only `customers/new` is a guarded
-route. And `canDeactivate` never runs when only the query changes, so leaving edit mode
-cannot prompt — the screen therefore keeps the edits rather than discarding them
-silently, and the prompt still happens on the way out of the screen. An explicit Cancel
-is the one control that throws work away.
-
-Leaving a half-filled form is the router's business, not the collection's: a route
-declares `canDeactivate`, which is asked deepest-first and only for levels actually being
-released — a parameter change or a surviving layout asks nobody. Answering `false` keeps
-the user where they are and puts the URL back. `false` is allowed here where a
-`canActivate` guard must name a redirect instead, because refusing to leave answers "then
-where?" by construction. See `example/src/pages/sales/customer-detail-page.js` for a guard
-that resolves against a `<ui-dialog mandatory>` rather than `confirm()` — the native
-prompt blocks the event loop, cannot be translated and reads as a browser error, and a
-question the guard is holding a promise open for is exactly the one that may not be
-dismissed without an answer.
-
-## What may go in the collection
-
-A component belongs here when all four are true:
-
-1. It imports from `@core/`, `@auth/`, `@host/` or another component here, and nothing
-   else. An import of `@app/…` means it belongs in that application's `src/`.
-2. It takes its content through attributes, properties and projected children. Reading
-   the injector for an application service (`USER_SERVICE`) makes it unusable in the next
-   application; reading a library token (`AUTH_SESSION`) is fine.
-3. Its text comes from the consumer as a property, or from a standard key the consumer's
-   bundle answers. A hardcoded English string is a component that cannot be reused in the
-   Arabic locale, which this project supports.
-4. Nothing about it is a page. Routes, guards and `<x-outlet>` targets are application
-   concerns.
+A shared element depends only on library modules or other shared elements.
+It receives content through properties, attributes, or projection. Its
+interaction text comes from standard keys, while application-specific labels
+come from the caller. Pages, routes, and application services stay in the
+application.

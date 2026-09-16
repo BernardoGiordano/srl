@@ -7,12 +7,8 @@ import { textList } from './values.js';
 /** @import { FilterState } from '@components/data/ui-dynamic-filter.js' */
 
 /**
- * Products, stock movements and warehouses.
- *
- * The products endpoint takes an offset and a limit rather than a page and a page
- * size, because the products screen appends pages instead of replacing them and an
- * offset is what "append from here" means. `ui-table`'s `infinite` mode emits both
- * — `offset` alongside `page` — so the difference costs the page nothing.
+ * Load products, stock movements, and warehouses. Products use offsets so the
+ * infinite table can append each result.
  */
 
 /** @type {import('@core/foundation/types.js').InjectionToken<InventoryService>} */

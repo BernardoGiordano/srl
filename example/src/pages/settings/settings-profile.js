@@ -8,17 +8,8 @@ import { AppBadge } from '../../ui/app-badge.js';
 import { AppField } from '../../ui/app-field.js';
 
 /**
- * The session, shown to its owner.
- *
- * This screen exists to make the auth model visible. Everything on it comes from
- * `AuthSession`, and what is *not* on it is the point: there is no token to show, because
- * with the `bff` strategy the browser never has one. `session.expiresAt` is not a token
- * lifetime either — it is when the backend expects to renew behind the cookie, which is
- * why the label says "renews" rather than "expires".
- *
- * The scope list is the session's own. A remote's `host.auth.permissions()` returns its
- * granted set intersected with this one, so the analytics micro-frontend can see two of
- * these entries and knows nothing about the rest.
+ * Show the current identity and scopes from `AuthSession`. In the BFF example,
+ * `expiresAt` marks the backend's renewal time behind the session cookie.
  */
 export class SettingsProfile extends SignalElement {
   get session() {

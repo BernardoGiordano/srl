@@ -12,13 +12,8 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
 /** @import { Team } from '../../services/people-service.js' */
 
 /**
- * Teams: six cards, and one plural.
- *
- * `t('people.headcount', { count })` selects a plural category through
- * `Intl.PluralRules` for the active locale, so English resolves `one`/`other` and Arabic
- * resolves `zero`/`one`/`two`/`few`/`many`/`other` from the same call and the same key.
- * That is the whole reason counts go through `t()` here rather than being concatenated
- * with a label.
+ * Show the six teams as cards. `t()` selects the right headcount plural for the
+ * active locale.
  */
 export class TeamsPage extends SignalElement {
   #teams = resource(

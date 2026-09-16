@@ -1,57 +1,45 @@
-# Getting started: run, check, test
+# Getting started
+
+Run the example with its Node backend to try sign-in, API calls, and live updates.
 
 ```bash
-npm run example                                 # the application, http://localhost:8100
-node cli/dev/serve.mjs --open                 # any application, statically, http://localhost:8000
+npm run example
 ```
 
-`npm run example` is the one to use: it serves `example/` from a Node backend, so the
-`bff` token strategy is exercised against a real `HttpOnly` cookie, which no faked
-`fetch` can produce, and `/api/*` and the event stream answer for real. Sign in with any
-username; the password picks the role — `admin`, `operator` or `viewer`. `/analytics` is
-the foreign-stack micro-frontend, `/billing` the same-stack one.
+Open <http://localhost:8100>. Enter any username and use `admin`, `operator`, or
+`viewer` as the password to choose a demo role. The analytics and billing pages
+show two ways to mount a remote application.
 
-`cli/dev/serve.mjs` is the file-server half of the same layout: the three mounts, a
-history fallback and watch-reload, with no npm install and no process behind `/auth` or
-`/api`. It is how an application with no backend of its own is served, and how this one
-is checked to be a plain static folder.
+The static server is useful when you are working on an application without a
+backend. It serves the application, library, and components from one origin and
+reloads changed files. The example's sign-in and API routes need its Node backend.
 
 ```bash
-npm run check                 # typecheck + templates + lint + tool tests + vendor + package + verify + docs + browser tests
-APP=example npm test          # the library, the collection and that application's suite
-npm run benchmark:ci          # the performance gate, against the checked-in baseline
-npm run test:journey          # one accessible journey on Blink, Gecko and WebKit
+node cli/dev/serve.mjs --app example --open
 ```
 
-Everything `check` runs, individually:
+Neither server needs `npm install`. The checks and tests do.
 
-| Command | What fails it |
+```bash
+npm install
+npm run check
+```
+
+`npm run check` runs type checking, template checking, lint, Node and editor tests,
+the browser suite, package and dependency checks, and documentation checks. To run
+one part while editing, use the commands below.
+
+| Change | Check |
 |---|---|
-| `npm run typecheck` | A JSDoc type error anywhere, including tools |
-| `npm run templates:check` | A binding that does not typecheck against its component class |
-| `npm run lint` | Type-aware ESLint |
-| `npm run test:tools` | The Node-side suites: project model, checkers, benchmark integrity, frozen interfaces, docs, and one accessible journey on three engines |
-| `npm run test:editors` | Editor launcher path resolution |
-| `npm run vendor` | A vendored byte that does not match its recorded hash |
-| `npm run package` | A published bundle that will not build, or still names a specifier only an import map resolves |
-| `npm run verify` | Layering, dependencies, import maps, template ownership, message keys, storage access |
-| `npm run docs:check` | A generated reference table that no longer matches the project model |
-| `npm run docs:browsers` | The published browser support matrix, against the recorded journey run |
-| `npm test` | The browser suites, in real Chrome, for the library, the collection and one application |
+| JavaScript or JSDoc | `npm run typecheck && npm run lint` |
+| Component template or public member | `npm run templates:check` |
+| Import map, manifest, remote, or dependency | `npm run verify` |
+| Message key or locale bundle | `npm run messages:check` |
+| Generated documentation table | `npm run docs:check` |
+| Browser behavior | `APP=example npm test` |
+| Editor or language server | `npm run test:tools && npm run test:editors` |
+| Release output | `npm run build -- --app example` |
 
-## Run this after changing X
-
-| You changed | Run |
-|---|---|
-| Any `.js` under `source/` or an application | `npm run check` |
-| A `.html` template, a component's public members, or the attribute one observes | `npm run templates:check` |
-| A `defineComponent` declaration, a tag, or a module path | `npm run verify && npm run docs:check` |
-| An import map, a manifest, or a remote's bytes | `npm run verify` (integrity, CSP hash, grants) |
-| A message key, a locale bundle, or a `t()` call | `npm run messages:check`, and `npm run messages:write` to add the keys nothing answers |
-| A vendored dependency | `npm run vendor` then `npm run verify` |
-| Anything under `source/`, before publishing | `npm run package` then `npm run verify` (the `exports` map names files it emits) |
-| Anything in the render, router, table or startup path | `npm run benchmark:ci` |
-| Tailwind input or a component's example classes | `npm run css`, then re-read the delivery numbers in [the performance envelope](guide/performance.md) |
-| A journey step, an engine, or anything the journey touches | `npm run journey:record`, then `npm run docs:browsers:write` |
-| Documentation prose | nothing; generated tables: `npm run docs:write` |
-| `cli/language-server/` or `editors/` | `npm run test:tools && npm run test:editors`; package each editor before release |
+The [benchmark guide](guide/performance.md) explains the performance gate. The
+[browser support guide](guide/browser-support.md) records the cross-browser
+journey and the builds that ran it.

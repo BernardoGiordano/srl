@@ -3,13 +3,8 @@ import { token } from '@core/foundation/inject.js';
 /** @import { ApiClient } from '@core/http/client.js' */
 
 /**
- * The HR roster.
- *
- * Employees are returned whole — eighty-four rows — because that screen is a
- * client-paginated table: `ui-table` filters, sorts and slices what it is given, so
- * the round trip happens once and every subsequent interaction is local. The
- * distinction between this and the server-paginated orders screen is the point of
- * having both.
+ * Load the small HR roster in one request. The table sorts, filters, and pages
+ * these rows locally.
  */
 
 /** @type {import('@core/foundation/types.js').InjectionToken<PeopleService>} */

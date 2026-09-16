@@ -10,7 +10,7 @@ import { resource } from '@core/foundation/resource.js';
  */
 
 /**
- * The two operations this state module needs from the sales transport adapter.
+ * Operations this module needs from the sales service.
  *
  * @typedef {object} OrderSource
  * @property {(id: string, signal: AbortSignal) => Promise<OrderDetail>} order
@@ -29,8 +29,7 @@ import { resource } from '@core/foundation/resource.js';
  */
 
 /**
- * One retained entry, internal to the module. A separate lease is returned for
- * every watcher so releasing one cannot release another.
+ * One shared entry. Each watcher receives its own lease.
  *
  * @typedef {object} OrderLease
  * @property {string} id
@@ -54,13 +53,9 @@ import { resource } from '@core/foundation/resource.js';
 export const ORDER_RECORDS = token('OrderRecords');
 
 /**
- * Shared settled order records, owned for exactly as long as a mounted reader.
- *
- * `watch()` is the whole interface a screen needs. It follows the supplied id,
- * joins every reader of that id to one resource, refreshes that shared value
- * after a status write, and releases it when the caller's lifetime ends. There
- * is no staleness interval or retained cache: the final reader leaving deletes
- * the entry, so a later visit asks the server again.
+ * Share one order request among mounted readers of the same id. A status write
+ * refreshes their shared value. The last reader releases the entry, so a later
+ * visit fetches it again.
  */
 export class OrderRecords {
   #source;
@@ -74,11 +69,8 @@ export class OrderRecords {
   }
 
   /**
-   * Follow one record id until `lifetime` ends.
-   *
-   * The id is a function because a router reuses the same elements when only a
-   * path parameter changes. The watcher moves its lease in that same update, so
-   * callers do not coordinate release, reload, or stale values themselves.
+   * Follow an id until `lifetime` ends. Read the id on each update because the
+   * router may reuse the element for another order.
    *
    * @param {() => string} readId
    * @param {AbortSignal} lifetime
@@ -117,8 +109,7 @@ export class OrderRecords {
   }
 
   /**
-   * Retain one keyed resource, starting its first read when the first watcher
-   * arrives. Every returned release is idempotent and owns one retain only.
+   * Retain one keyed resource and return an idempotent release function.
    *
    * @param {string} id
    * @returns {OrderLease}
@@ -168,8 +159,7 @@ export class OrderRecords {
     entry.retained -= 1;
     if (entry.retained > 0) return;
 
-    // Delete first. A watcher arriving while abort handlers run must build a
-    // fresh entry, not join one whose request is already being abandoned.
+    // Remove the entry before abort handlers run so new watchers fetch afresh.
     this.#records.delete(entry.id);
     entry.lifetime.abort();
   }

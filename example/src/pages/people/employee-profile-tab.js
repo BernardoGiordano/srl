@@ -13,11 +13,8 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
 /** @import { Employee } from '../../services/people-service.js' */
 
 /**
- * The index tab of the employee detail screen: the record itself.
- *
- * `rel()` renders the hire date as "3 years ago" beside the absolute date. Both, not one:
- * a relative time is easier to judge and an absolute one is what someone copies into a
- * ticket, and `Intl.RelativeTimeFormat` produces the first in the active locale for free.
+ * Show the employee record. The hire date appears in absolute and relative form,
+ * with `rel()` using the active locale.
  */
 export class EmployeeProfileTab extends SignalElement {
   #employee = resource(
@@ -47,9 +44,7 @@ export class EmployeeProfileTab extends SignalElement {
   }
 
   /**
-   * Mounted before the route parameter exists — a tab rendered by a layout whose own
-   * match has not landed — there is nothing to ask for. Not asking leaves `pending`
-   * true, which is what the screen should be showing.
+   * Wait for the route's employee id before fetching the profile.
    */
   load() {
     return (routeParams.value.id ?? '') === '' ? undefined : this.#employee.reload();

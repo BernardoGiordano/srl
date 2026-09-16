@@ -16,13 +16,8 @@ import { PEOPLE_SERVICE } from '../../services/people-service.js';
 /** @import { TabItem } from '../../ui/app-tabs.js' */
 
 /**
- * One employee: the second layout route, and deliberately the same shape as the order
- * detail screen.
- *
- * The repetition is the point of having both. Two detail screens written the same way
- * means the pattern — layout fetches the header, an effect over `routeParams` drives the
- * reload, children fetch their own slices — is a pattern rather than a one-off, and the
- * next one is a copy rather than a decision.
+ * Load an employee header when the route id changes. Child tabs fetch their own
+ * details, as on the order detail screen.
  */
 export class EmployeeDetailPage extends SignalElement {
   #employee = resource(
@@ -41,10 +36,7 @@ export class EmployeeDetailPage extends SignalElement {
   }
 
   /**
-   * The record, or nothing while the last load is failing. A resource keeps the value
-   * it had, which is right for a list that is being refreshed and wrong for a header:
-   * the previous employee's name under a "not found" notice is a worse answer than no
-   * name at all.
+   * Hide the previous employee's header when a new request fails.
    */
   get record() {
     return this.failed.value ? null : this.#employee.value.value;

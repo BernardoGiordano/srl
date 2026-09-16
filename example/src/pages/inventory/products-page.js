@@ -19,26 +19,9 @@ import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
 /** @import { FilterRule, FilterState } from '@components/data/ui-dynamic-filter.js' */
 
 /**
- * Products: the infinite-scroll screen.
- *
- * `pagination="infinite"` appends instead of replacing, so this page holds the rows it
- * has accumulated and adds to them. Two consequences the other two table screens do not
- * have:
- *
- *  - **`load-more` carries an offset, and the accumulated rows are the state.** A page
- *    number would be ambiguous the moment a filter changed under it.
- *  - **A filter or sort change resets the accumulation.** The table emits
- *    `query-change` with `offset: 0`; anything already appended belongs to the previous
- *    query and has to go, or the list becomes two queries stacked on top of each other.
- *
- * `state-id` persists the column layout and the sort, and `persist-filters` the filter
- * values — but never the rows, which is the one thing table state deliberately does not
- * store.
- *
- * The stock column is a cell fragment with a badge in it, so "below reorder point" is
- * visible rather than something the reader has to work out by comparing two columns. It
- * is ordinary markup — `*if` and `app-badge`, both checked here — rather than DOM this
- * page builds by hand.
+ * Append product pages as the table asks for more rows. A new sort or filter resets
+ * the list because its rows belong to a different query. Table preferences persist
+ * the layout and filters, while the products are fetched again.
  */
 export class ProductsPage extends SignalElement {
   /** The query the accumulated rows belong to. */
@@ -49,9 +32,7 @@ export class ProductsPage extends SignalElement {
   };
 
   /**
-   * One window of the collection. The accumulated rows are this screen's, not the
-   * resource's — appending is what `pagination="infinite"` means and no other screen
-   * wants it — so `reload()`'s return value is what `fetch()` folds in.
+   * Fetch one window and append its rows to this screen's list.
    */
   #window = resource(
     (signal) =>
@@ -102,7 +83,7 @@ export class ProductsPage extends SignalElement {
         children: () => lookups.options('warehouse'),
       },
       {
-        // A single-option rule: on or off, one value. The API takes it as a boolean.
+        // The API reads this single-option rule as a boolean.
         ref: 'belowReorder',
         type: 'option',
         group: t('products.stock'),
@@ -124,14 +105,13 @@ export class ProductsPage extends SignalElement {
     return t('products.loadedCount', { loaded: this.loaded, total: this.total.value });
   }
 
-  /** Whether there is anything left to fetch. Drives the table's own load-more affordance. */
+/** Whether another page is available. */
   get complete() {
     return this.loaded >= this.total.value;
   }
 
   onMount() {
-    // The first window. As on the orders screen, `state-restore` fires only when something
-    // was stored, so this is the first-visit path and a restore that follows supersedes it.
+    // Fetch the first page when there is no saved table state.
     void this.reset({ limit: 25, sort: { key: '', direction: '' } });
   }
 
@@ -148,8 +128,7 @@ export class ProductsPage extends SignalElement {
   }
 
   /**
-   * A page, sort or filter change. Every one of them starts the list again, because the
-   * rows already appended answered a different question.
+   * Start a new list for a page, sort, or filter change.
    *
    * @param {Event} event
    */
@@ -160,7 +139,7 @@ export class ProductsPage extends SignalElement {
     void this.reset({ limit: detail.pageSize, sort: detail.sort });
   }
 
-  /** The sentinel scrolled into view, or the accessible button was pressed. */
+/** Load the next page on scroll or button activation. */
   loadMore() {
     if (this.loading.value || this.complete) return;
     void this.fetch(this.loaded, false);
@@ -184,8 +163,7 @@ export class ProductsPage extends SignalElement {
     this.#query = { ...this.#query, offset };
 
     const page = await this.#window.reload();
-    // Superseded, aborted or rejected. All three are already on the resource, and none
-    // of them may touch rows the user is still looking at.
+    // Keep current rows when the new request produces no data.
     if (page === undefined) return;
 
     this.rows.value = replace ? page.rows : [...this.rows.value, ...page.rows];

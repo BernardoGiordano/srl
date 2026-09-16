@@ -6,22 +6,15 @@ npm run journey:record       # the same run, written to tools/browser/journeys.j
 npm run docs:browsers        # fail if this page disagrees with that file
 ```
 
-Three engines run one journey through the built example artifact, served under the
-Content-Security-Policy the build emitted. `cli/test/support/journey/` holds the whole
-arrangement: the observer that reads a page, the engine adapters, and the journey itself.
-The suite runs inside `npm run check`, so an engine that breaks fails a pull request.
+The browser journey runs against a built example artifact on Blink, Gecko, and
+WebKit. The artifact uses its production Content Security Policy. The suite is
+part of `npm run check`.
 
 ## What a support claim means here
 
-An engine named in a configuration file is not evidence. What this page publishes is the
-result of running one composed interaction on each engine, with real keys, against the
-bytes that ship — and, just as important, what that run does not cover.
-
-The journey is one path. The library's own suites and the component collection's suites
-are broader and run on Chrome alone; they prove that a dialog traps focus and that a table
-windows its rows, each in isolation. What no isolated suite can prove is that those
-behaviours still hold when they happen to the same user in the same minute, on an engine
-nobody has opened, which is what the journey is for.
+The table below records the browser builds that ran one composed interaction.
+The library and component suites cover more isolated behavior, but run in Chrome.
+The journey checks that these parts work together on all three engines.
 
 <!-- generated:browsers-matrix -->
 
@@ -66,10 +59,9 @@ No screen-reader pass is recorded in `tools/browser/assistive.json`. The journey
 
 <!-- /generated:browsers-assistive -->
 
-A pass is recorded by the person who ran it, in `tools/browser/assistive.json`, with the
-reader, the browser, the platform, the date, the journey steps it covered and what it
-sounded like. Nothing generates that file and nothing can: a driver reads attributes, and
-what a screen reader says about them is a different question.
+A person records a screen-reader pass in `tools/browser/assistive.json`, including
+the reader, browser, platform, date, steps, and announcements heard. Automated
+attribute checks do not supply those observations.
 
 ## What this does not cover
 
@@ -87,16 +79,13 @@ what a screen reader says about them is a different question.
 
 ## Adding an engine
 
-Add it to `ENGINES` in `cli/test/support/journey/engines.mjs` with the key it reaches the
-next control by, then record a run. The suite iterates the same list, so a declared engine
-that cannot run fails immediately rather than appearing in the matrix as a name.
+Add the engine and its next-control key to `ENGINES` in
+`cli/test/support/journey/engines.mjs`, then record a run. A declared engine that
+cannot run fails the suite.
 
 ## Adding a step
 
-Steps live in `cli/test/support/journey/journey.mjs` and are written once for every
-engine. A step may press keys and take readings; it may not call a component's method or
-read a class field, because what an application can do to itself is the same on every
-engine and is not what the journey is asking.
-
-A new reading goes in `observer.mjs`, typed in `types.d.ts`. That pair is the observable
-interaction interface, and everything a journey may know about a page comes through it.
+Write a step once in `cli/test/support/journey/journey.mjs` for every engine.
+Steps press keys and read observable page state. They do not call component
+methods or inspect private fields. Add new readings to `observer.mjs` and type
+them in `types.d.ts`.

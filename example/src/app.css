@@ -1,26 +1,16 @@
 /*
- * Tailwind entry point for the production CSS build.
- *
  *   npm run css:example   ->  ../app.css
  *
- * Swap the @tailwindcss/browser script tag in index.html for the <link> to app.css when
- * deploying. Nothing else in this application knows which of the two is in use.
+ * The production build replaces the browser compiler with this output.
  */
 
 @import '../../source/components/style.css';
-/* The collection's neutral palette. style.css names these tokens and defines none of
-   them; an application with a brand imports its own file here instead. Mirrors the two
-   <link> tags in index.html, for the reason the next comment gives. */
+/* The shared styles read the neutral palette's tokens. */
 @import '../../source/components/theme-default.css';
 @import 'tailwindcss' source(none);
 
 /*
- * Tailwind names for the component library's semantic design tokens.
- *
- * Kept in step with the inline <style type="text/tailwindcss"> block in index.html by
- * hand: the browser JIT reads the document, this file is read only by the CLI, and neither
- * can see the other. The values themselves live once, in /components/theme-default.css;
- * these lines only make Tailwind utilities for them.
+ * Match the semantic token names in the inline Tailwind block in index.html.
  */
 @theme inline {
   --color-canvas: var(--ui-color-canvas);
@@ -43,17 +33,11 @@
 }
 
 /*
- * Which box each component is lives in that component's own stylesheet, beside its
- * module (`src/ui/app-card.css`), and the build folds those into this sheet's output.
- * ADR-0119.
+ * Include each application's component stylesheet in the output.
  */
 
 /*
- * Where to scan for class names. Miss a directory and its utilities are absent from the
- * generated sheet with no error anywhere, which looks exactly like Tailwind being broken.
- *
- * Remote artifacts compile their own utilities. Keeping those sources out of the shell
- * means a remote can add classes and publish without rebuilding this stylesheet.
+ * Scan the shell's sources. Remotes build their own utility CSS.
  */
 @source '../src/**/*.js';
 @source '../src/**/*.html';
@@ -66,8 +50,5 @@
 @source '../../source/lib/host/**/*.js';
 
 /*
- * `source(none)` above disables automatic content detection. Without it Tailwind walks the
- * repository, finds source/lib/vendor/tailwind-browser.js — its own engine, which names
- * every utility it can generate — and emits all of them. The trap is specific to vendoring
- * a CSS framework's compiler.
+ * `source(none)` keeps the vendored Tailwind compiler out of the scan.
  */

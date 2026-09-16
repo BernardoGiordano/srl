@@ -15,9 +15,8 @@ import java.nio.file.Path;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * The IntelliJ side of one project's srl session: the disk, the notification group, the
- * Node.js the server runs under and the platform's LSP starter. What those are used for is
- * {@link SrlEditorSession}, which this class holds one of per open project. ADR-0090.
+ * Connect a WebStorm project to its {@link SrlEditorSession}, Node runtime, and
+ * LSP starter.
  */
 public final class SrlProjectSession implements Disposable {
   private final Project project;
@@ -73,8 +72,7 @@ public final class SrlProjectSession implements Disposable {
   }
 
   /**
-   * A file the server can be told about: one that exists on disk. Files in archives, over
-   * HTTP or in memory carry no path to send, and asking one for a path throws.
+   * Accept files on disk that the server can open by path.
    */
   private static boolean isSupported(VirtualFile file) {
     if (!file.isInLocalFileSystem()) return false;
@@ -83,10 +81,7 @@ public final class SrlProjectSession implements Disposable {
   }
 
   /**
-   * The Node.js that runs the server, or null when none was found. Read through
-   * EnvironmentUtil rather than System.getenv and PATH: a desktop-launched IDE inherits the
-   * launcher's environment, not the shell's, so a version manager's node is invisible to the
-   * process and to a plain PATH lookup.
+   * Find Node in the IDE's shell environment, including version manager paths.
    */
   private static String findNode() {
     String configured = EnvironmentUtil.getValue("SRL_NODE_PATH");
