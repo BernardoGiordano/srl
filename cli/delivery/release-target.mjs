@@ -1,26 +1,27 @@
 /**
- * Where a prepared release is going — the half of delivery a repository owns.
+ * Where a prepared release is going, which is the half of delivery a repository
+ * owns.
  *
- * `prepareRelease()` turns a verified artifact into a transport tree: immutable
- * assets, one versioned release directory, one signed-by-hash report. That much
- * is true of every deployment. A site name, an nginx template, a supervisor
- * program, a database directory that must outlive the release — none of it is,
- * and none of it belongs in a module a second repository is meant to import.
+ * `prepareRelease()` turns a verified artifact into a transport tree of immutable
+ * assets, one versioned release directory and one signed-by-hash report. That much is
+ * true of every deployment. A site name, an nginx template, a supervisor program or a
+ * database directory that must outlive the release is not, and none of it belongs in
+ * a module a second repository is meant to import.
  *
- * A ReleaseTarget carries those facts across the seam. It is opened in two
- * phases because the release id sits between them:
+ * A ReleaseTarget carries those facts across the seam. It is opened in two phases,
+ * because the release id sits between them.
  *
- *   open()    everything knowable before the id — the payload a target adds to
- *             the release, and the `identity` value folded into the hash the id
- *             is derived from. Two deployments that differ in any rendered fact
- *             must differ here, or one id would name two configurations.
- *   render()  everything that needs the id — the configuration files, whose
+ *   open()    everything knowable before the id, which is the payload a target adds
+ *             to the release and the `identity` value folded into the hash the id is
+ *             derived from. Two deployments that differ in any rendered fact must
+ *             differ here, or one id would name two configurations.
+ *   render()  everything that needs the id, which is the configuration files, whose
  *             paths and contents name the versioned release root.
  *
- * `staticTarget()` is the first adapter and ships with the framework: a plain
- * directory tree, no configuration, serveable by any host. The second lives in
- * the repository that owns the deployment. Two adapters is what makes this a
- * seam rather than a parameter.
+ * `staticTarget()` is the first adapter and ships with the framework, a plain
+ * directory tree with no configuration, serveable by any host. The second lives in
+ * the repository that owns the deployment. Two adapters is what makes this a seam
+ * rather than a parameter.
  */
 
 import { createHash } from 'node:crypto';
@@ -68,7 +69,7 @@ import { createHash } from 'node:crypto';
  */
 
 /**
- * A release as a plain directory: `assets/` beside `releases/<id>/`, and nothing
+ * A release as a plain directory, with `assets/` beside `releases/<id>/` and nothing
  * generated for a particular server. Any host that can serve two directories and
  * follow a symbolic link can serve this.
  *
@@ -152,18 +153,17 @@ export function validateProgram(program) {
 }
 
 /**
- * The http-scope variable prefix for one deployment, from a site or a program
- * name: `app-rehearsal.example.com` and `app-rehearsal` both give
- * `space_rehearsal`.
+ * The http-scope variable prefix for one deployment, from a site or a program name.
+ * `app-rehearsal.example.com` and `app-rehearsal` both give `space_rehearsal`.
  *
- * Variable and zone names declared by a site file are http-scoped, so two
- * deployments sharing one prefix are a duplicate declaration `nginx -t` refuses
- * for the whole host — which is what keeps a rehearsal stack from claiming
- * production's requests. And nginx hashes every variable name into
- * `variables_hash_bucket_size`, 64 by default, where a name built from a whole
- * hostname overflows and is reported as `could not build variables_hash` for
- * every site the host loads, not only this one. Both budgets are cheaper to
- * check here than to discover as a refused configuration.
+ * Variable and zone names declared by a site file are http-scoped, so two deployments
+ * sharing one prefix are a duplicate declaration `nginx -t` refuses for the whole
+ * host. That is what keeps a rehearsal stack from claiming production's requests.
+ * nginx also hashes every variable name into `variables_hash_bucket_size`, 64 by
+ * default, where a name built from a whole hostname overflows and is reported as
+ * `could not build variables_hash` for every site the host loads rather than only
+ * this one. Both budgets are cheaper to check here than to discover as a refused
+ * configuration.
  *
  * @param {string} name
  * @returns {string}

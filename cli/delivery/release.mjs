@@ -1,11 +1,11 @@
 /**
  * Prepare one verified release for transport.
  *
- * Artifact verification, the immutable/versioned split, release identity, and the
- * report a deploy adapter verifies against stay behind this module. Where the
- * release is going does not: that arrives as a ReleaseTarget, and everything a
- * host is named by — site, configuration template, supervisor program, data
- * directory — lives on the far side of it. See ./release-target.mjs.
+ * Artifact verification, the immutable and versioned split, release identity, and the
+ * report a deploy adapter verifies against stay behind this module. Where the release
+ * is going does not. That arrives as a ReleaseTarget, and everything a host is named
+ * by, such as the site, configuration template, supervisor program and data directory,
+ * lives on the far side of it. See ./release-target.mjs.
  *
  * The output directory must not exist; this module never cleans a caller-owned
  * path.
@@ -55,7 +55,7 @@ export async function prepareRelease(options) {
   const artifactSha256 = sha256(artifactBytes);
   const opened = await target.open();
   // Identity covers the artifact, everything the target adds, and every fact the
-  // target renders from — so two deployments that differ anywhere a host can see
+  // target renders from, so two deployments that differ anywhere a host can see
   // cannot resolve to one release directory.
   const payload = opened.files ?? [];
   const identitySha256 = sha256(
@@ -312,8 +312,8 @@ export function flag(name) {
 
 /* ── As a command ──────────────────────────────────────────────────────────
  *
- * The static target only. A target that names a host is a command in the
- * repository that owns the host: see deploy/targets/.
+ * The static target only. A target that names a host is a command in the repository
+ * that owns the host. See deploy/targets/.
  */
 
 if (

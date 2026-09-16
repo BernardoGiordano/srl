@@ -2,23 +2,24 @@
  * Which authoring form a document is written in, and what each editor feature may ask
  * of it.
  *
- * This project supports two authored forms over one Element identity: an external srl
- * template, and inline Lit templates inside a JavaScript module. They share tag identity
- * and element nesting, and nothing else — srl directives, bindings and interpolation are
- * not Lit syntax. Building an srl semantic snapshot for every URI offered `*for`,
- * `(click)` and `[.rows]` inside JavaScript, where none of them mean anything, and read a
- * tag written in a comment or a string as markup.
+ * This project supports two authored forms over one Element identity, an external srl
+ * template and inline Lit templates inside a JavaScript module. They share tag identity
+ * and element nesting and nothing else, because srl directives, bindings and
+ * interpolation are not Lit syntax. Building an srl semantic snapshot for every URI
+ * would offer `*for`, `(click)` and `[.rows]` inside JavaScript, where none of them
+ * mean anything, and would read a tag written in a comment or a string as markup.
  *
- * Classification and routing live here so no editor feature decides a dialect for itself
- * again. Each form is an adapter behind one view, and the binding surface each one
+ * Classification and routing live here so no editor feature decides a dialect for
+ * itself. Each form is an adapter behind one view, and the binding surface each one
  * completes, describes and resolves belongs to the adapter rather than to the feature
- * asking. srl writes `[.row-key]="expr"`; Lit writes `.rowKey=${expr}` for the same
- * property of the same element. ADR-0090, ADR-0090.
+ * asking. srl writes `[.row-key]="expr"` and Lit writes `.rowKey=${expr}` for the same
+ * property of the same element. ADR-0090.
  *
  * What a feature asks the view for is deliberately narrower for Lit. A substitution is
- * the module's own JavaScript, so TypeScript already completes, types and navigates it;
- * answering there again would put a second, worse completion list over a correct one.
- * The view therefore reports a substitution as the binding that owns it and stops.
+ * the module's own JavaScript, so TypeScript already completes, types and navigates
+ * it, and answering there again would put a second, worse completion list over a
+ * correct one. The view therefore reports a substitution as the binding that owns it
+ * and stops.
  */
 
 import { litSource, TemplateSemantics } from './semantics.mjs';
@@ -209,8 +210,9 @@ function srlView(semantics, source) {
  * Inline Lit markup, which shares tag identity and element nesting with an srl template
  * and writes every binding in its own syntax.
  *
- * The scan is deferred because most questions asked of a JavaScript document — every
- * completion keystroke among them — are answered without it, and it parses the module.
+ * The scan is deferred because it parses the module, and most questions asked of a
+ * JavaScript document, every completion keystroke among them, are answered without
+ * it.
  *
  * @param {string} source
  * @param {(source: string) => TemplateSemantics} build
@@ -278,8 +280,9 @@ function emptyView() {
  *
  * `uses` is what makes an element exist in the browser, and markup built in JavaScript
  * depends on it exactly as markup in a template file does. Only elements the project
- * model knows are reported: a tag it has never seen may belong to a library this list
- * does not govern, and calling that a missing `uses` entry would be a guess.
+ * model knows are reported, because a tag it has never seen may belong to a library
+ * this list does not govern, and calling that a missing `uses` entry would be a
+ * guess.
  *
  * A bare `customElements.define` has no `uses` list, so it has no entry to be missing.
  * Its imports are what register the tags its markup names, and reading those the way
@@ -364,10 +367,10 @@ function srlAttributeCompletions(tag, record) {
 /**
  * Lit's binding syntax over the same Element surface.
  *
- * `.rowKey` rather than `[.row-key]`: a Lit property binding names the JavaScript
- * property, so the label is the property. srl directives are absent because Lit has no
- * `*if`, `*for` or `*fragment` — its conditionals and loops are the expressions inside
- * substitutions.
+ * `.rowKey` rather than `[.row-key]`, because a Lit property binding names the
+ * JavaScript property, so the label is the property. srl directives are absent because
+ * Lit has no `*if`, `*for` or `*fragment`, and its conditionals and loops are the
+ * expressions inside substitutions.
  *
  * @param {string} tag @param {ElementRecord | undefined} record @returns {CompletionItems}
  */

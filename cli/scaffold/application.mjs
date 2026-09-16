@@ -4,34 +4,35 @@
  *   node cli/scaffold/application.mjs <name>        (or: srl new <name>)
  *
  * Nine interdependent files, and every one of them is a contract this toolchain
- * enforces after the fact: the eight facts the production HTML transform requires of
- * the document (ADR-0041), an import map that must carry the library's published
- * fragment entry for entry and hash for hash or the page is blank, a manifest the
- * library's own admission policy has to admit, a stylesheet that reaches into the
- * installed package by node_modules path, at least two JavaScript chunks because an
- * application with nothing behind an `import()` carries every route in its entry, and
- * a tsconfig extending the published base so `@core/` resolves for tsc.
+ * enforces after the fact. There are the eight facts the production HTML transform
+ * requires of the document (ADR-0041), an import map that must carry the library's
+ * published fragment entry for entry and hash for hash or the page is blank, a
+ * manifest the library's own admission policy has to admit, a stylesheet that reaches
+ * into the installed package by node_modules path, at least two JavaScript chunks
+ * because an application with nothing behind an `import()` carries every route in its
+ * entry, and a tsconfig extending the published base so `@core/` resolves for tsc.
  *
  * Getting any one of them wrong is a blank page or a refused build, which is why
- * `srl check importmap` exists. The installed journey also proves the declared build and
- * type dependencies, local bin and Git commit around these files. ADR-0098. Until this
- * module, the only executable description of a correct application was the fixture inside
- * tools/checks/pack-check.mjs — reachable by `npm run pack:check` and by nothing else —
- * and an adopter re-derived the same nine files from prose. ADR-0073.
+ * `srl check importmap` exists. The installed journey also proves the declared build
+ * and type dependencies, local bin and Git commit around these files. ADR-0098.
+ * Without this module the only executable description of a correct application is the
+ * fixture inside tools/checks/pack-check.mjs, reachable by `npm run pack:check` and
+ * by nothing else, leaving an adopter to re-derive the same nine files from prose.
+ * ADR-0073.
  *
- * Two halves, deliberately:
+ * Two halves, deliberately.
  *
- *   `applicationFiles(facts)`   pure. Path -> contents, and nothing touches disk, so
+ *   `applicationFiles(facts)`   pure. Path to contents, and nothing touches disk, so
  *                              what a scaffolded document contains is assertable
  *                              without a build, a temp directory or a subprocess.
  *   `emitApplication(root, …)`  the adapter. It finds the facts in the installed
  *                              library, refuses to overwrite, and writes.
  *
- * The facts are found, never typed: the import map is the fragment the library ships,
- * the integrity hash is computed from the bytes in the package, and the mount URLs and
- * the node_modules path to the collection stylesheets are derived from the library's own
- * manifest through cli/package/interface.mjs. Nothing in here can go stale against the
- * library it scaffolds against.
+ * The facts are found rather than typed. The import map is the fragment the library
+ * ships, the integrity hash is computed from the bytes in the package, and the mount
+ * URLs and the node_modules path to the collection stylesheets are derived from the
+ * library's own manifest through cli/package/interface.mjs. Nothing in here can go
+ * stale against the library it scaffolds against.
  *
  * Findings are values, printed by cli/diagnostics/index.mjs like every other command's.
  * ADR-0072.
@@ -54,8 +55,8 @@ import {
 /** @import { Diagnostic } from '../diagnostics/types.js' */
 
 /**
- * What the files below are written from: everything that depends on where the library
- * is installed, resolved once.
+ * What the files below are written from, which is everything that depends on where
+ * the library is installed, resolved once.
  *
  * @typedef {object} ApplicationFacts
  * @property {string} name the application's directory name, and its title
@@ -87,11 +88,11 @@ export function applicationFiles(facts) {
 
   /**
    * Eight facts, exactly one of each, and the production HTML transform refuses the
-   * document otherwise: the two collection stylesheets it replaces with the compiled
-   * one, the import map it replaces with pinned chunk URLs, the browser Tailwind and its
-   * inline input it replaces with the compiled sheet, the entry module, the root element
-   * and the noscript. ADR-0041. That contract is the reason this is a whole index.html
-   * rather than a stub.
+   * document otherwise. They are the two collection stylesheets it replaces with the
+   * compiled one, the import map it replaces with pinned chunk URLs, the browser
+   * Tailwind and its inline input it replaces with the compiled sheet, the entry
+   * module, the root element and the noscript. ADR-0041. That contract is why this is
+   * a whole index.html rather than a stub.
    *
    * The map is the library's own, pasted. It is what a consumer does by hand, and it
    * means no specifier and no integrity hash written here can drift from the library.
@@ -121,8 +122,8 @@ ${facts.importMap.trimEnd()}
 `;
 
   /*
-   * A component, a template and a signal: the three things whose types the template
-   * checker resolves through the library wherever it was installed.
+   * A component, a template and a signal, which are the three things whose types the
+   * template checker resolves through the library wherever it was installed.
    *
    * Two modules, and the second is reached by `import()`, because the build refuses an
    * artifact with fewer than two JavaScript chunks. The lazy chunk is also where a
@@ -189,10 +190,10 @@ await defineComponent({
 `;
 
   /*
-   * The three frozen top-level fields, at their smallest admissible values: one locale
-   * with one bundle, no remotes. The policy that admits this is the library's own — the
-   * same module the browser runs at startup — so a shape it would refuse fails in a
-   * check rather than in a page. ADR-0010.
+   * The three frozen top-level fields, at their smallest admissible values, which is
+   * one locale with one bundle and no remotes. The policy that admits this is the
+   * library's own, the same module the browser runs at startup, so a shape it would
+   * refuse fails in a check rather than in a page. ADR-0010.
    */
   const manifest = {
     auth: { apiBaseUrl: '/api' },

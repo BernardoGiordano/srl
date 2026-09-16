@@ -6,19 +6,21 @@
  * Two failures, and both reach a user rather than a build:
  *
  *  1. A reference nothing answers. `t('orders.titel')` renders `orders.titel` in the
- *     page, in every language, and every catalog-against-catalog comparison passes: the
- *     translations agree with each other perfectly, and none of them has the key the
- *     source asked for.
+ *     page, in every language, and every catalog-against-catalog comparison passes.
+ *     The translations agree with each other perfectly, and none of them has the key
+ *     the source asked for.
  *  2. A placeholder a call does not fill. `{name}` is kept verbatim when no parameter
  *     matches it, so the sentence ships with a brace in it.
  *
- * Reported and not refused: a catalog entry no source names, a computed key and the
- * family it claims, and how much of each locale is translated. A key may be one release
- * ahead of the screen that will show it, and a catalog is also written by hand.
+ * Reported and not refused are a catalog entry no source names, a computed key and
+ * the family it claims, and how much of each locale is translated. A key may be one
+ * release ahead of the screen that will show it, and a catalog is also written by
+ * hand.
  *
  * `--write` adds the unanswered keys to the default-locale bundle that should hold them,
  * with the key as the message, and leaves every existing line alone. It is an authoring
- * step rather than a fix: the entry exists, the sentence is still somebody's to write.
+ * step rather than a fix, because the entry exists and the sentence is still
+ * somebody's to write.
  *
  * Nothing here interprets a catalog. cli/message-catalog/ owns what a key is, which
  * bundle answers for a file and what a reference resolves to, so this check, the

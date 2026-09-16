@@ -1,14 +1,14 @@
 /**
- * One development update session: what changed on disk, as the URL a browser knows
+ * One development update session. What changed on disk, as the URL a browser knows
  * it by, delivered to every tab with that page open.
  *
- * A development server used to answer this with the word "reload". The watcher knew
- * which file an editor had written and spent that knowledge on a log line, the
- * debounce that turned three writes into one event also threw away which files were
- * in it, and the browser could do nothing with "something changed" except start the
- * page again. An edited `.html` file is now a revision the page can apply
- * ([ADR-0111](../../docs/adr/0111-development-edits-update-the-running-page.md)),
- * and that needs the identity the old message dropped.
+ * Answering with the word "reload" throws the identity away. The watcher knows which
+ * file an editor wrote, and a debounce that turns three writes into one event can
+ * lose which files were in it, leaving the browser nothing to do with "something
+ * changed" but start the page again. An edited `.html` file is a revision the page
+ * can apply
+ * ([ADR-0111](../../docs/adr/0111-development-edits-update-the-running-page.md)), and
+ * that needs the identity.
  *
  * What this owns, so that neither adapter repeats it:
  *
@@ -19,18 +19,18 @@
  *   the stream   the event stream, the injected tag that reads it, and the module
  *                that decides what each changed URL means.
  *   gaps         a batch carries an id, and a reconnecting browser says which one it
- *                had. Anything it missed is replayed; anything older than the
+ *                had. Anything it missed is replayed, and anything older than the
  *                retained window, or from a previous process, is a reload.
  *   disposal     watchers, the pending timer and open connections all end with
- *                `close()`. The watchers had no cancellation at all before, so a
- *                suite that started a server and closed it kept a recursive watch of
- *                the repository for the life of the process.
+ *                `close()`. Without cancellation a suite that started a server and
+ *                closed it would keep a recursive watch of the repository for the
+ *                life of the process.
  *
- * Policy about *what a change means* is not here. The session says `/src/app-root.html`
- * changed; `update-client.js` decides that an `.html` file is a template revision, a
- * `.css` file is a stylesheet swap, a `.js` file is a component revision and anything
- * else is a reload. ADR-0075 keeps
- * development policy in the development adapter, and this is the seam inside it.
+ * Policy about what a change means is not here. The session says
+ * `/src/app-root.html` changed, and `update-client.js` decides that an `.html` file
+ * is a template revision, a `.css` file is a stylesheet swap, a `.js` file is a
+ * component revision and anything else is a reload. ADR-0075 keeps development policy
+ * in the development adapter, and this is the seam inside it.
  */
 
 import { readFile, stat, watch } from 'node:fs/promises';
@@ -56,7 +56,7 @@ const CLIENT_FILE = fileURLToPath(new URL('update-client.js', import.meta.url));
  * Injected into the application's index.html, and only into that, when watching.
  *
  * The connection is here, in plain sight in the page, and the policy is in the
- * module it imports: an inline tag is what a developer finds when they ask what the
+ * module it imports. An inline tag is what a developer finds when they ask what the
  * page is doing, and a module is what a test can import without a browser.
  */
 const CLIENT_TAG = `
@@ -72,11 +72,11 @@ const CLIENT_TAG = `
 /**
  * What an editor writes beside the file it is saving, rather than the save.
  *
- * A dotfile at any depth covers `.app-root.html.swp` and `.DS_Store` alike; the rest
+ * A dotfile at any depth covers `.app-root.html.swp` and `.DS_Store` alike. The rest
  * are the temporary halves of an atomic save, which arrives as a write to a scratch
  * name followed by a rename onto the real one. Only the rename is the edit, and
- * announcing the scratch name would hand the browser a URL ending in `.tmp` — which
- * it answers, correctly and uselessly, with a reload.
+ * announcing the scratch name would hand the browser a URL ending in `.tmp`, which it
+ * answers, correctly and uselessly, with a reload.
  *
  * @param {string} filename Relative to a mount, in the platform's separators.
  * @returns {boolean}
@@ -149,11 +149,11 @@ export function startUpdateSession(options) {
   const history = [];
 
   /**
-   * This process. A browser that reconnects to a *restarted* server holds an id from
-   * the process before it, and the ids alone cannot say so — they start again at 1.
-   * The token is what makes "I have seen 7" answerable, and a mismatch is a reload,
-   * which is the right answer: the server restarted because something it reads
-   * changed.
+   * This process. A browser that reconnects to a restarted server holds an id from
+   * the process before it, and the ids alone cannot say so, because they start again
+   * at 1. The token is what makes "I have seen 7" answerable, and a mismatch is a
+   * reload, which is the right answer, because the server restarted when something
+   * it reads changed.
    */
   const token = randomUUID().slice(0, 8);
   let counter = 0;
@@ -213,9 +213,9 @@ export function startUpdateSession(options) {
   /**
    * A directory is not an edit. `mkdir` and a rename both report the directory as
    * well as what moved inside it, and announcing `/src` hands the browser a URL that
-   * is no file, which it answers with the reload this exists to avoid. A file that
-   * no longer exists is still announced: a deleted template is a page that has gone
-   * stale, and the client's fetch of it is what says so.
+   * is no file, which it answers with the reload this exists to avoid. A file that no
+   * longer exists is still announced, because a deleted template is a page that has
+   * gone stale and the client's fetch of it is what says so.
    *
    * @param {string} file
    */

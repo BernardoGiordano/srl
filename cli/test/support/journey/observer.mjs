@@ -1,17 +1,18 @@
 /**
  * What a journey may see, expressed once and evaluated inside the page.
  *
- * This is the observable interaction interface the journey is written against. It exists
- * so that the engine adapters stay thin: an adapter navigates, presses a key and forwards
- * one `evaluate` call, and everything about *what a running application looks like* —
- * where focus is, what a dialog is announcing, which rows a window is holding — is
- * decided here, once, for every engine.
+ * This is the observable interaction interface the journey is written against. It keeps
+ * the engine adapters thin, because an adapter navigates, presses a key and forwards one
+ * `evaluate` call. Everything about what a running application looks like is decided
+ * here, once, for every engine, including where focus is, what a dialog is announcing,
+ * and which rows a window is holding.
  *
  * Every reading is taken through the accessibility surface rather than through the
- * component's internals. Focus is `document.activeElement` and the name it carries; a
- * field's error is the `role="alert"` paragraph its control points `aria-describedby` at;
- * a combobox's highlighted option is its `aria-activedescendant`; a window's position is
- * `aria-rowindex` and `aria-rowcount`. An assertion written against a private class field
+ * component's internals. Focus is `document.activeElement` and the name it carries. A
+ * field's error is the `role="alert"` paragraph its control points `aria-describedby`
+ * at, a combobox's highlighted option is its `aria-activedescendant`, and a window's
+ * position is `aria-rowindex` and `aria-rowcount`. An assertion written against a
+ * private class field
  * would pass on an engine where a screen reader is told nothing, which is the failure this
  * journey exists to notice.
  *
@@ -24,8 +25,8 @@
 /**
  * The observer, as the page defines it on `globalThis.__journey`.
  *
- * Written as one IIFE with no imports and no optional chaining across frames: it is
- * evaluated as-is by four different engines and has to parse in all of them.
+ * Written as one IIFE with no imports and no optional chaining across frames, because
+ * it is evaluated as-is by four different engines and has to parse in all of them.
  */
 export const OBSERVER_SOURCE = `(() => {
   const text = (node) => (node === null ? '' : (node.textContent || '').replace(/\\s+/gu, ' ').trim());
@@ -95,8 +96,9 @@ export const OBSERVER_SOURCE = `(() => {
     },
 
     /**
-     * A form field as its control describes itself: the value, whether it is announced
-     * invalid, and the error text \`aria-describedby\` actually resolves to.
+     * A form field as its control describes itself, giving the value, whether it is
+     * announced invalid, and the error text \`aria-describedby\` actually resolves
+     * to.
      */
     field(fieldName) {
       const input = control(fieldName);
@@ -117,8 +119,9 @@ export const OBSERVER_SOURCE = `(() => {
     },
 
     /**
-     * A combobox as it announces itself: whether it is expanded, which option it points
-     * \`aria-activedescendant\` at, and which options carry \`aria-selected\`. The chosen set
+     * A combobox as it announces itself, giving whether it is expanded, which option
+     * it points \`aria-activedescendant\` at, and which options carry
+     * \`aria-selected\`. The chosen set
      * is read from the options rather than from the chips, because chips are the
      * multiple-choice presentation and a single-choice combobox shows its answer in the
      * input instead.
@@ -160,9 +163,9 @@ export const OBSERVER_SOURCE = `(() => {
     },
 
     /**
-     * A windowed table: what it claims to hold, what it actually rendered, and where the
-     * scroller is. \`aria-rowcount\` and \`aria-rowindex\` are the numbers a screen reader
-     * is given, so they are the numbers asserted on.
+     * A windowed table, giving what it claims to hold, what it actually rendered, and
+     * where the scroller is. \`aria-rowcount\` and \`aria-rowindex\` are the numbers a
+     * screen reader is given, so they are the numbers asserted on.
      */
     table() {
       const grid = document.querySelector('ui-table table');
@@ -187,7 +190,7 @@ export const OBSERVER_SOURCE = `(() => {
 
     /**
      * Put focus on one row's selection checkbox without a pointer, the way a keyboard
-     * user arrives at it — the caller then presses real keys from there.
+     * user arrives at it. The caller then presses real keys from there.
      */
     focusRowCheckbox(index) {
       const row = document.querySelector('ui-table [data-ui-part="table-row"][aria-rowindex="' + String(index) + '"]');

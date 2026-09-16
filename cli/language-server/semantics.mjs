@@ -1,16 +1,16 @@
 /**
  * One interpretation of an authored template for every editor feature.
  *
- * The checker remains the second implementation of the runtime dialect: it emits
+ * The checker is the second implementation of the runtime dialect, and it emits
  * TypeScript and reports diagnostics. This module owns the editor-facing meaning of
  * incomplete source. It scans once, keeps scopes and exact source ranges together, and
  * asks the checker's compiler for member types. Callers do not search backwards with a
  * feature-specific regular expression. ADR-0090.
  *
  * Element nesting, tag spans and attribute spans are HTML, so both authored forms read
- * them from the same scan. The `dialect` selects what else the scan means: srl records
- * `{{ }}` and directive expressions, Lit records none because its substitutions are the
- * module's own JavaScript and TypeScript already types them.
+ * them from the same scan. The `dialect` selects what else the scan means. srl records
+ * `{{ }}` and directive expressions, and Lit records none, because its substitutions
+ * are the module's own JavaScript and TypeScript already types them.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -817,10 +817,10 @@ function narrowest(spans, offset) {
 /**
  * A `*fragment` head, read the way an editor needs it.
  *
- * The dialect's parser wants the closing parenthesis, and rightly so — the runtime
- * and the checker must refuse `*fragment="cell(row"`. An editor sees that text on
- * the way to the finished one, so a head still being typed is closed here and read
- * with the same grammar rather than a second, looser one.
+ * The dialect's parser wants the closing parenthesis, and rightly so, because the
+ * runtime and the checker must refuse `*fragment="cell(row"`. An editor sees that
+ * text on the way to the finished one, so a head still being typed is closed here and
+ * read with the same grammar rather than a second, looser one.
  *
  * @param {string} value
  */

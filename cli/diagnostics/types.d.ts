@@ -1,26 +1,26 @@
 /**
  * What a check found, in one declaration.
  *
- * Every check in this toolchain used to answer "what is wrong" by writing to a
- * terminal: `console.error` at the point of discovery and a count as the return
- * value. That makes the finding unreachable — a test can assert that six things
- * were wrong and not which six, an editor has nothing to underline, and an agent
- * has nothing to read. The count crossed the function boundary; the finding did
- * not.
+ * A check that answers "what is wrong" by writing to a terminal, with
+ * `console.error` at the point of discovery and a count as the return value, makes
+ * the finding unreachable. A test can assert that six things were wrong and not which
+ * six, an editor has nothing to underline, and an agent has nothing to read. The
+ * count crosses the function boundary and the finding does not.
  *
- * A `Diagnostic` is the finding as a value. `cli/diagnostics/index.mjs` is the
- * only thing that formats one, so a check states what it found and never how it
- * is printed. ADR-0072.
+ * A `Diagnostic` is the finding as a value. `cli/diagnostics/index.mjs` is the only
+ * thing that formats one, so a check states what it found and never how it is
+ * printed. ADR-0072.
  */
 
 /**
  * How much a finding matters.
  *
- * `error` is a refusal: the command exits non-zero. `warning` is reported and
- * does not fail — an untranslated locale, a coverage gap a run should say out
- * loud. `info` is a check that ran and passed, kept as a value for the same
- * reason a failure is: a caller that wants to know the import map was compared
- * verbatim should not have to parse a line of terminal output to find out.
+ * `error` is a refusal, and the command exits non-zero. `warning` is reported and
+ * does not fail, such as an untranslated locale or a coverage gap a run should say
+ * out loud. `info` is a check that ran and passed, kept as a value for the same
+ * reason a failure is, because a caller that wants to know the import map was
+ * compared verbatim should not have to parse a line of terminal output to find
+ * out.
  */
 export type Severity = 'error' | 'warning' | 'info';
 

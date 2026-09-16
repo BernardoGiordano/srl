@@ -1,13 +1,13 @@
 /**
  * One stdio client for the language server.
  *
- * Framing, id correlation and the diagnostics stream were written once per caller —
- * twice in the suites, again in the workload that measures editor latency — and three
- * copies of a wire format disagree eventually. Callers get messages; nobody else counts
+ * Framing, id correlation and the diagnostics stream are needed by three callers, twice
+ * in the suites and again in the workload that measures editor latency, and three copies
+ * of a wire format disagree eventually. Callers get messages, and nobody else counts
  * bytes to a separator.
  *
- * Raw `frame`/`write` stay exposed because atomicity is part of what a caller tests: a
- * request and the `$/cancelRequest` that withdraws it have to reach the server in one
+ * Raw `frame` and `write` stay exposed because atomicity is part of what a caller tests.
+ * A request and the `$/cancelRequest` that withdraws it have to reach the server in one
  * read, and so do two opens that must not queue behind each other.
  */
 
@@ -26,8 +26,8 @@ const SERVER = resolve(fileURLToPath(new URL('../..', import.meta.url)), 'langua
  *   timeout?: number,
  *   onPublish?: (publish: { uri: string, diagnostics: any[], at: number }) => void,
  * }} [options]
- *   `root` is the repository the server analyses, `capabilities` what the client claims —
- *   which decides what the server asks of it.
+ *   `root` is the repository the server analyses, and `capabilities` is what the client
+ *   claims, which decides what the server asks of it.
  */
 export function startLanguageServer(options = {}) {
   const root = options.root ?? process.cwd();

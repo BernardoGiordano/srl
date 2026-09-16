@@ -30,8 +30,9 @@ import { verifyPublishedRelease } from './verify-release.mjs';
 /** @import { ArtifactFile, RemoteArtifactReport, RemoteTransport } from './artifact-report.mjs' */
 
 /**
- * The report retained beside a published Remote release: what was published, from
- * which artifact, at which immutable version URL. `remote` is the Remote's own
+ * The report retained beside a published Remote release, naming what was published,
+ * from which artifact, and at which immutable version URL. `remote` is the Remote's
+ * own
  * transport descriptor, carried through unchanged so that composing a shell later
  * needs the release and not the artifact it came from.
  *
@@ -249,10 +250,10 @@ export async function applyRemoteRetention(plan) {
 }
 
 /**
- * What a release requires of an artifact report beyond the report's own contract:
- * a Remote rather than a shell, a full commit to name the release by, a base this
- * module's publication layout recognises, and — unless a PoC deploy says otherwise
- * — a build that is no longer marked experimental.
+ * What a release requires of an artifact report beyond the report's own contract. It
+ * must be a Remote rather than a shell, carry a full commit to name the release by,
+ * use a base this module's publication layout recognises, and, unless a PoC deploy
+ * says otherwise, not be marked experimental.
  *
  * @param {import('./artifact-report.mjs').ArtifactReport} report
  * @param {string} path
