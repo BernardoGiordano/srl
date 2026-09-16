@@ -1,24 +1,24 @@
 /**
- * Project the artifact report onto the entry document: the transfers the browser
- * is going to need, named in the document that starts them.
+ * Project the artifact report onto the entry document, naming the transfers the
+ * browser is going to need in the document that starts them.
  *
- * The build computes the whole module graph — `chunks[].imports`,
- * `chunks[].dynamicImports` — validates it, and writes it to `artifact.json`. Until
- * this module existed nothing read it back. The document was produced by
- * `productionHtml`, a `transformIndexHtml` with `order: 'pre'`, which runs before a
- * single chunk has been emitted and therefore structurally cannot name one. So a
- * cold start discovered its own dependency graph one round trip at a time: fetch the
- * entry, evaluate it, learn the root module's URL, fetch that, evaluate it, learn the
- * next one. Around twenty serial round trips delivered ten kilobytes of JavaScript.
+ * The build computes the whole module graph in `chunks[].imports` and
+ * `chunks[].dynamicImports`, validates it, and writes it to `artifact.json`. The
+ * document is produced by `productionHtml`, a `transformIndexHtml` with
+ * `order: 'pre'`, which runs before a single chunk has been emitted and therefore
+ * cannot name one. Without this module a cold start discovers its own dependency
+ * graph one round trip at a time. Fetch the entry, evaluate it, learn the root
+ * module's URL, fetch that, evaluate it, learn the next one. Around twenty serial
+ * round trips deliver ten kilobytes of JavaScript.
  *
  * Nothing here changes evaluation order. `@core/application/runtime.js` imports the
- * root module dynamically "because a static import is evaluated before any of the
- * above runs", and that constraint is about evaluation. A `modulepreload` moves only
- * the transfer: the bytes arrive while the seven startup steps run, and step 7 gets a
- * module that is already fetched and compiled. ADR-0080.
+ * root module dynamically because a static import is evaluated before any of the
+ * startup steps run, and that constraint is about evaluation. A `modulepreload` moves
+ * only the transfer, so the bytes arrive while the seven startup steps run and step 7
+ * gets a module that is already fetched and compiled. ADR-0080.
  *
- * Pure, and deliberately: report in, document out. A hint list is asserted without
- * running Vite over an application.
+ * Pure, and deliberately so, with a report in and a document out. A hint list is
+ * asserted without running Vite over an application.
  */
 
 import { parse, parseFragment, serialize } from 'parse5';
@@ -34,7 +34,7 @@ const MANIFEST = '/app.manifest.json';
 
 /**
  * One transfer the entry document starts. `integrity` is the digest the page's own
- * import map already pins for that URL: repeating it on the hint is what makes the
+ * import map already pins for that URL, and repeating it on the hint makes the
  * preloaded response the one the later module request consumes, rather than a second
  * copy fetched under different integrity metadata.
  *
@@ -43,8 +43,8 @@ const MANIFEST = '/app.manifest.json';
  */
 
 /**
- * The facts a hint list is derived from. A whole `ShellArtifactReport` satisfies it;
- * so does a literal in a test, which is the point of naming the subset.
+ * The facts a hint list is derived from. A whole `ShellArtifactReport` satisfies it,
+ * and so does a literal in a test, which is why the subset is named.
  *
  * @typedef {Pick<ShellArtifactReport, 'entry' | 'chunks' | 'security'>} HintFacts
  */
@@ -52,21 +52,22 @@ const MANIFEST = '/app.manifest.json';
 /**
  * Every transfer the entry document can start before the entry module has run.
  *
- * Two groups, in the order the browser should begin them. The manifest first: it is
- * startup step 2, it is small, and until now it was not requested until the entry
- * chunk had been fetched and evaluated. Then the module graph — the entry's static
- * closure, which the browser needs before it may evaluate the entry at all, followed
- * by the root module and its own static closure, which is the one dynamic import the
- * document can predict, because `startApplication`'s last step always makes it.
+ * Two groups, in the order the browser should begin them. The manifest comes first,
+ * because it is startup step 2, it is small, and otherwise it is not requested until
+ * the entry chunk has been fetched and evaluated. Then the module graph, which is the
+ * entry's static closure the browser needs before it may evaluate the entry at all,
+ * followed by the root module and its own static closure. The root module is the one
+ * dynamic import the document can predict, because `startApplication`'s last step
+ * always makes it.
  *
  * Route chunks are not here. Which route a visitor lands on is not a build fact, and
  * a document that preloaded all of them would trade a round trip for the whole
- * application's bytes. That chain is shortened where it is actually known — in the
- * router, which knows the levels a URL enters. Nothing there calls this yet: a
- * `RouteDef` carries an opaque `load` closure and neither side has a fact that maps a
- * route to the chunk that import resolves to. What does exist is the other half —
- * `app.manifest.json` groups its templates by chunk under the same closure rule this
- * uses, so a router that gained such a fact would have a list to start. ADR-0081.
+ * application's bytes. That chain is shortened in the router, which knows the levels
+ * a URL enters. Nothing there calls this yet, because a `RouteDef` carries an opaque
+ * `load` closure and neither side has a fact that maps a route to the chunk that
+ * import resolves to. The other half does exist, since `app.manifest.json` groups its
+ * templates by chunk under the same closure rule this uses, so a router that gained
+ * such a fact would have a list to start. ADR-0081.
  *
  * @param {HintFacts} facts
  * @returns {EntryHint[]}
@@ -122,7 +123,7 @@ export function entryHints(facts) {
  *
  * Before the script rather than after it, so the transfers are in flight by the time
  * the parser reaches the tag that needs them, and after the import map, which
- * `emitSecurity` has already placed there: an import map has to precede every module
+ * `emitSecurity` has already placed there. An import map has to precede every module
  * load a document starts, and a `modulepreload` is one.
  *
  * @param {string} html The production document, import map already inlined.

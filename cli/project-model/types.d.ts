@@ -1,11 +1,11 @@
 /**
  * What the project model knows, in one declaration.
  *
- * Every static tool in tools/ used to answer "which custom elements exist and where is
- * their markup" for itself: the template checker with a TypeScript AST pass, the
- * verifier with a line-anchored regex, the template bundler with a directory walk. Three
- * answers to one question is three chances to disagree, and the regex could not see a
- * definition written across two lines while the AST pass could. These types are the one
+ * Three static tools need to know which custom elements exist and where their markup
+ * is. Answering it separately, the template checker would use a TypeScript AST pass,
+ * the verifier a line-anchored regex and the template bundler a directory walk. Three
+ * answers to one question is three chances to disagree, and a regex cannot see a
+ * definition written across two lines while an AST pass can. These types are the one
  * answer, and `cli/project-model/index.mjs` is the only thing that produces them.
  */
 
@@ -14,8 +14,8 @@ export interface Application {
   name: string;
   dir: string;
   /**
-   * Marked `.private`: excluded from the generated tables in README.md and from
-   * nothing else. See `apps()` in cli/layout.mjs.
+   * Marked `.private`, which excludes it from the generated tables in README.md and
+   * from nothing else. See `apps()` in cli/layout.mjs.
    */
   private?: boolean;
 }
@@ -109,7 +109,7 @@ export interface ElementRecord {
    * Attribute names an instance reacts to, from `static properties` and
    * `static observedAttributes`. Sorted.
    *
-   * Null when the declaration could not be read, which is not the same as empty: an
+   * Null when the declaration could not be read, which is not the same as empty. An
    * element that observes nothing is `[]`, and only `[]` licenses a tool to call an
    * attribute written in markup dead.
    */
@@ -143,16 +143,16 @@ export interface TemplateGlobal {
 /**
  * Something the static model cannot understand, or a project rule it can see broken.
  *
- * `dynamic` is the one that matters most: a declaration built at runtime works in the
- * browser and is invisible to every tool here, so it has to be reported rather than
- * skipped.
+ * `dynamic` is the one that matters most. A declaration built at runtime works in
+ * the browser and is invisible to every tool here, so it has to be reported rather
+ * than skipped.
  *
  * Severity is what makes that reportable without being useless. An `error` fails
- * verification. A `note` is dynamism that is either the mechanism itself — the
- * `customElements.define` inside `defineComponent`, the projection marker registering
- * itself — or a test deliberately declaring something invalid to assert that the runtime
- * rejects it. Failing the build on those would mean deleting the framework's own
- * implementation to satisfy a tool that reads it.
+ * verification. A `note` is dynamism that is either the mechanism itself, such as the
+ * `customElements.define` inside `defineComponent` or the projection marker
+ * registering itself, or a test deliberately declaring something invalid to assert
+ * that the runtime rejects it. Failing the build on those would mean deleting the
+ * framework's own implementation to satisfy a tool that reads it.
  */
 export interface ProjectDiagnostic {
   kind:
@@ -187,21 +187,22 @@ export interface ModuleRecord {
   /**
    * Absolute paths of the modules imported for their side effect alone.
    *
-   * A component declares the components it renders in `uses`. A plain custom
-   * element cannot be declared that way — `uses` resolves to component definitions
-   * and throws on a class that has none — so importing its module is the whole of
-   * its declaration, and this is where the template checker reads it.
+   * A component declares the components it renders in `uses`. A plain custom element
+   * cannot be declared that way, because `uses` resolves to component definitions and
+   * throws on a class that has none. Importing its module is the whole of its
+   * declaration, and this is where the template checker reads it.
    */
   sideEffectImports: Set<string>;
   /** Class name -> whether it is exported. */
   classes: Map<string, boolean>;
   /**
-   * Every message this module names, in source order: `t('orders.title')`,
-   * `t('cart.items', { count })`, `t('billing.view.' + name)`,
+   * Every message this module names, in source order, such as `t('orders.title')`,
+   * `t('cart.items', { count })`, `t('billing.view.' + name)` and
    * `standardText('table', 'empty')`.
    *
-   * A reference site and nothing more. `key` is the whole key when it is written out;
-   * otherwise `prefix` is the part before the first computed piece, and the reference
+   * A reference site and nothing more. `key` is the whole key when it is written out.
+   * Otherwise `prefix` is the part before the first computed piece, and the
+   * reference
    * claims every catalog key under it. `params` is null when the options argument cannot
    * be read, which forbids any conclusion about placeholders.
    */

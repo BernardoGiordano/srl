@@ -7,28 +7,28 @@
  *
  *  1. The map omits or hand-edits an entry the library publishes. The page loads,
  *     fetches its entry module, and dies on "Failed to resolve module specifier
- *     @core/…" — a resolution error, in a browser, on whichever route needed the
- *     layer that was missing.
+ *     @core/…", which is a resolution error in a browser, on whichever route
+ *     needed the layer that was missing.
  *  2. A library prefix resolves somewhere that is not the installed package. The
- *     application then runs a copy of the framework: a second custom element
- *     registry, a second injector, a second template cache. Everything works until
- *     two components from the two copies meet.
+ *     application then runs a copy of the framework, with a second custom element
+ *     registry, a second injector and a second template cache. Everything works
+ *     until two components from the two copies meet.
  *  3. An integrity hash that does not match the bytes it covers. The browser
  *     refuses the module outright, and refuses it silently as far as the page is
  *     concerned.
  *  4. A vendored URL the map names and no file answers. A 404 on one route.
  *
- * The fourth thing it does is not a failure: it prints the `script-src` hash the
- * map needs. An import map is an inline script, so a CSP of `script-src 'self'`
- * blocks it, and the symptom is failure 1 with no visible violation in the console.
- * Nobody should have to derive that value by hand.
+ * The fourth thing it does is not a failure. It prints the `script-src` hash the map
+ * needs. An import map is an inline script, so a CSP of `script-src 'self'` blocks
+ * it, and the symptom is failure 1 with no visible violation in the console. Nobody
+ * should have to derive that value by hand.
  *
- * What this deliberately does not check is the application's own entries — its
- * remotes, its `/src/`, its own vendored dependencies' *specifiers*. Those are the
- * application's to declare. Every `integrity` entry is checked, whoever put it
- * there, because a hash nobody verifies is a hash that rots.
+ * It deliberately does not check the application's own entries, meaning its remotes,
+ * its `/src/` and the specifiers of its own vendored dependencies. Those are the
+ * application's to declare. Every `integrity` entry is checked, whoever put it there,
+ * because a hash nobody verifies is a hash that rots.
  *
- * Every finding is a `Diagnostic` and nothing here prints: cli/diagnostics/index.mjs
+ * Every finding is a `Diagnostic` and nothing here prints. cli/diagnostics/index.mjs
  * owns the report, which is what `--json` is, and what lets a suite assert that a
  * hand-edited entry was found rather than that four things were wrong. ADR-0072.
  */
@@ -64,13 +64,13 @@ function show(path) {
 }
 
 /**
- * Whether a URL names third-party bytes: a `vendor` path segment.
+ * Whether a URL names third-party bytes, decided by a `vendor` path segment.
  *
  * The convention rather than a configured list, because both halves of the
- * arrangement already follow it — the library commits its runtime dependencies to
+ * arrangement already follow it. The library commits its runtime dependencies to
  * `lib/vendor/`, and an application that vendors its own puts them in
- * `<app>/vendor/`. A segment, not a substring, so `/src/vendored-icons.js` is the
- * application's own code and stays so.
+ * `<app>/vendor/`. A segment rather than a substring, so `/src/vendored-icons.js` is
+ * the application's own code and stays so.
  *
  * @param {string} url
  * @returns {boolean}
@@ -80,11 +80,11 @@ function isVendored(url) {
 }
 
 /**
- * The applications to check: the one named, or every one in the repository.
+ * The applications to check, which is the one named or every one in the repository.
  *
- * `--app` is optional here and required nowhere else, because this check is
- * cheap and reads nothing it could damage. A repository with two applications
- * wants both checked by default; a build wants to be told which one.
+ * `--app` is optional here and required nowhere else, because this check is cheap and
+ * reads nothing it could damage. A repository with two applications wants both
+ * checked by default, where a build wants to be told which one.
  *
  * @returns {Promise<{ selected: Array<{ name: string, dir: string }>, diagnostics: Diagnostic[] }>}
  */
@@ -245,11 +245,12 @@ async function checkApplication(app, fragment) {
     );
   }
 
-  // A script tag outside the map — the Tailwind development build is one — carries its
-  // hash as an attribute or not at all. Only vendored ones are required to: pinning is
-  // for bytes somebody else wrote, and an application's own `/src/` module changes with
-  // every deploy, so a hash on it would be a line to update rather than a control.
-  // Nothing requires such a tag to be present; a production page has none.
+  // A script tag outside the map, such as the Tailwind development build, carries its
+  // hash as an attribute or not at all. Only vendored ones are required to, because
+  // pinning is for bytes somebody else wrote. An application's own `/src/` module
+  // changes with every deploy, so a hash on it would be a line to update rather than a
+  // control. Nothing requires such a tag to be present, and a production page has
+  // none.
   for (const tag of html.matchAll(/<script\b[^>]*\ssrc=["'](\/[^"']+)["'][^>]*>/gu)) {
     const src = tag[1];
     if (src === undefined || !isVendored(src)) continue;

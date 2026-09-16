@@ -1,14 +1,14 @@
 /**
- * The library's own facts — the mounts, the specifier prefixes, the vendored
- * dependencies, how a URL resolves to a file — belong to the package and live in
- * the library's package.json, read by cli/package/interface.mjs. ADR-0033. What is
- * left here is the part that belongs to the repository being worked on rather than
- * to the library:
+ * The library's own facts belong to the package and live in the library's
+ * package.json, read by cli/package/interface.mjs. Those are the mounts, the
+ * specifier prefixes, the vendored dependencies and how a URL resolves to a file.
+ * ADR-0033. What is left here belongs to the repository being worked on rather than
+ * to the library.
  *
  *   where      the repository root is. Its parent in a checkout, the working
  *              directory when these tools were installed from the registry.
  *   <app>/     an application. Any directory in the repository root with an
- *              index.html: example today, more later.
+ *              index.html.
  *
  * Zero dependencies, so it works before `npm install` like the rest of cli/.
  */
@@ -23,41 +23,41 @@ const HERE = fileURLToPath(new URL('.', import.meta.url));
 
 /**
  * Whether these tools are running out of an installed package rather than a
- * checkout — the one fact that decides which default below is right, and the only
- * thing the filesystem will say about it.
+ * checkout. It decides which default below is right, and it is the only thing the
+ * filesystem will say about it.
  *
- * A path segment rather than a substring: `/home/me/node_modules_old/x` is a
- * checkout, and a directory named `node_modules` somewhere above an installed
- * package is what npm, pnpm and yarn all produce.
+ * A path segment rather than a substring, because `/home/me/node_modules_old/x` is a
+ * checkout and a directory named `node_modules` somewhere above an installed package
+ * is what npm, pnpm and yarn all produce.
  */
 const INSTALLED = HERE.split(sep).includes('node_modules');
 
 /**
- * The repository these tools operate on: the one whose applications they build,
- * serve and deploy. Not the library's — the package finds itself separately, in
- * cli/package/interface.mjs.
+ * The repository these tools operate on, meaning the one whose applications they
+ * build, serve and deploy. Not the library's, because the package finds itself
+ * separately in cli/package/interface.mjs.
  *
- * Two defaults, because there are two arrangements and each has exactly one
- * sensible answer:
+ * Two defaults, because there are two arrangements and each has exactly one sensible
+ * answer.
  *
- *   a checkout      the directory above `cli/`. `npm start` in this repository,
- *                   or in a standalone srl checkout, needs no environment.
+ *   a checkout      the directory above `cli/`. `npm start` in this repository, or
+ *                   in a standalone srl checkout, needs no environment.
  *   installed       the working directory. `srl build --app web` is run from the
- *                   root of the repository being built, which is the only place
- *                   an installed package can look: the directory above it is
+ *                   root of the repository being built, which is the only place an
+ *                   installed package can look. The directory above it is
  *                   node_modules, and above that is somebody's dependency tree.
  *
- * `SRL_ROOT` overrides both, for the arrangement neither default covers — a
- * repository that vendors or submodules a checkout somewhere below its own root,
- * and so runs a checkout's tools against a root that is not their parent.
+ * `SRL_ROOT` overrides both, for the arrangement neither default covers. That is a
+ * repository that vendors or submodules a checkout somewhere below its own root, and
+ * so runs a checkout's tools against a root that is not their parent.
  */
 export const REPO = resolve(
   process.env.SRL_ROOT ?? (INSTALLED ? process.cwd() : join(HERE, '..')),
 );
 
 /**
- * A repository path as a `/`-separated path relative to the repository root, with
- * no leading slash: `source/lib`.
+ * A repository path as a `/`-separated path relative to the repository root, with no
+ * leading slash, such as `source/lib`.
  *
  * @param {string} path
  * @returns {string}
@@ -68,7 +68,7 @@ export function repoPath(path) {
 
 /**
  * The library's mounts, expressed as URL rewrites for a server whose root is the
- * repository root rather than one application: `/lib/` -> `/source/lib/`.
+ * repository root rather than one application, so `/lib/` becomes `/source/lib/`.
  *
  * @web/test-runner serves the repository, so it needs the table in this shape.
  * Where the package sits in the repository is a repository fact, which is why the
@@ -79,12 +79,12 @@ export const LIB_MOUNT_ROUTES = /** @type {Array<[string, string]>} */ (
 );
 
 /**
- * The mounts as `<source directory> <remote subdirectory>` pairs — `source/lib
- * lib` — one per line.
+ * The mounts as `<source directory> <remote subdirectory>` pairs, one per line, such
+ * as `source/lib lib`.
  *
- * A consumer outside JavaScript needs both halves of each mount and cannot
- * import, so it asks: `node cli/layout.mjs --deploy-pairs`. That is what keeps
- * the delivered tree the shape the import map already assumes.
+ * A consumer outside JavaScript needs both halves of each mount and cannot import, so
+ * it runs `node cli/layout.mjs --deploy-pairs`. That keeps the delivered tree the
+ * shape the import map already assumes.
  *
  * @returns {string}
  */
@@ -122,9 +122,9 @@ export async function exists(path) {
 /**
  * Every application in the repository, in directory order.
  *
- * Discovered rather than configured: an application *is* a root directory with an
- * index.html, so adding one needs no edit here, and a tool that iterates this
- * cannot silently skip the application somebody added last week.
+ * Discovered rather than configured. An application is a root directory with an
+ * index.html, so adding one needs no edit here, and a tool that iterates this cannot
+ * silently skip the application somebody added last week.
  *
  * @returns {Promise<Array<{ name: string, dir: string }>>}
  */
@@ -144,10 +144,10 @@ export async function apps() {
 /**
  * The application named by `--app`, or by `APP`, or the only one there is.
  *
- * No default name: a tool that falls back to one application silently builds,
- * measures or deploys the wrong thing the day a second one exists. A repository
- * with one application still needs no flag, because with one candidate there is
- * nothing to choose.
+ * No default name, because a tool that falls back to one application silently
+ * builds, measures or deploys the wrong thing the day a second one exists. A
+ * repository with one application still needs no flag, since with one candidate
+ * there is nothing to choose.
  *
  * @returns {Promise<{ name: string, dir: string }>}
  */

@@ -1,22 +1,20 @@
 /**
- * The artifact report: one name, one shape, one module that writes and reads it.
+ * The artifact report. One name, one shape, one module that writes and reads it.
  *
  * `artifact.json` is the central value of the delivery pipeline. It is what the
  * build produces beside the bytes, what a release is prepared from, what a live
- * origin is verified against and what the benchmark measures. It used to be
- * declared `Promise<Readonly<Record<string, unknown>>>`, which is to say it was
- * not declared at all: the build re-read its own output through five poke-helpers
- * — `recordValue`, `arrayValue`, `stringValue`, `stringArray`, `artifactRecord` —
- * and each of the five downstream tools wrote its own `report.version !== 1 || …`
- * over the same document, checking a different subset of it.
+ * origin is verified against and what the benchmark measures.
  *
- * Six hand-rolled validations of a shape this repository writes. This module is
- * the name that was missing. `writeReport` is the only thing that writes one and
- * `readReport` the only thing that reads one, so a field added here reaches every
- * consumer as a typed property rather than as a cast at six call sites.
+ * Declared as `Record<string, unknown>` it would be six hand-rolled validations of
+ * a shape this repository writes, with the build poking at its own output and every
+ * downstream tool checking a different subset. `writeReport` is the only thing that
+ * writes one and `readReport` the only thing that reads one, so a field added here
+ * reaches every consumer as a typed property rather than as a cast at six call
+ * sites.
  *
- * `parseReport` is pure — bytes in, `ArtifactReport` out — which is what makes the
- * contract testable without running Vite over a real application. ADR-0074.
+ * `parseReport` is pure, taking bytes in and giving an `ArtifactReport` out, which
+ * makes the contract testable without running Vite over a real application.
+ * ADR-0074.
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -26,13 +24,15 @@ import { join } from 'node:path';
 
 /**
  * The report's own file name, at the root of every artifact this toolchain builds.
- * It is metadata rather than payload: a release copies it, and no browser fetches it.
+ * It is metadata rather than payload, so a release copies it and no browser fetches
+ * it.
  */
 export const REPORT = 'artifact.json';
 
 /**
  * The one directory inside an artifact a web server is pointed at. Everything else
- * an artifact carries — the report, the licence file — stays behind the origin.
+ * an artifact carries, such as the report and the licence file, stays behind the
+ * origin.
  */
 export const PUBLIC = 'public';
 
@@ -69,24 +69,25 @@ const INLINE_HASH = /^sha256-[A-Za-z0-9+/]+={0,2}$/u;
  * @typedef {{ delivery: TemplateDelivery, bundle: string | null, url: string | null, count: number, bytes: number, files: string[] }} ArtifactTemplates
  *
  * The identity the artifact was built from. Both halves are null when the build was
- * not told one: a working build of an uncommitted tree is a legitimate artifact, and
- * it is the release that refuses to ship one, not the build that refuses to make it.
+ * not told one, because a working build of an uncommitted tree is a legitimate
+ * artifact and it is the release that refuses to ship one rather than the build that
+ * refuses to make it.
  * @typedef {{ commit: string | null, sourceDateEpoch: number | null }} ArtifactRelease
  *
  * The `Cache-Control` header each class is served with. `metadata` is null
  * because nothing serves it.
  * @typedef {{ immutable: string, revalidate: string, metadata: string | null }} ArtifactCache
  *
- * Everything a host has to send for the page to be admitted by its own policy:
- * the import map as it appears in the document, its inline hash, the SRI digest
+ * Everything a host has to send for the page to be admitted by its own policy. That
+ * is the import map as it appears in the document, its inline hash, the SRI digest
  * of every module the map pins, and the CSP that admits exactly those.
  * @typedef {{ importMap: { source: string, sha256: string }, modules: Array<{ path: string, integrity: string }>, csp: string }} ArtifactSecurity
  *
- * What a Remote publishes about itself: the transport half of a manifest entry,
- * and the same declaration the runtime admits rather than a second copy of it.
- * Access policy — mount, what the Remote requires, what it is granted — stays in
- * the shell's manifest and is never read from a Remote's own report, which is why
- * those three are the fields removed here.
+ * What a Remote publishes about itself, which is the transport half of a manifest
+ * entry and the same declaration the runtime admits rather than a second copy of it.
+ * Access policy stays in the shell's manifest and is never read from a Remote's own
+ * report, which is why the mount, what the Remote requires and what it is granted
+ * are the three fields removed here.
  * @typedef {Omit<RemoteDescriptor, 'mount' | 'requires' | 'grants'>} RemoteTransport
  */
 
@@ -112,8 +113,8 @@ const INLINE_HASH = /^sha256-[A-Za-z0-9+/]+={0,2}$/u;
  */
 
 /**
- * A shell artifact: the document, its import map, its security metadata, and the
- * composed transport facts of every Remote it mounts.
+ * A shell artifact, carrying the document, its import map, its security metadata,
+ * and the composed transport facts of every Remote it mounts.
  *
  * @typedef {ArtifactReportBase & {
  *   kind?: undefined,
@@ -124,9 +125,9 @@ const INLINE_HASH = /^sha256-[A-Za-z0-9+/]+={0,2}$/u;
  */
 
 /**
- * A Remote artifact: published on its own cadence, under its own versioned base,
- * and composed into a shell later. It carries no security metadata because the
- * shell owns the document, the import map and the policy that admits both.
+ * A Remote artifact, published on its own cadence under its own versioned base and
+ * composed into a shell later. It carries no security metadata, because the shell
+ * owns the document, the import map and the policy that admits both.
  *
  * @typedef {ArtifactReportBase & {
  *   kind: 'remote',
@@ -141,10 +142,10 @@ const INLINE_HASH = /^sha256-[A-Za-z0-9+/]+={0,2}$/u;
 /**
  * Read one artifact's report, and the bytes it was read from.
  *
- * The bytes are returned rather than re-serialized because a release names an
- * artifact by the hash of this exact file: re-encoding the parsed object would
- * produce a different identity for the same artifact the day the writer's key
- * order or spacing changed.
+ * The bytes are returned rather than re-serialized, because a release names an
+ * artifact by the hash of this exact file. Re-encoding the parsed object would
+ * produce a different identity for the same artifact the day the writer's key order
+ * or spacing changed.
  *
  * @param {string} artifactRoot the directory holding the artifact
  * @returns {Promise<{ report: ArtifactReport, bytes: Buffer, path: string }>}
@@ -158,10 +159,9 @@ export async function readReport(artifactRoot) {
 /**
  * Write one artifact's report, refusing to publish a malformed one.
  *
- * The report is admitted before it reaches disk, so the build cannot emit a
- * document its own readers would reject. That check is the reason the five
- * poke-helpers this module replaced are gone: the shape is proved once, here,
- * rather than re-derived by every tool that opens the file.
+ * The report is admitted before it reaches disk, so the build cannot emit a document
+ * its own readers would reject. The shape is proved once, here, rather than
+ * re-derived by every tool that opens the file.
  *
  * @template {ArtifactReport} T
  * @param {string} artifactRoot the directory to write the report into
@@ -334,9 +334,9 @@ function admitAssets(value, where, name) {
 }
 
 /**
- * The security half, and the one fact that spans it: a CSP that does not admit
- * the import map it was generated for is a page that will not load, and no
- * consumer downstream is in a position to notice.
+ * The security half, and the one fact that spans it. A CSP that does not admit the
+ * import map it was generated for is a page that will not load, and no consumer
+ * downstream is in a position to notice.
  *
  * @param {unknown} value @param {string} where
  */
@@ -401,17 +401,17 @@ function admitChunks(value, where) {
  * How deep the entry's static module graph is, in round trips.
  *
  * Breadth-first rather than longest-path, because the number this answers is when a
- * browser *discovers* a chunk, and a chunk reachable in one hop is discovered in one
+ * browser discovers a chunk, and a chunk reachable in one hop is discovered in one
  * hop however many longer routes also reach it. Breadth-first is also the only shape
  * that terminates on a circular chunk graph, which the engine is free to emit.
  *
  * Static imports only. A route chunk is a dynamic import, which route a visitor
  * lands on is not a build fact, and following those would report the depth of the
- * whole application rather than of its startup — the same line `entryHints` draws.
+ * whole application rather than of its startup. `entryHints` draws the same line.
  *
- * The entry itself is depth 1: it is a transfer, and it is the one the document
- * names. So a graph the document flattens completely still reports the depth its
- * modules would have cost, which is what makes the number worth gating.
+ * The entry itself is depth 1, because it is a transfer and it is the one the
+ * document names. A graph the document flattens completely still reports the depth
+ * its modules would have cost, which is what makes the number worth gating.
  *
  * @param {string} entry
  * @param {ReadonlyArray<Pick<ArtifactChunk, 'path' | 'imports'>>} chunks
@@ -454,16 +454,17 @@ export function entryChain(entry, chunks) {
  * Every chunk the entry document has already started transferring by the time the
  * application's first module runs.
  *
- * The entry itself, its static closure, the dynamic imports the entry chunk makes —
- * the root module, which `startApplication`'s last step always reaches — and their
- * static closures. Route chunks are dynamic imports of the *root*, not of the entry,
- * so they stay outside it: which route a visitor lands on is not a build fact.
+ * The entry itself, its static closure, the dynamic imports the entry chunk makes,
+ * which is the root module `startApplication`'s last step always reaches, and their
+ * static closures. Route chunks are dynamic imports of the root rather than of the
+ * entry, so they stay outside it, because which route a visitor lands on is not a
+ * build fact.
  *
- * This is the rule three consumers state the same way, which is why it is here and
- * not in any one of them. `entryHints` names these chunks in the document,
- * `groupTemplates` calls the templates they define the `entry` group, and the
- * generated service worker precaches them. A fourth definition of "what the first
- * paint costs" is a fourth chance for the three to disagree about it.
+ * Three consumers state this rule the same way, which is why it is here and not in
+ * any one of them. `entryHints` names these chunks in the document, `groupTemplates`
+ * calls the templates they define the `entry` group, and the generated service
+ * worker precaches them. A fourth definition of what the first paint costs is a
+ * fourth chance for the three to disagree about it.
  *
  * @param {string} entry
  * @param {ReadonlyArray<Pick<ArtifactChunk, 'path' | 'imports' | 'dynamicImports'>>} chunks
@@ -486,7 +487,7 @@ export function entryClosure(entry, chunks) {
 }
 
 /**
- * The chain is derived, so it is admitted by re-deriving it: a report whose stated
+ * The chain is derived, so it is admitted by re-deriving it. A report whose stated
  * depth disagrees with its own `chunks[].imports` is describing a graph it does not
  * carry, and every consumer of the number would inherit the disagreement.
  *
