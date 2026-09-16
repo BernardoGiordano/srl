@@ -2,10 +2,10 @@
  * The machine a result came from.
  *
  * A benchmark number without this is not evidence, it is an anecdote. ADR-0037.
- * So every result file carries a full description, and a one-line `profile` that
- * comparisons key on — including the runtime dependency versions, not just the
- * hardware, because a faster median after a Lit upgrade is a different fact from a
- * faster median after an optimisation.
+ * Every result file therefore carries a full description, and a one-line `profile`
+ * that comparisons key on. It includes the runtime dependency versions rather than
+ * only the hardware, because a faster median after a Lit upgrade is a different fact
+ * from a faster median after an optimisation.
  */
 
 import { createHash } from 'node:crypto';
@@ -68,9 +68,9 @@ function fingerprint(facts) {
 }
 
 /**
- * The versions the browser actually runs, read from the vendor provenance file
- * rather than from package.json: node_modules holds types, source/lib/vendor holds
- * the bytes, and this is a measurement of the bytes.
+ * The versions the browser actually runs, read from the vendor provenance file rather
+ * than from package.json. node_modules holds types, source/lib/vendor holds the bytes,
+ * and this is a measurement of the bytes.
  *
  * @returns {Promise<Record<string, string>>}
  */

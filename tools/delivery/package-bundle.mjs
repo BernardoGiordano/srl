@@ -479,7 +479,7 @@ function assertSelfContained(fileName, text, inherited) {
 }
 
 /**
- * Refuse a bundle whose sibling no longer offers a name it imports.
+ * Refuse a bundle whose sibling stopped offering a name it imports.
  *
  * This is the failure the curated door introduces. `@internal` on a name in `lib/` is
  * invisible to a component that imports it. Inside `srl-components` that import

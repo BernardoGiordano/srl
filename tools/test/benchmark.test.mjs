@@ -28,8 +28,8 @@ import { REPO, readText } from '../../cli/layout.mjs';
 import { extractImportMap } from '../../cli/package/interface.mjs';
 
 /**
- * The benchmark harness's own tests: not "is the framework fast", but "would this
- * harness notice if it were not".
+ * The benchmark harness's own tests, asking whether this harness would notice if the
+ * framework were not fast.
  *
  * Every one of these is a failure mode a benchmark suite has in practice. A workload
  * that renders the wrong thing and reports a fast time. A comparison against a
@@ -39,8 +39,8 @@ import { extractImportMap } from '../../cli/package/interface.mjs';
  * be made wrong in one line.
  *
  * No Chrome is launched except by the one test that asserts a missing Chrome fails
- * clearly, and that one launches nothing: it points the launcher at a path that does
- * not exist.
+ * clearly, and that one launches nothing, because it points the launcher at a path
+ * that does not exist.
  */
 
 /** @import { BenchmarkSample, CalibrationRecord, WorkloadSpec } from '../benchmark/types.js' */
@@ -142,8 +142,9 @@ void test('sample count, warmup count and every metric survive aggregation', () 
 });
 
 void test('p95 is a sample that happened, not an interpolation', () => {
-  // Nearest-rank throughout: with ten samples the median is the fifth of them, not
-  // the average of the fifth and sixth, which is a number no run produced.
+  // Nearest-rank throughout, so with ten samples the median is the fifth of them
+  // rather than the average of the fifth and sixth, which is a number no run
+  // produced.
   const stats = summarise([1, 2, 3, 4, 5, 6, 7, 8, 9, 100]);
   assert.equal(stats.median, 5);
   assert.equal(stats.p95, 100);
@@ -225,9 +226,10 @@ void test('an absolute product budget fails independently of any baseline', () =
 });
 
 void test('each suite is scaled by the reference its own work resembles', () => {
-  // The measured failure this exists for: a machine whose renderer got 30% slower while
-  // its arithmetic stayed put. Every page-side workload has to absorb that; the tooling
-  // suite, which runs child processes, must not be scaled by a renderer figure.
+  // The measured failure this exists for, a machine whose renderer got 30% slower
+  // while its arithmetic stayed put. Every page-side workload has to absorb that, and
+  // the tooling suite, which runs child processes, must not be scaled by a renderer
+  // figure.
   const baseline = baselineWith({
     profile: 'same',
     results: [
@@ -287,8 +289,8 @@ void test('a machine that changed while the run was measured reports instead of 
   assert.match(String(different.reason), /2\.60x the baseline's/u);
 
   // The same rule stops `--update-baseline` recording from such a run, which is the
-  // worse half of the failure: a spike baked into a baseline reads as an improvement in
-  // every run after it.
+  // worse half of the failure, because a spike baked into a baseline reads as an
+  // improvement in every run after it.
   assert.deepEqual(
     unstableReference({ ...calibrationOf(100, 100), spread: { arithmetic: 1.02, layout: 1.4 } }, 1.25),
     { kind: 'layout', spread: 1.4 },
@@ -348,7 +350,7 @@ function request(url, initiator, startedAt = 0) {
 }
 
 void test('a serial chain and a flat one of the same size are told apart', () => {
-  // The failure this exists for: both of these are five requests and zero bytes, so
+  // The failure this exists for. Both of these are five requests and zero bytes, so
   // the count and the byte total report them as the same load.
   const serial = [
     request('/', null),
@@ -377,7 +379,8 @@ void test('a chain stops at the first routed view, and cycles do not hang it', (
   const load = [
     request('/', null, 1000),
     request('/entry.js', '/', 1010),
-    // A resource() from onMount: after the view, and not part of reaching it.
+    // A resource() from onMount, which is after the view and not part of reaching
+    // it.
     request('/api/projects', '/entry.js', 1400),
   ];
   assert.equal(requestChain(load).depth, 3);
@@ -406,8 +409,8 @@ void test('a leaked listener is detected by the lifecycle workload, and steady s
 
   /**
    * A page that answers the cycle call correctly and reports whatever counters the
-   * test wants. Everything else about the workload — batching, the correctness
-   * expectation, the growth rule — is the real code.
+   * test wants. Everything else about the workload is the real code, including the
+   * batching, the correctness expectation and the growth rule.
    *
    * @param {readonly number[]} listeners
    * @returns {import('../benchmark/types.js').NodeWorkloadContext}
@@ -450,7 +453,7 @@ void test('a leaked listener is detected by the lifecycle workload, and steady s
     };
   };
 
-  // Six readings: one baseline before any batch, then one per batch.
+  // Six readings, one baseline before any batch and then one per batch.
   const leaking = await workload.run(contextWith([100, 140, 180, 220, 260, 300]));
   assert.equal(leaking[0]?.ok, false);
   assert.match(String(leaking[0]?.detail), /retained listeners grew in every batch/u);
@@ -579,10 +582,10 @@ void test('the artifact origin serves production headers, compression, fallback 
 });
 
 void test('artifact size workload reports verified payload categories without rebuilding', async () => {
-  // Built from a fixture declaration rather than from the example's: the workload's job
-  // — read a verified report, report its payload categories — does not depend on which
-  // application declared it, and a fixture keeps this case from moving when the
-  // example's own declaration does.
+  // Built from a fixture declaration rather than from the example's. The workload
+  // reads a verified report and reports its payload categories, which does not depend
+  // on which application declared it, and a fixture keeps this case from moving when
+  // the example's own declaration does.
   const workload = artifactWorkloads({
     app: 'fixture',
     lazyRoutes: [],
@@ -652,9 +655,9 @@ void test('artifact size workload reports verified payload categories without re
 });
 
 void test('every startup step the runtime publishes is a declared metric', async () => {
-  // The harness reads the page's performance timeline, so it cannot discover a step the
-  // runtime added: an unlisted step is measured by the browser, reported by nobody and
-  // gated by nothing. This is the only place the two lists meet. ADR-0084.
+  // The harness reads the page's performance timeline, so it cannot discover a step
+  // the runtime added. An unlisted step is measured by the browser, reported by nobody
+  // and gated by nothing. This is the only place the two lists meet. ADR-0084.
   const types = await readFile(`${REPO}/source/lib/core/application/types.d.ts`, 'utf8');
   const union = /export type StartupStep =([^;]+);/u.exec(types)?.[1];
   assert.ok(union !== undefined, 'the runtime must still declare its steps as a union');
@@ -676,8 +679,9 @@ void test('the ci profile is bounded and declares what it does not cover', async
   assert.ok(budgets.maxSpeedDrift > 1);
   // Absolute limits stay scarce and stay explained. Two are counts, which need neither
   // the machine scaling nor the noise slack an absolute timing would ([ADR-0082]). Two
-  // are one frame, which is a requirement rather than a fence around a median: the
-  // windowed render measures a few milliseconds and the unwindowed one takes 468.9 ms,
+  // are one frame, which is a requirement rather than a fence around a median. The
+  // windowed render measures a few milliseconds and the unwindowed one takes
+  // 468.9 ms,
   // so a machine several times slower still passes and the thing the limit was written
   // for still fails. ADR-0107.
   assert.deepEqual(
@@ -702,10 +706,10 @@ void test('the ci profile is bounded and declares what it does not cover', async
   assert.ok(ci.length > 0);
   assert.ok(ci.every((workload) => workload.localOnly !== true));
 
-  // The example ships a benchmark.json, so the artifact workloads its declaration names
-  // are selected — which is what makes the chain-depth product budget above reachable at
-  // all. An application's route names reach its own numbers and nothing else, which is
-  // the property the declaration seam exists to hold.
+  // The example ships a benchmark.json, so the artifact workloads its declaration
+  // names are selected, which is what makes the chain-depth product budget above
+  // reachable at all. An application's route names reach its own numbers and nothing
+  // else, which is the property the declaration seam exists to hold.
   const distExample = selectWorkloads('ci', { app: 'example', origin: 'dist' });
   assert.ok(
     distExample.some((workload) => workload.id === 'delivery/artifact-size'),
@@ -722,8 +726,8 @@ void test('the ci profile is bounded and declares what it does not cover', async
     ),
     'artifact workloads need the dist origin and must not select on the source one',
   );
-  // And an application that declares nothing still contributes nothing: the seam is the
-  // declaration, not the presence of an application directory.
+  // And an application that declares nothing still contributes nothing, because the
+  // seam is the declaration rather than the presence of an application directory.
   assert.deepEqual(
     selectWorkloads('ci', { app: 'no-such-application', origin: 'dist' }).filter(
       (workload) => workload.suite === 'delivery' && workload.id !== 'delivery/entry-route',

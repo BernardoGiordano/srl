@@ -11,23 +11,22 @@ import { BUNDLE_FILES, buildPackageBundles } from '../delivery/package-bundle.mj
 /**
  * The dependency and layering gate, from the inside.
  *
- * This file had no exports at all until the checks answered with values, so the only
- * way to assert anything about it was to run the process and match its output.
- * ADR-0072. What is worth pinning now is not the wording of any one message — that is
- * the check's to improve — but that the run is a list a caller can read: this
- * repository currently satisfies every rule, and the checks that must have run are
- * nameable by code rather than countable.
+ * Without exports, the only way to assert anything about this check would be to run
+ * the process and match its output. ADR-0072. What is worth pinning is that the run is a
+ * list a caller can read, rather than the wording of any one message, which is the
+ * check's to improve. This repository satisfies every rule, and the checks that must
+ * have run are nameable by code rather than countable.
  *
- * One call, shared: the sweep walks every source file in the repository twice and there
- * is nothing per-case about it.
+ * One call, shared, because the sweep walks every source file in the repository twice
+ * and there is nothing per-case about it.
  */
 
 /**
  * One of the rules below is that `exports` names files that are there, and the files
  * it names are generated. Built here when they are missing rather than left to
- * whichever suite happened to build them first — that accident is what made this file
- * fail intermittently — and this is now the only suite that writes `source/dist/`, so
- * there is no second process to race. A no-op after `npm run package`.
+ * whichever suite happened to build them first, because that accident makes this file
+ * fail intermittently. This is the only suite that writes `source/dist/`, so there is
+ * no second process to race. A no-op after `npm run package`.
  */
 if (!(await Promise.all(BUNDLE_FILES.map((file) => exists(join(PACKAGE, file))))).every(Boolean)) {
   await buildPackageBundles();
@@ -50,8 +49,8 @@ void test('every rule reports that it ran, not merely that it passed', () => {
   const codes = new Set(found.map((diagnostic) => diagnostic.code));
 
   // One per section that has no per-application or per-file fan-out, so a check
-  // silently skipped — a directory that stopped being walked, an application that
-  // stopped being discovered — is a missing code rather than a smaller number.
+  // silently skipped, whether a directory that stopped being walked or an application
+  // that stopped being discovered, is a missing code rather than a smaller number.
   for (const code of [
     'deps/no-application-imports',
     'deps/import-map-fragment',

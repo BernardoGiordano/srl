@@ -4,24 +4,22 @@
  *   node tools/browser/record.mjs            record every declared engine
  *   node tools/browser/record.mjs --engine webkit   one of them
  *
- * WHY A RECORD EXISTS AT ALL
+ * The suite in `cli/test/browser-journey.test.mjs` fails a pull request, and it cannot
+ * publish anything. A passing suite leaves behind the word "passed" and no browser
+ * version, no step list and no statement of what was never run. A support matrix
+ * assembled from that is a matrix assembled from memory, which is how "we support
+ * Safari" survives two years after anybody last opened it.
  *
- * The suite in `cli/test/browser-journey.test.mjs` fails a pull request. It cannot publish
- * anything: a passing suite leaves behind the word "passed" and no browser version, no
- * step list and no statement of what was never run. A support matrix assembled from that
- * is a matrix assembled from memory, which is how "we support Safari" survives two years
- * after anybody last opened it.
- *
- * So the same journey is run here and its readings are written to `journeys.json`, which
+ * The same journey is run here and its readings are written to `journeys.json`, which
  * `tools/checks/browser-check.mjs` turns into the published table. The file carries the
- * engine versions, the machine, the date, and every step's own observations — a reader who
- * wants to know what "passed" meant can see the numbers it meant.
+ * engine versions, the machine, the date, and every step's own observations, so a reader
+ * who wants to know what "passed" meant can see the numbers it meant.
  *
- * A recorded run is evidence of that run, and nothing else. It is not a gate, it does not
- * replace the suite, and re-recording after a change to the journey is the normal thing to
- * do. `npm run docs:browsers` fails when the guide disagrees with the file, so the two
- * cannot drift; nothing fails when the file itself is older than the code, which is why
- * the guide prints the date.
+ * A recorded run is evidence of that run and nothing else. It is not a gate, it does not
+ * replace the suite, and re-recording after a change to the journey is the normal thing
+ * to do. `npm run docs:browsers` fails when the guide disagrees with the file, so the
+ * two cannot drift. Nothing fails when the file itself is older than the code, which is
+ * why the guide prints the date.
  */
 
 import { createRequire } from 'node:module';

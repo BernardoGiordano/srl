@@ -10,8 +10,9 @@
  * shared scenarios through the editor's own providers, and writes one parity report over
  * every editor it could reach.
  *
- * VS Code runs by default, at the minimum version `engines.vscode` claims and at current
- * stable. WebStorm needs an installed, licensed IDE, so it is opt-in: `--webstorm`.
+ * VS Code runs by default, at the minimum version `engines.vscode` claims and at
+ * current stable. WebStorm needs an installed, licensed IDE, so it is opt-in behind
+ * `--webstorm`.
  */
 
 import { writeFile } from 'node:fs/promises';

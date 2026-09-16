@@ -4,10 +4,10 @@
  * The language servers this machine is running, by the project each was started for.
  * ADR-0097.
  *
- * Started processes are the one piece of session state an editor cannot fake: a window
- * that says it is serving a folder and holds no process for it is not, and one that holds
- * two has leaked the first. CommonJS because both sides read it — the driver by
- * `createRequire`, the probe inside the extension host by `require`.
+ * Started processes are the one piece of session state an editor cannot fake. A window
+ * that says it is serving a folder and holds no process for it is not, and one that
+ * holds two has leaked the first. CommonJS because both sides read it, the driver by
+ * `createRequire` and the probe inside the extension host by `require`.
  */
 
 const { execFileSync } = require('node:child_process');

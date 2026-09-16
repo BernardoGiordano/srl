@@ -1,32 +1,27 @@
 /**
- * The reference workloads: how fast is this machine right now.
- *
- * WHY A BENCHMARK NEEDS THEM
+ * The reference workloads, answering how fast this machine is right now.
  *
  * Two runs on a developer machine do not get the same computer, so each run measures
- * fixed work no change to this repository can affect and comparisons are scaled by
- * how much slower or faster that work got. ADR-0043.
+ * fixed work no change to this repository can affect, and comparisons are scaled by how
+ * much slower or faster that work got. ADR-0043.
  *
- * WHY TWO OF THEM
- *
- * A reference can only normalise work of its own kind — an arithmetic loop reports
- * an interactive desktop as unchanged while every render workload is halved:
+ * There are two of them because a reference can only normalise work of its own kind. An
+ * arithmetic loop reports an interactive desktop as unchanged while every render
+ * workload is halved.
  *
  *   `reference`        integer and float arithmetic, no allocation, no DOM. The CPU
  *                      clock, and nothing else.
  *   `layoutReference`  build a few thousand styled elements and force one layout.
- *                      The renderer's throughput: allocation, style, layout, and
- *                      whatever else is competing for the machine.
+ *                      The renderer's throughput, covering allocation, style, layout
+ *                      and whatever else is competing for the machine.
  *
  * Both are reported in every result file, both are re-measured at the end of a run,
  * and `tools/benchmark/measure.mjs` picks the one that matches the suite it is
  * comparing. Neither touches a line of repository source, which is what makes a
  * change in either one environmental by construction.
  *
- * WHAT THEY DELIBERATELY ARE NOT
- *
- * Not a proxy for disk, network or a child process. That is the known limit of the
- * approach rather than a bug in it, and it is why the tooling suite carries a much
+ * Neither is a proxy for disk, network or a child process. That is the known limit of
+ * the approach rather than a bug in it, and it is why the tooling suite carries a much
  * wider threshold instead. ADR-0043.
  *
  * Neither loop may ever be tuned. Changing one invalidates every baseline ever
@@ -38,11 +33,11 @@ import { expect } from './support.js';
 /**
  * Iterations per sample. Fixed; see the note above.
  *
- * Sized so a sample lands in the tens of milliseconds — measured at 24 ms here. The
- * first version ran 2,000,000 iterations and measured 1.9 ms, which is 19 ticks of a
- * clock Chrome quantises to 100 µs: one tick of jitter moved the scale factor by 5%
- * and every workload's comparison with it. A few hundred ticks of reference work cost
- * a third of a second per run and make the factor a measurement instead of a rounding.
+ * Sized so a sample lands in the tens of milliseconds, measured at 24 ms here. At
+ * 2,000,000 iterations a sample measures 1.9 ms, which is 19 ticks of a clock Chrome
+ * quantises to 100 µs, so one tick of jitter moves the scale factor by 5% and every
+ * workload's comparison with it. A few hundred ticks of reference work cost a third of
+ * a second per run and make the factor a measurement rather than a rounding.
  */
 const ITERATIONS = 32_000_000;
 
@@ -69,18 +64,18 @@ export const reference = {
 
 /**
  * Rows per sample of the layout reference. Fixed, for the same reason as `ITERATIONS`,
- * and sized to the same tens-of-milliseconds range: measured at 21.5 ms here.
+ * and sized to the same tens-of-milliseconds range, measured at 21.5 ms here.
  */
 const LAYOUT_ROWS = 6_000;
 
 /**
- * The renderer-side reference: build DOM, style it, lay it out once.
+ * The renderer-side reference. Build DOM, style it, lay it out once.
  *
- * Deliberately built from `document.createElement` and inline styles rather than from
- * a template or an element in this repository, so that nothing a later phase changes
- * can move this number. The forced layout is the point: every read happens after
- * every write, so the cost is one layout pass over 4,000 boxes rather than 4,000
- * interleaved reflows, which is the shape the real render workloads have too.
+ * Deliberately built from `document.createElement` and inline styles rather than from a
+ * template or an element in this repository, so that nothing a later phase changes can
+ * move this number. The layout is forced so that every read happens after every write,
+ * and the cost is one layout pass over 4,000 boxes rather than 4,000 interleaved
+ * reflows, which is the shape the real render workloads have too.
  *
  * @type {import('./support.js').Workload}
  */

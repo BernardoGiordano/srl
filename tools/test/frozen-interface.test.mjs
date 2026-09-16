@@ -11,17 +11,17 @@ import { projectIndex, readProject } from '../../cli/project-model/index.mjs';
  * The public facts a refactor may not change, pinned so that changing one is a
  * decision with a diff rather than a side effect of a file move.
  *
- * Each assertion covers a fact with no compile-time protection: the custom-element
- * tags the library and the shared collection define, the host contract version
- * every deployed remote was built against, and the fields each application's
+ * Each assertion covers a fact with no compile-time protection. Those are the
+ * custom-element tags the library and the shared collection define, the host contract
+ * version every deployed remote was built against, and the fields each application's
  * `app.manifest.json` carries.
  *
- * Storage keys and the preference migrations are frozen too, but their tripwires
- * are the browser suites that own them —
- * `source/lib/test/preferences/persistence.test.js`, `theme.test.js` and `i18n.test.js`
- * assert the schema version, the per-owner key shape and the one-time adoption of
- * each legacy key against the real storage adapter. Restating them here from a Node
- * process that cannot reach `localStorage` would be a second, weaker copy.
+ * Storage keys and the preference migrations are frozen too, and their tripwires are
+ * the browser suites that own them. `source/lib/test/preferences/persistence.test.js`,
+ * `theme.test.js` and `i18n.test.js` assert the schema version, the per-owner key shape
+ * and the one-time adoption of each legacy key against the real storage adapter.
+ * Restating them here from a Node process that cannot reach `localStorage` would be a
+ * second, weaker copy.
  */
 
 /** Every tag the shared collection defines. Permanent names: pages are written against them. */
@@ -31,14 +31,14 @@ const COLLECTION_TAGS = [
   'ui-breadcrumb',
   'ui-combobox',
   'ui-date-range',
-  // Added with the modal: the discard prompt on the customer form was rendered
-  // under the form it was asking about. ADR-0029.
+  // Added with the modal, because the discard prompt on the customer form was
+  // rendered under the form it was asking about. ADR-0029.
   'ui-dialog',
   'ui-dynamic-filter',
   // Added with `@core/forms`: a field wrapper the collection did not have, because
   // the screen that needed one had not been written yet.
   'ui-field',
-  // Added with container validators: a group-level rule has a code and no
+  // Added with container validators, because a group-level rule has a code and no
   // control to sit under. ADR-0102.
   'ui-form-error',
   'ui-menu',
@@ -76,7 +76,8 @@ const REMOTE_FIELDS = [
 
 /**
  * The tags one application's model declares from library or shared-collection source,
- * with test source excluded: a suite defines a dozen elements that exist for one file.
+ * with test source excluded, because a suite defines a dozen elements that exist for
+ * one file.
  *
  * @param {import('../../cli/project-model/types.d.ts').ProjectIndex} index
  * @returns {string[]}
@@ -111,8 +112,8 @@ void test('every frozen tag still resolves to a module and a template decision',
     const element = index.elements.find((candidate) => candidate.tag === tag);
     assert.ok(element !== undefined, `${tag} is no longer defined anywhere`);
     assert.ok(element.className !== '', `${tag} lost its exported class`);
-    // `template` is a path or null; null means `template: false`, which is a
-    // decision. Undefined would mean the model could not tell, which is not.
+    // `template` is a path or null. Null means `template: false`, which is a
+    // decision, and undefined would mean the model could not tell, which is not.
     assert.notEqual(element.template, undefined, `${tag} has an unreadable template decision`);
   }
 });
@@ -187,7 +188,7 @@ void test('the modules the toolchain imports by name stay resolvable outside a b
 
     // An `exports` entry is a promise that Node can load the file. Every module under
     // lib/ is written against the browser's import map, so one that imports `@core/`
-    // at runtime resolves in a page and throws in a build — one level down, on a
+    // at runtime resolves in a page and throws in a build, one level down, on a
     // specifier the caller never typed. ADR-0066 closed `./lib/*` for exactly that
     // reason; these few are open because they do not, and this is what keeps it true.
     for (const statement of source.matchAll(/^\s*(?:import|export)\s[^\n]*?from\s*'([^']+)'/gmu)) {
@@ -204,7 +205,7 @@ void test('the modules the toolchain imports by name stay resolvable outside a b
 
     // The declaration-only siblings are exported under a `types` condition alone, so
     // a JSDoc `@import` of one is fine. A runtime import is not, and the loop above
-    // cannot tell them apart: `@import` lives in a comment, which is the point.
+    // cannot tell them apart, because `@import` lives in a comment.
     assert.doesNotMatch(
       source,
       /^\s*(?:import|export)\s[^\n]*?from\s*'[^']*types\.js'/mu,

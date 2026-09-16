@@ -5,40 +5,39 @@
  *
  * Every other check in this repository runs against the checkout, where `cli/` is a
  * sibling of `source/` and both are inside the repository the tools operate on. A
- * consumer has none of that: the two packages are real directories under
- * `node_modules`, the repository is the working directory, and `@srljs/core/lib/...`
- * is a resolver question rather than a relative path.
+ * consumer has none of that. The two packages are real directories under
+ * `node_modules`, the repository is the working directory, and `@srljs/core/lib/...` is
+ * a resolver question rather than a relative path.
  *
- * That difference has already broken the build once. The import-map resolver skipped
- * every importer under `node_modules`, which was right while the library was a
- * sibling directory and wrong the moment it was installed: it handed every `@core/`
- * import in the framework to a resolver that cannot see an import map. Nothing in
- * the checkout could notice, because in the checkout the condition is false.
- * ADR-0067, ADR-0068.
+ * That difference has already broken the build once. An import-map resolver that skips
+ * every importer under `node_modules` is right while the library is a sibling directory
+ * and wrong the moment it is installed, because it hands every `@core/` import in the
+ * framework to a resolver that cannot see an import map. Nothing in the checkout can
+ * notice, because in the checkout the condition is false. ADR-0067, ADR-0068.
  *
  * So this builds the layout instead of assuming it. tools/fixtures/installed-layout.mjs
- * declares every dependency a first application needs, packs both workspaces and
- * gives their tarballs to a real offline `npm install`; the probe then:
+ * declares every dependency a first application needs, packs both workspaces and gives
+ * their tarballs to a real offline `npm install`. The probe then does four things.
  *
- *   1. Scaffolds the application with the published `srl new`, through the same local-bin
- *      command the install guide gives an adopter, so the fixture is not
- *      written here at all: the shape lives in cli/scaffold/application.mjs, the one
+ *   1. Scaffolds the application with the published `srl new`, through the same
+ *      local-bin command the install guide gives an adopter, so the fixture is not
+ *      written here at all. The shape lives in cli/scaffold/application.mjs, the one
  *      module `srl new` and this probe both cross, and a consumer's first command is
  *      the thing under test. ADR-0073.
- *   2. Runs the toolchain against it through the published `srl` bin: the import-map
- *      check, the template checker, the build.
- *   3. Typechecks a consumer of the *other* audience — a bundler user with no import
- *      map — against nothing but the package's `exports`. ADR-0066.
+ *   2. Runs the toolchain against it through the published `srl` bin, covering the
+ *      import-map check, the template checker and the build.
+ *   3. Typechecks a consumer of the other audience, a bundler user with no import map,
+ *      against nothing but the package's `exports`. ADR-0066.
  *   4. Typechecks a strict consumer of the import-map audience as one whole program,
  *      importing every library module through the published tsconfig base. It allows
- *      no diagnostic anywhere, the package's own included, and no library JavaScript in
- *      the program where a declaration belongs. ADR-0066.
+ *      no diagnostic anywhere, the package's own included, and no library JavaScript
+ *      in the program where a declaration belongs. ADR-0066.
  *
- * What it does not cover: remotes, i18n, the release transport. Those are checked in
- * the checkout, and none of them is where the installed shape differs.
+ * It does not cover remotes, i18n or the release transport. Those are checked in the
+ * checkout, and none of them is where the installed shape differs.
  *
- * Every step's verdict is a `Diagnostic`, and cli/diagnostics/index.mjs prints them:
- * the probe is expensive enough that a caller wanting to know which step failed should
+ * Every step's verdict is a `Diagnostic`, and cli/diagnostics/index.mjs prints them.
+ * The probe is expensive enough that a caller wanting to know which step failed should
  * not have to scrape a terminal for it. ADR-0072, ADR-0098.
  */
 
@@ -68,16 +67,16 @@ function refuse(code, message) {
 /**
  * The application, scaffolded by the published toolchain.
  *
- * This used to be a hundred and eighty lines of fixture: an index.html with the import map
- * pasted and a hash computed, two components with their templates, the stylesheet, the
- * manifest, a locale bundle and a tsconfig. All of it was the shape of a correct srl
- * application, written down in the one place no consumer could reach, which made it a
- * fifth description of a contract the toolchain enforces. It is now
+ * As a fixture written here it would be a hundred and eighty lines, an index.html with
+ * the import map pasted and a hash computed, two components with their templates, the
+ * stylesheet, the manifest, a locale bundle and a tsconfig. That is the shape of a
+ * correct srl application, written down in the one place no consumer could reach, which
+ * would make it a fifth description of a contract the toolchain enforces. It lives in
  * cli/scaffold/application.mjs, and this runs it as a consumer does. ADR-0073.
  *
  * Through the local bin rather than by import, for the same reason everything else here
- * is: imported, the scaffold would find the library beside `cli/` in this checkout and
- * paste *that* import map. Run inside the probe, it resolves the installed package, and
+ * is. Imported, the scaffold would find the library beside `cli/` in this checkout and
+ * paste that import map. Run inside the probe, it resolves the installed package, and
  * the fixture is made of the bytes actually under test.
  *
  * @param {string} probe
@@ -112,16 +111,16 @@ const TYPED = 'typed-consumer';
 /**
  * A TypeScript consumer of the installed package, resolving through `exports` alone.
  *
- * Not an srl application. This one is the second audience — somebody with a bundler and
- * no import map — and the whole question is whether `import { … } from '@srljs/core'`
- * carries types when the only thing pointing at them is the package's own map. So the
- * tsconfig extends nothing, declares no `paths`, and names no directory in this
- * checkout: an alias here would answer the question with the arrangement it is asking
- * about. ADR-0066.
+ * Not an srl application. This one is the second audience, somebody with a bundler and
+ * no import map, and the question is whether `import { … } from '@srljs/core'` carries
+ * types when the only thing pointing at them is the package's own map. The tsconfig
+ * therefore extends nothing, declares no `paths`, and names no directory in this
+ * checkout, because an alias here would answer the question with the arrangement it is
+ * asking about. ADR-0066.
  *
  * The two `@ts-expect-error` lines are the assertion, and they are stronger than a
- * passing typecheck: tsc fails an unused directive, so a declaration that resolved to
- * `any` — or did not resolve at all — refuses the run rather than sailing through it.
+ * passing typecheck. tsc fails an unused directive, so a declaration that resolved to
+ * `any`, or did not resolve at all, refuses the run rather than sailing through it.
  *
  * @param {string} probe
  * @returns {Promise<void>}

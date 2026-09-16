@@ -5,29 +5,29 @@
  *   node tools/checks/adr-check.mjs --write    rewrite the generated index
  *
  * A source comment may say why a line is the way it is. It may not carry the narrative
- * of how the decision was reached: that is a record with an identity, and an identity a
- * comment can cite without restating. This tool is the enforcement half of that rule —
- * README.md has stated it since the repository had one reader, and a policy no check
- * reads is a policy the next commit forgets.
+ * of how the decision was reached, because that is a record with an identity, and an
+ * identity a comment can cite without restating. This tool is the enforcement half of
+ * that rule, because a policy no check reads is a policy the next commit forgets.
  *
- * WHAT IT REFUSES
- *
- * A record whose number disagrees with its filename or its heading, a duplicate number,
+ * It refuses a record whose number disagrees with its filename or its heading, a
+ * duplicate number,
  * a missing Status/Date/Affects field, a missing Context/Decision/Consequences section,
  * a superseded record that does not name its successor, and a cited `ADR-0000` that no
  * file defines. Each one means a citation somewhere resolves to nothing, which is the
  * failure mode a stable identifier exists to prevent.
  *
  * Every refusal is a `Diagnostic` carrying the file and the line, returned rather than
- * printed: cli/diagnostics/index.mjs owns the report, so `--json` costs this file nothing
- * and a malformed record no longer stops the run before the next one is read. ADR-0072.
+ * printed. cli/diagnostics/index.mjs owns the report, so `--json` costs this file
+ * nothing and a malformed record does not stop the run before the next one is read.
+ * ADR-0072.
  *
  * It also refuses two spellings that make a citation rot. A README section number moves
- * the moment a section is inserted above it, so source cites records and anchors, never
- * `§12`. And project-phase vocabulary — the phase a change happened in, the name of a
- * review that produced it — dates a permanent file against a calendar nobody keeps.
+ * the moment a section is inserted above it, so source cites records and anchors rather
+ * than `§12`. Project-phase vocabulary, such as the phase a change happened in or the
+ * name of a review that produced it, dates a permanent file against a calendar nobody
+ * keeps.
  *
- * No network, no npm install: it reads the repository and writes one file.
+ * No network and no npm install. It reads the repository and writes one file.
  */
 
 import { writeFile } from 'node:fs/promises';

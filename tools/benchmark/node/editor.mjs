@@ -134,8 +134,8 @@ async function build(context, scale) {
 }
 
 /**
- * Every `.html` beside a `.js` of the same name: a template with a host module, which is
- * the pair the language server has answers for.
+ * Every `.html` beside a `.js` of the same name, which is a template with a host
+ * module, the pair the language server has answers for.
  *
  * @param {string} directory
  * @returns {Promise<string[]>}
@@ -254,11 +254,11 @@ function positionAt(source, offset) {
 }
 
 /**
- * A cold session: a process that has never read this project, answering the first
- * completion and the first diagnostics an editor asks of it.
+ * A cold session, meaning a process that has never read this project, answering the
+ * first completion and the first diagnostics an editor asks of it.
  *
- * `firstCompletion` is the interactive thread's own cold cost — the program build behind
- * `templateExpressionMembers()` — which ADR-0090 left as the next measurable thing.
+ * `firstCompletion` is the interactive thread's own cold cost, the program build behind
+ * `templateExpressionMembers()`, which ADR-0090 left as the next measurable thing.
  *
  * @param {NodeWorkloadContext} context
  * @param {number} scale
@@ -266,8 +266,9 @@ function positionAt(source, offset) {
  */
 async function coldStart(context, scale) {
   const fx = await fixture(context, scale);
-  // Host members, not tags: a tag list comes from the project model, while an expression
-  // completion is what pays for the interactive thread's own program build.
+  // Host members rather than tags, because a tag list comes from the project model
+  // while an expression completion pays for the interactive thread's own program
+  // build.
   const trigger = /** @type {typeof INTERACTIONS[number]} */ (
     INTERACTIONS.find((candidate) => candidate.name === 'host member completion')
   );
@@ -323,11 +324,12 @@ async function coldStart(context, scale) {
 /**
  * A warm session answering interactive requests with validation outstanding.
  *
- * One block per interaction: the document is edited into the shape that interaction asks
- * about, the debounce is waited out so validation is running rather than pending, then the
- * block's samples are taken back to back. A check costs tens of milliseconds and a request
- * single digits, so the backlog outlasts the block. A sample answered by a server with
- * nothing left to validate is refused: that is not the state an editor types into.
+ * One block per interaction. The document is edited into the shape that interaction
+ * asks about, the debounce is waited out so validation is running rather than pending,
+ * then the block's samples are taken back to back. A check costs tens of milliseconds
+ * and a request single digits, so the backlog outlasts the block. A sample answered by
+ * a server with nothing left to validate is refused, because that is not the state an
+ * editor types into.
  *
  * @param {NodeWorkloadContext} context
  * @param {number} scale
@@ -348,7 +350,8 @@ async function interactive(context, scale) {
     }
     // The first check of a session builds the compiler's program, and an editor pays that
     // once. Sampling before it finished would report the cold cost of the first document
-    // as the cost of a keystroke: that number is `editor/cold-start`'s to report.
+    // as the cost of a keystroke, and that number is `editor/cold-start`'s to
+    // report.
     await until(() => client.publishes.length >= WARM_CHECKS, 'the checker is warm', 120_000);
 
     const perBlock = Math.ceil(context.samples / INTERACTIONS.length);
@@ -414,8 +417,9 @@ async function interactive(context, scale) {
 /**
  * Ten edits written together, then the answer.
  *
- * `validations` is the structural half: one burst inside one debounce window is one check
- * on any machine, which is what makes it the editor fact an absolute budget can hold.
+ * `validations` is the structural half. One burst inside one debounce window is one
+ * check on any machine, which is what makes it the editor fact an absolute budget can
+ * hold.
  * ADR-0096.
  *
  * @param {NodeWorkloadContext} context

@@ -7,12 +7,10 @@
  * distinguishes them, which is what lets the runner treat "compile a template" and
  * "time the typecheck" the same way.
  *
- * WHAT IS NOT HERE YET
- *
- * The plan lists workloads this first harness does not implement, and they are named
- * in `PENDING` below rather than left to be noticed later. A gate that silently
- * covers less than its plan says is worse than one that reports the gap, because the
- * gap is what the next agent needs.
+ * The workloads this harness does not implement yet are named in `PENDING` below
+ * rather than left to be noticed later. A gate that silently covers less than its plan
+ * says is worse than one that reports the gap, because the gap is what the next reader
+ * needs.
  */
 
 import { EDITOR_WORKLOADS } from './node/editor.mjs';
@@ -27,10 +25,9 @@ import { TOOLING_WORKLOADS } from './node/tooling.mjs';
  * dozens of samples; one that renders 40,000 cells cannot, and pretending otherwise
  * is how a benchmark gate becomes something people skip.
  *
- * These are higher than they first were, and the reason is worth keeping: at twelve
- * samples, two runs of unchanged code disagreed by up to 70% on a 4 ms table filter.
- * A median needs enough samples to be a median. Forty samples of a 4 ms workload cost
- * 160 ms, which buys a number that can carry a 20% budget.
+ * At twelve samples, two runs of unchanged code disagree by up to 70% on a 4 ms table
+ * filter. A median needs enough samples to be a median. Forty samples of a 4 ms
+ * workload cost 160 ms, which buys a number that can carry a 20% budget.
  *
  * @type {Record<string, { samples: Record<Mode, number>, warmup: Record<Mode, number> }>}
  */
@@ -81,8 +78,8 @@ const DEFINITION_WORKLOADS = [100, 1000, 5000].map((count) =>
     title: `Register ${count.toLocaleString('en')} components, then build 100 instances`,
     module: 'definitions.js',
     export: 'define_scale',
-    // A fresh page per sample: `customElements.define` is permanent, so a second
-    // sample in the same page would measure a registry the first one filled.
+    // A fresh page per sample, because `customElements.define` is permanent and a
+    // second sample in the same page would measure a registry the first one filled.
     driver: 'page',
     cost: count >= 5000 ? 'brutal' : 'heavy',
     args: { count },

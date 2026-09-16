@@ -13,9 +13,9 @@ import { checkReadme } from '../checks/readme-check.mjs';
  *
  * The tables that state which elements exist, where they live and what they may name are
  * generated from the project model rather than typed, and they live on the reference page
- * the generator owns. These tests pin the two properties that make that worth doing: the
- * committed page currently agrees with the source, and a page that stops agreeing fails
- * rather than being quietly out of date.
+ * the generator owns. These tests pin the two properties that make that worth doing.
+ * The committed page agrees with the source, and a page that stops agreeing fails rather
+ * than being quietly out of date.
  *
  * Every case works on a copy in a temporary directory. A test that rewrites the
  * repository's own page to prove it can is a test that leaves the repository dirty.
@@ -49,8 +49,8 @@ void test('a hand-edited generated row is reported as drift', async () => {
   const { diagnostics, drifted } = await checkReadme({ file });
   assert.ok(drifted.includes('elements'), `expected the elements table to drift, got ${drifted.join(', ')}`);
 
-  // The finding, not a count: the page and the section it drifted in are both on the
-  // diagnostic, which is what an editor underlines and a CI job reads.
+  // The finding rather than a count. The page and the section it drifted in are both
+  // on the diagnostic, which is what an editor underlines and a CI job reads.
   const [drift] = errors(diagnostics);
   assert.equal(drift?.code, 'docs/generated-drift');
   assert.ok(String(drift?.file).endsWith('project-index.md'));

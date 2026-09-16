@@ -6,9 +6,9 @@
  * rather than a relative path. Nothing in the checkout has that shape, and the difference
  * has broken the build before. ADR-0067, ADR-0068.
  *
- * Two callers need it now — the packaged-install probe and the editor conformance run —
- * so the package manifest, installation and local-bin invocation live here rather than
- * in whichever adapter wrote them first. ADR-0098.
+ * Two callers need it, the packaged-install probe and the editor conformance run, so
+ * the package manifest, installation and local-bin invocation live here rather than in
+ * whichever adapter wrote them first. ADR-0098.
  */
 
 import { execFile } from 'node:child_process';
@@ -92,8 +92,8 @@ export function applicationManifest(name) {
 /**
  * Run one of the installed packages' bins inside `root`, through the local-bin command
  * documented for adopters. Offline mode makes an absent local bin a refusal rather than
- * an implicit download. A non-zero exit is data, not a throw: a caller wants to say which
- * step failed and what it printed. ADR-0098.
+ * an implicit download. A non-zero exit is data rather than a throw, because a caller
+ * wants to say which step failed and what it printed. ADR-0098.
  *
  * @param {string} root
  * @param {string} command

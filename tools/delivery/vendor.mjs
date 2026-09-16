@@ -13,29 +13,25 @@
  *                                        regenerate LICENSES.md from node_modules
  *
  * The verify mode is offline and is what `npm run verify` calls. It answers one
- * question: do the files in this repository still match the hashes the browser
- * will enforce? A mismatch means either a bad merge or someone editing a vendored
- * file by hand, and both are worth failing a build over.
+ * question. Do the files in this repository still match the hashes the browser will
+ * enforce? A mismatch means either a bad merge or someone editing a vendored file by
+ * hand, and both are worth failing a build over.
  *
- * WHY IT CHECKS THE NOTICES
+ * It checks the notices because these bytes are committed, so this repository
+ * redistributes them, and both MIT and BSD-3-Clause require the notice to travel with
+ * the copy. Two of the three files carry no notice of their own. signals-core.mjs has
+ * no header at all, and tailwind-browser.js contains only the banner string it injects
+ * into compiled CSS. LICENSES.md is therefore where the notices live, and it is checked
+ * the same way the bytes are, against the LICENSE of the exact pinned version in
+ * node_modules, because a notice nobody verifies drifts away from the code it covers on
+ * the first upgrade. The production build carries its own generated
+ * THIRD_PARTY_LICENSES.md, and this covers the source-delivery path, which ships these
+ * files verbatim and runs no build at all.
  *
- * These bytes are committed, so this repository redistributes them, and both MIT
- * and BSD-3-Clause require the notice to travel with the copy. Two of the three
- * files carry no notice of their own: signals-core.mjs has no header at all and
- * tailwind-browser.js contains only the banner string it injects into compiled
- * CSS. LICENSES.md is therefore where the notices live, and it is checked the
- * same way the bytes are: against the LICENSE of the exact pinned version in
- * node_modules, because a notice nobody verifies drifts away from the code it
- * covers on the first upgrade. The production build carries its own generated
- * THIRD_PARTY_LICENSES.md; this covers the source-delivery path, which ships
- * these files verbatim and runs no build at all.
- *
- * WHY IT CHECKS EVERY APPLICATION
- *
- * The vendored bytes live with the library, but the hashes the browser enforces
- * live in each application's index.html, because that is where the import map is.
- * The invariant is therefore "every application that mounts this /lib agrees with
- * it", and checking one index.html would not see two of them disagreeing.
+ * It checks every application because the vendored bytes live with the library while
+ * the hashes the browser enforces live in each application's index.html, which is where
+ * the import map is. The invariant is that every application mounting this /lib agrees
+ * with it, and checking one index.html would not see two of them disagreeing.
  *
  * The fetch mode refuses to write anything whose downloaded bytes do not match the
  * hash already recorded, so upgrading a dependency is a two-step operation with the
@@ -99,10 +95,10 @@ for (const entry of provenance.files) {
   const path = join(VENDOR, entry.file);
   const servedAs = `/lib/vendor/${entry.file}`;
 
-  // The hashes that must agree: every application's index.html (enforced by the
-  // browser), provenance.json (documentation), and the bytes on disk (what ships).
-  // An application that does not reference a vendored file at all is not a
-  // problem — @tailwindcss/browser is development-only and an application may
+  // Three things must agree. Every application's index.html, which the browser
+  // enforces, provenance.json, which documents it, and the bytes on disk, which ship.
+  // An application that does not reference a vendored file at all is not a problem,
+  // because @tailwindcss/browser is development-only and an application may
   // legitimately ship the compiled stylesheet instead.
   for (const { name, referenced } of declared) {
     if (!referenced.has(servedAs)) continue;
@@ -151,8 +147,9 @@ for (const entry of provenance.files) {
 
   let bytes;
   try {
-    // Raw bytes, not text: the hash is over what the server sends, and a utf8
-    // round-trip through a string is not guaranteed to reproduce it byte for byte.
+    // Raw bytes rather than text, because the hash is over what the server sends and
+    // a utf8 round-trip through a string is not guaranteed to reproduce it byte for
+    // byte.
     bytes = await readFile(path);
   } catch {
     problems.push(
@@ -194,9 +191,9 @@ const licensesPath = join(VENDOR, 'LICENSES.md');
 
 /**
  * The heading that identifies one vendored file's notice. Carries the file, the
- * package and the version so that a section can never silently outlive the bytes
- * it covers: an upgrade changes the heading, and the check below then looks for a
- * section that is not there.
+ * package and the version so that a section can never silently outlive the bytes it
+ * covers. An upgrade changes the heading, and the check below then looks for a section
+ * that is not there.
  *
  * @param {Record<string, unknown>} entry
  * @returns {string}
@@ -340,8 +337,8 @@ if (changed && acceptNew) {
   await writeFile(provenancePath, `${JSON.stringify(provenance, null, 2)}\n`);
   // The published fragment carries the same hashes, so it is stale the moment the
   // bytes change. Regenerated here rather than left for the next `npm run verify`
-  // to complain about: it is the library's own file, and this is the command that
-  // changed what it describes.
+  // to complain about, because it is the library's own file and this is the command
+  // that changed what it describes.
   await writeFile(IMPORT_MAP_FILE, await importMapText());
   console.log(
     '\nprovenance.json and source/lib/importmap.json updated. Paste the new fragment into every ' +

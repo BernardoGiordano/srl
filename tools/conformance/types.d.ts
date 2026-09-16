@@ -1,5 +1,6 @@
 /**
- * The editor conformance contract: what a scenario asks, and what an adapter answers
+ * The editor conformance contract, covering what a scenario asks and what an adapter
+ * answers
  * for one installed editor. ADR-0097.
  */
 

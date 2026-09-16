@@ -7,7 +7,7 @@
  *
  * `npm run benchmark` is the local, detailed profile, with more samples and every
  * workload.
- * `npm run benchmark:ci` is the gate: fewer samples, a bounded runtime, and a
+ * `npm run benchmark:ci` is the gate, with fewer samples, a bounded runtime, and a
  * non-zero exit when a median or p95 has regressed past the threshold in budgets.json
  * or an absolute product budget is exceeded.
  *
@@ -530,9 +530,9 @@ async function readBaseline(path) {
  *
  * `comparability` answers this for a baseline that exists and does not match. It cannot
  * answer it for a baseline that is not there, because it is not told which file was
- * looked for — and that case was the quietest of the lot: `--origin dist` has never had
- * an artifact baseline in this repository, so it ran fully ungated and said nothing at
- * all. A run that gates nothing has to say so.
+ * looked for, and that case is the quietest of the lot. `--origin dist` has never had
+ * an artifact baseline in this repository, so it runs fully ungated. A run that gates
+ * nothing has to say so.
  *
  * @param {BaselineFile | null} baseline
  * @param {string} path
@@ -606,8 +606,8 @@ async function collect(workload, context) {
 
 /**
  * Hand the sample loop to the page, then check what came back for the two things a
- * workload is never allowed to have done: reach off origin, or leave an uncaught
- * error behind.
+ * workload is never allowed to have done, which are reaching off origin and leaving an
+ * uncaught error behind.
  *
  * @param {BenchmarkPage} page
  * @param {string} module
