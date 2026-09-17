@@ -34,7 +34,7 @@
     "This package defines the browser mounts and import prefixes in srl below.",
     "The import map and Node bundles are derived from that table. The explicit",
     "exports also give the CLI the small set of source modules it needs.",
-    "Run npm run package before publishing so every dist target exists."
+    "Run npm run package before publishing so every dist target and the shipped docs exist."
   ],
   "exports": {
     ".": { "types": "./dist/srl-core.d.ts", "default": "./dist/srl-core.js" },
@@ -58,14 +58,17 @@
   ],
   "sideEffects": true,
   "//files": [
-    "Publish the library, components, generated bundles, and shared tsconfig.",
-    "Tests stay out of the tarball except for the public browser test harness."
+    "Publish the library, components, generated bundles, shared tsconfig, and the",
+    "docs copy with its llms.txt index. Tests stay out of the tarball except for the",
+    "public browser test harness."
   ],
   "files": [
     "dist",
     "lib",
     "components",
     "tsconfig.base.json",
+    "docs",
+    "llms.txt",
     "!**/test/**",
     "lib/test/harness.js"
   ],

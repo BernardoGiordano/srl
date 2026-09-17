@@ -24,11 +24,38 @@ template grammar before the page runs.
 | `(click)="expr"` | Handle an event with `$event` in scope. |
 | `*if` and `*else` | Render one branch. |
 | `*for="u of users; key: u.id"` | Render keyed items. |
+| `*for="u of users; index as i"` | Name the row index. |
 | `<template *fragment="cell(row of rows)">` | Pass markup to another element. |
 | `&expr` | Pass a signal without unwrapping it. |
 
 Each compiled binding tracks the signals it reads and updates its own DOM
 part. A handwritten `render()` tracks at component granularity.
+
+The [template dialect reference](../reference/template-dialect.md) lists every
+binding form, operator, refused expression, and security context. It is
+generated from the modules the runtime and the checker read.
+
+## Structural directives
+
+`*else` goes on the element that follows an `*if` element, with only
+whitespace between them. An `*else` anywhere else is refused. One element
+cannot carry both `*for` and `*if`, so wrap one of them in an element of its
+own.
+
+```html
+<ul>
+  <li *for="user of rows; key: user.id; index as position">
+    <span *if="$first">Newest</span>
+    {{ position + 1 }} of {{ $count }}: {{ user.name }}
+  </li>
+</ul>
+```
+
+Each `*for` row has `$index`, `$first`, `$last`, and `$count` in scope besides
+its own item. `index as position` gives `$index` a second name, which helps
+when `*for` blocks nest. The `key` clause gives each row an identity. Without
+it, a reorder re-renders every row. The two clauses may appear in either
+order.
 
 ## Loading and caching
 
@@ -54,9 +81,12 @@ whitespace on the element itself.
 
 Bindings use a parser and evaluator instead of `eval`. They support member
 access, optional chaining, calls, arithmetic, comparisons, ternaries, logical
-operators, arrays, objects, and assignment in event bindings. They exclude
-arrow functions, `new`, bitwise operators, and template literals. Templates
-read public component members.
+operators, arrays, and objects. Only an event binding may assign, and only
+with `=`. Arrow functions, `new`, template literals, bitwise operators,
+`typeof`, `in`, `++`, `+=`, and spread are refused. `==` and `!=` compare
+strictly. The [reference](../reference/template-dialect.md#expressions) lists
+each construct with the parser's verdict. Templates read public component
+members.
 
 Signals unwrap during expression evaluation. Use `&` when another element
 needs the signal itself.
@@ -125,7 +155,8 @@ The checker covers public members, signal unwrapping, loop locals, branch
 narrowing, event targets, custom-element properties, observed attributes,
 `uses` entries, and unknown tags. Diagnostics point to the authored HTML, and
 each one carries a code such as `templates/unknown-element`.
-`srl check --codes` explains every code.
+`srl check --codes` explains every code, and the
+[diagnostic code reference](../reference/diagnostic-codes.md) lists them.
 
 A static tool cannot infer every dynamic element declaration. The model marks
 such a surface incomplete and avoids claiming unknown members are absent.

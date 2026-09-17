@@ -107,15 +107,26 @@ export function describeCode(code) {
 }
 
 /**
+ * Every entry as a code and its sentence, families last with `<number>` for the tail.
+ *
+ * @returns {Array<[string, string]>}
+ */
+export function catalogEntries() {
+  return [
+    ...Object.entries(CODES),
+    ...Object.entries(CODE_FAMILIES).map(
+      ([prefix, summary]) => /** @type {[string, string]} */ ([`${prefix}<number>`, summary]),
+    ),
+  ];
+}
+
+/**
  * The catalogue as terminal text, one code per line.
  *
  * @returns {string}
  */
 export function formatCatalog() {
-  const rows = [
-    ...Object.entries(CODES),
-    ...Object.entries(CODE_FAMILIES).map(([prefix, summary]) => [`${prefix}<number>`, summary]),
-  ];
+  const rows = catalogEntries();
   const width = Math.max(...rows.map(([code = '']) => code.length)) + 2;
   return `${rows.map(([code = '', summary = '']) => `${code.padEnd(width)}${summary}`).join('\n')}\n`;
 }

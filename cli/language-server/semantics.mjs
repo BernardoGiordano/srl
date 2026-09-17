@@ -23,6 +23,7 @@ import {
   FOR_HEAD,
   FOR_INDEX_CLAUSE,
   FOR_KEY_CLAUSE,
+  FOR_LOCALS,
   parseFragmentHead,
   VOID_ELEMENTS,
 } from '@srljs/core/lib/core/template/dialect.js';
@@ -839,10 +840,7 @@ function localNames(loops, fragments, event) {
   const found = new Set();
   for (const loop of loops) {
     found.add(loop.alias);
-    found.add('$index');
-    found.add('$first');
-    found.add('$last');
-    found.add('$count');
+    for (const local of FOR_LOCALS) found.add(local.name);
     if (loop.indexAlias !== undefined) found.add(loop.indexAlias);
   }
   for (const fragment of fragments) {

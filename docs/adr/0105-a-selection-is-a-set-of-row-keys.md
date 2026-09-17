@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-10
-- Affects: `source/components/data/ui-table.js`, `source/components/data/ui-table.html`, `source/components/internal/text.js`, `source/components/test/data/table.test.js`, `source/components/test/standard-text.js`, `example/src/pages/settings/settings-users.js`, `example/src/pages/settings/settings-users.html`, `example/i18n/en.json`, `example/i18n/it.json`, `docs/known-gaps.md`
+- Affects: `source/components/data/ui-table.js`, `source/components/data/ui-table.html`, `source/components/internal/text.js`, `source/components/test/data/table.test.js`, `source/components/test/standard-text.js`, `example/src/pages/settings/settings-users.js`, `example/src/pages/settings/settings-users.html`, `example/i18n/en.json`, `example/i18n/it.json`
 
 ## Context
 
@@ -13,9 +13,8 @@ table performs without asking: a sort that reorders the page, a page change that
 rows out, a filter that removes some of them, a reload that replaces the array. Each of
 those is a rule the caller has to get right, and each of them is decided inside the table.
 
-The reason no selection existed was not oversight. `docs/known-gaps.md` recorded it as
-deliberately unbuilt, because the word "selection" hides a question the table cannot
-answer on its own. Does choosing rows mean the current page, the rows loaded so far,
+The reason no selection existed was not oversight. It was left unbuilt on purpose, because
+the word "selection" hides a question the table cannot answer on its own. Does choosing rows mean the current page, the rows loaded so far,
 or every record matching the query, including the ones on the server that this browser has
 never seen. Building the checkbox before answering that question produces an interface that
 means something different in each of the four pagination modes.
@@ -74,7 +73,7 @@ list, and comparing them would need an equality rule the table has no basis to p
 **Rejected: a `select-all-matching` affordance.** It reads as one checkbox and is a
 server-side authorization question about how many records, under whose scopes, retrieved
 how.
-The same reasoning defers export in `docs/position-and-non-goals.md`.
+The same reasoning leaves export unbuilt.
 
 ## Consequences
 

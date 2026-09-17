@@ -53,7 +53,7 @@ boundaries have one production implementation and a test adapter.
 
 | Change | File |
 |---|---|
-| The template grammar, a directive, an attribute-to-sink mapping | `source/lib/core/template/dialect.js` |
+| The template grammar, a directive, an attribute-to-sink mapping | `source/lib/core/template/dialect.js`, which also generates `docs/reference/template-dialect.md` |
 | What a binding expression may say | `source/lib/core/template/expression-parser.js`, `expression.js` |
 | Sanitisation or a Trusted Types policy | `source/lib/core/template/security.js` |
 | How a tag, class and template relate | `source/lib/core/elements/component.js` |
@@ -74,6 +74,7 @@ boundaries have one production implementation and a test adapter.
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
 | What a saved file does to a page that is already open | `cli/dev/updates.mjs` owns the watching, the URL identity and the delivery; `cli/dev/update-client.js` decides whether a change is a template revision, a component stylesheet revision, a stylesheet swap or a reload |
 | What a correct srl application is made of | `cli/scaffold/application.mjs` — the nine files `srl new` writes; `tools/fixtures/installed-layout.mjs` owns the declared dependency set its installed adapters use |
+| What a package ships besides its source | `tools/delivery/package-bundle.mjs` writes `dist/`; `tools/delivery/package-docs.mjs` copies `docs/` and writes `llms.txt` |
 | What static discovery knows about the project | `cli/project-model/` |
 | How public inputs, internal state, inherited declarations, events and projection names become one Element | `cli/project-model/parse.mjs`, resolved by `cli/project-model/index.mjs` |
 | What a message is, which bundle answers for a file, and whether a reference resolves | `cli/message-catalog/` — the verifier, `cli/checks/message-check.mjs` and the editor are adapters over it |

@@ -98,8 +98,12 @@ checker. The CLI scaffold writes this file too.
 
 Install `@srljs/cli` as a development dependency to scaffold an application,
 serve source with live updates, check templates, or build a production artifact.
-The [repository](https://github.com/BernardoGiordano/srl) contains the guides,
-architecture map, and working example.
+
+This package ships the documentation for its version. `llms.txt` at the package
+root lists every guide, reference page, and decision record under `docs/`. A
+source comment that cites `ADR-0042` refers to `docs/adr/0042-*.md`. The
+[repository](https://github.com/BernardoGiordano/srl) holds the same pages and a
+working example.
 
 ## Runtime dependencies and license
 

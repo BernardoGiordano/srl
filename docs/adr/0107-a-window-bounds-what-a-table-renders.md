@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-10
-- Affects: `source/components/data/ui-table.js`, `source/components/data/ui-table.html`, `source/components/test/data/table.test.js`, `tools/benchmark/workloads.mjs`, `tools/benchmark/budgets.json`, `docs/position-and-non-goals.md`, `docs/known-gaps.md`, `docs/guide/collection.md`
+- Affects: `source/components/data/ui-table.js`, `source/components/data/ui-table.html`, `source/components/test/data/table.test.js`, `tools/benchmark/workloads.mjs`, `tools/benchmark/budgets.json`, `docs/guide/collection.md`
 
 ## Context
 
@@ -19,8 +19,8 @@ rows and 40,000 cells in 468.9 ms with 131.7 MB of heap resident, and
 `collection/table-reorder-10000` moves the same rendered list in 318.9 ms
 ([the performance envelope](../guide/performance.md)).
 
-`docs/position-and-non-goals.md` nonetheless listed row virtualisation as a non-goal, and
-the reason it gave was not that 468.9 ms is acceptable. It was that no budget existed for
+Row virtualisation was nonetheless recorded as a non-goal, and the reason given was not
+that 468.9 ms is acceptable. It was that no budget existed for
 it to fail: a duration with nothing to compare it against is a number, not a verdict, and
 `budgets.json` gated no timing at all
 ([ADR-0044](0044-a-regression-must-be-relatively-and-absolutely-large.md),
@@ -97,8 +97,8 @@ had to change. A helper that owned the viewport arithmetic and left the table to
 coordinate the rest would be the shallow module this decision exists to avoid.
 
 **Rejected: a virtualisation adapter seam.** One table and one option panel are not two
-consumers. The place a specialist grid goes on is still the one `docs/known-gaps.md`
-names: an advanced grid suite wanted whole, behind an adapter.
+consumers. A specialist grid still belongs behind an adapter, for an application that wants
+a whole advanced grid suite.
 
 ## Consequences
 

@@ -82,7 +82,8 @@ answers editor requests through the project model. `cli/scaffold/` writes the
 files of a new application.
 
 `tools/checks/` enforces this repository's dependency, package, and
-documentation rules. `tools/benchmark/` measures performance. `tools/conformance/`
+documentation rules. `tools/delivery/` writes what the packages ship besides
+source, which is the bundles and the copy of `docs/`. `tools/benchmark/` measures performance. `tools/conformance/`
 drives installed editor clients.
 
 ## Browser specifiers

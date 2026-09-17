@@ -25,6 +25,7 @@ import {
   FOR_HEAD,
   FOR_INDEX_CLAUSE,
   FOR_KEY_CLAUSE,
+  FOR_LOCALS,
   INTERPOLATION,
   parseFragmentHead,
   refusedProperty,
@@ -1087,8 +1088,7 @@ function compileIf(element, source, context, consumed) {
 
 /**
  * `*for="user of users"`, with optional clauses defined in dialect.js. Without `key`,
- * a reorder re-renders every row. `$index`, `$first`, `$last` and `$count` are always
- * in scope.
+ * a reorder re-renders every row. The locals in `FOR_LOCALS` are always in scope.
  *
  * @param {Element} element
  * @param {string} source
@@ -1175,10 +1175,7 @@ function compileFor(element, source, context) {
       ) {
         locals[alias] = item;
         if (indexAlias !== '$index') locals[indexAlias] = index;
-        locals.$index = index;
-        locals.$first = index === 0;
-        locals.$last = index === count - 1;
-        locals.$count = count;
+        for (const local of FOR_LOCALS) locals[local.name] = local.value(index, count);
         entry.parentVersion = scope.version;
         entry.scope.version += 1;
       }

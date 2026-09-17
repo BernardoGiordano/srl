@@ -11,11 +11,10 @@ import { checkReadme } from '../checks/readme-check.mjs';
 /**
  * The documentation gate.
  *
- * The tables that state which elements exist, where they live and what they may name are
- * generated from the project model rather than typed, and they live on the reference page
- * the generator owns. These tests pin the two properties that make that worth doing.
- * The committed page agrees with the source, and a page that stops agreeing fails rather
- * than being quietly out of date.
+ * The reference pages state which elements exist, what the template dialect accepts and
+ * what each diagnostic code means. Their tables are generated rather than typed. These
+ * tests pin the two properties that make that worth doing. The committed pages agree with
+ * the source, and a page that stops agreeing fails rather than being quietly out of date.
  *
  * Every case works on a copy in a temporary directory. A test that rewrites the
  * repository's own page to prove it can is a test that leaves the repository dirty.
@@ -32,7 +31,7 @@ async function copyReadme() {
   return file;
 }
 
-void test('the committed project index agrees with the project model', async () => {
+void test('the committed reference pages agree with what generates them', async () => {
   const { diagnostics, drifted } = await checkReadme();
   assert.deepEqual(drifted, [], 'run `npm run docs:write` and commit the result');
   assert.deepEqual(
@@ -105,4 +104,21 @@ void test('a broken document is not rewritten, even with --write', async () => {
     ['docs/missing-marker'],
   );
   assert.equal(await readFile(file, 'utf8'), broken, 'and nothing was written over it');
+});
+
+void test('the template dialect page drifts when a generated row is edited', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'readme-check-'));
+  const file = join(dir, 'template-dialect.md');
+  const text = await readFile(join(REPO, 'docs/reference/template-dialect.md'), 'utf8');
+  await writeFile(file, text.replace('| Arrow function | `(item) => item.id` | no | no |', '| Arrow function | `(item) => item.id` | yes | yes |'), 'utf8');
+
+  const { drifted } = await checkReadme({ file });
+  assert.deepEqual(drifted, ['dialect-expressions']);
+});
+
+void test('a page no generator owns is refused by name', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'readme-check-'));
+  const file = join(dir, 'unknown.md');
+  await writeFile(file, '# Unknown\n', 'utf8');
+  assert.deepEqual(await codes(file), ['docs/unknown-page']);
 });

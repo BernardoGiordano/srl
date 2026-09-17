@@ -40,7 +40,8 @@
     "srl": "bin/srl.mjs"
   },
   "//files": [
-    "Publish the CLI modules and omit their tests and fixtures."
+    "Publish the CLI modules and the docs copy with its llms.txt index. Omit tests and",
+    "fixtures. npm run package writes the docs copy."
   ],
   "files": [
     "bin",
@@ -54,7 +55,9 @@
     "language-server",
     "delivery",
     "checks",
-    "dev"
+    "dev",
+    "docs",
+    "llms.txt"
   ],
   "//peerDependencies": [
     "The CLI checks applications against the exact core version it was released",

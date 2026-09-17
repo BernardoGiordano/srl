@@ -3,7 +3,8 @@
  *
  * `core/template/template.js` evaluates the dialect in the browser, and
  * `cli/checks/template-check.mjs` emits TypeScript for it in Node. Both import the
- * grammar from here. The module imports nothing, so Node can load it directly.
+ * grammar from here, and `tools/checks/readme-check.mjs` writes the template reference
+ * page from the same tables. The module imports nothing, so Node can load it directly.
  *
  * This module holds tables and parsing only. Sanitizing lives in security.js,
  * evaluation in template.js and emission in the checker.
@@ -38,8 +39,10 @@ export const VOID_ELEMENTS = new Set([
 /**
  * Boolean attributes, bound with lit's `?` semantics even without the `?`. So
  * `[disabled]="isBusy"` removes the attribute when `isBusy` is false.
+ *
+ * @internal
  */
-const BOOLEAN_ATTRIBUTES = new Set([
+export const BOOLEAN_ATTRIBUTES = new Set([
   'autofocus',
   'checked',
   'default',
@@ -81,6 +84,25 @@ export const FOR_HEAD = /^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s+of\s+([\s\S]+)$/u;
 export const FOR_KEY_CLAUSE = /^key\s*:\s*([\s\S]+)$/u;
 /** @internal */
 export const FOR_INDEX_CLAUSE = /^index\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)$/u;
+
+/**
+ * The locals every `*for` row has in scope besides its own alias. The runtime sets them
+ * from `value`, and the checker and the editor declare them with `type`.
+ *
+ * @type {ReadonlyArray<{ name: string, type: 'number' | 'boolean', meaning: string, value: (index: number, count: number) => number | boolean }>}
+ * @internal
+ */
+export const FOR_LOCALS = Object.freeze([
+  { name: '$index', type: 'number', meaning: 'Position of the row, from 0.', value: (index) => index },
+  { name: '$first', type: 'boolean', meaning: 'True for the first row.', value: (index) => index === 0 },
+  {
+    name: '$last',
+    type: 'boolean',
+    meaning: 'True for the last row.',
+    value: (index, count) => index === count - 1,
+  },
+  { name: '$count', type: 'number', meaning: 'Number of rows in the list.', value: (_index, count) => count },
+]);
 
 /**
  * `<template *fragment="cell(row of people, index)">` declares markup the enclosing
@@ -268,6 +290,15 @@ export const URL_ATTRIBUTES = new Set([
   'xlink:href',
 ]);
 
+/** Names that parse their value as markup, in any element. Lowercase. @internal */
+export const HTML_SINKS = new Set(['innerhtml', 'srcdoc']);
+
+/** Names that parse their value as CSS, in any element. Lowercase. @internal */
+export const STYLE_SINKS = new Set(['csstext', 'style']);
+
+/** Names that hold a list of URLs, in any element. @internal */
+export const URL_SET_SINKS = new Set(['srcset']);
+
 /**
  * The security context of a value written to `tag`.`name`, or `undefined` when
  * escaping is enough.
@@ -283,9 +314,9 @@ export const URL_ATTRIBUTES = new Set([
 export function securityContextFor(tag, name) {
   const lower = name.toLowerCase();
   if (RESOURCE_URL_SINKS.has(`${tag.toLowerCase()}:${lower}`)) return 'resourceUrl';
-  if (lower === 'srcdoc' || lower === 'innerhtml') return 'html';
-  if (lower === 'style' || lower === 'csstext') return 'style';
-  if (lower === 'srcset') return 'urlSet';
+  if (HTML_SINKS.has(lower)) return 'html';
+  if (STYLE_SINKS.has(lower)) return 'style';
+  if (URL_SET_SINKS.has(lower)) return 'urlSet';
   if (URL_ATTRIBUTES.has(lower)) return 'url';
   return undefined;
 }

@@ -332,6 +332,16 @@ describe('template compiler', () => {
     assert.sameArray(texts, ['0:a', '1:b']);
   });
 
+  it('gives every *for row its position locals, and index as renames $index', () => {
+    paint(
+      '<ul><li *for="item of items; index as at">' +
+        '{{ at }}/{{ $count }} {{ $first }} {{ $last }} {{ item }}</li></ul>',
+      { items: ['a', 'b', 'c'] },
+    );
+    const texts = [...host.querySelectorAll('li')].map((li) => li.textContent);
+    assert.sameArray(texts, ['0/3 true false a', '1/3 false false b', '2/3 false true c']);
+  });
+
   it('keeps DOM identity for keyed rows when the list reorders', () => {
     const compiled = compileTemplate(
       '<ul><li *for="user of users; key: user.id">{{ user.name }}</li></ul>',

@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-10
-- Affects: `source/lib/core/diagnostics/updates.js`, `source/lib/core/diagnostics/report.js`, `source/lib/core/diagnostics/types.d.ts`, `source/lib/core/elements/signal-element.js`, `source/lib/core/template/template.js`, `source/lib/test/diagnostics/updates.test.js`, `docs/guide/performance.md`, `docs/known-gaps.md`, `docs/reference/source-layout.md`
+- Affects: `source/lib/core/diagnostics/updates.js`, `source/lib/core/diagnostics/report.js`, `source/lib/core/diagnostics/types.d.ts`, `source/lib/core/elements/signal-element.js`, `source/lib/core/template/template.js`, `source/lib/test/diagnostics/updates.test.js`, `docs/guide/performance.md`, `docs/reference/source-layout.md`
 
 ## Context
 
@@ -23,9 +23,8 @@ expression* read changes it patches its own Lit Part with no render anywhere
 therefore report silence for the update path a fine-grained framework produces the most
 of, and report it confidently.
 
-`docs/known-gaps.md` had no entry for this, which was itself the gap: the framework
-measured what it could already name and had never decided what "why did this update"
-should mean.
+No record listed this as missing, which was itself the gap. The framework measured what it
+could already name and had never decided what "why did this update" should mean.
 
 ## Decision
 
@@ -87,8 +86,8 @@ would rebuild them slightly differently.
 
 **Rejected: a state or component-tree inspector.** Reading the live tree is a different
 question from explaining a change, needs a different lifetime, and would have made this a
-devtools project rather than a diagnostic. It stays in `docs/known-gaps.md` with its own
-trigger.
+devtools project rather than a diagnostic. It stays unbuilt until something beyond the text
+report needs to read the tree.
 
 ## Consequences
 

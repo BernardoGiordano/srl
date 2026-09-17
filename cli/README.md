@@ -158,6 +158,14 @@ await origin.close();
 The [testing guide](https://github.com/BernardoGiordano/srl/blob/main/docs/guide/testing.md)
 shows the component harness and browser setup.
 
+## Documentation
+
+This package ships the srl documentation for its version. `llms.txt` at the
+package root lists every guide, reference page, and decision record under
+`docs/`. `docs/reference/diagnostic-codes.md` explains every code `srl check`
+reports. A source comment that cites `ADR-0072` refers to
+`docs/adr/0072-*.md`.
+
 ## Release and license
 
 `srl release` stages a verified artifact. `srl verify-release` checks a staged

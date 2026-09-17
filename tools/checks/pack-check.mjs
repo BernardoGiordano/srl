@@ -17,7 +17,7 @@
  *
  * So this builds the layout instead of assuming it. tools/fixtures/installed-layout.mjs
  * declares every dependency a first application needs, packs both workspaces and gives
- * their tarballs to a real offline `npm install`. The probe then does four things.
+ * their tarballs to a real offline `npm install`. The probe then does five things.
  *
  *   1. Scaffolds the application with the published `srl new`, through the same
  *      local-bin command the install guide gives an adopter, so the fixture is not
@@ -32,6 +32,9 @@
  *      importing every library module through the published tsconfig base. It allows
  *      no diagnostic anywhere, the package's own included, and no library JavaScript
  *      in the program where a declaration belongs. ADR-0066.
+ *   5. Reads the documentation each package ships. Every relative link resolves inside
+ *      its package, and every record the package cites is in its own docs/adr/.
+ *      ADR-0121.
  *
  * It does not cover remotes, i18n or the release transport. Those are checked in the
  * checkout, and none of them is where the installed shape differs.
@@ -49,6 +52,7 @@ import { promisify } from 'node:util';
 
 import { error, hasErrors, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { exists, walk } from '../../cli/layout.mjs';
+import { linkTarget, relativeLinks } from '../delivery/package-docs.mjs';
 import { applicationManifest, install, localBin, srl } from '../fixtures/installed-layout.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
@@ -257,6 +261,88 @@ async function writeStrictConsumer(probe) {
   };
 }
 
+/** The installed packages, by the directory name under node_modules/@srljs. */
+const PACKAGES = ['core', 'cli'];
+
+/** A record citation, in any file a package ships. */
+const CITATION = /\bADR-(\d{4})\b/gu;
+
+/**
+ * The documentation one installed package carries, held against what it links and cites.
+ *
+ * Read from the installed files rather than from docs/, because the question is what the
+ * tarball holds. A `files` list that dropped `docs` would pass every check in the
+ * checkout. ADR-0121.
+ *
+ * @param {string} probe
+ * @param {string} name
+ * @returns {Promise<Diagnostic[]>}
+ */
+async function shippedDocs(probe, name) {
+  const root = join(probe, 'node_modules', '@srljs', name);
+  const label = `@srljs/${name}`;
+  const index = join(root, 'llms.txt');
+  if (!(await exists(index))) {
+    return [refuse('pack/no-docs', `${label} ships no llms.txt. Run \`npm run package\` before packing.`)];
+  }
+
+  const pages = await walk(join(root, 'docs'), /\.md$/u);
+  /** @type {Array<[string, string]>} */
+  const documents = [['llms.txt', await readFile(index, 'utf8')]];
+  for (const page of pages) {
+    documents.push([relative(root, page).split(sep).join('/'), await readFile(page, 'utf8')]);
+  }
+
+  /** @type {string[]} */
+  const broken = [];
+  for (const [page, text] of documents) {
+    for (const target of relativeLinks(text)) {
+      const resolved = linkTarget(page, target);
+      if (resolved === null || !(await exists(join(root, resolved)))) broken.push(`${page} -> ${target}`);
+    }
+  }
+
+  const records = new Set(
+    documents.map(([page]) => /^docs\/adr\/(\d{4})-/u.exec(page)?.[1]).filter((number) => number !== undefined),
+  );
+  /** @type {Set<string>} */
+  const cited = new Set();
+  for (const file of await walk(root, /\.(?:m?js|ts|html|json)$/u)) {
+    for (const match of (await readFile(file, 'utf8')).matchAll(CITATION)) cited.add(match[1] ?? '');
+  }
+  cited.delete('0000');
+  const unresolved = [...cited].filter((number) => !records.has(number)).sort();
+
+  /** @type {Diagnostic[]} */
+  const found = [];
+  if (broken.length > 0) {
+    found.push(
+      refuse(
+        'pack/docs-broken-link',
+        `${label} ships documentation whose links go nowhere once installed:\n\n${indent(broken.join('\n'))}`,
+      ),
+    );
+  }
+  if (unresolved.length > 0) {
+    found.push(
+      refuse(
+        'pack/unresolved-citation',
+        `${label} cites ${unresolved.map((number) => `ADR-${number}`).join(', ')}, which its docs/adr/ does not hold.`,
+      ),
+    );
+  }
+  if (found.length === 0) {
+    found.push(
+      info(
+        'pack/docs',
+        `${label} ships ${String(pages.length)} page(s), and its ${String(cited.size)} cited record(s) resolve inside it`,
+        { group: GROUP },
+      ),
+    );
+  }
+  return found;
+}
+
 /**
  * Drive the probe, and say what each step found.
  *
@@ -372,6 +458,10 @@ async function check(probe) {
       ),
     );
   }
+
+  /* ── Each package carries its documentation ──────────────────────────── */
+
+  for (const name of PACKAGES) found.push(...(await shippedDocs(probe, name)));
 
   /* ── The artifact is real, and is the installed library's ─────────────── */
 

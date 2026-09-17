@@ -3,9 +3,12 @@ dist/
 /editors/vscode/*.vsix
 /editors/webstorm/target/
 
-# Two working documents rather than repository content
-docs/position-and-non-goals.md
-docs/known-gaps.md
+# The copy of docs/ each package ships, and its index. `npm run package` writes them
+# from docs/, so they are build output like dist/.
+/source/docs/
+/source/llms.txt
+/cli/docs/
+/cli/llms.txt
 
 # templates.json is ignored, because it is an optional optimisation that is off by
 # default and derived entirely from the .html files the application can reach.

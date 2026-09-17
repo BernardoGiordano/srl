@@ -20,7 +20,12 @@ import { refusedMember } from './dialect.js';
 const TOKEN =
   /\s+|(\d+(?:\.\d+)?)|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|([A-Za-z_$][A-Za-z0-9_$]*)|(\?\.|===|!==|==|!=|<=|>=|&&|\|\||\?\?|[()[\]{}.,:?!+\-*/%<>=&])/gy;
 
-const WORD_LITERALS = new Map([
+/**
+ * Names that read as values rather than as members of the component.
+ *
+ * @internal
+ */
+export const WORD_LITERALS = new Map([
   ['true', true],
   ['false', false],
   ['null', null],
@@ -254,7 +259,12 @@ class Parser {
   #error(at, message) { return syntaxError(this.#source, at, this.#where, message); }
 }
 
-const BINARY_LEVELS = [
+/**
+ * Binary operators, loosest binding first. Operators on one level group left to right.
+ *
+ * @internal
+ */
+export const BINARY_LEVELS = [
   new Set(['??']),
   new Set(['||']),
   new Set(['&&']),

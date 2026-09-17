@@ -6,9 +6,8 @@
 
 ## Context
 
-`@core/forms` had validators on fields and nowhere else. The reason recorded in
-[position-and-non-goals.md](../position-and-non-goals.md) was never that the computation was
-hard, because a rule over a group's value is a function from an object to a code and the
+`@core/forms` had validators on fields and nowhere else. The reason was never that the
+computation was hard, because a rule over a group's value is a function from an object to a code and the
 group already builds that object for `values`. It was that the answer had nowhere to go. Every
 error the library could produce was shown by `ui-field`, `ui-field` is a label and a
 projected control, and "the end day may not precede the start day" is under neither of the
@@ -84,9 +83,9 @@ this change does not need.
 
 ## Consequences
 
-`docs/known-gaps.md` loses its "no validator that runs over a group or an array" entry and
-`position-and-non-goals.md` loses that clause from the reactive-forms row. Neither loses the
-sentence about `contacts.1.email`, because per-row placement is still `applyErrors`.
+A rule over a group or an array is no longer missing. A rule that names one row, such as a
+duplicate `contacts.1.email` shown on that field before submit, still is, because per-row
+placement is still `applyErrors`.
 
 `COLLECTION_TAGS` in `tools/test/frozen-interface.test.mjs` gains `ui-form-error`, which is
 the frozen-name decision this change makes.

@@ -10,12 +10,21 @@ The published packages have their own READMEs. A reader installing
 needs a short entry point. Feature details belong in the guides, where there is
 one page per subject.
 
+Both packages also ship this whole `docs/` tree, with an `llms.txt` index at
+the package root. `npm run package` writes the copies. It refuses a page whose
+relative link names a file the package does not contain. Links inside `docs/`
+work, and `../README.md` lands on the package README. It also refuses a guide or reference page that `docs/README.md` does not list,
+because `llms.txt` is built from that index. Name source files in prose or link
+to them by repository URL. ADR-0121 explains the arrangement.
+
 | Information | Put it in |
 |---|---|
 | First steps and project overview | Root `README.md` |
 | Package entry point | `source/README.md` or `cli/README.md` |
 | Feature behavior and examples | The relevant page in `docs/guide/` |
 | Facts derived from source | Generated blocks in `docs/reference/` |
+| Template syntax and its rules | `dialect.js`, which generates `docs/reference/template-dialect.md` |
+| What a diagnostic code means | `cli/diagnostics/catalog.mjs`, which generates `docs/reference/diagnostic-codes.md` |
 | Decision and its tradeoffs | One record in `docs/adr/` |
 | Rule the project can enforce | A type, test, or verifier check |
 | Local reason a reader needs beside code | A short source comment |

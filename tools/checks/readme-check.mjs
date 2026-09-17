@@ -1,21 +1,24 @@
 /**
- * The contract tables in docs/reference/project-index.md, generated from the project
- * model and checked.
+ * The generated tables in docs/reference/, checked against what they are generated from.
  *
  *   node tools/checks/readme-check.mjs            fail if a generated section drifted
  *   node tools/checks/readme-check.mjs --write    rewrite the generated sections
- *   node tools/checks/readme-check.mjs --file X   operate on X instead of the default
+ *   node tools/checks/readme-check.mjs --file X   operate on X, a copy of one page
  *
- * The reference pages carry tables of tags, modules, templates and `uses`
- * relationships. Restating those by hand is how a manual starts lying, because an
- * element renamed in one commit stays right in the source and wrong in the document
- * nobody re-read. Every fact in a generated block comes from the same model the
- * template checker and the verifier read, so the document cannot hold a second opinion
- * about what exists.
+ * Three pages carry generated blocks.
  *
- * The default target is a page rather than the README because the README is an interface
- * and a generated index is not part of one. `--file` is how any other page
- * carries a block.
+ *   project-index.md     tags, modules, templates and `uses`, from the project model
+ *   template-dialect.md  the template dialect, from source/lib/core/template/
+ *   diagnostic-codes.md  every `srl check` code, from cli/diagnostics/catalog.mjs
+ *
+ * Restating those facts by hand is how a manual starts lying, because an element renamed
+ * in one commit stays right in the source and wrong in the document nobody re-read. Every
+ * fact in a generated block comes from the module the runtime or the toolchain reads, so
+ * the document cannot hold a second opinion. These pages ship inside both packages, so a
+ * drifted table would mislead a consumer at the installed version.
+ *
+ * `--file` picks the generator by the file name, so a copy of a page elsewhere is checked
+ * as that page.
  *
  * Prose stays hand-written. Only the blocks between the markers are owned here.
  *
@@ -28,19 +31,19 @@
  */
 
 import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
-import { outputFormat, report } from '../../cli/diagnostics/index.mjs';
+import { catalogEntries } from '../../cli/diagnostics/catalog.mjs';
+import { error, outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { apps, readText, repoPath, REPO } from '../../cli/layout.mjs';
 import { readProject } from '../../cli/project-model/index.mjs';
+import { dialectSections } from './dialect-reference.mjs';
 import { rewriteGenerated, table } from './generated.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
 
 /** @import { ProjectModel } from '../../cli/project-model/types.js' */
 
-/** The page the generated contract tables live on, unless `--file` says otherwise. */
-const DEFAULT_TARGET = 'docs/reference/project-index.md';
 
 /**
  * Element records the collection and the library publish, without test source.
@@ -66,11 +69,11 @@ function code(path) {
 }
 
 /**
- * Every generated block, keyed by the name in its marker.
+ * The project index blocks, keyed by the name in its marker.
  *
  * @returns {Promise<Map<string, string>>}
  */
-async function sections() {
+async function projectSections() {
   const discovered = await apps();
 
   /** @type {ProjectModel[]} */
@@ -138,13 +141,36 @@ async function sections() {
 }
 
 /**
- * @param {{ file?: string, write?: boolean }} [options]
+ * The diagnostic code table, in catalogue order.
+ *
+ * @returns {Map<string, string>}
+ */
+function codeSections() {
+  const rows = catalogEntries().map(([code, summary]) => [`\`${code}\``, summary]);
+  return new Map([['codes', table(['Code', 'Meaning'], rows)]]);
+}
+
+/**
+ * Every page with generated blocks, and what generates them.
+ *
+ * @type {ReadonlyArray<{ page: string, sections: () => Promise<Map<string, string>> | Map<string, string> }>}
+ */
+const PAGES = [
+  { page: 'docs/reference/project-index.md', sections: projectSections },
+  { page: 'docs/reference/template-dialect.md', sections: dialectSections },
+  { page: 'docs/reference/diagnostic-codes.md', sections: codeSections },
+];
+
+/**
+ * Hold one page against its generator.
+ *
+ * @param {string} file
+ * @param {() => Promise<Map<string, string>> | Map<string, string>} sections
+ * @param {boolean} write
  * @returns {Promise<{ diagnostics: Diagnostic[], drifted: string[], text: string | null }>}
  */
-export async function checkReadme(options = {}) {
-  const file = options.file ?? join(REPO, DEFAULT_TARGET);
+async function checkPage(file, sections, write) {
   const text = await readText(file);
-  const write = options.write === true;
   // The absolute path, spelled by cli/diagnostics rather than here. A page inside the
   // repository is reported relative to it and one outside keeps its full path, which is
   // one rule for every check rather than a `show()` helper per tool.
@@ -157,6 +183,48 @@ export async function checkReadme(options = {}) {
   return { diagnostics, drifted, text: out };
 }
 
+/**
+ * Check every generated page, or the one page `file` is a copy of.
+ *
+ * `text` is the rewritten page when one file was checked, and null otherwise.
+ *
+ * @param {{ file?: string, write?: boolean }} [options]
+ * @returns {Promise<{ diagnostics: Diagnostic[], drifted: string[], text: string | null }>}
+ */
+export async function checkReadme(options = {}) {
+  const write = options.write === true;
+
+  if (options.file !== undefined) {
+    const name = basename(options.file);
+    const owner = PAGES.find(({ page }) => basename(page) === name);
+    if (owner === undefined) {
+      return {
+        diagnostics: [
+          error(
+            'docs/unknown-page',
+            `no generator owns a page named ${name}. The pages are ${PAGES.map(({ page }) => basename(page)).join(', ')}.`,
+            { file: options.file },
+          ),
+        ],
+        drifted: [],
+        text: null,
+      };
+    }
+    return checkPage(options.file, owner.sections, write);
+  }
+
+  /** @type {Diagnostic[]} */
+  const diagnostics = [];
+  /** @type {string[]} */
+  const drifted = [];
+  for (const { page, sections } of PAGES) {
+    const checked = await checkPage(join(REPO, page), sections, write);
+    diagnostics.push(...checked.diagnostics);
+    drifted.push(...checked.drifted);
+  }
+  return { diagnostics, drifted, text: null };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const write = process.argv.includes('--write');
   const index = process.argv.indexOf('--file');
@@ -165,6 +233,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const { diagnostics } = await checkReadme({ file, write });
   process.exitCode = report(diagnostics, {
     format: outputFormat(),
-    summary: `The generated sections of ${file ?? DEFAULT_TARGET} come from the project model.`,
+    summary: `The generated sections of ${file ?? 'docs/reference/'} match what generates them.`,
   });
 }

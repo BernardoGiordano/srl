@@ -3,6 +3,9 @@
 The root [README](../README.md) introduces srl and shows how to run it.
 These pages cover the library, its tools, and the decisions behind them.
 
+Both packages ship a copy of these pages under `docs/`, with an `llms.txt`
+index at the package root. `npm run package` writes both.
+
 ## Start here
 
 | Page | What is in it |
@@ -35,6 +38,8 @@ These pages cover the library, its tools, and the decisions behind them.
 | Page | Subject |
 |---|---|
 | [Project index](reference/project-index.md) | Generated inventory of elements, globals, and applications. |
+| [Template dialect](reference/template-dialect.md) | Generated bindings, directives, expressions, and security contexts. |
+| [Diagnostic codes](reference/diagnostic-codes.md) | Generated list of every code `srl check` reports. |
 | [Source layout](reference/source-layout.md) | Directory ownership and dependencies. |
 | [Angular to this](reference/angular-to-this.md) | Names and patterns familiar to Angular users. |
 

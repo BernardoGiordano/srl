@@ -28,6 +28,7 @@ import {
   FOR_HEAD,
   FOR_INDEX_CLAUSE,
   FOR_KEY_CLAUSE,
+  FOR_LOCALS,
   INTERPOLATION,
   parseFragmentHead,
   refusedProperty,
@@ -486,18 +487,12 @@ class ShimBuilder {
 
     const child = new Map(scope);
     child.set(alias, itemId);
-    const indexId = this.id('index');
-    const firstId = this.id('first');
-    const lastId = this.id('last');
-    const countId = this.id('count');
-    child.set('$index', indexId);
-    child.set('$first', firstId);
-    child.set('$last', lastId);
-    child.set('$count', countId);
-    this.line(indent + 1, `const ${indexId}: number = 0;\n`);
-    this.line(indent + 1, `const ${firstId}: boolean = false;\n`);
-    this.line(indent + 1, `const ${lastId}: boolean = false;\n`);
-    this.line(indent + 1, `const ${countId}: number = 0;\n`);
+    for (const local of FOR_LOCALS) {
+      const id = this.id(local.name.slice(1));
+      child.set(local.name, id);
+      this.line(indent + 1, `const ${id}: ${local.type} = ${placeholder(local.type)};\n`);
+    }
+    const indexId = /** @type {string} */ (child.get('$index'));
 
     for (const clause of clauses) {
       const trimmed = clause.trim();
@@ -1016,6 +1011,15 @@ function attribute(node, name) {
   return found === undefined ? undefined : { source: found.value, at: found.at, value: found.value };
 }
 
+/**
+ * An initializer for a declared loop local. Only the declared type matters.
+ *
+ * @param {'number' | 'boolean'} type
+ */
+function placeholder(type) {
+  return type === 'number' ? '0' : 'false';
+}
+
 /** @param {string} name */
 function globalIdentifier(name) {
   return `__global_${name.replace(/[^A-Za-z0-9_$]/gu, '_')}`;
@@ -1291,22 +1295,15 @@ export function templateExpressionMembers(input) {
       );
       const listId = builder.id('completion_list');
       const itemId = builder.id('completion_item');
-      const indexId = builder.id('completion_index');
-      const firstId = builder.id('completion_first');
-      const lastId = builder.id('completion_last');
-      const countId = builder.id('completion_count');
       body.push(`  const ${listId} = ${iterable};\n`);
       body.push(`  const ${itemId} = null as unknown as __Item<typeof ${listId}>;\n`);
-      body.push(`  const ${indexId}: number = 0;\n`);
-      body.push(`  const ${firstId}: boolean = false;\n`);
-      body.push(`  const ${lastId}: boolean = false;\n`);
-      body.push(`  const ${countId}: number = 0;\n`);
       scope.set(loop.alias, itemId);
-      scope.set('$index', indexId);
-      scope.set('$first', firstId);
-      scope.set('$last', lastId);
-      scope.set('$count', countId);
-      if (loop.indexAlias !== undefined) scope.set(loop.indexAlias, indexId);
+      for (const local of FOR_LOCALS) {
+        const id = builder.id(`completion_${local.name.slice(1)}`);
+        body.push(`  const ${id}: ${local.type} = ${placeholder(local.type)};\n`);
+        scope.set(local.name, id);
+      }
+      if (loop.indexAlias !== undefined) scope.set(loop.indexAlias, /** @type {string} */ (scope.get('$index')));
       continue;
     }
     if (fragment === undefined) continue;

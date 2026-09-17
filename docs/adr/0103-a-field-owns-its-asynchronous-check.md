@@ -74,7 +74,7 @@ through with a value nobody has verified. The failure is silent and lands on the
 **Rejected: the validator debounces itself.** The field would only supersede. Every
 application-written check would then repeat the timer and the abort wiring, which is the
 duplication `@core/forms` exists to absorb, which is the same argument the nine-field
-measurement in `known-gaps.md` makes for the rest of the layer.
+customer form made for the rest of the layer.
 
 **Rejected: reusing `resource()`.** It re-runs on demand and holds a settled value, where a
 check re-runs because a value changed and holds a code; `pending` there starts true and

@@ -1144,9 +1144,10 @@ export async function verifyDependencies() {
    * A README under source/ is how a manual starts disagreeing with itself. The one
    * nobody
    * is reading goes stale, and it goes stale in the directory somebody edits first. The
-   * root README and docs/ own durable documentation, and the contract tables under
-   * docs/reference/ are generated from the project model rather than typed. Everything
-   * else belongs in a type, a test, or a check like this one.
+   * root README and docs/ own durable documentation, and the tables under
+   * docs/reference/ are generated from the modules they describe rather than typed.
+   * `npm run package` copies docs/ into each package, outside lib/ and components/.
+   * Everything else belongs in a type, a test, or a check like this one.
    */
   const strayDocs = [...(await walk(LIB, /README\.md$/u)), ...(await walk(COMPONENTS, /README\.md$/u))];
 
