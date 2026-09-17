@@ -96,7 +96,7 @@ import { readText } from '../layout.mjs';
  *   storage: Array<{ name: string, line: number }>,
  *   messages: RawMessageReference[],
  *   literals: Set<string>,
- *   dynamic: Array<{ severity: 'error' | 'note', message: string }>,
+ *   dynamic: Array<{ severity: 'error' | 'warning', line: number, column: number, message: string }>,
  * }} ParsedModule
  */
 
@@ -270,8 +270,9 @@ function readDefineComponent(node, parsed, tree) {
   if (argument === undefined || !ts.isObjectLiteralExpression(argument)) {
     parsed.dynamic.push({
       severity: 'error',
+      ...at(tree, node),
       message:
-        `${at(tree, node)}: defineComponent() is called with ${
+        `defineComponent() is called with ${
           argument === undefined ? 'no argument' : 'something other than an object literal'
         }, so no tool can tell which tag it defines.`,
     });
@@ -333,8 +334,9 @@ function readDefineComponent(node, parsed, tree) {
   if (tag === undefined || className === undefined || !templateLiteral || unreadable.length > 0) {
     parsed.dynamic.push({
       severity: 'error',
+      ...at(tree, node),
       message:
-        `${at(tree, node)}: defineComponent(${tag === undefined ? '' : `"${tag}"`}) declares ${
+        `defineComponent(${tag === undefined ? '' : `"${tag}"`}) declares ${
           unreadable.length > 0 ? unreadable.join(', ') : 'no literal tag or element class'
         }. Static discovery cannot see it, so the template checker, the verifier and the ` +
           'template bundler cannot either.',
@@ -378,9 +380,10 @@ function readCustomElementsDefine(node, parsed, tree) {
     !ts.isIdentifier(classArgument)
   ) {
     parsed.dynamic.push({
-      severity: 'note',
+      severity: 'warning',
+      ...at(tree, node),
       message:
-        `${at(tree, node)}: customElements.define() is called with a computed tag or class, so ` +
+        'customElements.define() is called with a computed tag or class, so ' +
         'no tool can name the element it registers.',
     });
     return;
@@ -1008,15 +1011,15 @@ function resolveSpecifier(specifier, file, prefixes) {
 }
 
 /**
- * `path:line:column`, so a diagnostic about a declaration names the declaration.
+ * Where a declaration starts, 1-based, so a diagnostic about it names the declaration.
  *
  * @param {ts.SourceFile} tree
  * @param {ts.Node} node
- * @returns {string}
+ * @returns {{ line: number, column: number }}
  */
 function at(tree, node) {
   const { line, character } = tree.getLineAndCharacterOfPosition(node.getStart(tree));
-  return `${tree.fileName}:${String(line + 1)}:${String(character + 1)}`;
+  return { line: line + 1, column: character + 1 };
 }
 
 /**

@@ -116,14 +116,16 @@ strings.
 
 ## Static checking
 
-`npm run templates:check` discovers component and template pairs through the
+`srl check templates` discovers component and template pairs through the
 project model. It generates type queries in memory and checks expressions
 against the component's JSDoc and nearby `.d.ts` files. No runtime file
 changes.
 
 The checker covers public members, signal unwrapping, loop locals, branch
 narrowing, event targets, custom-element properties, observed attributes,
-`uses` entries, and unknown tags. Diagnostics point to the authored HTML.
+`uses` entries, and unknown tags. Diagnostics point to the authored HTML, and
+each one carries a code such as `templates/unknown-element`.
+`srl check --codes` explains every code.
 
 A static tool cannot infer every dynamic element declaration. The model marks
 such a surface incomplete and avoids claiming unknown members are absent.

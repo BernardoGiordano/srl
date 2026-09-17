@@ -17,7 +17,6 @@
  * cli/diagnostics/index.mjs owns every way of printing them. ADR-0039, ADR-0072.
  */
 
-import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -40,6 +39,7 @@ import { parseExpression } from '@srljs/core/lib/core/template/expression-parser
 import { error, info, outputFormat, report, warning } from '../diagnostics/index.mjs';
 import { apps, REPO } from '../layout.mjs';
 import { readProject } from '../project-model/index.mjs';
+import { readTsconfig } from './tsconfig.mjs';
 
 /** @import { Diagnostic, Where } from '../diagnostics/types.js' */
 
@@ -74,6 +74,7 @@ const MATHML_ELEMENTS = new Set(
 /** @typedef {{ kind: 'element', tag: string, attributes: Attribute[], children: TemplateNode[], at: number }} ElementNode */
 /** @typedef {{ source: string, at: number }} BindingSource */
 /** @typedef {{ start: number, end: number, template: string, at: number }} SourceMapEntry */
+/** @typedef {{ code: string, at: number, message: string }} Problem */
 /**
  * Attributes any element may carry: HTML's global content attributes, plus `role`.
  *
@@ -108,6 +109,7 @@ const GLOBAL_ATTRIBUTES = new Set(
 /** @typedef {{ module: string, className: string, template: string, available: Set<string> }} Component */
 /** @typedef {{ name: string, dir: string }} Application */
 /** @typedef {{ module: string, exportName: string }} TemplateGlobal */
+/** @typedef {(app: Application) => Promise<import('../project-model/types.js').ProjectModel>} ReadModel */
 
 /**
  * Tags every template may name without declaring anything, and the attributes each one
@@ -302,10 +304,11 @@ function parseAttributes(source, absolute, from) {
  * the model.
  *
  * @param {Application} app
+ * @param {ReadModel} readModel
  * @returns {Promise<{ components: Component[], elements: Map<string, ElementType>, globals: Map<string, TemplateGlobal> }>}
  */
-async function discover(app) {
-  const model = await readProject(app);
+async function discover(app, readModel) {
+  const model = await readModel(app);
 
   /** @type {Map<string, ElementType>} */
   const elements = new Map();
@@ -340,7 +343,7 @@ class ShimBuilder {
   /** @type {GeneratedFile} */ file;
   /** @type {Map<string, string>} */ hostNames = new Map();
   /** @type {Map<string, number>} */ hostOffsets = new Map();
-  /** @type {{ at: number, message: string }[]} */ problems = [];
+  /** @type {Problem[]} */ problems = [];
   counter = 0;
 
   /**
@@ -431,6 +434,7 @@ class ShimBuilder {
         // The runtime refuses this outright (template.js), rather than picking an
         // order. Silently checking only the *if was the checker's oldest lie.
         this.problem(
+          'templates/for-with-if',
           node.at,
           `${this.component.template}: <${node.tag}> carries both *for and *if. ` +
             `Wrap one in an element of its own.`,
@@ -452,7 +456,7 @@ class ShimBuilder {
         continue;
       }
       if (attribute(node, '*else') !== undefined) {
-        this.problem(node.at, `${this.component.template}: *else has no preceding *if`);
+        this.problem('templates/else-without-if', node.at, `${this.component.template}: *else has no preceding *if`);
         continue;
       }
       this.element(node, scope, indent);
@@ -470,7 +474,7 @@ class ShimBuilder {
     const [head = '', ...clauses] = loop.value.split(';');
     const parsed = FOR_HEAD.exec(head);
     if (parsed === null) {
-      this.problem(loop.at, `${this.component.template}: invalid *for expression ${JSON.stringify(loop.value)}`);
+      this.problem('templates/invalid-for', loop.at, `${this.component.template}: invalid *for expression ${JSON.stringify(loop.value)}`);
       return;
     }
     const alias = parsed[1] ?? '';
@@ -511,7 +515,7 @@ class ShimBuilder {
         child.set(indexAlias, indexId);
         continue;
       }
-      this.problem(loop.at, `${this.component.template}: invalid *for clause ${JSON.stringify(trimmed)}`);
+      this.problem('templates/invalid-for-clause', loop.at, `${this.component.template}: invalid *for clause ${JSON.stringify(trimmed)}`);
     }
 
     this.elementBody(node, child, indent + 1, new Set(['*for']));
@@ -524,14 +528,21 @@ class ShimBuilder {
     // that arrives here has no owner. Its children live in a scope nothing
     // supplies, which is why they are not checked in this one.
     if (node.tag === 'template') {
-      this.problem(
-        node.at,
-        attribute(node, '*fragment') === undefined
-          ? `${this.component.template}: <template> has no *fragment. Declare it as ` +
-            '<template *fragment="name(row)"> inside the element that renders it.'
-          : `${this.component.template}: <template *fragment> has no element to belong to. ` +
+      if (attribute(node, '*fragment') === undefined) {
+        this.problem(
+          'templates/template-without-fragment',
+          node.at,
+          `${this.component.template}: <template> has no *fragment. Declare it as ` +
+            '<template *fragment="name(row)"> inside the element that renders it.',
+        );
+      } else {
+        this.problem(
+          'templates/fragment-without-owner',
+          node.at,
+          `${this.component.template}: <template *fragment> has no element to belong to. ` +
             'A fragment is a property of the element it is written inside.',
-      );
+        );
+      }
       return;
     }
     this.checkTag(node);
@@ -540,6 +551,7 @@ class ShimBuilder {
       const syntax = classifyAttributeName(attr.name);
       if (syntax.kind === 'inline-handler') {
         this.problem(
+          'templates/inline-handler',
           attr.at,
           `${this.component.template}: inline event handler attribute ${attr.name} is forbidden. ` +
             `Use (${syntax.event})="handler()".`,
@@ -566,11 +578,12 @@ class ShimBuilder {
         const { name } = classified;
         if (classified.kind === 'inline-handler') {
           this.problem(
+            'templates/inline-handler',
             attr.at,
             `${this.component.template}: inline event attribute ${syntax.target} is forbidden`,
           );
         } else if (classified.kind === 'empty-attribute' || classified.kind === 'empty-property') {
-          this.problem(attr.at, `${this.component.template}: empty ${attr.name} binding`);
+          this.problem('templates/empty-binding', attr.at, `${this.component.template}: empty ${attr.name} binding`);
         } else if (classified.kind === 'boolean') {
           this.checkAttribute(node, attr, name);
           this.line(indent, '__boolean(');
@@ -578,11 +591,12 @@ class ShimBuilder {
           this.file.write(');\n');
         } else if (classified.kind === 'property') {
           if (refusedProperty(name) !== undefined) {
-            this.problem(attr.at, `${this.component.template}: property ${name} is forbidden`);
+            this.problem('templates/refused-property', attr.at, `${this.component.template}: property ${name} is forbidden`);
             continue;
           }
           if (this.elements.get(node.tag)?.state?.includes(name) === true) {
             this.problem(
+              'templates/state-binding',
               attr.at,
               `${this.component.template}: <${node.tag}> declares ${name} as internal reactive ` +
                 'state, not a public input.',
@@ -648,6 +662,7 @@ class ShimBuilder {
       if (declaration === undefined) {
         if (child.tag === 'template') {
           this.problem(
+            'templates/template-without-fragment',
             child.at,
             `${this.component.template}: <template> has no *fragment. Declare it as ` +
               '<template *fragment="name(row)"> inside the element that renders it.',
@@ -659,6 +674,7 @@ class ShimBuilder {
       }
       if (child.tag !== 'template') {
         this.problem(
+          'templates/fragment-outside-template',
           declaration.at,
           `${this.component.template}: <${child.tag}> has *fragment. Only <template> may declare one.`,
         );
@@ -668,6 +684,7 @@ class ShimBuilder {
       const head = parseFragmentHead(declaration.value);
       if (head === undefined) {
         this.problem(
+          'templates/invalid-fragment',
           declaration.at,
           `${this.component.template}: invalid *fragment expression ${JSON.stringify(declaration.value)}`,
         );
@@ -680,6 +697,7 @@ class ShimBuilder {
         securityContextFor(node.tag, property) !== undefined
       ) {
         this.problem(
+          'templates/fragment-on-sink',
           declaration.at,
           `${this.component.template}: *fragment ${property} names a text sink, not a place a fragment can go.`,
         );
@@ -687,6 +705,7 @@ class ShimBuilder {
       }
       if (this.elements.get(node.tag)?.state?.includes(property) === true) {
         this.problem(
+          'templates/state-binding',
           declaration.at,
           `${this.component.template}: <${node.tag}> declares ${property} as internal reactive ` +
             'state, not a public input.',
@@ -694,7 +713,7 @@ class ShimBuilder {
         continue;
       }
       if (seen.has(property)) {
-        this.problem(declaration.at, `${this.component.template}: duplicate *fragment ${property}`);
+        this.problem('templates/duplicate-fragment', declaration.at, `${this.component.template}: duplicate *fragment ${property}`);
         continue;
       }
       seen.add(property);
@@ -800,6 +819,7 @@ class ShimBuilder {
     const property = camelCase(lower);
     if (properties.includes(property)) {
       this.problem(
+        'templates/property-without-attribute',
         attr.at,
         `${this.component.template}: <${node.tag}> declares ${property} as a property with no ` +
           `attribute, so ${attr.name} does nothing. Bind it as [.${lower}].`,
@@ -812,6 +832,7 @@ class ShimBuilder {
     const flat = lower.split('-').join('');
     const near = observed.find((candidate) => candidate.split('-').join('') === flat);
     this.problem(
+      'templates/unknown-attribute',
       attr.at,
       `${this.component.template}: <${node.tag}> does not observe the attribute ${attr.name}. ` +
         (near === undefined
@@ -838,7 +859,7 @@ class ShimBuilder {
       const emitted = this.emit(ast, scope, true, binding.at);
       this.file.mapped(emitted, this.component.template, binding.at);
     } catch (error) {
-      this.problem(binding.at, error instanceof Error ? error.message : String(error));
+      this.problem('templates/expression', binding.at, error instanceof Error ? error.message : String(error));
       this.file.write('undefined');
     }
   }
@@ -929,6 +950,7 @@ class ShimBuilder {
     const known = this.elements.get(node.tag);
     if (known !== undefined) {
       this.problem(
+        'templates/missing-use',
         node.at + 1,
         `${this.component.template}: <${node.tag}> is ${known.className} in ` +
           `${relative(REPO, known.module).split(sep).join('/')}, which this component does not ` +
@@ -936,7 +958,7 @@ class ShimBuilder {
       );
       return;
     }
-    this.problem(node.at + 1, `${this.component.template}: unknown element <${node.tag}>`);
+    this.problem('templates/unknown-element', node.at + 1, `${this.component.template}: unknown element <${node.tag}>`);
   }
 
   /** @param {string} tag */
@@ -971,9 +993,9 @@ class ShimBuilder {
     return `CustomEvent<${detail}>`;
   }
 
-  /** @param {number} at @param {string} message */
-  problem(at, message) {
-    this.problems.push({ at, message });
+  /** @param {string} code @param {number} at @param {string} message */
+  problem(code, at, message) {
+    this.problems.push({ code, at, message });
   }
 
   /** @param {number} indent @param {string} value */
@@ -1046,33 +1068,11 @@ let compiler;
 function compilerState() {
   if (compiler !== undefined) return compiler;
 
-  const configFile = resolve(REPO, 'tsconfig.json');
-
   // Before anything else, because the alternative is worse than useless. A missing
-  // config otherwise arrives as one TypeScript diagnostic per template, counted in
-  // the "N template type error(s)" total, so a repository with no tsconfig.json is
-  // told its templates have type errors, once per application, when the actual
-  // problem is a file that is not there. This is setup rather than a finding.
-  if (!existsSync(configFile)) {
-    throw new Error(
-      `No tsconfig.json at ${REPO}.\n\n` +
-        `The template checker type-checks each template against the same options and the same ` +
-        `JSDoc types as the JavaScript around it, so it needs the configuration that describes ` +
-        `them — including the path mappings that make \`@core/\` resolve, which tsc cannot get ` +
-        `from an import map.\n\n` +
-        `Extend the one the library publishes:\n\n` +
-        `  {\n` +
-        `    "extends": "@srljs/core/tsconfig.base.json",\n` +
-        `    "include": ["<app>/**/*.js"]\n` +
-        `  }\n`,
-    );
-  }
-
-  const config = ts.readConfigFile(configFile, (file) => ts.sys.readFile(file));
-  const parsed =
-    config.error === undefined
-      ? ts.parseJsonConfigFileContent(config.config, ts.sys, REPO)
-      : { options: {}, fileNames: [] };
+  // config otherwise arrives as one TypeScript diagnostic per template, so a repository
+  // with no tsconfig.json is told its templates have type errors, once per application,
+  // when the actual problem is a file that is not there. `readTsconfig()` throws instead.
+  const parsed = readTsconfig();
   const options = {
     ...parsed.options,
     noEmit: true,
@@ -1091,7 +1091,7 @@ function compilerState() {
     overrides: new Map(),
     program: undefined,
     overlay: new Map(),
-    error: config.error,
+    error: parsed.error,
   };
 
   const originalGetSourceFile = state.host.getSourceFile.bind(state.host);
@@ -1522,9 +1522,7 @@ export function checkTemplateSource(input) {
   });
 
   return [
-    ...builder.problems.map((problem) =>
-      error('templates/dialect', problem.message, at(problem.at)),
-    ),
+    ...builder.problems.map((problem) => error(problem.code, problem.message, at(problem.at))),
     ...diagnostics.map((diagnostic) =>
       fromCompiler(diagnostic, at(templateOffset(generatedFile, diagnostic))),
     ),
@@ -1556,12 +1554,12 @@ function isOurs(component) {
   return !inside.split(sep).includes('node_modules');
 }
 
-/** @param {Application} app @returns {Promise<Diagnostic[]>} */
-async function checkApplication(app) {
-  const discovered = await discover(app);
+/** @param {Application} app @param {ReadModel} readModel @returns {Promise<Diagnostic[]>} */
+async function checkApplication(app, readModel) {
+  const discovered = await discover(app, readModel);
   /** @type {Map<string, GeneratedFile>} */
   const generated = new Map();
-  /** @type {{ template: string, source: string, generated: GeneratedFile, problems: { at: number, message: string }[] }[]} */
+  /** @type {{ template: string, source: string, generated: GeneratedFile, problems: Problem[] }[]} */
   const details = [];
   /** @type {Diagnostic[]} */
   const found = [];
@@ -1581,7 +1579,18 @@ async function checkApplication(app) {
       );
       continue;
     }
-    const tree = parseTemplate(source, component.template);
+    let tree;
+    try {
+      tree = parseTemplate(source, component.template);
+    } catch (cause) {
+      found.push(
+        error('templates/syntax', cause instanceof Error ? cause.message : String(cause), {
+          group: app.name,
+          file: component.template,
+        }),
+      );
+      continue;
+    }
     const builder = new ShimBuilder(component, tree, discovered.elements, discovered.globals);
     const built = builder.build();
     const shimPath = resolve(dirname(component.module), `.${component.className}.template-check.ts`);
@@ -1593,7 +1602,7 @@ async function checkApplication(app) {
   for (const detail of details) {
     for (const problem of detail.problems) {
       found.push(
-        error('templates/dialect', problem.message, {
+        error(problem.code, problem.message, {
           group: app.name,
           file: detail.template,
           ...lineAndColumn(detail.source, problem.at),
@@ -1641,23 +1650,42 @@ async function checkApplication(app) {
 }
 
 /**
- * Every template in every selected application, as findings.
+ * The applications `--app` names, or every one.
  *
- * @returns {Promise<Diagnostic[]>}
+ * @returns {Promise<{ selected: Application[], diagnostics: Diagnostic[] }>}
  */
-export async function checkTemplates() {
+async function selection() {
   const all = await apps();
   const appIndex = process.argv.indexOf('--app');
   const requested = appIndex === -1 ? undefined : process.argv[appIndex + 1];
   const selected = requested === undefined ? all : all.filter((app) => app.name === requested);
-  if (selected.length === 0) {
-    return [
+  if (selected.length > 0) return { selected, diagnostics: [] };
+  return {
+    selected,
+    diagnostics: [
       error(
         'templates/unknown-application',
         `Unknown application ${JSON.stringify(requested)}. Found: ${all.map((app) => app.name).join(', ')}`,
       ),
-    ];
-  }
+    ],
+  };
+}
+
+/**
+ * Every template in the given applications, as findings.
+ *
+ * `apps` defaults to the applications the command line selects. `readModel` defaults to
+ * reading each project model afresh, and `srl check` passes one that reads each
+ * application once for every check.
+ *
+ * @param {{ apps?: Application[], readModel?: ReadModel }} [options]
+ * @returns {Promise<Diagnostic[]>}
+ */
+export async function checkTemplates(options = {}) {
+  const { selected, diagnostics } =
+    options.apps === undefined ? await selection() : { selected: options.apps, diagnostics: [] };
+  if (diagnostics.length > 0) return diagnostics;
+  const readModel = options.readModel ?? readProject;
 
   // Once, before any application, and reported as configuration rather than as a
   // stack: nothing below can run without a compiler, and the same missing file would
@@ -1672,7 +1700,7 @@ export async function checkTemplates() {
 
   /** @type {Diagnostic[]} */
   const found = [];
-  for (const app of selected) found.push(...(await checkApplication(app)));
+  for (const app of selected) found.push(...(await checkApplication(app, readModel)));
   return found;
 }
 

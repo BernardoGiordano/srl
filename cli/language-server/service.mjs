@@ -9,12 +9,12 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { relative, sep } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 import { checkTemplateSource, parseTemplate } from '../checks/template-check.mjs';
-import { apps } from '../layout.mjs';
+import { REPO, apps } from '../layout.mjs';
 import { readMessages, referenceFindings, sourceReferences } from '../message-catalog/index.mjs';
 import { readProject } from '../project-model/index.mjs';
 import { AuthoredTemplates } from './authoring.mjs';
@@ -197,11 +197,16 @@ export class SrlLanguageService {
     const model = this.model(uri);
     if (model === undefined) return [];
     const source = await this.source(uri);
-    /** @type {Array<Diagnostic | import('../project-model/types.js').ProjectDiagnostic>} */
+    /** @type {Diagnostic[]} */
     const found = [];
 
+    // A diagnostic spells its file relative to the repository, and `path` is absolute.
     for (const project of this.models) {
-      found.push(...project.diagnostics.filter((diagnostic) => diagnostic.file === path));
+      found.push(
+        ...project.diagnostics.filter(
+          (diagnostic) => diagnostic.file !== null && resolve(REPO, diagnostic.file) === path,
+        ),
+      );
     }
 
     // The keys this buffer names, resolved against the bundles as saved. A misspelled key
@@ -252,7 +257,7 @@ export class SrlLanguageService {
       for (const unavailable of view.unavailableTags(model, component)) {
         found.push({
           severity: 'error',
-          code: 'templates/dialect',
+          code: 'templates/missing-use',
           message: unavailableMessage(path, unavailable),
           group: model.app.name,
           file: path,
@@ -550,9 +555,7 @@ export class SrlLanguageService {
     if (model === undefined || owner === undefined) return [];
     const actions = [];
     for (const diagnostic of diagnostics) {
-      if (diagnostic.code !== 'templates/dialect' || !/Add `[^`]+` to its `uses`/u.test(diagnostic.message)) {
-        continue;
-      }
+      if (diagnostic.code !== 'templates/missing-use') continue;
       const start = offsetAt(source, range.start);
       const view = this.#view(uri, source, model, owner);
       const tag = view.tagAt(start) ?? view.tagAt(Math.min(source.length, start + 1));
@@ -930,8 +933,8 @@ function offsetAt(source, position) {
 }
 
 /**
- * Why a tag written in inline Lit markup will not render, in the checker's own words so
- * that one quick fix answers both authored forms.
+ * Why a tag written in inline Lit markup will not render, in the checker's own words and
+ * under its code, so one quick fix answers both authored forms.
  *
  * @param {string} path @param {import('./authoring.mjs').UnavailableTag} unavailable
  */
@@ -957,10 +960,10 @@ function positionAt(source, offset) {
   return { line, character: before.length - last - 1 };
 }
 
-/** @param {Diagnostic | import('../project-model/types.js').ProjectDiagnostic} diagnostic @param {string} source */
+/** @param {Diagnostic} diagnostic @param {string} source */
 function lspDiagnostic(diagnostic, source) {
-  const line = typeof diagnostic.line === 'number' ? Math.max(0, diagnostic.line - 1) : 0;
-  const character = typeof diagnostic.column === 'number' ? Math.max(0, diagnostic.column - 1) : 0;
+  const line = diagnostic.line === null ? 0 : Math.max(0, diagnostic.line - 1);
+  const character = diagnostic.column === null ? 0 : Math.max(0, diagnostic.column - 1);
   const lineText = source.split('\n')[line] ?? '';
   let end = character;
   while (end < lineText.length && /[^\s"'<>={}]/u.test(lineText[end] ?? '')) end += 1;
@@ -969,21 +972,16 @@ function lspDiagnostic(diagnostic, source) {
   return {
     range: { start: { line, character }, end: { line, character: end } },
     severity,
-    code: 'code' in diagnostic ? diagnostic.code : `project/${diagnostic.kind}`,
+    code: diagnostic.code,
     source: 'srl',
     message: diagnostic.message,
   };
 }
 
-/** @param {Array<Diagnostic | import('../project-model/types.js').ProjectDiagnostic>} diagnostics @returns {Array<Diagnostic | import('../project-model/types.js').ProjectDiagnostic>} */
+/** @param {Diagnostic[]} diagnostics @returns {Diagnostic[]} */
 function uniqueDiagnostics(diagnostics) {
   return uniqueBy(diagnostics, (diagnostic) =>
-    [
-      'code' in diagnostic ? diagnostic.code : diagnostic.kind,
-      diagnostic.message,
-      'line' in diagnostic ? diagnostic.line : '',
-      'column' in diagnostic ? diagnostic.column : '',
-    ].join('\0'),
+    [diagnostic.code, diagnostic.message, diagnostic.line ?? '', diagnostic.column ?? ''].join('\0'),
   );
 }
 

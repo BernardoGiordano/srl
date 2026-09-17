@@ -82,7 +82,9 @@ boundaries have one production implementation and a test adapter.
 | How an incomplete editor template becomes context, scope, typed members and edit ranges | `cli/language-server/semantics.mjs` |
 | Which authoring form a document is written in, what each editor feature may ask of it, and the binding syntax the answer is written in | `cli/language-server/authoring.mjs` — one view over an external srl template or a module's inline Lit templates |
 | A dependency or layering rule | `tools/checks/verify-deps.mjs` |
-| Whether an application's import map still matches the library it installed | `cli/checks/importmap-check.mjs` — the one check a consumer runs, because the failures are blank pages |
+| Whether an application's import map still matches the library it installed | `cli/checks/importmap-check.mjs`, which a consumer runs because the failures are blank pages |
+| Which checks `srl check` and the build run, and the one list they report | `cli/checks/index.mjs`; each check returns `Diagnostic[]` and `cli/diagnostics/` prints them |
+| What each diagnostic code means | `cli/diagnostics/catalog.mjs`, printed by `srl check --codes` |
 | What tsc has to know to resolve `@core/` | `source/tsconfig.base.json` — published, extended rather than copied, resolves into the declaration tree; `source/tsconfig.source.json` resolves the same prefixes into the source for this repository |
 | Whether the published tarballs work when installed | `tools/checks/pack-check.mjs` — runs a real npm install from declared dependencies, scaffolds through the local bin, checks, commits and builds |
 | Whether an installed editor does what the plugins claim | `tools/conformance/` — installs the packed extension into a real editor and drives one scenario list through it |

@@ -24,8 +24,8 @@ import { fileURLToPath } from 'node:url';
 /**
  * Subcommand -> the module that is the program, relative to `cli/`.
  *
- * Flat rather than grouped, with `check` the one exception, because the three checks
- * are a set a repository runs together in CI and none is a verb on its own.
+ * Flat. `srl check` is one command, and the words after it name subjects for the check
+ * runner to parse, like any other tool's arguments.
  *
  * The vendor refresh and the bundle build are absent on purpose. They act on the
  * library's own committed bytes, are meaningful only inside the srl repository, and
@@ -45,9 +45,7 @@ const COMMANDS = {
   'verify-http': '../delivery/verify-http.mjs',
   activate: '../delivery/activate-release.mjs',
   retention: '../delivery/retention.mjs',
-  'check templates': '../checks/template-check.mjs',
-  'check importmap': '../checks/importmap-check.mjs',
-  'check messages': '../checks/message-check.mjs',
+  check: '../checks/index.mjs',
   'language-server': '../language-server/server.mjs',
 };
 
@@ -73,27 +71,29 @@ Development
                             can see
 
 Checks
-  check importmap [--app <name>] [--json]
-                            an application's inline import map against the
-                            installed library: missing entries, hand-edited
-                            ones, hashes that no longer match their bytes, and
-                            the script-src hash a CSP has to allow
-  check templates [--json]  type-check every template against the same JSDoc
-                            types as the JavaScript. Needs a tsconfig.json at
-                            the repository root
-  check messages [--app <name>] [--json] [--write]
-                            every message the source names against the bundles
-                            the application ships: a reference no key answers, a
-                            placeholder a call does not fill, a key present in a
-                            translation and absent from the default locale.
-                            --write adds the unanswered keys to the bundle that
-                            should hold them, each holding its key as its
-                            message, and leaves every existing line alone
+  check [<subject>...] [--app <name>] [--json]
+                            every check in one process, one report and one exit
+                            code. With no subject, all of them:
+                              project    element declarations, uses lists,
+                                         duplicate tags and stylesheets
+                              types      the JavaScript, as tsc --noEmit sees it
+                              templates  every template against the same JSDoc
+                                         types as the JavaScript
+                              importmap  the inline import map against the
+                                         installed library: missing or edited
+                                         entries, stale hashes, and the
+                                         script-src hash a CSP has to allow
+                              messages   every message the source names against
+                                         the bundles the application ships
+                            types and templates need a tsconfig.json at the
+                            repository root
+  check messages --write    add the unanswered keys to the bundle that should
+                            hold them, each holding its key as its message
+  check --codes [--json]    every code a check reports, and what it means
 
-  --json on any of them prints every finding as one document — severity, code,
-  message, file, line, column — instead of a terminal report. Same findings,
-  same exit code; a check returns them as values and this is the second way of
-  printing them
+  --json prints every finding as one document with severity, code, message,
+  file, line and column, instead of a terminal report. The findings and the
+  exit code are the same either way
 
 Delivery
   build [--app <name>] [--out <dir>] [--remote <name>]
@@ -133,7 +133,7 @@ Each command is a module and still runnable by path:
   node node_modules/@srljs/cli/delivery/build.mjs --app web
 `;
 
-const [first, second] = process.argv.slice(2);
+const [first] = process.argv.slice(2);
 
 if (first === undefined || first === '--help' || first === '-h' || first === 'help') {
   process.stdout.write(USAGE);
@@ -146,23 +146,16 @@ if (first === '--version' || first === '-v') {
   process.exit(0);
 }
 
-// `check` takes a second word, and the pair is one key. Consuming both from argv is
-// what lets the tool see the flags it expects and nothing it does not.
-const key = first === 'check' ? `check ${second ?? ''}`.trim() : first;
-const consumed = first === 'check' ? 2 : 1;
-const target = COMMANDS[/** @type {keyof typeof COMMANDS} */ (key)];
+const target = COMMANDS[/** @type {keyof typeof COMMANDS} */ (first)];
 
 if (target === undefined) {
   const known = Object.keys(COMMANDS).join(', ');
   process.stderr.write(
-    first === 'check'
-      ? `srl check needs a subject: ${second === undefined ? 'none given' : `"${second}"`} is ` +
-          `not one. Try \`srl check importmap\` or \`srl check templates\`.\n`
-      : `srl: unknown command "${first}". Known commands: ${known}.\nRun \`srl --help\`.\n`,
+    `srl: unknown command "${first}". Known commands: ${known}.\nRun \`srl --help\`.\n`,
   );
   process.exit(1);
 }
 
 const module = fileURLToPath(new URL(target, import.meta.url));
-process.argv = [process.argv[0] ?? process.execPath, module, ...process.argv.slice(2 + consumed)];
+process.argv = [process.argv[0] ?? process.execPath, module, ...process.argv.slice(3)];
 await import(module);

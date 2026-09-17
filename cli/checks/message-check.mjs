@@ -42,6 +42,7 @@ import {
 import { readProject } from '../project-model/index.mjs';
 
 /** @import { Diagnostic } from '../diagnostics/types.js' */
+/** @import { ProjectModel } from '../project-model/types.js' */
 
 /** @param {string} path */
 function show(path) {
@@ -72,20 +73,27 @@ async function selection() {
 }
 
 /**
- * Check every selected application's messages.
+ * Check the given applications' messages.
  *
- * @param {{ write?: boolean }} [options] `write` adds unanswered keys to the bundle that
- *   should hold them before reporting, so the run says what it wrote rather than what it
- *   would have written.
+ * @param {{
+ *   write?: boolean,
+ *   apps?: Array<{ name: string, dir: string }>,
+ *   readModel?: (app: { name: string, dir: string }) => Promise<ProjectModel>,
+ * }} [options]
+ *   `write` adds unanswered keys to the bundle that should hold them before reporting, so
+ *   the run says what it wrote rather than what it would have written. `apps` defaults
+ *   to the applications the command line selects, and `readModel` to a fresh read.
  * @returns {Promise<Diagnostic[]>}
  */
 export async function checkMessages(options = {}) {
-  const { selected, diagnostics } = await selection();
+  const { selected, diagnostics } =
+    options.apps === undefined ? await selection() : { selected: options.apps, diagnostics: [] };
+  const readModel = options.readModel ?? readProject;
   /** @type {Diagnostic[]} */
   const found = [...diagnostics];
 
   for (const app of selected) {
-    const model = await readProject(app);
+    const model = await readModel(app);
     let messages = await readMessages(app, model);
 
     if (options.write === true) {

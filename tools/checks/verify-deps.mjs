@@ -891,22 +891,8 @@ export async function verifyDependencies() {
      */
     const model = await readProject(app);
 
-    for (const problem of projectErrors(model)) {
-      // A field covering a method is readable and wrong, which is a different finding from
-      // a declaration no static tool could read at all.
-      const code =
-        problem.kind === 'shadowed-lifecycle'
-          ? 'deps/shadowed-member'
-          : problem.kind === 'stylesheet'
-            ? 'deps/stylesheet'
-            : 'deps/unreadable-declaration';
-      refuse(code, problem.message, {
-        group,
-        file: problem.file,
-        line: problem.line ?? null,
-        column: problem.column ?? null,
-      });
-    }
+    // Already findings, under the model's own `project/` codes and this application's name.
+    found.push(...projectErrors(model));
 
     const withTemplates = [...model.elements.values()].filter((record) => record.template !== null);
     for (const record of missingTemplates(model)) {

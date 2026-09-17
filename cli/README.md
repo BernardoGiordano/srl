@@ -44,15 +44,17 @@ can discover it.
 |---|---|
 | `srl new web` | Scaffold an application. |
 | `srl serve --app web --open` | Serve source, library, and components on one origin with history fallback and live updates. |
-| `srl check importmap` | Check mappings and integrity hashes against the installed library. |
-| `srl check templates` | Check template bindings against JSDoc types without compiling the app. |
-| `srl check messages` | Check message keys, locales, and placeholders. Add `--write` to insert missing keys. |
+| `srl check` | Check the project model, types, templates, import map, and messages in one run. |
+| `srl check templates importmap` | Run only the named checks: `project`, `types`, `templates`, `importmap`, or `messages`. |
+| `srl check messages --write` | Add missing message keys to the default-locale bundle. |
 | `srl build --app web` | Produce minified, hash-named assets, checked templates, CSS, and an artifact report. |
 | `srl model --app web --json` | List discovered elements, globals, and applications. |
 | `srl language-server` | Start the language server over stdio for an editor client. |
 
-Checks accept `--json` for diagnostics with stable codes and file positions.
-`srl --help` lists the remaining commands and options. The
+`srl check --json` prints every finding with a stable code and a file
+position, and exits non-zero when any finding is an error.
+`srl check --codes` explains each code. `srl --help` lists the remaining
+commands and options. The
 [editor guide](https://github.com/BernardoGiordano/srl/blob/main/docs/guide/editor-support.md)
 covers VS Code, WebStorm, and generic LSP clients.
 
@@ -102,15 +104,14 @@ Add another path to `include` for a second application.
 ## Production build
 
 The build reads the application's import map and refuses imports it cannot
-resolve. It checks templates and writes minified JavaScript chunks, CSS,
-templates, integrity pins, and `dist/<app>/artifact.json`. The report lists
+resolve. It runs the project model and template checks, refuses on any error,
+and writes minified JavaScript chunks, CSS, templates, integrity pins, and
+`dist/<app>/artifact.json`. The report lists
 the emitted files, chunk graph, sizes, and security metadata. The app needs
 at least one dynamic import so it produces more than an entry chunk.
 
 ```bash
-npx --no-install srl check importmap
-npx --no-install srl check templates
-npx --no-install srl check messages
+npx --no-install srl check
 git add .
 git commit -m "Create web application"
 npx --no-install srl build --app web

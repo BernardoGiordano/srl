@@ -330,7 +330,7 @@ export async function emitApplication(root, options = {}) {
         warning(
           'new/tsconfig-kept',
           `already exists and was left alone. Add "${name}/**/*.js" to its \`include\` so ` +
-            `\`srl check templates\` covers the new application.`,
+            `\`srl check\` covers the new application.`,
           { file, group: name },
         ),
       );

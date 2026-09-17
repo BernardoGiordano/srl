@@ -279,11 +279,14 @@ async function checkApplication(app, fragment) {
 }
 
 /**
- * Check every selected application against the installed library.
+ * Check the given applications against the installed library.
  *
+ * `apps` defaults to the applications the command line selects.
+ *
+ * @param {{ apps?: Array<{ name: string, dir: string }> }} [options]
  * @returns {Promise<Diagnostic[]>}
  */
-export async function checkImportMaps() {
+export async function checkImportMaps(options = {}) {
   const fragment = await importMapFragment();
 
   if (!(await exists(IMPORT_MAP_FILE))) {
@@ -296,7 +299,8 @@ export async function checkImportMaps() {
     ];
   }
 
-  const { selected, diagnostics } = await selection();
+  const { selected, diagnostics } =
+    options.apps === undefined ? await selection() : { selected: options.apps, diagnostics: [] };
   /** @type {Diagnostic[]} */
   const found = [...diagnostics];
   for (const app of selected) found.push(...(await checkApplication(app, fragment)));

@@ -71,8 +71,9 @@ application's source directory.
 ## Toolchain
 
 `cli/project-model/` parses application source once for the template checker,
-message catalog, language server, and build. `cli/checks/` exposes the static
-checks. `cli/origin/` resolves URLs against the same mounts for the dev server,
+message catalog, language server, and build. `cli/checks/` holds the static
+checks, and `cli/checks/index.mjs` runs them together as `srl check`.
+`cli/diagnostics/catalog.mjs` explains every code they report. `cli/origin/` resolves URLs against the same mounts for the dev server,
 benchmark origin, and tests.
 
 `cli/dev/` serves source and delivers edits to open pages. `cli/delivery/`

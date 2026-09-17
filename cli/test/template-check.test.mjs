@@ -244,18 +244,59 @@ void test('a finding carries the code, file, line and column an editor needs', (
   assert.ok((found?.column ?? 0) > 1);
 });
 
-void test('a dialect refusal is a finding of its own kind', () => {
-  const [found] = checkTemplateSource({
+void test('each dialect refusal carries a code of its own', () => {
+  // A quick fix, a filter or a test names the problem by code, so two problems never
+  // share one and no caller has to read the sentence to tell them apart.
+  const cases = /** @type {Array<[string, string]>} */ ([
+    ['templates/for-with-if', '<p *for="row of rows" *if="busy"></p>'],
+    ['templates/else-without-if', '<p *else></p>'],
+    ['templates/invalid-for', '<p *for="rows"></p>'],
+    ['templates/invalid-for-clause', '<p *for="row of rows; sorted"></p>'],
+    ['templates/template-without-fragment', '<div><template></template></div>'],
+    ['templates/fragment-without-owner', '<template *fragment="cell(row)"></template>'],
+    ['templates/inline-handler', '<button onclick="choose(1)"></button>'],
+    ['templates/inline-handler', '<button [onclick]="choose"></button>'],
+    ['templates/empty-binding', '<p []="busy"></p>'],
+    ['templates/refused-property', '<div [.outer-h-t-m-l]="trustedHtml"></div>'],
+    ['templates/state-binding', '<test-child [.internal]="rows"></test-child>'],
+    ['templates/state-binding', '<test-child><template *fragment="internal(row)"></template></test-child>'],
+    ['templates/fragment-outside-template', '<test-child><p *fragment="cell(row)"></p></test-child>'],
+    ['templates/invalid-fragment', '<test-child><template *fragment="cell"></template></test-child>'],
+    ['templates/fragment-on-sink', '<div><template *fragment="inner-h-t-m-l(row)"></template></div>'],
+    [
+      'templates/duplicate-fragment',
+      '<test-child><template *fragment="typed-cell(row)"></template>' +
+        '<template *fragment="typed-cell(row)"></template></test-child>',
+    ],
+    ['templates/property-without-attribute', '<test-child items="x"></test-child>'],
+    ['templates/unknown-attribute', '<test-child labell="x"></test-child>'],
+    ['templates/expression', '<p>{{ rows.constructor }}</p>'],
+    ['templates/unknown-element', '<mystery-widget></mystery-widget>'],
+  ]);
+
+  for (const [code, source] of cases) {
+    const codes = checkTemplateSource({
+      module,
+      className: 'TemplateCheckHost',
+      template: 'fixture.html',
+      source,
+      elements: child,
+    })
+      .map((diagnostic) => diagnostic.code)
+      .filter((found) => !/^templates\/ts\d+$/u.test(found));
+    assert.deepEqual(codes, [code], source);
+  }
+
+  const [missing] = checkTemplateSource({
     module,
     className: 'TemplateCheckHost',
     template: 'fixture.html',
-    source: '<button [onclick]="choose"></button>',
+    source: '<test-child></test-child>',
     elements: child,
+    available: new Set(),
   });
-
-  assert.equal(found?.code, 'templates/dialect');
-  assert.equal(found?.line, 1);
-  assert.match(String(found?.message), /forbidden/u);
+  assert.equal(missing?.code, 'templates/missing-use');
+  assert.equal(missing?.line, 1);
 });
 
 void test('an unsaved JavaScript buffer overrides the file on disk', async () => {

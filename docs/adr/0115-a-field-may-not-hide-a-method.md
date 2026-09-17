@@ -48,11 +48,11 @@ class passes, so a broken class reports itself on every instance rather than on 
 **The static model answers from the source, at the line that declared the field.**
 `parse.mjs` records the instance methods and fields each class declares under its own name.
 `index.mjs` resolves methods across inheritance the way it already resolves reactive
-properties, and reports a field that covers one as a `shadowed-lifecycle` diagnostic with a
-line and a column. `npm run verify` fails on it as `deps/shadowed-member`, and the language
+properties, and reports a field that covers one as a `project/shadowed-lifecycle` diagnostic
+with a line and a column. `npm run verify` and `srl check` fail on it, and the language
 server publishes it while the file is open, which is where an author actually meets it.
 
-**A field whose value static analysis cannot follow is a note, never an error.**
+**A field whose value static analysis cannot follow is a warning, never an error.**
 `refresh = chosen` may well be a function. Reporting a working component as broken is how
 a diagnostic teaches authors to ignore it, so the model says what it saw and what it could
 not resolve, in keeping with the explicit unknown states of
@@ -96,8 +96,8 @@ production as well as development. A page defining eighty components pays eighty
 loops, once, at the connect of each first instance, rather than per element, which is what
 a windowed table with a thousand rows would have made expensive.
 
-`ProjectDiagnostic` now carries an optional `line` and `column`, and the JSON projection
-emits them as null when absent. Every existing diagnostic keeps the shape it had.
+A model diagnostic carries a `line` and a `column` when it is about one declaration, and
+null for both when it is about a whole file. The JSON projection emits the same.
 
 The static check sees fields and not constructor assignments. `this.render = 'x'` creates
 the same own property and is caught only by the runtime: following an assignment through a
@@ -112,4 +112,4 @@ report a collision for. The runtime sees the resolved name and catches it.
 which would turn the rule into an opt-out rather than a refusal. A base class outside
 `ROOT_METHODS` that the walk stops at, which would need an entry there rather than a new
 mechanism. Or full type information in the model, which would resolve `refresh = chosen`
-and turn today's note into an answer.
+and turn today's warning into an answer.

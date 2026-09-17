@@ -34,6 +34,7 @@ import { parseFragment } from 'parse5';
 
 import { StylesheetScopeError, scopeStylesheet } from '@srljs/core/lib/core/elements/style-scope.js';
 import { INTERPOLATION } from '@srljs/core/lib/core/template/dialect.js';
+import { error, warning } from '../diagnostics/index.mjs';
 import { REPO, apps, exists, readText, repoPath, selectedApp, walk } from '../layout.mjs';
 import {
   COMPONENTS,
@@ -45,9 +46,10 @@ import {
 import { parseModule } from './parse.mjs';
 
 /**
- * @import { Application, ElementRecord, ModuleRecord, ProjectDiagnostic, ProjectIndex,
+ * @import { Application, ElementRecord, ModelFinding, ModuleRecord, ProjectIndex,
  *   ProjectModel, TemplateRecord, UsesEntry } from './types.js'
  */
+/** @import { Diagnostic } from '../diagnostics/types.js' */
 
 /** @typedef {{
  *   properties: Map<string, import('./types.js').ElementProperty>,
@@ -103,8 +105,8 @@ export async function readProject(app, options = {}) {
   const elements = new Map();
   /** @type {Map<string, import('./types.js').TemplateGlobal>} */
   const globals = new Map();
-  /** @type {ProjectDiagnostic[]} */
-  const diagnostics = [];
+  /** @type {ModelFinding[]} */
+  const findings = [];
   /** @type {Array<{ record: ElementRecord, uses: string[] }>} */
   const pending = [];
 
@@ -122,13 +124,15 @@ export async function readProject(app, options = {}) {
     });
 
     for (const entry of parsed.dynamic) {
-      diagnostics.push({
-        kind: 'dynamic',
+      findings.push({
+        code: 'project/dynamic',
         // A suite declaring something unreadable is a suite doing its job, since
         // several assert that the runtime rejects a definition a static tool could
         // never have accepted.
-        severity: isTestSource(parsed.path, roots) ? 'note' : entry.severity,
+        severity: isTestSource(parsed.path, roots) ? 'warning' : entry.severity,
         file: parsed.path,
+        line: entry.line,
+        column: entry.column,
         message: entry.message,
       });
     }
@@ -178,9 +182,9 @@ export async function readProject(app, options = {}) {
         // The runtime refuses this outright, because a tag is one component's
         // identity. A second claim is a rename that left the old declaration
         // behind, or two modules that will fight over whichever loads first.
-        diagnostics.push({
-          kind: 'duplicate-tag',
-          severity: isTestSource(parsed.path, roots) ? 'note' : 'error',
+        findings.push({
+          code: 'project/duplicate-tag',
+          severity: isTestSource(parsed.path, roots) ? 'warning' : 'error',
           file: parsed.path,
           message:
             `<${definition.tag}> is declared by both ${show(existing.module)} ` +
@@ -196,9 +200,9 @@ export async function readProject(app, options = {}) {
   }
 
   for (const finding of resolveElementSurfaces(elements, parsedModules)) {
-    diagnostics.push({
+    findings.push({
       ...finding,
-      severity: isTestSource(finding.file, roots) ? 'note' : finding.severity,
+      severity: isTestSource(finding.file, roots) ? 'warning' : finding.severity,
     });
   }
 
@@ -216,9 +220,9 @@ export async function readProject(app, options = {}) {
       const entry = { className, module, tag: target?.tag ?? null };
       record.uses.push(entry);
       if (target === undefined) {
-        diagnostics.push({
-          kind: 'unresolved-uses',
-          severity: isTestSource(record.module, roots) ? 'note' : 'error',
+        findings.push({
+          code: 'project/unresolved-uses',
+          severity: isTestSource(record.module, roots) ? 'warning' : 'error',
           file: record.module,
           message:
             `<${record.tag}> lists ${className} in \`uses\`, but nothing in ${show(module)} ` +
@@ -260,9 +264,30 @@ export async function readProject(app, options = {}) {
 
   const templates = await readTemplates(app, elements, roots);
   await readProjectionSlots(elements);
-  await readStylesheets(elements, diagnostics, roots);
+  await readStylesheets(elements, findings, roots);
 
+  const diagnostics = findings.map((finding) => asDiagnostic(app, finding));
   return { app, prefixes, entry, modules, elements, globals, templates, diagnostics };
+}
+
+/**
+ * A model finding as a `Diagnostic`.
+ *
+ * The conversion comes last because the test-source rule above needs absolute paths,
+ * and cli/diagnostics shortens them.
+ *
+ * @param {Application} app
+ * @param {ModelFinding} finding
+ * @returns {Diagnostic}
+ */
+function asDiagnostic(app, finding) {
+  const make = finding.severity === 'error' ? error : warning;
+  return make(finding.code, finding.message, {
+    group: app.name,
+    file: finding.file,
+    line: finding.line,
+    column: finding.column,
+  });
 }
 
 /** Platform/framework roots add no application-declared reactive inputs of their own. */
@@ -330,12 +355,12 @@ ROOT_METHODS.set('LitElement', new Set([...REACTIVE_METHODS, 'render']));
  *
  * @param {Map<string, ElementRecord>} elements
  * @param {Map<string, Awaited<ReturnType<typeof parseModule>>>} parsedModules
- * @returns {ProjectDiagnostic[]}
+ * @returns {ModelFinding[]}
  */
 function resolveElementSurfaces(elements, parsedModules) {
   /** @type {Map<string, ResolvedSurface>} */
   const cache = new Map();
-  /** @type {ProjectDiagnostic[]} */
+  /** @type {ModelFinding[]} */
   const findings = [];
   /** Classes already reported on: one shared base class serves many tags. @type {Set<string>} */
   const reported = new Set();
@@ -463,7 +488,7 @@ function resolveElementSurfaces(elements, parsedModules) {
  * runtime raises on the first instance, moved to the line that declared the field.
  * ADR-0115.
  *
- * A field whose value no static read can resolve is a note, never an error. The value may
+ * A field whose value no static read can resolve is a warning, never an error. The value may
  * well be a function, and calling a working component broken is how a diagnostic teaches
  * authors to ignore it.
  *
@@ -471,16 +496,16 @@ function resolveElementSurfaces(elements, parsedModules) {
  * @param {Set<string>} methods
  * @param {string} module
  * @param {string} className
- * @returns {ProjectDiagnostic[]}
+ * @returns {ModelFinding[]}
  */
 function fieldsHiding(fields, methods, module, className) {
-  /** @type {ProjectDiagnostic[]} */
+  /** @type {ModelFinding[]} */
   const found = [];
   for (const field of fields) {
     if (field.callable === true || !methods.has(field.name)) continue;
-    /** @type {Pick<ProjectDiagnostic, 'kind' | 'file' | 'line' | 'column'>} */
+    /** @type {Pick<ModelFinding, 'code' | 'file' | 'line' | 'column'>} */
     const where = {
-      kind: 'shadowed-lifecycle',
+      code: 'project/shadowed-lifecycle',
       file: module,
       line: field.line,
       column: field.column,
@@ -488,7 +513,7 @@ function fieldsHiding(fields, methods, module, className) {
     if (field.callable === null) {
       found.push({
         ...where,
-        severity: 'note',
+        severity: 'warning',
         message:
           `${className} declares \`${field.name}\` as a field, and it inherits a ` +
           `\`${field.name}()\` method of that name. A field is an own property, so it hides ` +
@@ -589,19 +614,19 @@ async function readProjectionSlots(elements) {
  * rule both of them would refuse is reported at the line that wrote it. ADR-0119.
  *
  * @param {Map<string, ElementRecord>} elements
- * @param {ProjectDiagnostic[]} diagnostics
+ * @param {ModelFinding[]} findings
  * @param {string[]} roots
  */
-async function readStylesheets(elements, diagnostics, roots) {
+async function readStylesheets(elements, findings, roots) {
   /** @type {Map<string, string>} */
   const owners = new Map();
   for (const record of elements.values()) {
     if (record.stylesheet === null) continue;
-    const severity = isTestSource(record.module, roots) ? 'note' : 'error';
+    const severity = isTestSource(record.module, roots) ? 'warning' : 'error';
 
     if (record.template === null) {
-      diagnostics.push({
-        kind: 'stylesheet',
+      findings.push({
+        code: 'project/stylesheet-without-template',
         severity,
         file: record.module,
         message:
@@ -613,8 +638,8 @@ async function readStylesheets(elements, diagnostics, roots) {
 
     const owner = owners.get(record.stylesheet);
     if (owner !== undefined) {
-      diagnostics.push({
-        kind: 'stylesheet',
+      findings.push({
+        code: 'project/shared-stylesheet',
         severity,
         file: record.module,
         message:
@@ -631,8 +656,8 @@ async function readStylesheets(elements, diagnostics, roots) {
       scopeStylesheet(record.tag, await readText(record.stylesheet), record.stylesheet);
     } catch (cause) {
       if (!(cause instanceof StylesheetScopeError)) throw cause;
-      diagnostics.push({
-        kind: 'stylesheet',
+      findings.push({
+        code: 'project/stylesheet-scope',
         severity,
         file: record.stylesheet,
         line: cause.line,
@@ -872,14 +897,16 @@ export function projectIndex(model) {
       })),
     diagnostics: model.diagnostics
       .map((diagnostic) => ({
-        kind: diagnostic.kind,
+        code: diagnostic.code,
         severity: diagnostic.severity,
-        file: repoPath(diagnostic.file),
-        line: diagnostic.line ?? null,
-        column: diagnostic.column ?? null,
+        file: diagnostic.file,
+        line: diagnostic.line,
+        column: diagnostic.column,
         message: diagnostic.message.split(REPO + sep).join(''),
       }))
-      .sort((left, right) => `${left.file}${left.message}`.localeCompare(`${right.file}${right.message}`)),
+      .sort((left, right) =>
+        `${left.file ?? ''}${left.message}`.localeCompare(`${right.file ?? ''}${right.message}`),
+      ),
   };
 }
 
@@ -964,7 +991,7 @@ export function describeElement(model, tag) {
  * framework registers elements or what a suite deliberately declared wrong.
  *
  * @param {ProjectModel} model
- * @returns {ProjectDiagnostic[]}
+ * @returns {Diagnostic[]}
  */
 export function projectErrors(model) {
   return model.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
@@ -972,7 +999,8 @@ export function projectErrors(model) {
 
 /**
  * Test source, meaning a suite or anything inside a `test/` directory of the project
- * it belongs to.
+ * it belongs to. Exported for `srl check`, which applies the same rule to one
+ * application's warnings.
  *
  * Relative to the root the file was found under, never absolute, and that matters.
  * This repository keeps the model's own fixture projects in `cli/test/fixtures`,
@@ -984,7 +1012,7 @@ export function projectErrors(model) {
  * @param {readonly string[]} roots
  * @returns {boolean}
  */
-function isTestSource(file, roots) {
+export function isTestSource(file, roots) {
   const root = roots.find((candidate) => file.startsWith(candidate + sep)) ?? REPO;
   const inside = relative(root, file);
   return inside.split(sep).includes('test') || inside.endsWith('.test.js');

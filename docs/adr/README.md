@@ -90,6 +90,7 @@ Numbers are permanent and never reused, so the index has gaps.
 | [ADR-0117](0117-a-message-reference-is-resolved-against-one-catalog.md) | A message reference is resolved against one catalog | accepted | `cli/message-catalog/`, `cli/checks/message-check.mjs`, `cli/project-model/parse.mjs`, `tools/checks/verify-deps.mjs`, `cli/language-server/service.mjs` |
 | [ADR-0118](0118-a-record-keyed-by-outside-data-has-no-prototype.md) | A record keyed by outside data has no prototype | accepted | `source/lib/core/localization/i18n.js`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/http/client.js`, `source/lib/core/forms/group.js`, `source/lib/test/localization/i18n.test.js`, `source/lib/test/remotes/manifest-policy.test.js`, `source/lib/test/http/client.test.js`, `source/lib/test/forms/forms.test.js` |
 | [ADR-0119](0119-an-element-stylesheet-reaches-only-that-element.md) | An Element's stylesheet reaches only that Element | accepted | `source/lib/core/elements/style-scope.js`, `source/lib/core/elements/stylesheet.js`, `source/lib/core/elements/element-defaults.js`, `source/lib/core/elements/component.js`, `source/components/style.css`, `cli/delivery/build.mjs`, `cli/project-model/parse.mjs`, `tools/checks/verify-deps.mjs` |
+| [ADR-0120](0120-one-command-runs-every-check.md) | One command runs every check | accepted | `cli/checks/`, `cli/diagnostics/catalog.mjs`, `cli/project-model/`, `cli/language-server/service.mjs`, `cli/delivery/build.mjs`, `cli/bin/srl.mjs`, `tools/checks/verify-deps.mjs` |
 
 <!-- /generated:adr-index -->
 

@@ -32,9 +32,11 @@ import { build as viteBuild } from 'vite';
 
 import { scopeStylesheet } from '@srljs/core/lib/core/elements/style-scope.js';
 import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
+import { checkProject } from '../checks/index.mjs';
+import { errors, formatText } from '../diagnostics/index.mjs';
 import { REPO, readText, selectedApp, walk } from '../layout.mjs';
 import { extractImportMap, PACKAGE, urlToFile } from '../package/interface.mjs';
-import { projectErrors, readProject } from '../project-model/index.mjs';
+import { readProject } from '../project-model/index.mjs';
 import {
   PUBLIC,
   REPORT,
@@ -127,18 +129,11 @@ export async function buildArtifact({
   const root = validateOutput(outDir, app);
   const normalizedRelease = normalizeRelease(release, app);
   const model = await readProject(app);
-  const errors = projectErrors(model);
 
   if (model.entry === null) {
     throw artifactError(app, 'model', 'index.html has no root-absolute module entry.');
   }
-  if (errors.length > 0) {
-    throw artifactError(
-      app,
-      'model',
-      errors.map((diagnostic) => diagnostic.message).join('\n'),
-    );
-  }
+  await refuseFindings(app, model);
   const source = await sourceManifest(app);
   const composition = composeRemotes(app, source.admitted, remotes);
 
@@ -442,14 +437,7 @@ export async function buildRemoteArtifact({
   }
 
   const model = await readProject(app);
-  const errors = projectErrors(model);
-  if (errors.length > 0) {
-    throw artifactError(
-      app,
-      'model',
-      errors.map((diagnostic) => diagnostic.message).join('\n'),
-    );
-  }
+  await refuseFindings(app, model);
 
   const parent = dirname(root);
   await mkdir(parent, { recursive: true });
@@ -2627,6 +2615,32 @@ async function exists(path) {
  */
 function artifactError(app, phase, detail, options) {
   return new Error(`artifact:${app.name}:${phase}: ${detail}`, options);
+}
+
+/**
+ * The `srl check` subjects a build runs before it writes anything.
+ *
+ * A finding in the project model or in a template ships a page that renders wrong, and
+ * the bundler would not notice either. Types, the import map and messages stay with
+ * `srl check`, which a repository runs before it builds.
+ */
+const BUILD_CHECKS = /** @type {const} */ (['project', 'templates']);
+
+/**
+ * Refuse the build when a build check finds an error, naming every error.
+ *
+ * @param {BuildApplication} app
+ * @param {import('../project-model/types.js').ProjectModel} model
+ */
+async function refuseFindings(app, model) {
+  const found = errors(
+    await checkProject({
+      subjects: BUILD_CHECKS,
+      apps: [app],
+      readModel: () => Promise.resolve(model),
+    }),
+  );
+  if (found.length > 0) throw artifactError(app, 'check', formatText(found).err.trim());
 }
 
 /** @param {BuildApplication} app @returns {Promise<ReleaseInput>} */

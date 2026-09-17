@@ -80,15 +80,17 @@ void test('a stylesheet is the module sibling, and only when `styles: true` says
 
 void test('a stylesheet the browser and the build would refuse is an error at its line', async () => {
   const model = await fixtureProject(APP_A);
-  const found = model.diagnostics.filter((diagnostic) => diagnostic.kind === 'stylesheet');
+  const found = model.diagnostics.filter((diagnostic) => diagnostic.code.includes('stylesheet'));
 
-  const refused = found.find((diagnostic) => diagnostic.file.endsWith('styled-refused.css'));
+  const refused = found.find((diagnostic) => diagnostic.file?.endsWith('styled-refused.css'));
+  assert.equal(refused?.code, 'project/stylesheet-scope');
   assert.equal(refused?.severity, 'error');
   assert.equal(refused?.line, 2);
   assert.equal(refused?.column, 3);
   assert.match(refused?.message ?? '', /<fx-styled-refused> uses `@apply`, a Tailwind directive/u);
 
-  const headless = found.find((diagnostic) => diagnostic.file.endsWith('styled-headless.js'));
+  const headless = found.find((diagnostic) => diagnostic.file?.endsWith('styled-headless.js'));
+  assert.equal(headless?.code, 'project/stylesheet-without-template');
   assert.equal(headless?.severity, 'error');
   assert.match(headless?.message ?? '', /`styles: true` and `template: false`/u);
 
@@ -132,7 +134,7 @@ void test('`uses` resolves through the import that brought the class in', async 
 void test('a `uses` entry naming a class nothing defines fails verification', async () => {
   const model = await fixtureProject(APP_A);
   const unresolved = projectErrors(model).filter(
-    (diagnostic) => diagnostic.kind === 'unresolved-uses',
+    (diagnostic) => diagnostic.code === 'project/unresolved-uses',
   );
 
   assert.equal(unresolved.length, 1);
@@ -143,7 +145,7 @@ void test('a `uses` entry naming a class nothing defines fails verification', as
 void test('two modules claiming one tag is an error, and the first one wins', async () => {
   const model = await fixtureProject(APP_A);
   const duplicates = projectErrors(model).filter(
-    (diagnostic) => diagnostic.kind === 'duplicate-tag',
+    (diagnostic) => diagnostic.code === 'project/duplicate-tag',
   );
 
   assert.equal(duplicates.length, 1);
@@ -153,7 +155,7 @@ void test('two modules claiming one tag is an error, and the first one wins', as
 
 void test('a declaration static analysis cannot read is an error, not a silent skip', async () => {
   const model = await fixtureProject(APP_A);
-  const dynamic = model.diagnostics.filter((diagnostic) => diagnostic.kind === 'dynamic');
+  const dynamic = model.diagnostics.filter((diagnostic) => diagnostic.code === 'project/dynamic');
 
   const errors = dynamic.filter((diagnostic) => diagnostic.severity === 'error');
   assert.equal(errors.length, 2, dynamic.map((one) => one.message).join('\n'));
@@ -163,26 +165,29 @@ void test('a declaration static analysis cannot read is an error, not a silent s
     /something other than an object literal/u,
   );
 
-  // The bare registration is the mechanism rather than a declaration, so it is a note
+  // Each one names the line of the declaration rather than spelling it into the message.
+  assert.ok(dynamic.every((diagnostic) => diagnostic.line !== null && diagnostic.column !== null));
+
+  // The bare registration is the mechanism rather than a declaration, so it is a warning
   // with no tag.
-  const notes = dynamic.filter((diagnostic) => diagnostic.severity === 'note');
-  assert.ok(notes.length >= 1);
+  const warnings = dynamic.filter((diagnostic) => diagnostic.severity === 'warning');
+  assert.ok(warnings.length >= 1);
   assert.equal(model.elements.get('fx-computed'), undefined);
 
   // Test source declares invalid things on purpose, and that may never fail a build.
   // The check that decides it is relative to the project root, because this fixture
   // project itself lives under a directory called `test`.
   const fromTests = model.diagnostics.filter((diagnostic) =>
-    diagnostic.file.includes(join('src', 'test')),
+    diagnostic.file?.includes('src/test/'),
   );
   assert.ok(fromTests.length > 0);
-  assert.ok(fromTests.every((diagnostic) => diagnostic.severity === 'note'));
+  assert.ok(fromTests.every((diagnostic) => diagnostic.severity === 'warning'));
 });
 
 void test('a field that hides a method is an error, at the line that declared it', async () => {
   const model = await fixtureProject(APP_A);
   const hidden = model.diagnostics.filter(
-    (diagnostic) => diagnostic.kind === 'shadowed-lifecycle',
+    (diagnostic) => diagnostic.code === 'project/shadowed-lifecycle',
   );
 
   const errors = hidden.filter((diagnostic) => diagnostic.severity === 'error');
@@ -201,9 +206,9 @@ void test('a field that hides a method is an error, at the line that declared it
 
   // A value static analysis cannot follow may be a function. Reporting it as broken is how
   // a diagnostic teaches authors to ignore it.
-  const notes = hidden.filter((diagnostic) => diagnostic.severity === 'note');
-  assert.equal(notes.length, 1);
-  assert.match(String(notes[0]?.message), /HiddenUnknown.*cannot follow/su);
+  const unknown = hidden.filter((diagnostic) => diagnostic.severity === 'warning');
+  assert.equal(unknown.length, 1);
+  assert.match(String(unknown[0]?.message), /HiddenUnknown.*cannot follow/su);
 });
 
 void test('a callable field and an unrelated field are not collisions', async () => {

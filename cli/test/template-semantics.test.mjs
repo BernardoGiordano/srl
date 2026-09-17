@@ -190,7 +190,7 @@ void test('uses quick fix preserves a valid trailing-comma array', async () => {
   service.open(templateUri, 'html', 1, templateSource);
 
   const diagnostics = await service.diagnostics(templateUri);
-  const diagnostic = diagnostics.find((candidate) => /Add `UiDialog` to its `uses`/u.test(candidate.message));
+  const diagnostic = diagnostics.find((candidate) => candidate.code === 'templates/missing-use');
   assert.ok(diagnostic);
   const actions = await service.codeActions(templateUri, diagnostic.range, [diagnostic]);
   assert.equal(actions.length, 1);

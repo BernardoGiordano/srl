@@ -24,8 +24,8 @@
  *      written here at all. The shape lives in cli/scaffold/application.mjs, the one
  *      module `srl new` and this probe both cross, and a consumer's first command is
  *      the thing under test. ADR-0073.
- *   2. Runs the toolchain against it through the published `srl` bin, covering the
- *      import-map check, the template checker and the build.
+ *   2. Runs the toolchain against it through the published `srl` bin, covering every
+ *      `srl check` subject and the build.
  *   3. Typechecks a consumer of the other audience, a bundler user with no import map,
  *      against nothing but the package's `exports`. ADR-0066.
  *   4. Typechecks a strict consumer of the import-map audience as one whole program,
@@ -285,8 +285,7 @@ async function check(probe) {
   /* ── Each tool, through the published bin ─────────────────────────────── */
 
   for (const [label, args] of /** @type {Array<[string, string[]]>} */ ([
-    ['srl check importmap', ['check', 'importmap']],
-    ['srl check templates', ['check', 'templates']],
+    ['srl check', ['check']],
     ['srl build', ['build', '--app', APP]],
   ])) {
     const result = await srl(probe, args);

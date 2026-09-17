@@ -159,8 +159,9 @@ void test('language service exposes the srl template contract', async (context) 
     service.open(litHostUri, 'javascript', 4, litSource);
 
     const diagnostics = await service.diagnostics(litHostUri);
-    const diagnostic = diagnostics.find((candidate) => /Add `UiTable` to its `uses`/u.test(candidate.message));
+    const diagnostic = diagnostics.find((candidate) => candidate.code === 'templates/missing-use');
     assert.ok(diagnostic, 'markup built in JavaScript depends on `uses` exactly as a template file does');
+    assert.match(diagnostic.message, /Add `UiTable` to its `uses`/u);
 
     const actions = await service.codeActions(litHostUri, diagnostic.range, [diagnostic]);
     const edits = actions[0]?.edit.changes[litHostUri] ?? [];
@@ -179,7 +180,7 @@ void test('language service exposes the srl template contract', async (context) 
 
     service.open(definedUri, 'javascript', 1, definedSource);
     const diagnostics = await service.diagnostics(definedUri);
-    assert.deepEqual(diagnostics.filter((candidate) => candidate.code === 'templates/dialect'), []);
+    assert.deepEqual(diagnostics.filter((candidate) => candidate.code === 'templates/missing-use'), []);
     service.close(definedUri);
   });
 
@@ -204,8 +205,9 @@ void test('language service exposes the srl template contract', async (context) 
     const source = `${original}\n<ui-dialog></ui-dialog>`;
     service.change(uri, 6, source);
     const diagnostics = await service.diagnostics(uri);
-    const diagnostic = diagnostics.find((candidate) => /Add `UiDialog` to its `uses`/u.test(candidate.message));
+    const diagnostic = diagnostics.find((candidate) => candidate.code === 'templates/missing-use');
     assert.ok(diagnostic);
+    assert.match(diagnostic.message, /Add `UiDialog` to its `uses`/u);
     const actions = await service.codeActions(uri, diagnostic.range, [diagnostic]);
     assert.equal(actions.length, 1);
     const edits = Object.values(actions[0]?.edit.changes ?? {}).flat();

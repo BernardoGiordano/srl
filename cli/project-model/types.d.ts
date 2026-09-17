@@ -9,6 +9,8 @@
  * answer, and `cli/project-model/index.mjs` is the only thing that produces them.
  */
 
+import type { Diagnostic } from '../diagnostics/types.js';
+
 /** An application: a repository-root directory with an index.html. */
 export interface Application {
   name: string;
@@ -141,29 +143,29 @@ export interface TemplateGlobal {
 }
 
 /**
- * Something the static model cannot understand, or a project rule it can see broken.
+ * Something the static model cannot understand, or a project rule it can see broken,
+ * before it becomes a `Diagnostic` with a `project/` code.
  *
- * `dynamic` is the one that matters most. A declaration built at runtime works in
- * the browser and is invisible to every tool here, so it has to be reported rather
- * than skipped.
+ * `project/dynamic` matters most. A declaration built at runtime works in the browser
+ * and is invisible to every tool here, so the model reports it rather than skipping it.
  *
- * Severity is what makes that reportable without being useless. An `error` fails
- * verification. A `note` is dynamism that is either the mechanism itself, such as the
- * `customElements.define` inside `defineComponent` or the projection marker
- * registering itself, or a test deliberately declaring something invalid to assert
- * that the runtime rejects it. Failing the build on those would mean deleting the
- * framework's own implementation to satisfy a tool that reads it.
+ * An `error` fails verification and the build. A `warning` covers two cases. One is
+ * dynamism that is the mechanism itself, such as the `customElements.define` inside
+ * `defineComponent`. The other is a test that declares something invalid on purpose,
+ * to assert that the runtime rejects it. Failing the build on either would mean
+ * deleting the framework's own code to satisfy a tool that reads it.
  */
-export interface ProjectDiagnostic {
-  kind:
-    | 'dynamic'
-    | 'duplicate-tag'
-    | 'unresolved-uses'
-    | 'unreadable'
-    | 'shadowed-lifecycle'
-    | 'stylesheet';
-  severity: 'error' | 'note';
-  /** Absolute path of the file the diagnostic is about. */
+export interface ModelFinding {
+  code:
+    | 'project/dynamic'
+    | 'project/duplicate-tag'
+    | 'project/unresolved-uses'
+    | 'project/shadowed-lifecycle'
+    | 'project/stylesheet-without-template'
+    | 'project/shared-stylesheet'
+    | 'project/stylesheet-scope';
+  severity: 'error' | 'warning';
+  /** Absolute path of the file the finding is about. */
   file: string;
   message: string;
   /** 1-based, when the finding is about one declaration rather than the file. */
@@ -242,7 +244,8 @@ export interface ProjectModel {
   globals: Map<string, TemplateGlobal>;
   /** Every template file this application can reach, keyed by absolute path. */
   templates: Map<string, TemplateRecord>;
-  diagnostics: ProjectDiagnostic[];
+  /** Every `ModelFinding`, as a `Diagnostic` grouped under the application's name. */
+  diagnostics: Diagnostic[];
 }
 
 /** One `t()` or `standardText()` call, as the parse read it. */
@@ -303,9 +306,9 @@ export interface ProjectIndex {
   globals: Array<{ name: string; module: string; exportName: string }>;
   templates: Array<{ path: string; url: string | null; claimedBy: string | null }>;
   diagnostics: Array<{
-    kind: string;
+    code: string;
     severity: string;
-    file: string;
+    file: string | null;
     line: number | null;
     column: number | null;
     message: string;
