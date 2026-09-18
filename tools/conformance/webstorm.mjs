@@ -192,7 +192,7 @@ async function opened(launcher, env, fixture, root, serving, patience) {
  * @returns {Promise<void>}
  */
 async function navigate(project) {
-  const relative = ['app/src/main.html', 'index.html'].find((candidate) => existsSync(join(project, candidate)));
+  const relative = ['web/src/pages/home-page.html', 'index.html'].find((candidate) => existsSync(join(project, candidate)));
   if (relative === undefined) return;
   const url = `jetbrains://web-storm/navigate/reference?project=${basename(project)}&path=${relative}`;
   await run(process.platform === 'darwin' ? 'open' : 'xdg-open', [url]).catch(() => undefined);

@@ -73,7 +73,7 @@ boundaries have one production implementation and a test adapter.
 | How a URL becomes a file, and what may answer a request that has none | `cli/origin/index.mjs` — mounts, the traversal refusal, the directory index and the history fallback; the dev server, the benchmark origin, the artifact test origin and the test runner's rewrite are adapters over it |
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
 | What a saved file does to a page that is already open | `cli/dev/updates.mjs` owns the watching, the URL identity and the delivery; `cli/dev/update-client.js` decides whether a change is a template revision, a component stylesheet revision, a stylesheet swap or a reload |
-| What a correct srl application is made of | `cli/scaffold/application.mjs` — the nine files `srl new` writes; `tools/fixtures/installed-layout.mjs` owns the declared dependency set its installed adapters use |
+| What a correct srl project, application and component are made of | `cli/scaffold/` — `project.mjs` for `srl new`, `application.mjs` and `component.mjs` for `srl generate`; `tools/fixtures/installed-layout.mjs` owns the dependency set its installed adapters prove |
 | What a package ships besides its source | `tools/delivery/package-bundle.mjs` writes `dist/`; `tools/delivery/package-docs.mjs` copies `docs/` and writes `llms.txt` |
 | What static discovery knows about the project | `cli/project-model/` |
 | How public inputs, internal state, inherited declarations, events and projection names become one Element | `cli/project-model/parse.mjs`, resolved by `cli/project-model/index.mjs` |
@@ -87,6 +87,6 @@ boundaries have one production implementation and a test adapter.
 | Which checks `srl check` and the build run, and the one list they report | `cli/checks/index.mjs`; each check returns `Diagnostic[]` and `cli/diagnostics/` prints them |
 | What each diagnostic code means | `cli/diagnostics/catalog.mjs`, printed by `srl check --codes` |
 | What tsc has to know to resolve `@core/` | `source/tsconfig.base.json` — published, extended rather than copied, resolves into the declaration tree; `source/tsconfig.source.json` resolves the same prefixes into the source for this repository |
-| Whether the published tarballs work when installed | `tools/checks/pack-check.mjs` — runs a real npm install from declared dependencies, scaffolds through the local bin, checks, commits and builds |
+| Whether the published tarballs work when installed | `tools/checks/pack-check.mjs` — runs `srl new` from an installed CLI, installs the project it wrote, generates a component, commits, and runs the scaffolded check and build scripts |
 | Whether an installed editor does what the plugins claim | `tools/conformance/` — installs the packed extension into a real editor and drives one scenario list through it |
 | A performance budget | `tools/benchmark/budgets.json` |

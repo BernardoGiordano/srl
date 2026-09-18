@@ -96,8 +96,9 @@ checker. The CLI scaffold writes this file too.
 
 ## Tools and documentation
 
-Install `@srljs/cli` as a development dependency to scaffold an application,
-serve source with live updates, check templates, or build a production artifact.
+`npx @srljs/cli new my-app` writes a project that depends on this package. The
+CLI also serves source with live updates, checks templates, and builds a
+production artifact.
 
 This package ships the documentation for its version. `llms.txt` at the package
 root lists every guide, reference page, and decision record under `docs/`. A

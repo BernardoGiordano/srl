@@ -16,23 +16,25 @@
  * notice, because in the checkout the condition is false. ADR-0067, ADR-0068.
  *
  * So this builds the layout instead of assuming it. tools/fixtures/installed-layout.mjs
- * declares every dependency a first application needs, packs both workspaces and gives
- * their tarballs to a real offline `npm install`. The probe then does five things.
+ * packs both workspaces and installs them the way a consumer does. The probe then does
+ * six things.
  *
- *   1. Scaffolds the application with the published `srl new`, through the same
- *      local-bin command the install guide gives an adopter, so the fixture is not
- *      written here at all. The shape lives in cli/scaffold/application.mjs, the one
- *      module `srl new` and this probe both cross, and a consumer's first command is
- *      the thing under test. ADR-0073.
- *   2. Runs the toolchain against it through the published `srl` bin, covering every
- *      `srl check` subject and the build.
- *   3. Typechecks a consumer of the other audience, a bundler user with no import map,
+ *   1. Runs the published `srl new` from a launcher install, as `npx @srljs/cli new`
+ *      does, and installs the project from the manifest it wrote. The install refuses
+ *      a manifest that pins anything but the versions this checkout proves. The shape
+ *      lives in cli/scaffold/, which `srl new` and this probe both cross, so a
+ *      consumer's first command is the thing under test. ADR-0073, ADR-0122.
+ *   2. Adds a styled component with `srl generate component`, puts it on the home
+ *      page, and commits with `git add .`, which the scaffolded .gitignore has to keep
+ *      out of node_modules and dist.
+ *   3. Runs the scaffolded `npm run check` and `npm run build`.
+ *   4. Typechecks a consumer of the other audience, a bundler user with no import map,
  *      against nothing but the package's `exports`. ADR-0066.
- *   4. Typechecks a strict consumer of the import-map audience as one whole program,
+ *   5. Typechecks a strict consumer of the import-map audience as one whole program,
  *      importing every library module through the published tsconfig base. It allows
  *      no diagnostic anywhere, the package's own included, and no library JavaScript
  *      in the program where a declaration belongs. ADR-0066.
- *   5. Reads the documentation each package ships. Every relative link resolves inside
+ *   6. Reads the documentation each package ships. Every relative link resolves inside
  *      its package, and every record the package cites is in its own docs/adr/.
  *      ADR-0121.
  *
@@ -53,12 +55,18 @@ import { promisify } from 'node:util';
 import { error, hasErrors, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { exists, walk } from '../../cli/layout.mjs';
 import { linkTarget, relativeLinks } from '../delivery/package-docs.mjs';
-import { applicationManifest, install, localBin, srl } from '../fixtures/installed-layout.mjs';
+import { install, launch, localBin, pack, srl, useComponent } from '../fixtures/installed-layout.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
 
 const run = promisify(execFile);
-const APP = 'app';
+
+/** The project `srl new` writes, and the application it starts with. */
+const PROJECT = 'project';
+const APP = 'web';
+
+/** The component the probe generates, with a stylesheet so the build has one to scope. */
+const COMPONENT = 'user-card';
 
 /** The heading every finding here sits under: there is one subject, the probe. */
 const GROUP = 'packaged install';
@@ -69,44 +77,113 @@ function refuse(code, message) {
 }
 
 /**
- * The application, scaffolded by the published toolchain.
+ * The project, scaffolded and installed by the published toolchain.
  *
- * As a fixture written here it would be a hundred and eighty lines, an index.html with
- * the import map pasted and a hash computed, two components with their templates, the
- * stylesheet, the manifest, a locale bundle and a tsconfig. That is the shape of a
- * correct srl application, written down in the one place no consumer could reach, which
- * would make it a fifth description of a contract the toolchain enforces. It lives in
- * cli/scaffold/application.mjs, and this runs it as a consumer does. ADR-0073.
+ * The launcher runs `srl new` the way npx does, from an install outside the project,
+ * so the application must reach the library through the project's own node_modules
+ * rather than through the directory the CLI ran from. Written here, the fixture would
+ * be a second description of a contract the toolchain enforces. ADR-0073, ADR-0122.
  *
- * Through the local bin rather than by import, for the same reason everything else here
- * is. Imported, the scaffold would find the library beside `cli/` in this checkout and
- * paste that import map. Run inside the probe, it resolves the installed package, and
- * the fixture is made of the bytes actually under test.
+ * Through the installed bin rather than by import. Imported, the scaffold would find the
+ * library beside `cli/` in this checkout and paste that import map. Run from the
+ * launcher, it reads the installed package, so the fixture is made of the bytes under
+ * test.
  *
  * @param {string} probe
+ * @param {string[]} tarballs
  * @returns {Promise<Diagnostic[]>}
  */
-async function create(probe) {
-  const scaffold = await srl(probe, ['new', APP]);
+async function create(probe, tarballs) {
+  const launcher = join(probe, 'launcher');
+  try {
+    await launch(launcher, tarballs);
+  } catch (cause) {
+    return [refuse('pack/install-failed', `the launcher did not install:\n\n${indent(message(cause))}`)];
+  }
+
+  const scaffold = await srl(probe, ['new', PROJECT], { prefix: launcher });
   if (scaffold.code !== 0) {
     return [
       refuse(
         'pack/scaffold-failed',
-        `\`srl new ${APP}\` failed in an installed layout:\n\n${indent(scaffold.output)}`,
+        `\`srl new ${PROJECT}\` failed from an installed CLI:\n\n${indent(scaffold.output)}`,
       ),
     ];
   }
 
-  // The artifact stamps the commit it was built from, so the probe has to be one.
-  await run('git', ['init', '-q', '.'], { cwd: probe });
-  await run('git', ['add', 'package.json', 'tsconfig.json', APP], { cwd: probe });
+  const project = join(probe, PROJECT);
+  try {
+    await install(project, tarballs);
+  } catch (cause) {
+    return [refuse('pack/install-failed', `the scaffolded project did not install:\n\n${indent(message(cause))}`)];
+  }
+
+  /** @type {Diagnostic[]} */
+  const found = [
+    info('pack/scaffold', `\`srl new ${PROJECT}\` wrote the project`, { group: GROUP }),
+    info('pack/install', '`npm install` resolved the scaffolded manifest', { group: GROUP }),
+  ];
+
+  const generated = await srl(project, ['generate', 'component', COMPONENT, '--styles']);
+  if (generated.code !== 0) {
+    found.push(
+      refuse(
+        'pack/generate-failed',
+        `\`srl generate component ${COMPONENT}\` failed in an installed project:\n\n${indent(generated.output)}`,
+      ),
+    );
+    return found;
+  }
+  await useComponent(project, APP, COMPONENT);
+  found.push(
+    info('pack/generate', `\`srl generate component ${COMPONENT}\` wrote a styled component`, {
+      group: GROUP,
+    }),
+  );
+
+  // The artifact stamps the commit it was built from, so the project has to be one.
+  await run('git', ['init', '-q', '.'], { cwd: project });
+  await run('git', ['add', '.'], { cwd: project });
   await run(
     'git',
     ['-c', 'user.email=pack@check', '-c', 'user.name=pack-check', 'commit', '-qm', 'probe'],
-    { cwd: probe },
+    { cwd: project },
   );
 
-  return [info('pack/scaffold', `\`srl new ${APP}\` wrote the application`, { group: GROUP })];
+  const { stdout } = await run('git', ['ls-files'], { cwd: project });
+  const ignored = stdout
+    .split('\n')
+    .filter((file) => file.startsWith('node_modules/') || file.startsWith('dist/'));
+  found.push(
+    ignored.length === 0
+      ? info('pack/ignored', '`git add .` left node_modules out', { group: GROUP })
+      : refuse(
+          'pack/committed-dependencies',
+          `\`git add .\` committed ${String(ignored.length)} installed or built file(s). The ` +
+            `scaffolded .gitignore has to exclude them.`,
+        ),
+  );
+  return found;
+}
+
+/**
+ * One of the scaffolded project's npm scripts.
+ *
+ * @param {string} project
+ * @param {string} name
+ * @returns {Promise<{ code: number, output: string }>}
+ */
+async function script(project, name) {
+  try {
+    const { stdout, stderr } = await run('npm', ['run', '--silent', name], { cwd: project });
+    return { code: 0, output: `${stdout}${stderr}` };
+  } catch (cause) {
+    const detail = /** @type {{ code?: unknown, stdout?: unknown, stderr?: unknown }} */ (cause);
+    return {
+      code: typeof detail.code === 'number' ? detail.code : 1,
+      output: [detail.stdout, detail.stderr].filter((text) => typeof text === 'string').join(''),
+    };
+  }
 }
 
 /** Where the typed consumer lives: its own directory, so its tsconfig is nobody else's. */
@@ -126,11 +203,11 @@ const TYPED = 'typed-consumer';
  * passing typecheck. tsc fails an unused directive, so a declaration that resolved to
  * `any`, or did not resolve at all, refuses the run rather than sailing through it.
  *
- * @param {string} probe
+ * @param {string} project
  * @returns {Promise<void>}
  */
-async function writeTypedConsumer(probe) {
-  const dir = join(probe, TYPED);
+async function writeTypedConsumer(project) {
+  const dir = join(project, TYPED);
   await mkdir(dir, { recursive: true });
 
   await writeFile(
@@ -199,15 +276,15 @@ const HARNESS = './testing/harness.js';
  * The two `@ts-expect-error` lines prove the imports are typed rather than `any`, for the
  * reason given on the typed consumer above.
  *
- * @param {string} probe
+ * @param {string} project
  * @returns {Promise<{ modules: number, javascript: string[] }>} How many library modules
  *   the consumer imports, and the package files behind the JavaScript subpaths among them.
  */
-async function writeStrictConsumer(probe) {
-  const dir = join(probe, STRICT);
+async function writeStrictConsumer(project) {
+  const dir = join(project, STRICT);
   await mkdir(dir, { recursive: true });
 
-  const installed = join(probe, 'node_modules', '@srljs', 'core');
+  const installed = join(project, 'node_modules', '@srljs', 'core');
   const manifest =
     /** @type {{ exports?: Record<string, unknown>, srl?: { imports?: Record<string, string> } }} */ (
       JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'))
@@ -274,12 +351,12 @@ const CITATION = /\bADR-(\d{4})\b/gu;
  * tarball holds. A `files` list that dropped `docs` would pass every check in the
  * checkout. ADR-0121.
  *
- * @param {string} probe
+ * @param {string} project
  * @param {string} name
  * @returns {Promise<Diagnostic[]>}
  */
-async function shippedDocs(probe, name) {
-  const root = join(probe, 'node_modules', '@srljs', name);
+async function shippedDocs(project, name) {
+  const root = join(project, 'node_modules', '@srljs', name);
   const label = `@srljs/${name}`;
   const index = join(root, 'llms.txt');
   if (!(await exists(index))) {
@@ -344,15 +421,15 @@ async function shippedDocs(probe, name) {
 }
 
 /**
- * Drive the probe, and say what each step found.
+ * Drive the installed project, and say what each step found.
  *
- * @param {string} probe
+ * @param {string} project
  * @returns {Promise<Diagnostic[]>}
  */
-async function check(probe) {
+async function check(project) {
   /* ── The two facts that have to be found rather than written down ─────── */
 
-  const resolved = await srl(probe, ['layout', '--apps']);
+  const resolved = await srl(project, ['layout', '--apps']);
   if (resolved.code !== 0 || resolved.output.trim() !== APP) {
     // Nothing below can mean anything if the repository was not located.
     return [
@@ -368,29 +445,26 @@ async function check(probe) {
   /** @type {Diagnostic[]} */
   const found = [];
 
-  /* ── Each tool, through the published bin ─────────────────────────────── */
+  /* ── The scaffolded scripts, through the published bin ────────────────── */
 
-  for (const [label, args] of /** @type {Array<[string, string[]]>} */ ([
-    ['srl check', ['check']],
-    ['srl build', ['build', '--app', APP]],
-  ])) {
-    const result = await srl(probe, args);
+  for (const name of ['check', 'build']) {
+    const result = await script(project, name);
     if (result.code === 0) {
-      found.push(info('pack/tool', label, { group: GROUP }));
+      found.push(info('pack/tool', `npm run ${name}`, { group: GROUP }));
       continue;
     }
     found.push(
       refuse(
         'pack/tool-failed',
-        `\`${label}\` failed in an installed layout:\n\n${indent(result.output)}`,
+        `\`npm run ${name}\` failed in the scaffolded project:\n\n${indent(result.output)}`,
       ),
     );
   }
 
   /* ── The bundled path carries its types ───────────────────────────────── */
 
-  await writeTypedConsumer(probe);
-  const typed = await localBin(probe, 'tsc', ['-p', join(TYPED, 'tsconfig.json')]);
+  await writeTypedConsumer(project);
+  const typed = await localBin(project, 'tsc', ['-p', join(TYPED, 'tsconfig.json')]);
   if (typed.code === 0) {
     found.push(
       info('pack/typed', 'a TypeScript consumer resolves the bundles and their declarations', {
@@ -410,10 +484,10 @@ async function check(probe) {
 
   /* ── The buildless path carries its types, under strict ───────────────── */
 
-  const consumer = await writeStrictConsumer(probe);
-  const project = join(STRICT, 'tsconfig.json');
-  const strict = await localBin(probe, 'tsc', ['-p', project]);
-  const listed = await localBin(probe, 'tsc', ['-p', project, '--listFilesOnly']);
+  const consumer = await writeStrictConsumer(project);
+  const strictConfig = join(STRICT, 'tsconfig.json');
+  const strict = await localBin(project, 'tsc', ['-p', strictConfig]);
+  const listed = await localBin(project, 'tsc', ['-p', strictConfig, '--listFilesOnly']);
   const javascript = listed.output
     .split('\n')
     .map((line) => line.trim())
@@ -461,11 +535,11 @@ async function check(probe) {
 
   /* ── Each package carries its documentation ──────────────────────────── */
 
-  for (const name of PACKAGES) found.push(...(await shippedDocs(probe, name)));
+  for (const name of PACKAGES) found.push(...(await shippedDocs(project, name)));
 
   /* ── The artifact is real, and is the installed library's ─────────────── */
 
-  const reportPath = join(probe, 'dist', APP, 'artifact.json');
+  const reportPath = join(project, 'dist', APP, 'artifact.json');
   if (!(await exists(reportPath))) {
     found.push(
       refuse('pack/no-artifact', `the build wrote no ${join('dist', APP, 'artifact.json')}.`),
@@ -502,6 +576,11 @@ async function check(probe) {
   return found;
 }
 
+/** @param {unknown} cause @returns {string} */
+function message(cause) {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
 /** @param {string} text */
 function indent(text) {
   return text
@@ -523,25 +602,19 @@ export async function checkPackagedInstall(options = {}) {
   /** @type {Diagnostic[]} */
   const found = [info('pack/probe', probe, { group: GROUP })];
   try {
-    await writeFile(join(probe, 'package.json'), applicationManifest('pack-probe'));
+    let tarballs;
     try {
-      await install(probe);
-      found.push(
-        info('pack/install', '`npm install` resolved only the declared dependencies', {
-          group: GROUP,
-        }),
-      );
+      tarballs = await pack(join(probe, 'tarballs'));
     } catch (cause) {
-      const detail = cause instanceof Error ? cause.message : String(cause);
-      found.push(refuse('pack/install-failed', `the declared dependencies did not install:\n\n${indent(detail)}`));
+      found.push(refuse('pack/pack-failed', `\`npm pack\` failed:\n\n${indent(message(cause))}`));
       return found;
     }
 
-    // A scaffold that refused wrote no application, and every step below would then
-    // report the absence of one rather than the reason for it.
-    const created = await create(probe);
+    // A scaffold that refused wrote no project, and every step below would then report
+    // the absence of one rather than the reason for it.
+    const created = await create(probe, tarballs);
     found.push(...created);
-    if (!hasErrors(created)) found.push(...(await check(probe)));
+    if (!hasErrors(created)) found.push(...(await check(join(probe, PROJECT))));
   } finally {
     if (options.keep === true) {
       found.push(info('pack/kept', `kept for inspection: ${probe}`, { group: GROUP }));
@@ -554,5 +627,5 @@ export async function checkPackagedInstall(options = {}) {
 
 process.exitCode = report(await checkPackagedInstall({ keep: process.argv.includes('--keep') }), {
   format: outputFormat(),
-  summary: 'Both tarballs install and drive an application end to end.',
+  summary: 'Both tarballs install, scaffold a project, and check and build it end to end.',
 });

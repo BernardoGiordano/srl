@@ -1356,7 +1356,7 @@ export async function verifyDependencies() {
    */
   const CLI_MANIFEST = join(REPO, 'cli', 'package.json');
   const cliManifest =
-    /** @type {{ version?: string, peerDependencies?: Record<string, string>, dependencies?: Record<string, string>, devDependencies?: Record<string, string> }} */ (
+    /** @type {{ version?: string, peerDependencies?: Record<string, string>, dependencies?: Record<string, string>, devDependencies?: Record<string, string>, scaffold?: { devDependencies?: Record<string, string> } }} */ (
       JSON.parse(await readText(CLI_MANIFEST))
     );
   const libraryVersion = String(MANIFEST.version);
@@ -1428,6 +1428,33 @@ export async function verifyDependencies() {
         { group: 'toolchain' },
       );
     }
+  }
+
+  /**
+   * `srl new` writes these pins into every new project, so they have to be the
+   * versions this repository installs and builds with. The lockfile is the reference,
+   * because the root may declare a range where the scaffold needs an exact version.
+   * ADR-0122.
+   */
+  const lock = /** @type {{ packages?: Record<string, { version?: string }> }} */ (
+    JSON.parse(await readText(join(REPO, 'package-lock.json')))
+  );
+  const scaffolded = cliManifest.scaffold?.devDependencies ?? {};
+  for (const [name, version] of Object.entries(scaffolded)) {
+    const installed = lock.packages?.[`node_modules/${name}`]?.version;
+    if (installed !== version) {
+      refuse(
+        'deps/scaffold-drift',
+        `pins ${name}@${version} for \`srl new\`, and this repository installs ` +
+          `${installed ?? 'nothing'}. Every new project would build with a version nobody ` +
+          `checked.`,
+        { group: 'toolchain', file: CLI_MANIFEST },
+      );
+      continue;
+    }
+    pass('deps/scaffold-pin', `${name.padEnd(22)} ${version.padEnd(8)} is what \`srl new\` pins`, {
+      group: 'toolchain',
+    });
   }
 
 

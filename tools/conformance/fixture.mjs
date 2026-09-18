@@ -4,22 +4,25 @@
  * Four roots, because what an editor does with a project is decided by what the project
  * is: two installed ones (a window may hold more than a single server), one that asks for
  * srl and has not installed it, one that never asked. The installed pair is built from
- * the tarballs this repository would publish, installed from the same declared dependency
- * set as the packaged-install probe and scaffolded by the published `srl new`, so the
- * fixture is the toolchain's own idea of an application rather than a second one written
- * here. ADR-0098.
+ * the tarballs this repository would publish, scaffolded by the published `srl new` and
+ * `srl generate component`, and installed from the manifest the scaffold wrote, as the
+ * packaged-install probe does. The fixture is the toolchain's own idea of an application
+ * rather than a second one written here. ADR-0098, ADR-0122.
  */
 
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { applicationManifest, install, srl } from '../fixtures/installed-layout.mjs';
+import { install, launch, pack, srl, useComponent } from '../fixtures/installed-layout.mjs';
 
 /** @import { Fixture } from './types.js' */
 
-/** The application directory inside each installed root. */
-export const APP = 'app';
+/** The application directory inside each installed root, as `srl new` names it. */
+export const APP = 'web';
+
+/** The component the home page uses, which gives the rename scenario a tag in two files. */
+export const COMPONENT = 'user-card';
 
 /**
  * A Lit component, for the one thing an srl adapter must not do, which is answer inside
@@ -49,19 +52,26 @@ export async function build() {
   const declared = join(root, 'declared');
   const plain = join(root, 'plain');
 
-  await mkdir(one, { recursive: true });
-  await writeFile(join(one, 'package.json'), applicationManifest('conformance-one'));
-  await install(one);
+  const tarballs = await pack(join(root, 'tarballs'));
+  const launcher = join(root, 'launcher');
+  await launch(launcher, tarballs);
 
-  const scaffold = await srl(one, ['new', APP]);
-  if (scaffold.code !== 0) throw new Error(`\`srl new ${APP}\` failed:\n${scaffold.output}`);
-  await useDetailFromMain(one);
+  const scaffold = await srl(root, ['new', 'one'], { prefix: launcher });
+  if (scaffold.code !== 0) throw new Error(`\`srl new one\` failed:\n${scaffold.output}`);
+  await install(one, tarballs);
+
+  const generated = await srl(one, ['generate', 'component', COMPONENT]);
+  if (generated.code !== 0) {
+    throw new Error(`\`srl generate component ${COMPONENT}\` failed:\n${generated.output}`);
+  }
+  await useComponent(one, APP, COMPONENT);
   await writeFile(join(one, APP, 'src', 'widget.js'), WIDGET);
 
   // The second project is a byte-for-byte install copy with its own manifest name. Both
   // editor sessions therefore start from real package directories, never checkout links.
   await cp(one, two, { recursive: true });
-  await writeFile(join(two, 'package.json'), applicationManifest('conformance-two'));
+  const copied = join(two, 'package.json');
+  await writeFile(copied, renamed(await readFile(copied, 'utf8'), 'two'));
 
   for (const [directory, name, dependencies] of /** @type {Array<[string, string, Record<string, string>]>} */ ([
     [declared, 'conformance-declared', { '@srljs/cli': '0.0.0' }],
@@ -76,27 +86,12 @@ export async function build() {
 }
 
 /**
- * Make the main template use the other component, which is what gives the run a tag to
- * rename in two files rather than one.
- *
- * @param {string} root
- * @returns {Promise<void>}
+ * @param {string} source a package manifest
+ * @param {string} name
+ * @returns {string}
  */
-async function useDetailFromMain(root) {
-  const template = join(root, APP, 'src', 'main.html');
-  await writeFile(template, `${(await readFile(template, 'utf8')).trimEnd()}\n<app-detail></app-detail>\n`);
-
-  const module = join(root, APP, 'src', 'main.js');
-  const source = await readFile(module, 'utf8');
-  await writeFile(
-    module,
-    source
-      .replace(
-        "import { signal } from '@core/foundation/reactive.js';",
-        "import { signal } from '@core/foundation/reactive.js';\n\nimport { AppDetail } from './detail.js';",
-      )
-      .replace('  module: import.meta.url,\n});', '  module: import.meta.url,\n  uses: [AppDetail],\n});'),
-  );
+function renamed(source, name) {
+  return `${JSON.stringify({ ...JSON.parse(source), name }, null, 2)}\n`;
 }
 
 /** @param {string} name @param {Record<string, string>} dependencies */

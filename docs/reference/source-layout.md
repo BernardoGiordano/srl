@@ -78,8 +78,8 @@ benchmark origin, and tests.
 
 `cli/dev/` serves source and delivers edits to open pages. `cli/delivery/`
 builds, verifies, stages, and activates artifacts. `cli/language-server/`
-answers editor requests through the project model. `cli/scaffold/` writes the
-files of a new application.
+answers editor requests through the project model. `cli/scaffold/` writes a
+new project, application, or component.
 
 `tools/checks/` enforces this repository's dependency, package, and
 documentation rules. `tools/delivery/` writes what the packages ship besides

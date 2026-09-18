@@ -5,44 +5,56 @@ templates and messages, runs the language server, and builds production
 artifacts. It works with the matching version of
 [`@srljs/core`](https://www.npmjs.com/package/@srljs/core).
 
-An application can run in the browser without the CLI. Install this package
-in the repository where you develop and deploy the application.
+An application can run in the browser without the CLI. `srl new` adds this
+package to every project it writes.
 
 ## Start a project
 
-You need Node.js 22 or later, npm, and Git. Install the two srl packages at
-the same version. The build also uses your project's Tailwind CLI and Node
-types.
+You need Node.js 22 or later, npm, and Git.
 
 ```bash
-git init
-npm init -y
-npm install --save-exact @srljs/core@0.9.0
-npm install --save-dev --save-exact @srljs/cli@0.9.0 \
-  tailwindcss@4.3.3 @tailwindcss/cli@4.3.3 @types/node@24.13.3
-npx --no-install srl new web
-npx --no-install srl serve --app web --open
+npx @srljs/cli@0.9.0 new my-app
+cd my-app
+npm install
+npm run dev
 ```
 
-`srl new` writes an application under `web/` with an entry document, import
-map, modules, templates, stylesheet, manifest, locale bundle, and type
-configuration. It refuses an existing application directory. Commit the
-project before its first production build, because the artifact records the
-source commit.
+`srl new` writes the project into `my-app/`. It pins `@srljs/core` and
+`@srljs/cli` to the same exact version, because the CLI checks templates and
+manifests against that version of the runtime. It also pins the Tailwind CLI
+and Node types the build uses, and adds `dev`, `check` and `build` scripts, a
+`.gitignore`, and an `AGENTS.md` for coding agents. The application in
+`my-app/web/` boots through `startApplication` with one route. Pass `--app` to
+name it differently. The command installs nothing and refuses a directory that
+already exists.
+
+Add to the project from its root.
+
+```bash
+npx --no-install srl generate component user-card
+npx --no-install srl generate component pages/users-page --styles
+npx --no-install srl generate app admin
+```
+
+A component goes to `web/src/components/` unless its name starts with a
+directory under `web/src/`. `--styles` adds its scoped stylesheet. A template
+that names the new tag imports its class and lists it in `uses`. The command
+refuses a tag the project already defines and any file that exists.
 
 `npx --no-install` uses the installed binary and will not download another
-version. The packages have an exact version relationship because the CLI
-checks the runtime's template and manifest dialect.
+version.
 
 ## Commands
 
-Run commands from the repository root. Pass `--app <directory>` when the
-repository holds more than one application. With one application, the CLI
+Run commands from the project root. Pass `--app <directory>` when the
+project holds more than one application. With one application, the CLI
 can discover it.
 
 | Command | What it does |
 |---|---|
-| `srl new web` | Scaffold an application. |
+| `srl new my-app` | Write a new project with one application. |
+| `srl generate component user-card` | Add a component and its template. |
+| `srl generate app admin` | Add another application to the project. |
 | `srl serve --app web --open` | Serve source, library, and components on one origin with history fallback and live updates. |
 | `srl check` | Check the project model, types, templates, import map, and messages in one run. |
 | `srl check templates importmap` | Run only the named checks: `project`, `types`, `templates`, `importmap`, or `messages`. |
@@ -78,11 +90,13 @@ The tools discover its manifest, modules, templates, and locale files from
 there. Set `SRL_ROOT` when the srl checkout is nested under another root.
 
 ```text
-your-repo/
+my-app/
   package.json
+  tsconfig.json
   web/
     index.html
     app.manifest.json
+    i18n/en.json
     src/
   node_modules/@srljs/core/
 ```
@@ -99,7 +113,8 @@ to the declarations generated from the browser's JavaScript source.
 }
 ```
 
-Add another path to `include` for a second application.
+Add another path to `include` for a second application. `srl generate app`
+says which one.
 
 ## Production build
 
@@ -111,10 +126,11 @@ the emitted files, chunk graph, sizes, and security metadata. The app needs
 at least one dynamic import so it produces more than an entry chunk.
 
 ```bash
-npx --no-install srl check
+npm run check
+git init
 git add .
-git commit -m "Create web application"
-npx --no-install srl build --app web
+git commit -m "Create my-app"
+npm run build
 ```
 
 The build calls the project's Tailwind CLI to compile its stylesheet.

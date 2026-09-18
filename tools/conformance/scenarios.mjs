@@ -10,7 +10,11 @@
 /** @import { Scenario } from './types.js' */
 
 /** The primary project's application directory, as `srl new` writes it. */
-const APP = 'app';
+const APP = 'web';
+
+/** The scaffolded home page, and the generated component it uses. */
+const PAGE = `${APP}/src/pages/home-page`;
+const COMPONENT = `${APP}/src/components/user-card`;
 
 /** @type {Scenario[]} */
 export const SCENARIOS = [
@@ -53,7 +57,7 @@ export const SCENARIOS = [
     title: 'the scaffolded template reports nothing',
     kind: 'language',
     ask: 'diagnostics',
-    document: `${APP}/src/main.html`,
+    document: `${PAGE}.html`,
     expect: { empty: true },
   },
   {
@@ -61,7 +65,7 @@ export const SCENARIOS = [
     title: 'an unsaved edit is checked, and names the member that does not exist',
     kind: 'language',
     ask: 'diagnostics',
-    document: `${APP}/src/main.html`,
+    document: `${PAGE}.html`,
     edit: { replace: '{{ count }}', with: '{{ nowhere }}' },
     expect: { includes: ['nowhere'] },
   },
@@ -70,7 +74,7 @@ export const SCENARIOS = [
     title: 'completion inside an interpolation offers the component the template belongs to',
     kind: 'language',
     ask: 'completion',
-    document: `${APP}/src/main.html`,
+    document: `${PAGE}.html`,
     at: { after: '{{ ' },
     expect: { includes: ['count', 'increment'] },
   },
@@ -79,7 +83,7 @@ export const SCENARIOS = [
     title: 'hover over a bound member says what it is',
     kind: 'language',
     ask: 'hover',
-    document: `${APP}/src/main.html`,
+    document: `${PAGE}.html`,
     at: { on: 'count' },
     expect: { includes: ['count'] },
   },
@@ -88,19 +92,19 @@ export const SCENARIOS = [
     title: 'go to definition from a template lands in the class beside it',
     kind: 'language',
     ask: 'definition',
-    document: `${APP}/src/main.html`,
+    document: `${PAGE}.html`,
     at: { on: 'count' },
-    expect: { file: `${APP}/src/main.js` },
+    expect: { file: `${PAGE}.js` },
   },
   {
     id: 'rename.tag',
     title: 'renaming a tag edits the template that uses it and the declaration that names it',
     kind: 'language',
     ask: 'rename',
-    document: `${APP}/src/main.html`,
-    at: { on: 'app-detail' },
-    to: 'app-panel',
-    expect: { files: [`${APP}/src/main.html`, `${APP}/src/detail.js`] },
+    document: `${PAGE}.html`,
+    at: { on: 'user-card' },
+    to: 'user-panel',
+    expect: { files: [`${PAGE}.html`, `${COMPONENT}.js`] },
   },
   {
     id: 'lit.isolation',
@@ -116,7 +120,7 @@ export const SCENARIOS = [
     title: "the editor's own JavaScript service still answers in a served project",
     kind: 'language',
     ask: 'completion',
-    document: `${APP}/src/main.js`,
+    document: `${PAGE}.js`,
     at: { after: '    this.' },
     expect: { includes: ['increment'] },
   },
@@ -125,8 +129,8 @@ export const SCENARIOS = [
     title: 'a member added on disk, outside the editor, reaches the next completion',
     kind: 'language',
     ask: 'watch',
-    write: { document: `${APP}/src/detail.js`, replace: "  get title() {", with: '  get subtitle() {\n    return 1;\n  }\n\n  get title() {' },
-    document: `${APP}/src/detail.html`,
+    write: { document: `${COMPONENT}.js`, replace: "  label = '';", with: "  get subtitle() {\n    return 1;\n  }\n\n  label = '';" },
+    document: `${COMPONENT}.html`,
     at: { after: '{{ ' },
     expect: { includes: ['subtitle'] },
   },
@@ -135,7 +139,7 @@ export const SCENARIOS = [
     title: 'srl.trace.server records the protocol for the folder it belongs to',
     kind: 'session',
     ask: 'trace',
-    document: `${APP}/src/main.html`,
+    document: `${PAGE}.html`,
     at: { after: '{{ ' },
     expect: { includes: ['textDocument/completion'] },
   },

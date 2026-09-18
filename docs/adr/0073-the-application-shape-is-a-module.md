@@ -55,9 +55,11 @@ collection stylesheets are derived from the library's own manifest through
 Nothing written into a scaffolded application can go stale against the library it was
 scaffolded from.
 
-**Two adapters cross it the day it lands.** `srl new <name>` is the consumer's, and the
-packaged-install probe is this repository's: `pack-check.mjs` no longer writes a fixture,
-it runs `srl new app` through the published bin. So the thing an adopter is given is the
+**Two adapters cross it.** The consumer's are `srl new`, which writes the application
+inside a new project, and `srl generate app`, which adds one to an existing project
+([ADR-0122](0122-srl-new-writes-a-project.md)). The packaged-install probe is this
+repository's: `pack-check.mjs` writes no fixture of its own, it runs `srl new` through the
+published bin. So the thing an adopter is given is the
 thing `npm run check` drives end to end on every run, through the import-map check, the
 template checker, the build and the artifact assertions.
 
@@ -79,10 +81,9 @@ module nothing ([ADR-0072](0072-a-check-returns-diagnostics.md)).
 
 ## Consequences
 
-The first hour stops being assembly. `npm install --save-dev @srljs/cli && srl new web`
-produces a repository that builds, and the prose in `cli/README.md` that used to describe
-the same nine files by hand is now one command plus the explanation of what the build
-expects of you.
+The first hour stops being assembly. `npx @srljs/cli new my-app` produces a project that
+builds, and the prose in `cli/README.md` that used to describe the same files by hand is
+now one command plus the explanation of what the build expects of you.
 
 Scaffold and check cannot drift, which is the property the old arrangement could not have.
 A change to the eight-fact HTML contract, to the manifest policy, or to the published
@@ -90,16 +91,16 @@ tsconfig base now breaks one module, and it breaks it inside `npm run check` rat
 a consumer's first afternoon. ADR-0068's "one more place to edit" is closed: the place is
 the module, and the probe is a caller.
 
-The emitted application is deliberately the smallest thing that runs, a component, a
-template, a signal and a lazy chunk, rather than the shape a real application takes. An
-application with routes, a manifest-driven startup and a session replaces `main.js` with
-one call to `startHostedApplication` and keeps every other file as written. That is a
-choice worth naming: a scaffold that emitted the hosted-runtime shape would be a second,
-larger fixture for the probe to drive, and the probe's subject is the packaging seam rather
-than the router. `example/` remains the answer to "what does a real one look like".
+The application this decision first emitted was the smallest thing that runs: a
+component, a template, a signal and a lazy chunk, with no startup, router or manifest
+read. [ADR-0122](0122-srl-new-writes-a-project.md) replaced it with one that boots through
+`startApplication` and the router, because the smaller one skipped what every real
+application needs and wrote two files nothing read. `example/` remains the answer to
+"what does a full one look like".
 
-`srl new` is now the toolchain's first write command. Every other one reads the repository
-and writes into `dist/` or a staging tree; this one writes source files a person then owns.
+The scaffold commands are the toolchain's only write commands. Every other one reads the
+repository and writes into `dist/` or a staging tree; these write source files a person then
+owns.
 The refusals above are what keeps that safe, and they are the reason the command has no
 `--force`: a flag that overwrote an application directory would be the one irreversible
 thing in this package.

@@ -75,6 +75,18 @@
     "typescript": "6.0.3",
     "vite": "8.2.1"
   },
+  "//scaffold": [
+    "srl new pins these application-owned packages in the project it writes. They",
+    "are the versions this release was checked with. npm run verify compares them",
+    "with the versions the repository lockfile installs."
+  ],
+  "scaffold": {
+    "devDependencies": {
+      "@tailwindcss/cli": "4.3.3",
+      "@types/node": "24.13.3",
+      "tailwindcss": "4.3.3"
+    }
+  },
   "//devDependencies": [
     "The artifact tests drive Chrome and do not ship these packages."
   ],

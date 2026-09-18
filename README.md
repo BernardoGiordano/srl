@@ -33,19 +33,21 @@ Its source is in [`example/`](example/).
 
 ## Get started
 
-Install the library and its development tools in a Node.js 22+ project.
+Create a project with Node.js 22 or later.
 
 ```bash
-npm install @srljs/core
-npm install --save-dev @srljs/cli
-npm exec -- srl new web
-npm exec -- srl serve --app web --open
+npx @srljs/cli@0.9.0 new my-app
+cd my-app
+npm install
+npm run dev
 ```
 
-`srl new` creates the import map, entry point, templates, stylesheet, manifest,
-and type configuration. The server loads those files directly and updates open
-pages when they change. The [CLI guide](cli/README.md) covers checks, production
-builds, and deployment requirements.
+`srl new` writes a project whose application boots through the library's
+startup, router, manifest, and locale bundle. `npm run check` checks types,
+templates, the import map, and messages, and `npx --no-install srl generate
+component <tag>` adds a component. The server loads the source files directly
+and updates open pages when they change. The [CLI guide](cli/README.md) covers
+checks, production builds, and deployment requirements.
 
 You can also run this repository's example without installing packages.
 

@@ -2,21 +2,28 @@
  * The layout a consumer gets, installed from the tarballs this repository would publish.
  *
  * `@srljs/core` and `@srljs/cli` are real directories under `node_modules`, the
- * repository is the working directory, and `@srljs/core/lib/...` is a resolver question
+ * project is the working directory, and `@srljs/core/lib/...` is a resolver question
  * rather than a relative path. Nothing in the checkout has that shape, and the difference
  * has broken the build before. ADR-0067, ADR-0068.
  *
+ * A consumer starts with `npx @srljs/cli new my-app`, which runs the CLI from npx's own
+ * install and writes the project into the working directory. Then `npm install` inside
+ * the project installs what the scaffolded `package.json` declares. The fixture does
+ * the same in two steps. `launch()` installs the pair into a launcher directory, which
+ * stands in for npx's install, and `srl()` with `prefix` runs its bin from there.
+ * `install()` then installs the project from its own manifest. ADR-0122.
+ *
  * Two callers need it, the packaged-install probe and the editor conformance run, so
- * the package manifest, installation and local-bin invocation live here rather than in
- * whichever adapter wrote them first. ADR-0098.
+ * the packing, installation and local-bin invocation live here. ADR-0098.
  */
 
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { REPO } from '../../cli/layout.mjs';
+import { componentClassName } from '../../cli/scaffold/component.mjs';
 
 const run = promisify(execFile);
 
@@ -33,15 +40,19 @@ const repositoryLock = /** @type {Record<string, unknown>} */ (JSON.parse(lockSo
 const corePackage = /** @type {Record<string, unknown>} */ (JSON.parse(coreSource));
 const cliPackage = /** @type {Record<string, unknown>} */ (JSON.parse(cliSource));
 
-/**
- * The dependencies a first application declares, at the versions this checkout proves.
- * The framework pair comes from its package manifests; application tools come from the
- * root manifest and lockfile. A fixture that copied this table would be free to omit the
- * next prerequisite the build gains. ADR-0098.
- */
-const APPLICATION_DEV_DEPENDENCIES = Object.freeze({
+/** The framework pair, at the versions in their package manifests. */
+const PAIR = Object.freeze({
   '@srljs/core': packageVersion(corePackage, '@srljs/core'),
   '@srljs/cli': packageVersion(cliPackage, '@srljs/cli'),
+});
+
+/**
+ * Every package a first project declares, at the versions this checkout proves. The
+ * application tools come from the root manifest and lockfile, not from the scaffold's
+ * own pins, so `install()` catches a scaffold that declares something else. ADR-0098.
+ */
+const APPLICATION_DEPENDENCIES = Object.freeze({
+  ...PAIR,
   '@tailwindcss/cli': developmentVersion(repositoryPackage, '@tailwindcss/cli'),
   '@types/node': lockedVersion(repositoryLock, '@types/node'),
   tailwindcss: developmentVersion(repositoryPackage, 'tailwindcss'),
@@ -70,41 +81,26 @@ function lockedVersion(lock, name) {
 }
 
 /**
- * The package manifest shared by every installed application fixture.
+ * Run an installed bin inside `cwd`, through the local-bin command documented for
+ * adopters. Offline mode makes an absent bin a refusal rather than an implicit
+ * download. `prefix` names the directory whose install holds the bin, when that is not
+ * `cwd`. A non-zero exit is data rather than a throw, because a caller wants to say
+ * which step failed and what it printed. ADR-0098.
  *
- * @param {string} name
- * @returns {string}
- */
-export function applicationManifest(name) {
-  return `${JSON.stringify(
-    {
-      name,
-      private: true,
-      type: 'module',
-      version: '0.0.0',
-      devDependencies: APPLICATION_DEV_DEPENDENCIES,
-    },
-    null,
-    2,
-  )}\n`;
-}
-
-/**
- * Run one of the installed packages' bins inside `root`, through the local-bin command
- * documented for adopters. Offline mode makes an absent local bin a refusal rather than
- * an implicit download. A non-zero exit is data rather than a throw, because a caller
- * wants to say which step failed and what it printed. ADR-0098.
- *
- * @param {string} root
+ * @param {string} cwd
  * @param {string} command
  * @param {string[]} args
+ * @param {{ prefix?: string }} [options]
  * @returns {Promise<{ code: number, output: string }>}
  */
-export async function localBin(root, command, args) {
+export async function localBin(cwd, command, args, options = {}) {
+  const prefix = options.prefix === undefined ? [] : ['--prefix', options.prefix];
   try {
-    const { stdout, stderr } = await run('npx', ['--offline', '--no-install', command, ...args], {
-      cwd: root,
-    });
+    const { stdout, stderr } = await run(
+      'npx',
+      ['--offline', '--no-install', ...prefix, command, ...args],
+      { cwd },
+    );
     return { code: 0, output: `${stdout}${stderr}` };
   } catch (cause) {
     const detail = /** @type {{ code?: unknown, stdout?: unknown, stderr?: unknown }} */ (cause);
@@ -118,35 +114,87 @@ export async function localBin(root, command, args) {
 /**
  * The toolchain's own bin, which is what most of a probe is made of.
  *
- * @param {string} root
+ * @param {string} cwd
  * @param {string[]} args
+ * @param {{ prefix?: string }} [options]
  * @returns {Promise<{ code: number, output: string }>}
  */
-export async function srl(root, args) {
-  return localBin(root, 'srl', args);
+export async function srl(cwd, args, options) {
+  return localBin(cwd, 'srl', args, options);
 }
 
 /**
- * Pack both workspaces and install the application's declared dependencies.
+ * Pack both workspaces into `destination`, and return the two tarballs.
+ *
+ * @param {string} destination
+ * @returns {Promise<string[]>}
+ */
+export async function pack(destination) {
+  await mkdir(destination, { recursive: true });
+  await run(
+    'npm',
+    ['pack', '--workspace', '@srljs/core', '--workspace', '@srljs/cli', '--pack-destination', destination],
+    { cwd: REPO },
+  );
+
+  const files = await readdir(destination);
+  return ['srljs-core-', 'srljs-cli-'].map((prefix) => {
+    const file = files.find((entry) => entry.startsWith(prefix));
+    if (file === undefined) throw new Error(`npm pack produced no ${prefix}*.tgz`);
+    return join(destination, file);
+  });
+}
+
+/**
+ * Install the pair into `dir` and nothing else, as npx does before it runs
+ * `@srljs/cli`. Run its bin with `srl(cwd, args, { prefix: dir })`.
+ *
+ * @param {string} dir
+ * @param {string[]} tarballs from `pack()`
+ * @returns {Promise<void>}
+ */
+export async function launch(dir, tarballs) {
+  await mkdir(dir, { recursive: true });
+  const manifest = { name: 'launcher', private: true, type: 'module', version: '0.0.0', devDependencies: PAIR };
+  await writeFile(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  await installTarballs(dir, tarballs, PAIR);
+}
+
+/**
+ * Install a scaffolded project from its own manifest.
+ *
+ * The manifest must declare exactly the versions this checkout proves, which is how a
+ * scaffold that pins a different version fails here.
  *
  * `npm install` receives the two local tarballs and resolves everything else, preferring
  * npm's cache. No package is linked or copied from this checkout's node_modules, so the
  * root holds the layout a consumer gets rather than a view of this repository.
  *
- * The install cannot be `--offline`. This root carries no lockfile, so npm resolves every
+ * @param {string} root
+ * @param {string[]} tarballs from `pack()`
+ * @returns {Promise<void>}
+ */
+export async function install(root, tarballs) {
+  await installTarballs(root, tarballs, APPLICATION_DEPENDENCIES);
+}
+
+/**
+ * The install cannot be `--offline`. The root carries no lockfile, so npm resolves every
  * declared name against a registry packument, and `npm ci` installs from resolved URLs
  * without ever fetching one. A CI runner therefore has the tarballs cached and no
  * packument to resolve them by.
  *
  * @param {string} root
+ * @param {string[]} tarballs
+ * @param {Readonly<Record<string, string>>} expected
  * @returns {Promise<void>}
  */
-export async function install(root) {
+async function installTarballs(root, tarballs, expected) {
   const manifest = /** @type {{ dependencies?: Record<string, string>, devDependencies?: Record<string, string> }} */ (
     JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   );
   const declared = { ...manifest.dependencies, ...manifest.devDependencies };
-  for (const [name, version] of Object.entries(APPLICATION_DEV_DEPENDENCIES)) {
+  for (const [name, version] of Object.entries(expected)) {
     if (declared[name] !== version) {
       throw new Error(
         `${join(root, 'package.json')} must declare ${name}@${version}; found ${String(declared[name])}.`,
@@ -154,24 +202,45 @@ export async function install(root) {
     }
   }
 
-  const tarballs = join(root, 'tarballs');
-  await mkdir(tarballs, { recursive: true });
   await run(
     'npm',
-    ['pack', '--workspace', '@srljs/core', '--workspace', '@srljs/cli', '--pack-destination', tarballs],
-    { cwd: REPO },
-  );
-
-  const files = await readdir(tarballs);
-  const packages = ['srljs-core-', 'srljs-cli-'].map((prefix) => {
-    const file = files.find((entry) => entry.startsWith(prefix));
-    if (file === undefined) throw new Error(`npm pack produced no ${prefix}*.tgz`);
-    return join(tarballs, file);
-  });
-
-  await run(
-    'npm',
-    ['install', '--prefer-offline', '--no-save', '--no-audit', '--no-fund', ...packages],
+    ['install', '--prefer-offline', '--no-save', '--no-audit', '--no-fund', ...tarballs],
     { cwd: root },
   );
+}
+
+/**
+ * Put a generated component on the scaffolded home page, as a developer does after
+ * `srl generate component <tag>`: the tag in the template, the class in `uses`.
+ *
+ * Throws when the page no longer has the lines this edits, so a changed scaffold fails
+ * here rather than leaving the component unused.
+ *
+ * @param {string} root the project
+ * @param {string} app
+ * @param {string} tag a component generated into `<app>/src/components/`
+ * @returns {Promise<void>}
+ */
+export async function useComponent(root, app, tag) {
+  const name = componentClassName(tag);
+  const page = join(root, app, 'src', 'pages', 'home-page');
+
+  const template = `${page}.html`;
+  await writeFile(template, `${(await readFile(template, 'utf8')).trimEnd()}\n<${tag} label="${tag}"></${tag}>\n`);
+
+  const module = `${page}.js`;
+  const source = await readFile(module, 'utf8');
+  const anchors = /** @type {Array<[string, string]>} */ ([
+    [
+      "import { t } from '@core/localization/i18n.js';\n",
+      `import { t } from '@core/localization/i18n.js';\n\nimport { ${name} } from '../components/${tag}.js';\n`,
+    ],
+    ['  module: import.meta.url,\n});', `  module: import.meta.url,\n  uses: [${name}],\n});`],
+  ]);
+  let edited = source;
+  for (const [anchor, replacement] of anchors) {
+    if (!edited.includes(anchor)) throw new Error(`${module} has no ${JSON.stringify(anchor)} to edit.`);
+    edited = edited.replace(anchor, replacement);
+  }
+  await writeFile(module, edited);
 }

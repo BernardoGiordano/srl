@@ -32,7 +32,8 @@ import { fileURLToPath } from 'node:url';
  * are not in this package at all.
  */
 const COMMANDS = {
-  new: '../scaffold/application.mjs',
+  new: '../scaffold/project.mjs',
+  generate: '../scaffold/generate.mjs',
   serve: '../dev/serve.mjs',
   build: '../delivery/build.mjs',
   templates: '../delivery/bundle-templates.mjs',
@@ -51,13 +52,24 @@ const COMMANDS = {
 
 const USAGE = `usage: srl <command> [options]
 
+Project
+  new <project> [--app <name>] [--json]
+                            a new project directory: package.json pinning the
+                            matching @srljs/core and @srljs/cli with dev, check
+                            and build scripts, .gitignore, AGENTS.md,
+                            tsconfig.json, and an application at
+                            <project>/web/ (--app renames it) that boots
+                            through startApplication with one route. Installs
+                            nothing. Refuses an existing directory
+  generate app <name> [--json]
+                            add an application to the current project
+  generate component <[dir/]tag> [--app <name>] [--styles] [--json]
+                            add a component module and its template under
+                            <app>/src/components/, or <app>/src/<dir>/.
+                            --styles adds its scoped stylesheet. Refuses a tag
+                            the application already defines
+
 Development
-  new <name>                a new application in the repository root: the
-                            document with the library's import map pasted and
-                            hashed, an entry and a lazy chunk, the stylesheet,
-                            the manifest, a locale bundle, and a tsconfig.json
-                            extending the published base. Refuses rather than
-                            overwrites
   serve [--app <name>] [--port <n>] [--no-watch] [--open]
         [--proxy <prefix>=<origin>]...
                             static server for one application: the library's
@@ -118,13 +130,15 @@ Release
   retention <release-root> [--apply]
 
 Other
-  language-server             LSP server over stdio, used by VS Code, WebStorm and
-                              any editor with a generic LSP client
+  --version                 the installed version
+  language-server           LSP server over stdio, used by VS Code, WebStorm and
+                            any editor with a generic LSP client
   layout [--deploy-pairs | --apps]
                             the mount table and the application list, for a
                             consumer that cannot import
 
-The repository worked on is the working directory. Every command takes
+The project worked on is the working directory, and \`srl new\` creates one
+inside it. Every other command that acts on an application takes
 \`--app <name>\`, or reads APP; with one application the flag is optional, with
 two it is required, because a tool that picks one deploys the wrong thing sooner
 or later.

@@ -20,6 +20,10 @@ await defineComponent({
 });
 ```
 
+`npx --no-install srl generate component users-page` writes a module and
+template in this shape under the application's `src/components/`. Give a
+directory first, as in `pages/users-page`, to place it elsewhere under `src/`.
+
 `module` finds the sibling `.html` template. A component with a handwritten
 `render()` declares `template: false`; another path can be given through
 `template`. Export the class so the static checker can type its template.
