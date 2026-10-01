@@ -267,7 +267,7 @@
       [.value]="selectedPageSize"
       (change)="changePageSize($event)"
     >
-      <option *for="option of pageOptions; key: option.value" [value]="option.label">
+      <option *for="option of pageOptions; key: option.value" [value]="option.label" [.selected]="option.label === selectedPageSize">
         {{ option.label }}
       </option>
     </select>
