@@ -57,6 +57,7 @@
     "checks",
     "dev",
     "testing",
+    "mcp",
     "docs",
     "llms.txt"
   ],

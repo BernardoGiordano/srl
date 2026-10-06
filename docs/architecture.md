@@ -83,6 +83,7 @@ boundaries have one production implementation and a test adapter.
 | How public inputs, internal state, inherited declarations, events and projection names become one Element | `cli/project-model/parse.mjs`, resolved by `cli/project-model/index.mjs` |
 | What a message is, which bundle answers for a file, and whether a reference resolves | `cli/message-catalog/` — the verifier, `cli/checks/message-check.mjs` and the editor are adapters over it |
 | How an editor consumes the project model and template checker | `cli/language-server/`; editor launchers live under `editors/` |
+| How an agent or an ecosystem tool reads the project | `cli/mcp/server.mjs` over the check runner, the model and the shipped docs; `cli/project-model/custom-elements.mjs` writes the Custom Elements Manifest |
 | What one editor session owns, and when it starts, stops or restarts | `editors/vscode/session.cjs`; the watchers it needs are registered by `cli/language-server/server.mjs` |
 | How an incomplete editor template becomes context, scope, typed members and edit ranges | `cli/language-server/semantics.mjs` |
 | Which authoring form a document is written in, what each editor feature may ask of it, and the binding syntax the answer is written in | `cli/language-server/authoring.mjs` — one view over an external srl template or a module's inline Lit templates |

@@ -97,6 +97,7 @@ Run \`npx --no-install srl check --json\` after each edit, and fix every finding
 | \`npm test\` | Run the component tests under \`${app}/test/\` in Chrome. |
 | \`npx --no-install srl generate component <tag>\` | Add a component and its template under \`${app}/src/components/\`. |
 | \`npx --no-install srl generate app <name>\` | Add another application. |
+| \`npx --no-install srl mcp\` | Serve checks, elements and the docs to an MCP client. |
 
 ## Rules
 

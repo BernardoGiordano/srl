@@ -63,8 +63,14 @@
     "docs copy with its llms.txt index. Tests stay out of the tarball except for the",
     "public browser test harness."
   ],
+  "//customElements": [
+    "The Custom Elements Manifest for the elements this package defines, written by",
+    "npm run package from the project model, for Storybook and IDE plugins."
+  ],
+  "customElements": "custom-elements.json",
   "files": [
     "dist",
+    "custom-elements.json",
     "lib",
     "components",
     "tsconfig.base.json",

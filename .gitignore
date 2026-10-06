@@ -10,6 +10,9 @@ dist/
 /cli/docs/
 /cli/llms.txt
 
+# The Custom Elements Manifest `npm run package` writes from the project model.
+/source/custom-elements.json
+
 # templates.json is ignored, because it is an optional optimisation that is off by
 # default and derived entirely from the .html files the application can reach.
 # Turn it on by running `npm run templates` in a deploy step and setting

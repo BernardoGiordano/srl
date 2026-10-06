@@ -16,6 +16,7 @@ import {
   readProject,
   shippedTemplates,
 } from '../project-model/index.mjs';
+import { customElementsManifest } from '../project-model/custom-elements.mjs';
 import { clearParseCache, parseModule } from '../project-model/parse.mjs';
 
 /**
@@ -431,4 +432,31 @@ void test('an import from the library entry resolves to the module that declares
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+void test('the JSON projection is versioned, and the Custom Elements Manifest is the same model', async () => {
+  // ADR-0127. A reader holds `schemaVersion` and knows which shape it has.
+  const model = await fixtureProject(APP_A);
+  assert.equal(projectIndex(model).schemaVersion, 1);
+
+  const manifest = customElementsManifest(model, { base: APP_A.dir, include: () => true });
+  assert.equal(manifest.schemaVersion, '2.1.0');
+  const paths = manifest.modules.map((module) => module.path);
+  assert.deepEqual(paths, [...paths].sort(), 'modules are sorted, so two runs write the same bytes');
+
+  const child = manifest.modules.flatMap((module) =>
+    module.declarations.map((declaration) => ({ module: module.path, declaration: /** @type {Record<string, unknown>} */ (declaration) })),
+  ).find(({ declaration }) => declaration.tagName === 'fx-child');
+  assert.ok(child !== undefined, 'fx-child is declared');
+  assert.equal(child.module, 'src/child.js');
+  assert.equal(child.declaration.customElement, true);
+
+  const definitions = manifest.modules.flatMap((module) => module.exports);
+  assert.ok(
+    definitions.some(
+      (entry) =>
+        /** @type {Record<string, unknown>} */ (entry).kind === 'custom-element-definition' &&
+        /** @type {Record<string, unknown>} */ (entry).name === 'fx-child',
+    ),
+  );
 });
