@@ -49,7 +49,19 @@ jobs:
     runs-on: ubuntu-latest
     # `workflow_run` fires on every conclusion, cancelled and failed included, so the
     # gate is here rather than in the trigger. A dispatch has no workflow_run to read.
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    #
+    # `check` also runs on pull requests, and the `branches` filter matches the head
+    # branch by name, so a fork PR from a branch called main would pass it. Only a push
+    # to this repository deploys.
+    if: >-
+      github.event_name == 'workflow_dispatch' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      )
+
+    # Holds PRIVATE_KEY, HOST, USERNAME and KNOWN_HOSTS behind a required reviewer.
+    environment: production
 
     steps:
       # The commit that passed `check`, not whatever main points at now: a
@@ -85,21 +97,34 @@ jobs:
       # same table, so /lib/ and /components/ are not spelled out in this file at all
       # and a mount added there is deployed here with no edit. Zero dependencies,
       # which is why it runs before any install.
+      #
+      # Both halves end up unquoted inside the remote shell command of --rsync-path,
+      # so a pair outside lowercase path characters stops the deploy.
       - name: Read the mount table
         run: |
           node cli/layout.mjs --deploy-pairs | tee mounts.txt
+          if grep -qvE '^[a-z0-9/_-]+ [a-z0-9/_-]+$' mounts.txt; then
+            echo "mount table holds a pair outside [a-z0-9/_-]:" >&2
+            grep -vE '^[a-z0-9/_-]+ [a-z0-9/_-]+$' mounts.txt >&2
+            exit 1
+          fi
 
       # Plain ssh rather than a third-party action: the whole deployment is two
       # rsyncs and one restart, and this way the credential never leaves the job.
+      #
+      # The host key is pinned from KNOWN_HOSTS, and ssh refuses any host it does not
+      # list.
       - name: Authorise
         env:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          HOST: ${{ secrets.HOST }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
         run: |
+          test -n "$KNOWN_HOSTS" || { echo "KNOWN_HOSTS secret is empty" >&2; exit 1; }
           mkdir -p ~/.ssh
           printf '%s\n' "$PRIVATE_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'StrictHostKeyChecking yes\n' > ~/.ssh/config
 
       # PASS 1: the application, at the root.
       #
