@@ -23,6 +23,7 @@ await defineComponent({
 `npx --no-install srl generate component users-page` writes a module and
 template in this shape under the application's `src/components/`. Give a
 directory first, as in `pages/users-page`, to place it elsewhere under `src/`.
+`srl g c users-page` is the short form.
 
 `module` finds the sibling `.html` template. A component with a handwritten
 `render()` declares `template: false`; another path can be given through

@@ -41,6 +41,10 @@ directory under `web/src/`. `--styles` adds its scoped stylesheet. A template
 that names the new tag imports its class and lists it in `uses`. The command
 refuses a tag the project already defines and any file that exists.
 
+The CLI accepts Angular's short forms. `srl g c user-card` is
+`srl generate component user-card`, and `n`, `g`, `s` and `b` stand for
+`new`, `generate`, `serve` and `build`.
+
 `npx --no-install` uses the installed binary and will not download another
 version.
 

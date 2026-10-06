@@ -3,6 +3,7 @@
  *
  *   srl generate app <name> [--json]
  *   srl generate component <[dir/]tag> [--app <name>] [--styles] [--json]
+ *   srl g c <[dir/]tag> ...
  *
  * `srl new` writes a whole project. This command adds one application or one
  * component to a project that exists, and refuses to overwrite anything. ADR-0122.
@@ -19,6 +20,9 @@ import { componentClassName, emitComponent } from './component.mjs';
 /** @import { Diagnostic } from '../diagnostics/types.js' */
 
 const KINDS = ['app', 'component'];
+
+/** Short kind names, as in Angular's `ng g c`. */
+const KIND_ALIASES = { c: 'component' };
 
 /**
  * The words that are not flags or flag values.
@@ -40,7 +44,11 @@ function positionals(args) {
  * @returns {Promise<{ found: Diagnostic[], summary?: string }>}
  */
 async function generate(args) {
-  const [kind, name] = positionals(args);
+  const [written, name] = positionals(args);
+  const kind =
+    written !== undefined && Object.hasOwn(KIND_ALIASES, written)
+      ? KIND_ALIASES[/** @type {keyof typeof KIND_ALIASES} */ (written)]
+      : written;
 
   if (kind === 'app') {
     return {
@@ -72,7 +80,8 @@ async function generate(args) {
       error(
         'scaffold/usage',
         `${kind === undefined ? 'Nothing to generate' : `"${kind}" is not something srl generates`}. ` +
-          `Kinds: ${KINDS.join(', ')}. For example \`srl generate component user-card\`.`,
+          `Kinds: ${KINDS.join(', ')}, or c for component. ` +
+          `For example \`srl generate component user-card\`.`,
       ),
     ],
   };

@@ -27,5 +27,6 @@
 | A shared service injected into a remote | `mount(host)`, a frozen capability object |
 | `$localize` (build-time, one bundle per locale) | `t()` (runtime, one deployment) |
 | `DatePipe` / `CurrencyPipe` | `dt` / `cur`, template globals |
+| `ng new` / `ng g c` / `ng serve` / `ng build` | `srl new` / `srl g c` / `srl serve` / `srl build`, with the same short forms `n`, `g`, `c`, `s` and `b` |
 | Module Federation | import map plus `app.manifest.json` |
 | Federation `shared` singletons | one URL per dependency in the import map |

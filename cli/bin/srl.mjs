@@ -50,6 +50,20 @@ const COMMANDS = {
   'language-server': '../language-server/server.mjs',
 };
 
+/**
+ * Short command names, the ones Angular's CLI uses for the same commands, so
+ * `srl g c user-card` works where `ng g c` does.
+ *
+ * Each resolves to its command name before dispatch. A short name for an argument,
+ * such as `c` for `component`, belongs to the tool that parses that argument.
+ */
+const ALIASES = {
+  n: 'new',
+  g: 'generate',
+  s: 'serve',
+  b: 'build',
+};
+
 const USAGE = `usage: srl <command> [options]
 
 Project
@@ -129,6 +143,13 @@ Release
   activate <release-root> <release-id>
   retention <release-root> [--apply]
 
+Short forms, as in Angular's CLI
+  n                         new
+  g                         generate
+  g c                       generate component
+  s                         serve
+  b                         build
+
 Other
   --version                 the installed version
   language-server           LSP server over stdio, used by VS Code, WebStorm and
@@ -160,7 +181,12 @@ if (first === '--version' || first === '-v') {
   process.exit(0);
 }
 
-const target = COMMANDS[/** @type {keyof typeof COMMANDS} */ (first)];
+const command = Object.hasOwn(ALIASES, first)
+  ? ALIASES[/** @type {keyof typeof ALIASES} */ (first)]
+  : first;
+const target = Object.hasOwn(COMMANDS, command)
+  ? COMMANDS[/** @type {keyof typeof COMMANDS} */ (command)]
+  : undefined;
 
 if (target === undefined) {
   const known = Object.keys(COMMANDS).join(', ');
