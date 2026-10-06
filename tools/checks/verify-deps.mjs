@@ -102,6 +102,7 @@ import { error, info, outputFormat, report, warning } from '../../cli/diagnostic
 import { REPO, apps, exists, readText, walk } from '../../cli/layout.mjs';
 import { messageFindings, readMessages } from '../../cli/message-catalog/index.mjs';
 import { entryBundles, entryText } from '../../cli/package/entry.mjs';
+import { HARNESS } from '../../cli/testing/web-test-runner.mjs';
 import {
   COMPONENTS,
   BUNDLES,
@@ -855,11 +856,12 @@ export async function verifyDependencies() {
       ...(await walk(join(app.dir, 'src'), /\.js$/u)),
       ...(await walk(join(app.dir, 'remotes'), /\.js$/u)),
     ];
+    const testFiles = await walk(join(app.dir, 'test'), /\.js$/u);
     const checkedFiles = [
       ...appFiles,
       ...libFiles.filter((file) => file.endsWith('.js')),
       ...(await walk(COMPONENTS, /\.js$/u)),
-      ...(await walk(join(app.dir, 'test'), /\.js$/u)),
+      ...testFiles,
     ];
 
     for (const file of checkedFiles) {
@@ -878,8 +880,11 @@ export async function verifyDependencies() {
         if (specifier.startsWith('./') || specifier.startsWith('../') || specifier.startsWith('/')) {
           continue;
         }
+        // A test page maps the published harness as well. ADR-0126.
         const declared =
-          imports[specifier] !== undefined || prefixes.some((p) => specifier.startsWith(p));
+          imports[specifier] !== undefined ||
+          prefixes.some((p) => specifier.startsWith(p)) ||
+          (specifier === HARNESS && testFiles.includes(file));
         if (!declared) {
           refuse(
             'deps/undeclared-specifier',

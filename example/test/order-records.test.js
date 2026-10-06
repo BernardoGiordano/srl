@@ -1,6 +1,6 @@
 import { signal } from '@core/foundation/reactive.js';
 import { OrderRecords } from '../src/state/order-records.js';
-import { assert } from '../../source/lib/test/harness.js';
+import { assert } from '@srljs/core/testing/harness.js';
 
 /** @import { Order } from '../src/services/sales-service.js' */
 

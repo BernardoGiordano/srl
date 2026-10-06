@@ -157,7 +157,17 @@ const { report } = await readReport('dist/web');
 console.log(report.totals.brotli);
 ```
 
-For browser tests, `serveOrigin()` serves an application with the same mount
+Component tests run through `@web/test-runner` with the preset this package
+publishes. `srl new` writes the configuration, a test and the `test` script.
+
+```js
+// web-test-runner.config.mjs
+import { testRunnerConfig } from '@srljs/cli/testing/web-test-runner.mjs';
+
+export default testRunnerConfig({ app: 'web' });
+```
+
+For end-to-end tests, `serveOrigin()` serves an application with the same mount
 rules and history fallback as the development server. It accepts `route`,
 `transform`, `headers`, and `fallback` adapters.
 
@@ -175,8 +185,8 @@ const origin = await serveOrigin({
 await origin.close();
 ```
 
-The [testing guide](https://github.com/BernardoGiordano/srl/blob/main/docs/guide/testing.md)
-shows the component harness and browser setup.
+The testing guide, `docs/guide/testing.md` in this package, covers the preset
+options, the harness and the rules a test follows.
 
 ## Documentation
 

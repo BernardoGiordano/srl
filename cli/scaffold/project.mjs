@@ -66,6 +66,7 @@ export function projectFiles(facts) {
       dev: `srl serve --app ${app}`,
       check: 'srl check',
       build: `srl build --app ${app}`,
+      test: 'web-test-runner',
     },
     dependencies: { '@srljs/core': facts.core },
     devDependencies: sorted({ '@srljs/cli': facts.cli, ...facts.tools }),
@@ -93,6 +94,7 @@ Run \`npx --no-install srl check --json\` after each edit, and fix every finding
 | \`npm run dev\` | Serve \`${app}/\` with live updates. |
 | \`npm run check\` | Check types, templates, the import map, messages and the project model. |
 | \`npm run build\` | Build the production artifact into \`dist/${app}/\`. Needs a Git commit. |
+| \`npm test\` | Run the component tests under \`${app}/test/\` in Chrome. |
 | \`npx --no-install srl generate component <tag>\` | Add a component and its template under \`${app}/src/components/\`. |
 | \`npx --no-install srl generate app <name>\` | Add another application. |
 
@@ -105,6 +107,8 @@ Run \`npx --no-install srl check --json\` after each edit, and fix every finding
 - Message keys live in \`${app}/i18n/en.json\`. \`npx --no-install srl check messages --write\`
   adds the missing ones.
 - \`@srljs/core\` and \`@srljs/cli\` stay pinned to the same exact version.
+- A test imports the harness as \`@srljs/core/testing/harness.js\` and the module under
+  test by relative path, then awaits \`settled\` before it asserts.
 
 ## Documentation
 
@@ -119,11 +123,54 @@ The installed packages carry the documentation for their version.
   \`node_modules/@srljs/core/docs/adr/0072-*.md\`.
 `;
 
+  /*
+   * The CLI's preset runs the tests the way this repository runs its own, against the
+   * application's import map. ADR-0126.
+   */
+  const testConfig = `import { testRunnerConfig } from '@srljs/cli/testing/web-test-runner.mjs';
+
+// Component tests in Chrome, against the import map in ${app}/index.html.
+// See docs/guide/testing.md in @srljs/core.
+export default testRunnerConfig({ app: '${app}' });
+`;
+
+  const homeTest = `import { assert, mount, present, settled, unmountAll } from '@srljs/core/testing/harness.js';
+
+import '../src/pages/home-page.js';
+
+describe('home-page', () => {
+  afterEach(() => {
+    unmountAll();
+  });
+
+  it('counts each click', async () => {
+    const page = mount('<home-page></home-page>');
+    await settled(page);
+
+    const button = present(page.querySelector('button'));
+    button.click();
+    await settled(page);
+
+    assert.equal(button.textContent?.trim(), '1');
+  });
+});
+`;
+
+  // The application's tsconfig, with the test globals the project installs.
+  const tsconfig = {
+    extends: '@srljs/core/tsconfig.base.json',
+    compilerOptions: { types: ['mocha', 'node'] },
+    include: [`${app}/**/*.js`],
+  };
+
   return new Map([
     ['package.json', `${JSON.stringify(manifest, null, 2)}\n`],
     ['.gitignore', ignore],
     ['AGENTS.md', agents],
+    ['web-test-runner.config.mjs', testConfig],
     ...applicationFiles(facts.app),
+    [`${app}/test/home-page.test.js`, homeTest],
+    ['tsconfig.json', `${JSON.stringify(tsconfig, null, 2)}\n`],
   ]);
 }
 

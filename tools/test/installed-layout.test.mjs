@@ -24,12 +24,14 @@ void test('a new project declares every dependency its first build needs, as thi
     const manifest = JSON.parse(await readFile(join(parent, 'installed-application', 'package.json'), 'utf8'));
 
     // The pinned pair, then the application-owned tools at the versions the packaged
-    // install proves. ADR-0098, ADR-0122.
+    // install proves. ADR-0098, ADR-0122, ADR-0126.
     assert.deepEqual(manifest.dependencies, { '@srljs/core': JSON.parse(coreSource).version });
     assert.deepEqual(manifest.devDependencies, {
       '@srljs/cli': JSON.parse(cliSource).version,
       '@tailwindcss/cli': locked('@tailwindcss/cli'),
+      '@types/mocha': locked('@types/mocha'),
       '@types/node': locked('@types/node'),
+      '@web/test-runner': locked('@web/test-runner'),
       tailwindcss: locked('tailwindcss'),
     });
   } finally {
