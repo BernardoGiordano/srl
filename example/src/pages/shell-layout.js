@@ -20,6 +20,7 @@ import { UiMenu } from '@components/shell/ui-menu.js';
 
 import { NAVIGATION, locate } from '../navigation.js';
 import { iconPath } from '../icons.js';
+import { avatarTone } from '../ui/avatar-tone.js';
 import { LIVE_FEED } from '../services/live-feed.js';
 
 /** @import { NavNode } from '../navigation.js' */
@@ -120,8 +121,21 @@ export class ShellLayout extends SignalElement {
     return t(`nav.${(found.leaf ?? found.group).key}`);
   }
 
-  /** @returns {Array<{ label: string, href?: string }>} */
+  /**
+   * The trail to the current screen. The last step is the screen itself, so it
+   * carries no link.
+   *
+   * @returns {Array<{ label: string, href?: string }>}
+   */
   get breadcrumbs() {
+    const trail = this.#trail();
+    const last = trail.at(-1);
+    if (last !== undefined) trail[trail.length - 1] = { label: last.label };
+    return trail;
+  }
+
+  /** @returns {Array<{ label: string, href?: string }>} */
+  #trail() {
     const path = currentPath.value;
     /** @type {Array<{ label: string, href?: string }>} */
     const trail = [{ label: t('nav.dashboard'), href: '/' }];
@@ -151,6 +165,11 @@ export class ShellLayout extends SignalElement {
   /** @param {string | undefined} name */
   iconPath(name) {
     return iconPath(name);
+  }
+
+  /** @param {string | undefined} name */
+  avatarTone(name) {
+    return avatarTone(name);
   }
 
   /** @param {Event} event */

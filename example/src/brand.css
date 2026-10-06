@@ -1,0 +1,190 @@
+/*
+ * Meridian's palette and finish.
+ *
+ * The library palette stays linked because the release build expects it. This
+ * file follows it and redefines every token in each block, so no library value
+ * leaks through when the document switches scheme. Development links it from
+ * index.html; the release build imports it from src/app.css.
+ *
+ * The rules after the palette are unlayered. An unlayered rule outranks every
+ * layer, so these refinements win over the collection's defaults and over the
+ * utilities inside its templates.
+ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --ui-color-canvas: #f8f8fa;
+  --ui-color-surface: #ffffff;
+  --ui-color-surface-raised: #ffffff;
+  --ui-color-hover: #f3f3f6;
+  --ui-color-text: #17171c;
+  --ui-color-text-muted: #6b6b76;
+  --ui-color-border: #e6e6eb;
+  --ui-color-primary: #5b5bd6;
+  --ui-color-primary-hover: #4c4cc4;
+  --ui-color-primary-contrast: #ffffff;
+  --ui-color-accent: #5b5bd6;
+  --ui-color-accent-strong: #3d3da8;
+  --ui-color-sidebar: #f1f1f4;
+  --ui-color-sidebar-hover: rgb(23 23 28 / 5%);
+  --ui-color-sidebar-active: #ffffff;
+  --ui-color-sidebar-text: #17171c;
+  --ui-color-sidebar-muted: #5d5d68;
+  --ui-color-overlay: rgb(17 17 24 / 40%);
+  --ui-color-focus-ring: #5b5bd6;
+  --ui-color-shadow: rgb(17 17 34 / 7%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --ui-color-canvas: #111114;
+    --ui-color-surface: #18181c;
+    --ui-color-surface-raised: #1e1e23;
+    --ui-color-hover: #232329;
+    --ui-color-text: #ececf1;
+    --ui-color-text-muted: #9b9ba7;
+    --ui-color-border: #2a2a31;
+    --ui-color-primary: #5b5bd6;
+    --ui-color-primary-hover: #6a6ae0;
+    --ui-color-primary-contrast: #ffffff;
+    --ui-color-accent: #9d9df7;
+    --ui-color-accent-strong: #c2c2fc;
+    --ui-color-sidebar: #0c0c0f;
+    --ui-color-sidebar-hover: rgb(255 255 255 / 5%);
+    --ui-color-sidebar-active: rgb(255 255 255 / 8%);
+    --ui-color-sidebar-text: #f1f1f5;
+    --ui-color-sidebar-muted: #9c9ca8;
+    --ui-color-overlay: rgb(0 0 0 / 65%);
+    --ui-color-focus-ring: #9d9df7;
+    --ui-color-shadow: rgb(0 0 0 / 45%);
+  }
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --ui-color-canvas: #111114;
+  --ui-color-surface: #18181c;
+  --ui-color-surface-raised: #1e1e23;
+  --ui-color-hover: #232329;
+  --ui-color-text: #ececf1;
+  --ui-color-text-muted: #9b9ba7;
+  --ui-color-border: #2a2a31;
+  --ui-color-primary: #5b5bd6;
+  --ui-color-primary-hover: #6a6ae0;
+  --ui-color-primary-contrast: #ffffff;
+  --ui-color-accent: #9d9df7;
+  --ui-color-accent-strong: #c2c2fc;
+  --ui-color-sidebar: #0c0c0f;
+  --ui-color-sidebar-hover: rgb(255 255 255 / 5%);
+  --ui-color-sidebar-active: rgb(255 255 255 / 8%);
+  --ui-color-sidebar-text: #f1f1f5;
+  --ui-color-sidebar-muted: #9c9ca8;
+  --ui-color-overlay: rgb(0 0 0 / 65%);
+  --ui-color-focus-ring: #9d9df7;
+  --ui-color-shadow: rgb(0 0 0 / 45%);
+}
+
+/*
+ * Inter when the visitor has it, the platform's UI face otherwise. Both are
+ * local, so the first paint never waits on a font request.
+ */
+html {
+  font-family:
+    'Inter var', InterVariable, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: color-mix(in oklab, var(--ui-color-primary) 22%, transparent);
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────────── */
+
+[data-ui-part='table'] {
+  font-size: 13.5px;
+}
+
+[data-ui-part='table-header'],
+[data-ui-part='table-selection-header'] {
+  padding-block: 9px;
+  background-color: var(--ui-color-surface);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+[data-ui-part='table-cell'],
+[data-ui-part='table-selection-cell'] {
+  padding-block: 10px;
+}
+
+[data-ui-part='table-columns-control'] {
+  border-block-end: 0;
+  padding-block: 10px;
+}
+
+[data-ui-part='table-columns-trigger'],
+[data-ui-part='table-page-size'] {
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px var(--ui-color-shadow);
+}
+
+[data-ui-part='table-pagination'] {
+  font-size: 12.5px;
+}
+
+[data-ui-part='table-page'],
+[data-ui-part='table-previous'],
+[data-ui-part='table-next'] {
+  border-color: transparent;
+  border-radius: 8px;
+}
+
+[data-ui-part='table-page']:hover,
+[data-ui-part='table-previous']:not(:disabled):hover,
+[data-ui-part='table-next']:not(:disabled):hover {
+  background-color: var(--ui-color-hover);
+}
+
+[data-ui-part='table-page'][aria-current='page'] {
+  border-color: transparent;
+  background-color: color-mix(in oklab, var(--ui-color-primary) 12%, transparent);
+  color: var(--ui-color-accent-strong);
+}
+
+/* ── Inputs and menus ───────────────────────────────────────────────────── */
+
+[data-ui-part='combobox-control'] {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px var(--ui-color-shadow);
+}
+
+[data-ui-part='combobox-panel'],
+[data-ui-part='menu-panel'],
+[data-ui-part='table-columns-panel'] {
+  border-radius: 10px;
+}
+
+[data-ui-part='combobox-chip'] {
+  background-color: color-mix(in oklab, var(--ui-color-primary) 10%, transparent);
+  color: var(--ui-color-accent-strong);
+}
+
+[data-ui-part='dialog-panel'] {
+  border-radius: 14px;
+}
+
+/* ── Shell ──────────────────────────────────────────────────────────────── */
+
+/* A group step has no link either, so only the last step reads as current. */
+[data-ui-part='breadcrumb-item']:last-child [data-ui-part='breadcrumb-current'] {
+  color: var(--ui-color-text);
+  font-weight: 500;
+}

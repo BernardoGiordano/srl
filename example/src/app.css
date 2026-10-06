@@ -7,7 +7,25 @@
 @import '../../source/components/style.css';
 /* The shared styles read the neutral palette's tokens. */
 @import '../../source/components/theme-default.css';
+/* Meridian's palette, after the neutral one so its values win. */
+@import './brand.css';
 @import 'tailwindcss' source(none);
+
+/*
+ * `dark:` follows the resolved theme rather than the OS, so a light choice on a
+ * dark system stays light. `ocean` is this application's dark registered theme.
+ * The inline Tailwind block in index.html declares the same variant.
+ */
+@custom-variant dark {
+  &:where([data-theme='dark'], [data-theme='dark'] *, [data-theme='ocean'], [data-theme='ocean'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme]), :root:not([data-theme]) *) {
+      @slot;
+    }
+  }
+}
 
 /*
  * Match the semantic token names in the inline Tailwind block in index.html.

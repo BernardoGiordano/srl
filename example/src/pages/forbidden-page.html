@@ -14,13 +14,13 @@
     <path d="M12 15.4v.2"></path>
   </svg>
 
-  <h1 class="mt-4 text-[20px] font-bold text-ink">{{ t('forbidden.title') }}</h1>
+  <h1 class="mt-4 text-[20px] font-semibold text-ink">{{ t('forbidden.title') }}</h1>
   <p class="mt-2 text-[13.5px] leading-relaxed text-muted">{{ t('forbidden.body') }}</p>
   <p class="mt-1 text-[13px] text-muted">{{ signedInAs }}</p>
 
   <a
     href="/"
-    class="mt-6 inline-block rounded-md bg-brand px-4 py-2 text-[13.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover"
+    class="mt-6 inline-block rounded-lg bg-brand px-4 py-2 text-[13.5px] font-medium text-brand-contrast shadow-[0_1px_2px_var(--ui-color-shadow),inset_0_1px_0_rgb(255_255_255/14%)] transition-colors hover:bg-brand-hover"
   >
     {{ t('common.goHome') }}
   </a>

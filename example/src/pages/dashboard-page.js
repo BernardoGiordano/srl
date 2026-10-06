@@ -5,6 +5,7 @@ import { signal } from '@core/foundation/reactive.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { dt, t } from '@core/localization/i18n.js';
+import { AUTH_SESSION } from '@auth/session.js';
 
 import { AppCard } from '../ui/app-card.js';
 import { AppStat } from '../ui/app-stat.js';
@@ -13,6 +14,14 @@ import { SALES_SERVICE } from '../services/sales-service.js';
 
 /** @import { DashboardSummary } from '../services/sales-service.js' */
 /** @import { OutletTarget } from '@core/elements/types.js' */
+
+/** @type {Readonly<Record<string, string>>} */
+const KPI_ICONS = {
+  openOrders: 'billing',
+  pipeline: 'analytics',
+  shipped: 'truck',
+  belowReorder: 'warning',
+};
 
 /**
  * Show KPIs, alerts, and a chosen panel. The tiles format numeric API values for
@@ -57,6 +66,14 @@ export class DashboardPage extends SignalElement {
     },
   ];
 
+  /** Name the time of day, then the user's first name. */
+  get greeting() {
+    const hour = new Date().getHours();
+    const part = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+    const name = inject(AUTH_SESSION).session.value?.name ?? '';
+    return t(`dashboard.greeting.${part}`, { name: name.split(' ')[0] ?? name });
+  }
+
   get kpis() {
     return this.#summary.value.value?.kpis ?? [];
   }
@@ -73,6 +90,11 @@ export class DashboardPage extends SignalElement {
   /** @param {{ key: string, value: number, delta: number, currency: string }} kpi */
   kpiLabel(kpi) {
     return t(`dashboard.kpi.${kpi.key}`);
+  }
+
+  /** @param {{ key: string }} kpi */
+  kpiIcon(kpi) {
+    return KPI_ICONS[kpi.key] ?? '';
   }
 
   /** @param {{ sku: string, name: string, stock: number, reorderPoint: number }} alert */

@@ -1,4 +1,9 @@
 <div class="space-y-5 p-4 sm:p-6">
+  <div>
+    <h2 class="text-[22px] font-semibold tracking-tight text-ink">{{ greeting }}</h2>
+    <p class="mt-1 text-[13.5px] text-muted">{{ t('dashboard.greetingLead') }}</p>
+  </div>
+
   <app-notice
     *if="pending"
     variant="loading"
@@ -20,6 +25,7 @@
     <app-stat
       *for="kpi of kpis; key: kpi.key"
       label="{{ kpiLabel(kpi) }}"
+      icon="{{ kpiIcon(kpi) }}"
       [.value]="kpi.value"
       [.delta]="kpi.delta"
       currency="{{ kpi.currency }}"
@@ -27,16 +33,15 @@
   </div>
 
   <div class="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-    <app-card
-      eyebrow="{{ t('nav.dashboard') }}"
-      heading="{{ t('dashboard.panelsTitle') }}"
-      lead="{{ t('dashboard.panelsLead') }}"
-    >
-      <div slot="actions" class="flex flex-wrap gap-1.5">
+    <app-card heading="{{ t('dashboard.panelsTitle') }}" lead="{{ t('dashboard.panelsLead') }}">
+      <div
+        slot="actions"
+        class="inline-flex rounded-lg bg-canvas p-0.5 ring-1 ring-inset ring-ui-border"
+      >
         <button
           *for="option of panels; key: option.id"
           type="button"
-          class="cursor-pointer rounded-md border px-3 py-1.5 text-[12.5px] font-medium transition-colors {{ isSelected(option.target) ? 'border-accent bg-accent/10 text-brand' : 'border-ui-border text-muted hover:bg-canvas' }}"
+          class="cursor-pointer whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-medium transition-colors sm:px-2.5 sm:text-[12.5px] {{ isSelected(option.target) ? 'bg-surface text-ink shadow-[0_1px_2px_var(--ui-color-shadow),0_0_0_1px_var(--ui-color-border)]' : 'text-muted hover:text-ink' }}"
           [aria-pressed]="isSelected(option.target) ? 'true' : 'false'"
           (click)="select(option.target)"
         >
@@ -53,27 +58,34 @@
     <app-card heading="{{ t('dashboard.alertsTitle') }}" lead="{{ t('dashboard.alertsLead') }}">
       <p *if="alerts.length === 0" class="text-[13px] text-muted">{{ t('dashboard.alertsEmpty') }}</p>
 
-      <ul *else class="divide-y divide-ui-border">
-        <li *for="alert of alerts; key: alert.sku" class="flex items-start gap-3 py-2.5">
-          <svg
-            class="mt-0.5 size-4 shrink-0 text-amber-500"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+      <ul *else class="-mx-2 space-y-0.5">
+        <li
+          *for="alert of alerts; key: alert.sku"
+          class="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-canvas"
+        >
+          <span
+            class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400"
             aria-hidden="true"
           >
-            <path d="M12 4l9 16H3z M12 10v4.5 M12 17.2v.2"></path>
-          </svg>
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 4l9 16H3z M12 10v4.5 M12 17.2v.2"></path>
+            </svg>
+          </span>
           <span class="min-w-0">
             <a
-              class="block truncate font-medium text-brand hover:text-accent-strong"
+              class="block truncate font-medium text-ink hover:text-accent"
               [href]="'/inventory/products?sku=' + alert.sku"
               >{{ alert.name }}</a
             >
-            <span class="block text-[12.5px] text-muted">{{ alertText(alert) }}</span>
+            <span class="block truncate text-[12.5px] text-muted">{{ alertText(alert) }}</span>
           </span>
         </li>
       </ul>

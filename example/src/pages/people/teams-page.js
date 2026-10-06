@@ -7,6 +7,7 @@ import { UiAvatar } from '@components/shell/ui-avatar.js';
 
 import { AppCard } from '../../ui/app-card.js';
 import { AppNotice } from '../../ui/app-notice.js';
+import { avatarTone } from '../../ui/avatar-tone.js';
 import { PEOPLE_SERVICE } from '../../services/people-service.js';
 
 /** @import { Team } from '../../services/people-service.js' */
@@ -23,6 +24,11 @@ export class TeamsPage extends SignalElement {
 
   pending = this.#teams.pending;
   failed = this.#teams.failed;
+
+  /** @param {string} name */
+  avatarTone(name) {
+    return avatarTone(name);
+  }
 
   get teams() {
     return this.#teams.value.value;

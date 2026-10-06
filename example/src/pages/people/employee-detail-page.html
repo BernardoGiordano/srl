@@ -10,19 +10,19 @@
   ></app-notice>
 
   <div
-    class="flex flex-wrap items-center gap-4 rounded-xl border border-ui-border bg-surface px-5 py-4 shadow-[0_1px_3px_var(--ui-color-shadow)]"
+    class="flex flex-wrap items-center gap-4 rounded-xl border border-ui-border bg-surface px-5 py-5 shadow-[0_1px_2px_var(--ui-color-shadow)]"
   >
     <ui-avatar
       name="{{ name }}"
-      fallback-class="flex size-12 items-center justify-center rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast"
+      fallback-class="flex size-14 items-center justify-center rounded-full text-[18px] font-semibold ring-4 ring-canvas {{ avatarTone(name) }}"
     ></ui-avatar>
 
     <div class="min-w-0">
-      <p class="text-[17px] font-bold text-ink">{{ name }}</p>
+      <p class="text-[20px] font-semibold tracking-tight text-ink">{{ name }}</p>
       <p class="text-[13px] text-muted">{{ role }} · {{ team }}</p>
       <a
         *if="email"
-        class="text-[12.5px] text-brand hover:text-accent-strong"
+        class="text-[12.5px] text-accent hover:text-accent-strong"
         [href]="'mailto:' + email"
         >{{ email }}</a
       >
@@ -32,7 +32,7 @@
   </div>
 
   <div
-    class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_3px_var(--ui-color-shadow)]"
+    class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_2px_var(--ui-color-shadow)]"
   >
     <app-tabs [.items]="tabs" label="{{ t('people.tabsLabel') }}"></app-tabs>
     <x-route-outlet class="block p-4 sm:p-5"></x-route-outlet>

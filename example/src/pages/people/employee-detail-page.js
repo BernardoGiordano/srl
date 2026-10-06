@@ -10,6 +10,7 @@ import { UiAvatar } from '@components/shell/ui-avatar.js';
 import { AppBadge } from '../../ui/app-badge.js';
 import { AppNotice } from '../../ui/app-notice.js';
 import { AppTabs } from '../../ui/app-tabs.js';
+import { avatarTone } from '../../ui/avatar-tone.js';
 import { PEOPLE_SERVICE } from '../../services/people-service.js';
 
 /** @import { Employee } from '../../services/people-service.js' */
@@ -64,6 +65,11 @@ export class EmployeeDetailPage extends SignalElement {
 
   get statusLabel() {
     return this.status === '' ? '' : t(`people.statusValue.${this.status}`);
+  }
+
+  /** @param {string} name */
+  avatarTone(name) {
+    return avatarTone(name);
   }
 
   get statusTone() {

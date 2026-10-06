@@ -18,7 +18,7 @@
       -->
       <button
         type="button"
-        class="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+        class="cursor-pointer rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-medium text-brand-contrast shadow-[0_1px_2px_var(--ui-color-shadow),inset_0_1px_0_rgb(255_255_255/14%)] transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         [?disabled]="advanceDisabled"
         [title]="advanceHint"
         (click)="advance()"
@@ -33,7 +33,7 @@
 
     <div class="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
       <app-field label="{{ t('orders.customer') }}">
-        <a class="font-medium text-brand hover:text-accent-strong" [href]="customerLink">
+        <a class="font-medium text-accent hover:text-accent-strong" [href]="customerLink">
           {{ customerName }}
         </a>
       </app-field>
@@ -48,7 +48,7 @@
   </app-card>
 
   <div
-    class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_3px_var(--ui-color-shadow)]"
+    class="overflow-hidden rounded-xl border border-ui-border bg-surface shadow-[0_1px_2px_var(--ui-color-shadow)]"
   >
     <app-tabs [.items]="tabs" label="{{ t('orders.tabsLabel') }}"></app-tabs>
 
