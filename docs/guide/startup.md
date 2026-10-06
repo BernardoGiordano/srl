@@ -4,7 +4,7 @@ An application starts with one call in `main.js`. It supplies configuration and
 providers; the library runs the startup steps in order.
 
 ```js
-import { startHostedApplication } from '@host/runtime.js';
+import { startHostedApplication } from '@srljs/core';
 
 await startHostedApplication({
   configure: () => configureTheme({ defaultTheme: 'system' }),
@@ -16,8 +16,7 @@ await startHostedApplication({
 });
 ```
 
-Use `startApplication` from `@core/application/runtime.js` when an application
-has no remotes. `startHostedApplication` adds the default `REMOTE_HOST`
+Use `startApplication` when an application has no remotes. `startHostedApplication` adds the default `REMOTE_HOST`
 provider before the application's providers run. The example uses it for its
 remotes, and an application can replace that provider with its own policy.
 

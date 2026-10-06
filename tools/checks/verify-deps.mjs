@@ -101,6 +101,7 @@ import { dirname, join, relative, sep } from 'node:path';
 import { error, info, outputFormat, report, warning } from '../../cli/diagnostics/index.mjs';
 import { REPO, apps, exists, readText, walk } from '../../cli/layout.mjs';
 import { messageFindings, readMessages } from '../../cli/message-catalog/index.mjs';
+import { entryBundles, entryText } from '../../cli/package/entry.mjs';
 import {
   COMPONENTS,
   BUNDLES,
@@ -285,6 +286,25 @@ export async function verifyDependencies() {
   }
 
   /**
+   * The entry module behind each bundle's bare specifier is committed for the same
+   * reason the fragment is, and generated from the same door as the bundle, so a stale
+   * one offers the import map a different set of names than `exports` does. ADR-0124.
+   */
+  for (const bundle of entryBundles()) {
+    const onDisk = await readText(bundle.entry).catch(() => null);
+    if (onDisk === (await entryText(bundle))) {
+      pass('deps/entry-module', `offers the ${bundle.file} door to the import map`, { file: bundle.entry });
+    } else {
+      refuse(
+        'deps/stale-entry-module',
+        `is not the door ${bundle.file} offers. Run \`npm run importmap\`. Until then ` +
+          `\`${bundle.specifier}\` names a different set of exports in a browser than in a bundler.`,
+        { file: bundle.entry },
+      );
+    }
+  }
+
+  /**
    * Every specifier prefix belongs to exactly one bundle.
    *
    * This is what makes the two halves of the interface the same surface. A layer
@@ -401,10 +421,11 @@ export async function verifyDependencies() {
    *
    * @param {string} file
    * @param {(dir: string) => string} expected The package-relative target for a prefix's directory.
+   * @param {(bundle: import('../../cli/package/interface.mjs').PackageBundle & { entry: string }) => string} expectedEntry The target for a bundle's bare specifier.
    * @param {string} consequence What a different target would type-check against.
    * @returns {Promise<{ extends?: string, compilerOptions?: Record<string, unknown> } | null>}
    */
-  const checkPathTable = async (file, expected, consequence) => {
+  const checkPathTable = async (file, expected, expectedEntry, consequence) => {
     if (!(await exists(file))) {
       refuse(
         'deps/no-base-tsconfig',
@@ -432,7 +453,20 @@ export async function verifyDependencies() {
         );
       }
     }
+    const entries = new Map(entryBundles().map((bundle) => [bundle.specifier, bundle]));
+    for (const [specifier, bundle] of entries) {
+      const target = expectedEntry(bundle);
+      const declared = tsPaths[specifier]?.[0];
+      if (declared !== target) {
+        refuse(
+          'deps/tspath-disagrees',
+          `maps "${specifier}" to ${declared ?? 'nothing'} rather than ${target}. ${consequence}`,
+          { file },
+        );
+      }
+    }
     for (const pattern of Object.keys(tsPaths)) {
+      if (entries.has(pattern)) continue;
       const prefix = pattern.replace(/\*$/u, '');
       if (SPECIFIER_DIRS[prefix] === undefined) {
         refuse(
@@ -449,12 +483,14 @@ export async function verifyDependencies() {
   await checkPathTable(
     baseTsconfigFile,
     (dir) => `./${DECLARATION_TREE}/${dir}/*`,
+    (bundle) => `./${bundle.declaration}`,
     `The import map serves the prefix from the directory those declarations are built from, so ` +
       `any other target type-checks a consumer against modules the browser does not load.`,
   );
   const sourceTsconfig = await checkPathTable(
     sourceTsconfigFile,
     (dir) => `./${dir}/*`,
+    (bundle) => `./${relative(PACKAGE, bundle.entry).split(sep).join('/')}`,
     `That is where the library's import map resolves the prefix, so any other target ` +
       `type-checks this repository against files the browser does not load.`,
   );

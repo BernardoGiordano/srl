@@ -21,11 +21,13 @@
  * read.
  */
 
+import { readFileSync, statSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import ts from 'typescript';
 
 import { readText } from '../layout.mjs';
+import { moduleDoor } from '../package/door.mjs';
 
 /**
  * One `defineComponent` or `customElements.define` call, exactly as written.
@@ -169,6 +171,7 @@ export function parseSource(file, source, prefixes) {
 /** Forget every parse. For a test that rewrites a fixture within one mtime tick. */
 export function clearParseCache() {
   cache.clear();
+  entryCache.clear();
 }
 
 /**
@@ -205,6 +208,9 @@ function read(path, source, prefixes) {
     if (ts.isImportDeclaration(statement)) {
       const target = resolveSpecifier(statement.moduleSpecifier, path, prefixes);
       if (target === undefined) continue;
+      const entry = isEntrySpecifier(statement.moduleSpecifier, prefixes)
+        ? entryExports(target, prefixes)
+        : undefined;
 
       // `import './md-body.js'` has no clause at all, and the import is the
       // statement. Running the module calls `customElements.define`, which is what
@@ -220,8 +226,9 @@ function read(path, source, prefixes) {
       const bindings = statement.importClause.namedBindings;
       if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
       for (const element of bindings.elements) {
-        parsed.imports.set(element.name.text, target);
-        parsed.importNames.set(element.name.text, element.propertyName?.text ?? element.name.text);
+        const name = element.propertyName?.text ?? element.name.text;
+        parsed.imports.set(element.name.text, entry?.get(name) ?? target);
+        parsed.importNames.set(element.name.text, name);
       }
     }
   }
@@ -991,9 +998,10 @@ function sourcePosition(tree, node) {
 }
 
 /**
- * Turn an import specifier into the file it names, for the prefixes an application's
- * import map declares. A bare specifier such as `lit` names nothing in this
- * repository.
+ * Turn an import specifier into the file it names, for the specifiers an application's
+ * import map declares. A key ending in `/` is a prefix for a directory, and any other
+ * key, such as `@srljs/core`, names one entry module. A bare specifier such as `lit`
+ * names nothing in this repository.
  *
  * @param {ts.Expression} specifier
  * @param {string} file
@@ -1004,10 +1012,66 @@ function resolveSpecifier(specifier, file, prefixes) {
   if (!ts.isStringLiteralLike(specifier)) return undefined;
   const text = specifier.text;
   if (text.startsWith('.')) return resolve(dirname(file), text);
-  for (const [prefix, directory] of Object.entries(prefixes)) {
-    if (text.startsWith(prefix)) return resolve(directory, text.slice(prefix.length));
+  for (const [key, target] of Object.entries(prefixes)) {
+    if (!key.endsWith('/')) {
+      if (text === key) return target;
+    } else if (text.startsWith(key)) {
+      return resolve(target, text.slice(key.length));
+    }
   }
   return undefined;
+}
+
+/**
+ * Whether a specifier names a library entry module rather than a file under a prefix.
+ *
+ * @param {ts.Expression} specifier
+ * @param {Record<string, string>} prefixes
+ * @returns {boolean}
+ */
+function isEntrySpecifier(specifier, prefixes) {
+  return ts.isStringLiteralLike(specifier) && !specifier.text.endsWith('/') && specifier.text in prefixes;
+}
+
+/** @type {Map<string, { size: number, mtimeMs: number, names: Map<string, string> }>} */
+const entryCache = new Map();
+
+/**
+ * The module that declares each name an entry module re-exports.
+ *
+ * An import from `@srljs/core` then resolves to the file the deep path names, so `uses`,
+ * inheritance and message calls read the same through either spelling. ADR-0124.
+ *
+ * @param {string} file
+ * @param {Record<string, string>} prefixes
+ * @returns {Map<string, string>}
+ */
+function entryExports(file, prefixes) {
+  const stats = statSync(file, { throwIfNoEntry: false });
+  if (stats === undefined) return new Map();
+  const cached = entryCache.get(file);
+  if (cached !== undefined && cached.size === stats.size && cached.mtimeMs === stats.mtimeMs) {
+    return cached.names;
+  }
+
+  const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  /** @type {Map<string, string>} */
+  const names = new Map();
+  for (const statement of tree.statements) {
+    if (!ts.isExportDeclaration(statement) || statement.moduleSpecifier === undefined) continue;
+    const target = resolveSpecifier(statement.moduleSpecifier, file, prefixes);
+    if (target === undefined) continue;
+    const clause = statement.exportClause;
+    if (clause === undefined) {
+      const member = statSync(target, { throwIfNoEntry: false });
+      if (member === undefined) continue;
+      for (const name of moduleDoor(readFileSync(target, 'utf8'), target).names) names.set(name, target);
+    } else if (ts.isNamedExports(clause)) {
+      for (const element of clause.elements) names.set(element.name.text, target);
+    }
+  }
+  entryCache.set(file, { size: stats.size, mtimeMs: stats.mtimeMs, names });
+  return names;
 }
 
 /**

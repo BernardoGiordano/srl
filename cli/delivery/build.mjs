@@ -35,7 +35,7 @@ import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
 import { checkProject } from '../checks/index.mjs';
 import { errors, formatText } from '../diagnostics/index.mjs';
 import { REPO, readText, selectedApp, walk } from '../layout.mjs';
-import { extractImportMap, PACKAGE, urlToFile } from '../package/interface.mjs';
+import { ENTRY_SPECIFIERS, extractImportMap, PACKAGE, urlToFile } from '../package/interface.mjs';
 import { readProject } from '../project-model/index.mjs';
 import {
   PUBLIC,
@@ -2202,6 +2202,11 @@ async function importMapResolver(app, prefixes) {
       for (const [prefix, directory] of orderedPrefixes) {
         if (source.startsWith(prefix)) return join(directory, source.slice(prefix.length));
       }
+      // A library entry such as `@srljs/core` resolves through the map to the source
+      // entry, which shares its modules with the deep paths. Through `exports` it would
+      // reach the bundle, a second copy of every module. ADR-0124.
+      const mapped = imports[source];
+      if (mapped !== undefined && ENTRY_SPECIFIERS[source] === mapped) return urlToFile(app.dir, mapped);
       if (source.startsWith('/')) return urlToFile(app.dir, source);
       if (isBare(source) && !bare.has(source)) {
         throw artifactError(

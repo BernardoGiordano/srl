@@ -63,8 +63,7 @@ repository checks.
 A component declares its element class and points to a sibling HTML template.
 
 ```js
-import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
+import { defineComponent, SignalElement } from '@srljs/core';
 
 export class GreetingCard extends SignalElement {
   name = 'world';
@@ -95,10 +94,17 @@ syntax.
 
 For direct browser loading, serve the library's `lib/` and `components/` folders
 on the same origin as your application. The published `lib/importmap.json` maps
-`@core/` and `@components/` to those folders. The CLI writes this setup, and the
+`@srljs/core` to the library's entry module and `@components/` to the component
+folder. The CLI writes this setup, and the
 [example document](example/index.html) shows it in place.
 
-For Node.js or a bundler, use the package exports.
+```js
+import { defineComponent, SignalElement } from '@srljs/core';
+import { UiTable } from '@components/data/ui-table.js';
+```
+
+For Node.js or a bundler, the same core import resolves through the package
+exports, and the components come from one bundle.
 
 ```js
 import { defineComponent, SignalElement } from '@srljs/core';

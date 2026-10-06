@@ -4,8 +4,7 @@ A component declares its tag, class, template, and element dependencies in one
 place.
 
 ```js
-import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
+import { defineComponent, SignalElement } from '@srljs/core';
 import { AppCard } from '../ui/app-card.js';
 
 export class UsersPage extends SignalElement {
@@ -107,7 +106,7 @@ may conflict.
 Use `resource()` for one latest request tied to an element's lifetime.
 
 ```js
-import { resource } from '@core/foundation/resource.js';
+import { resource } from '@srljs/core';
 
 export class OrdersPage extends SignalElement {
   /** @type {TableQuery} */

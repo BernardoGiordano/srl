@@ -56,9 +56,9 @@ The applications, discovered rather than configured:
 
 <!-- generated:applications -->
 
-| Application | Entry module | Prefixes it declares | Templates it owns | Elements it declares |
+| Application | Entry module | Library specifiers it declares | Templates it owns | Elements it declares |
 |---|---|---|---|---|
-| `example` | `example/src/main.js` | `@auth/` `@components/` `@core/` `@host/` | 36 | 36 |
+| `example` | `example/src/main.js` | `@auth/` `@components/` `@core/` `@host/` `@srljs/core` | 36 | 36 |
 
 <!-- /generated:applications -->
 

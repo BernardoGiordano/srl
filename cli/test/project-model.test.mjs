@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import test from 'node:test';
 
 import { REPO, apps } from '../layout.mjs';
+import { LIB } from '../package/interface.mjs';
 import {
   describeElement,
   missingStylesheets,
@@ -396,4 +398,37 @@ void test('a side-effect import makes a plain custom element available to the te
   const other = model.elements.get('fx-host');
   assert.ok(other !== undefined);
   assert.ok(!other.usesTags.includes('fx-plain'), 'not available to a component that does not import it');
+});
+
+void test('an import from the library entry resolves to the module that declares the name', async () => {
+  // ADR-0124. `@srljs/core` is one module that re-exports the door, and the model reads
+  // through it, so `uses` and message calls mean the same under either spelling.
+  const dir = await mkdtemp(join(REPO, '.entry-fixture-'));
+  try {
+    await writeFile(
+      join(dir, 'index.html'),
+      '<script type="importmap">{ "imports": { "@srljs/core": "/lib/srl-core.js", "@core/": "/lib/core/" } }</script>\n' +
+        '<script type="module" src="/src/page.js"></script>\n',
+    );
+    await mkdir(join(dir, 'src'));
+    await writeFile(
+      join(dir, 'src', 'page.js'),
+      "import { defineComponent, RouteOutlet, SignalElement, t } from '@srljs/core';\n\n" +
+        "export class FxPage extends SignalElement {\n  get title() {\n    return t('page.title');\n  }\n}\n\n" +
+        "await defineComponent({ tag: 'fx-page', element: FxPage, module: import.meta.url, template: false, uses: [RouteOutlet] });\n",
+    );
+
+    const model = await readProject({ name: 'entry', dir }, { roots: [LIB, dir] });
+    const page = model.elements.get('fx-page');
+    assert.deepEqual(
+      page?.uses.map((entry) => [entry.tag, relative(REPO, entry.module ?? '')]),
+      [['x-route-outlet', 'source/lib/core/navigation/router.js']],
+    );
+    assert.deepEqual(
+      model.modules.get(join(dir, 'src', 'page.js'))?.messages.map((message) => message.key),
+      ['page.title'],
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

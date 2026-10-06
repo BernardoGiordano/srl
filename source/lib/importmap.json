@@ -4,6 +4,7 @@
     "lit/async-directive.js": "/lib/vendor/lit-all.min.js",
     "lit/directives/repeat.js": "/lib/vendor/lit-all.min.js",
     "@preact/signals-core": "/lib/vendor/signals-core.mjs",
+    "@srljs/core": "/lib/srl-core.js",
     "@core/": "/lib/core/",
     "@auth/": "/lib/auth/",
     "@host/": "/lib/host/",

@@ -29,13 +29,18 @@ the vendored runtime files with integrity hashes. The CLI scaffold writes
 this setup for you. The [example document](https://github.com/BernardoGiordano/srl/blob/main/example/index.html)
 shows a complete import map.
 
-Your source can then import individual modules.
+Your source then imports the library under the name a bundler uses.
 
 ```js
-import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
+import { defineComponent, SignalElement } from '@srljs/core';
 import { UiTable } from '@components/data/ui-table.js';
 ```
+
+The import map sends `@srljs/core` to `lib/srl-core.js`, which re-exports the
+same names as the core bundle from the modules under `lib/`. A deep path such
+as `@core/elements/component.js` loads the same module, so mixing the two
+keeps one element registry. Import each component by path, because loading a
+component's module registers its tag.
 
 ### Node.js or a bundler
 
@@ -53,8 +58,7 @@ fetches each template beside its component module.
 ## A component
 
 ```js
-import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
+import { defineComponent, SignalElement } from '@srljs/core';
 
 export class GreetingCard extends SignalElement {
   name = 'world';

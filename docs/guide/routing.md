@@ -78,7 +78,7 @@ Routes, remotes, startup, and `<x-outlet>` use the mounting code in
 `@core/elements/mount.js`.
 
 ```js
-import { MountSequence, createElement } from '@core/elements/mount.js';
+import { MountSequence, createElement } from '@srljs/core';
 
 const sequence = new MountSequence();
 const attempt = sequence.begin();

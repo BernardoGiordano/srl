@@ -22,7 +22,7 @@
     "serve": "node cli/dev/serve.mjs --app example",
     "build": "node cli/delivery/build.mjs",
     "vendor": "node tools/delivery/vendor.mjs",
-    "importmap": "node cli/package/interface.mjs --write",
+    "importmap": "node cli/package/interface.mjs --write && node cli/package/entry.mjs --write",
     "templates": "node cli/delivery/bundle-templates.mjs",
     "package": "node tools/delivery/package-bundle.mjs && node tools/delivery/package-docs.mjs",
     "package:check": "node tools/delivery/package-bundle.mjs --check && node tools/delivery/package-docs.mjs --check",

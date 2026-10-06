@@ -44,6 +44,7 @@ import { signal } from '@core/foundation/reactive.js';
  * Nothing outside these four elements has standard text. `ui-table-column`
  * labels, filter rule captions, group names and option labels are data, and data
  * arrives from the caller.
+ * @internal
  */
 export const STANDARD_TEXT = {
   table: {
@@ -158,6 +159,7 @@ export function configureCollectionText(config = {}) {
  * @param {keyof typeof STANDARD_TEXT} namespace
  * @param {string} name
  * @returns {string}
+ * @internal
  */
 export function standardText(namespace, name) {
   const key = `ui.${namespace}.${name}`;

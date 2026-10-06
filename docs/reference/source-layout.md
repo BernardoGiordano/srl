@@ -7,7 +7,7 @@ from applications through components and host adapters into the core library.
 | Directory | Purpose |
 |---|---|
 | `source/` | The `@srljs/core` package. Its `package.json` defines browser mounts, exports, and published files. |
-| `source/lib/` | Framework modules, vendored browser dependencies, and the library's browser tests. Served at `/lib/`. |
+| `source/lib/` | Framework modules, vendored browser dependencies, and the library's browser tests. Served at `/lib/`. `srl-core.js` is the generated entry module the import map names `@srljs/core`. |
 | `source/components/` | Shared UI elements and styles. Served at `/components/`. |
 | `cli/` | The `@srljs/cli` package. It provides the scaffold, project model, checks, dev server, language server, and release pipeline. |
 | `example/` | Meridian, a complete application with a Node API, authentication, and two remotes. |

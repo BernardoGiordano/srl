@@ -12,6 +12,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "paths": {
+      "@srljs/core": ["./lib/srl-core.js"],
       "@core/*": ["./lib/core/*"],
       "@auth/*": ["./lib/auth/*"],
       "@host/*": ["./lib/host/*"],

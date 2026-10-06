@@ -38,6 +38,7 @@ import { error, warning } from '../diagnostics/index.mjs';
 import { REPO, apps, exists, readText, repoPath, selectedApp, walk } from '../layout.mjs';
 import {
   COMPONENTS,
+  ENTRY_SPECIFIERS,
   LIB,
   extractImportMap,
   fileToUrl,
@@ -716,12 +717,13 @@ async function readTemplates(app, elements, roots) {
 }
 
 /**
- * The import-map prefixes that name source in this repository, as directories.
+ * The import-map prefixes that name source in this repository, as directories, and
+ * the library's entry specifiers, as files.
  *
  * Read from the application's own import map rather than hardcoded, because the map
  * is what the browser resolves against. A prefix added there reaches every static tool
- * with no second edit. Vendored bare specifiers are skipped, because they name files
- * rather than prefixes.
+ * with no second edit. Vendored bare specifiers are skipped, because they name
+ * third-party files the model does not read.
  *
  * @param {Application} app
  * @param {string} indexHtml
@@ -732,6 +734,11 @@ function importPrefixes(app, indexHtml) {
   /** @type {Record<string, string>} */
   const prefixes = {};
   for (const [specifier, url] of Object.entries(imports)) {
+    // A library entry such as `@srljs/core` names one module. ADR-0124.
+    if (ENTRY_SPECIFIERS[specifier] === url) {
+      prefixes[specifier] = resolve(urlToFile(app.dir, url));
+      continue;
+    }
     if (!specifier.endsWith('/') || !url.startsWith('/')) continue;
     // `resolve` rather than the raw join, because a prefix maps to a directory and a
     // trailing separator would make the same directory two different strings to

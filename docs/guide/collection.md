@@ -128,9 +128,7 @@ to labels so the active filter remains visible after a reload.
 a projected native input or a custom control.
 
 ```js
-import { field } from '@core/forms/field.js';
-import { group } from '@core/forms/group.js';
-import { email, required } from '@core/forms/validators.js';
+import { field, group, email, required } from '@srljs/core';
 
 form = group({
   name: field('', [required()]),
@@ -162,7 +160,7 @@ stops for them. This lets a read-only form keep its full record.
 A `fieldArray` holds rows with stable keys.
 
 ```js
-import { fieldArray } from '@core/forms/array.js';
+import { fieldArray } from '@srljs/core';
 
 form = group({
   contacts: fieldArray(() => group({

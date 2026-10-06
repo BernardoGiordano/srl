@@ -127,6 +127,18 @@ function mountedUrl(dir) {
   );
 }
 
+/**
+ * A package-relative file as the URL it is served at, so `lib/srl-core.js` becomes
+ * `/lib/srl-core.js`.
+ *
+ * @param {string} file
+ * @returns {string}
+ */
+function mountedFileUrl(file) {
+  const slash = file.lastIndexOf('/');
+  return `${mountedUrl(file.slice(0, slash))}${file.slice(slash + 1)}`;
+}
+
 /** Bare specifier prefix -> the URL it resolves to: `@core/` -> `/lib/core/`. */
 export const SPECIFIERS = /** @type {Record<string, string>} */ (
   Object.fromEntries(
@@ -296,12 +308,19 @@ export function vendorReferences(html, where) {
  * reaches the minified one through `./dist/*`, where a resolver substitutes `.d.ts`
  * for the `.js` it was given. ADR-0066.
  *
+ * `specifier` is the bare name a bundler resolves through `exports`, such as
+ * `@srljs/core`. A bundle with an `entry` also offers that name to the import map,
+ * which maps it to the entry module `cli/package/entry.mjs` writes. ADR-0124.
+ *
  * @typedef {{
  *   name: string,
  *   subpath: string,
  *   imports: string[],
  *   extends?: string,
  *   exclude?: string[],
+ *   specifier: string,
+ *   entry?: string,
+ *   entryUrl?: string,
  *   file: string,
  *   minified: string,
  *   declaration: string,
@@ -314,7 +333,7 @@ export function vendorReferences(html, where) {
 
 /** @type {PackageBundle[]} */
 export const BUNDLES = Object.entries(
-  /** @type {Record<string, { subpath: string, imports: string[], extends?: string, exclude?: string[] }>} */ (
+  /** @type {Record<string, { subpath: string, imports: string[], extends?: string, exclude?: string[], entry?: string }>} */ (
     MANIFEST.srl.bundles ?? {}
   ),
 ).map(([name, entry]) => {
@@ -335,6 +354,9 @@ export const BUNDLES = Object.entries(
     imports: entry.imports,
     extends: inherited,
     exclude: entry.exclude,
+    specifier: `${MANIFEST.name}${entry.subpath.slice(1)}`,
+    entry: entry.entry === undefined ? undefined : join(PACKAGE, entry.entry),
+    entryUrl: entry.entry === undefined ? undefined : mountedFileUrl(entry.entry),
     file: `dist/${name}.js`,
     minified: `dist/${name}.min.js`,
     declaration: `dist/${name}.d.ts`,
@@ -344,6 +366,18 @@ export const BUNDLES = Object.entries(
     external: parent?.imports ?? [],
   };
 });
+
+/**
+ * Bare specifier -> the URL of the entry module behind it: `@srljs/core` ->
+ * `/lib/srl-core.js`. Exact names, unlike the prefixes in `SPECIFIERS`. ADR-0124.
+ */
+export const ENTRY_SPECIFIERS = /** @type {Record<string, string>} */ (
+  Object.fromEntries(
+    BUNDLES.flatMap((bundle) =>
+      bundle.entryUrl === undefined ? [] : [[bundle.specifier, bundle.entryUrl]],
+    ),
+  )
+);
 
 /**
  * The declaration tree, package-relative, with one `.d.ts` per module under the
@@ -422,7 +456,7 @@ export const MANIFEST_SCHEMA_FILE = join(LIB, 'core', 'remotes', 'app.manifest.s
 /**
  * The import-map fragment every application on this library carries. It holds the
  * vendored dependencies with the hashes of the bytes actually in lib/vendor, then
- * the library's own prefixes.
+ * the library's entry specifiers and its own prefixes.
  *
  * An application's own entries, such as its remotes and its `/src/`, are not here
  * and never can be. The fragment is what the library publishes and the map is the
@@ -443,7 +477,7 @@ export async function importMapFragment() {
     integrity[url] = await subresourceIntegrity(file);
   }
 
-  return { imports: { ...vendor, ...SPECIFIERS }, integrity };
+  return { imports: { ...vendor, ...ENTRY_SPECIFIERS, ...SPECIFIERS }, integrity };
 }
 
 /**

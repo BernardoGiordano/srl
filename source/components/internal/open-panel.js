@@ -90,6 +90,7 @@ const MIN_HEIGHT = 96;
  * @param {HTMLElement} panel
  * @param {PanelOptions} options
  * @returns {() => void} Closes the panel and undoes all of the above. Idempotent.
+ * @internal
  */
 export function openPanel(host, trigger, panel, options) {
   const controller = new AbortController();
@@ -179,6 +180,7 @@ export function openPanel(host, trigger, panel, options) {
  *
  * @param {PanelBindingOptions} options
  * @returns {{ sync: (open: boolean) => void, close: () => void }}
+ * @internal
  */
 export function panelBinding(options) {
   /** @type {(() => void) | undefined} */

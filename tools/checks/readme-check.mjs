@@ -120,7 +120,7 @@ async function projectSections() {
   );
 
   const applications = table(
-    ['Application', 'Entry module', 'Prefixes it declares', 'Templates it owns', 'Elements it declares'],
+    ['Application', 'Entry module', 'Library specifiers it declares', 'Templates it owns', 'Elements it declares'],
     documented.map((model) => {
       const root = `${repoPath(model.app.dir)}/`;
       const owned = [...model.templates.values()].filter((template) => repoPath(template.path).startsWith(root));

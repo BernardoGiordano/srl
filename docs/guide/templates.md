@@ -132,7 +132,7 @@ deployment can enforce Trusted Types through its CSP. Review every explicit
 bypass beside the validation that makes its value safe.
 
 ```js
-import { bypassSecurityTrustResourceUrl } from '@core/template/security.js';
+import { bypassSecurityTrustResourceUrl } from '@srljs/core';
 
 get reviewedFrameUrl() {
   const url = new URL(this.reportPath, location.origin);

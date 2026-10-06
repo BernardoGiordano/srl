@@ -70,8 +70,7 @@ export function componentFiles(facts) {
   const file = /** @param {string} extension @returns {string} */ (extension) =>
     `${facts.dir}/${tag}.${extension}`;
 
-  const module = `import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
+  const module = `import { defineComponent, SignalElement } from '@srljs/core';
 
 /**
  * \`<${tag} label="…">\`. A template that names this tag imports \`${name}\` and lists it

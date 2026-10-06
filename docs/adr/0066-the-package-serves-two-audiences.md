@@ -18,7 +18,7 @@ The package publishes two shapes.
 
 | Audience | Gets |
 |---|---|
-| Browser with an import map | `lib/` and `components/` as source, plus `lib/importmap.json` |
+| Browser with an import map | `lib/` and `components/` as source, plus `lib/importmap.json`, which also maps `@srljs/core` to a source entry module (ADR-0124) |
 | Node or a bundler | Pre-resolved bundles in `dist/` |
 
 `npm run package` emits `srl-core.js`, `srl-components.js` and a minified version of each. The build resolves every internal prefix, so a bundle imports only `lit` and `@preact/signals-core`. `srl-components.js` imports `srl-core.js` instead of inlining it, so a page has one element registry, one injector and one template cache. Component templates are inlined by giving each declaration an explicit `template` path and seeding the compiler with that file's bytes.

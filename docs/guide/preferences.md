@@ -9,7 +9,7 @@ import {
   loadPreference,
   removePreference,
   savePreference,
-} from '@core/preferences/persistence.js';
+} from '@srljs/core';
 
 savePreference('search-panel', 'orders', { density: 'compact' });
 const state = loadPreference('search-panel', 'orders');
@@ -52,7 +52,7 @@ so include an account or tenant in the id when preferences must stay separate.
 ## Themes
 
 ```js
-import { configureTheme, setTheme } from '@core/appearance/theme.js';
+import { configureTheme, setTheme } from '@srljs/core';
 
 configureTheme({
   defaultTheme: 'system',

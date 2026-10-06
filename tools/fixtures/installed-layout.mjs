@@ -232,8 +232,8 @@ export async function useComponent(root, app, tag) {
   const source = await readFile(module, 'utf8');
   const anchors = /** @type {Array<[string, string]>} */ ([
     [
-      "import { t } from '@core/localization/i18n.js';\n",
-      `import { t } from '@core/localization/i18n.js';\n\nimport { ${name} } from '../components/${tag}.js';\n`,
+      "import { defineComponent, signal, SignalElement, t } from '@srljs/core';\n",
+      `import { defineComponent, signal, SignalElement, t } from '@srljs/core';\n\nimport { ${name} } from '../components/${tag}.js';\n`,
     ],
     ['  module: import.meta.url,\n});', `  module: import.meta.url,\n  uses: [${name}],\n});`],
   ]);
