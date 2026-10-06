@@ -11,6 +11,8 @@ import { UiDynamicFilter } from '@components/data/ui-dynamic-filter.js';
 
 import { AppCard } from '../../ui/app-card.js';
 import { AppNotice } from '../../ui/app-notice.js';
+import { AppBadge } from '../../ui/app-badge.js';
+import { orderStatusTone } from './order-status.js';
 import { SALES_SERVICE } from '../../services/sales-service.js';
 import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
 
@@ -171,8 +173,10 @@ export class OrdersPage extends SignalElement {
   /** @param {unknown} row */
   renderPlacedOn = (row) => dt(/** @type {Order} */ (row).placedOn, { dateStyle: 'medium' });
 
-  /** @param {unknown} row */
-  renderStatus = (row) => t(`orders.statusValue.${/** @type {Order} */ (row).status}`);
+  /** @param {string} status */
+  statusTone(status) {
+    return orderStatusTone(status);
+  }
 
   /** @param {unknown} row */
   renderChannel = (row) => t(`orders.channelValue.${/** @type {Order} */ (row).channel}`);
@@ -186,7 +190,7 @@ export class OrdersPage extends SignalElement {
     const order = /** @type {Order} */ (row);
     const link = document.createElement('a');
     link.href = `/sales/orders/${order.id}`;
-    link.className = 'font-medium text-brand hover:text-accent-strong';
+    link.className = 'font-medium text-ink tabular-nums hover:text-accent';
     link.textContent = order.code;
     return link;
   };
@@ -233,5 +237,5 @@ await defineComponent({
   tag: 'orders-page',
   element: OrdersPage,
   module: import.meta.url,
-  uses: [AppCard, AppNotice, UiTable, UiTableColumn, UiDynamicFilter],
+  uses: [AppCard, AppNotice, AppBadge, UiTable, UiTableColumn, UiDynamicFilter],
 });

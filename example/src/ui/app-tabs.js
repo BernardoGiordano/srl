@@ -42,7 +42,7 @@ export class AppTabs extends SignalElement {
    */
   linkClasses(item) {
     return this.isCurrent(item)
-      ? 'border-accent text-brand'
+      ? 'border-brand text-ink'
       : 'border-transparent text-muted hover:border-ui-border hover:text-ink';
   }
 

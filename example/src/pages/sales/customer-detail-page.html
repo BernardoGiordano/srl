@@ -13,7 +13,12 @@
     (action)="retry()"
   ></app-notice>
 
-  <app-card eyebrow="{{ t('nav.salesCustomers') }}" heading="{{ title }}" lead="{{ lead }}">
+  <app-card
+    eyebrow="{{ t('nav.salesCustomers') }}"
+    heading="{{ title }}"
+    lead="{{ lead }}"
+    avatar="{{ creating ? '' : title }}"
+  >
     <!--
       The Edit button explains when writing is unavailable. `startEdit()` puts the
       mode in the URL. Keep the slot present while the button appears conditionally.
@@ -22,7 +27,7 @@
       <button
         *if="viewing && !creating"
         type="button"
-        class="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+        class="cursor-pointer rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-medium text-brand-contrast shadow-[0_1px_2px_var(--ui-color-shadow),inset_0_1px_0_rgb(255_255_255/14%)] transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         [?disabled]="!canWrite"
         [title]="writeHint"
         (click)="startEdit()"
@@ -256,7 +261,7 @@
             <button
               *if="editing"
               type="button"
-              class="mt-6 cursor-pointer rounded-md border border-ui-border px-2.5 py-2 text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-raised"
+              class="mt-6 cursor-pointer rounded-lg border border-ui-border bg-surface px-2.5 py-2 text-[12.5px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] text-ink transition-colors hover:bg-surface-raised"
               [title]="t('customerForm.removeContact')"
               [aria-label]="t('customerForm.removeContact')"
               (click)="removeContact(row.index)"
@@ -269,7 +274,7 @@
         <div *if="editing" class="mt-3 flex items-center gap-3">
           <button
             type="button"
-            class="cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50"
+            class="cursor-pointer rounded-lg border border-ui-border bg-surface px-3 py-1.5 text-[12.5px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] text-ink transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50"
             [?disabled]="!canAddContact"
             (click)="addContact()"
           >
@@ -287,7 +292,7 @@
           *if="editing"
           type="submit"
           [?disabled]="saveDisabled"
-          class="cursor-pointer rounded-md bg-brand px-4 py-2 text-[13.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-default disabled:opacity-50"
+          class="cursor-pointer rounded-lg bg-brand px-4 py-2 text-[13.5px] font-medium text-brand-contrast shadow-[0_1px_2px_var(--ui-color-shadow),inset_0_1px_0_rgb(255_255_255/14%)] transition-colors hover:bg-brand-hover disabled:cursor-default disabled:opacity-50"
         >
           {{ saveLabel }}
         </button>
@@ -295,7 +300,7 @@
         <button
           *if="editing"
           type="button"
-          class="cursor-pointer rounded-md border border-ui-border px-4 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+          class="cursor-pointer rounded-lg border border-ui-border bg-surface px-4 py-2 text-[13.5px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] text-ink transition-colors hover:bg-canvas"
           (click)="cancel()"
         >
           {{ t('customerForm.cancel') }}
@@ -304,7 +309,7 @@
         <a
           *if="viewing"
           href="/sales/customers"
-          class="rounded-md border border-ui-border px-4 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+          class="rounded-lg border border-ui-border bg-surface px-4 py-2 text-[13.5px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] text-ink transition-colors hover:bg-canvas"
         >
           {{ t('customerForm.backToList') }}
         </a>
@@ -325,13 +330,13 @@
     label="{{ t('customerForm.discardTitle') }}"
     panel-class="w-full max-w-md rounded-xl border border-ui-border p-5"
   >
-    <h2 class="text-[15px] font-bold text-brand">{{ t('customerForm.discardTitle') }}</h2>
+    <h2 class="text-[15px] font-semibold text-ink">{{ t('customerForm.discardTitle') }}</h2>
     <p class="mt-2 text-[13.5px] leading-relaxed text-muted">{{ t('customerForm.discardPrompt') }}</p>
 
     <div class="mt-5 flex flex-wrap justify-end gap-2">
       <button
         type="button"
-        class="cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+        class="cursor-pointer rounded-lg border border-ui-border bg-surface px-3 py-1.5 text-[12.5px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] text-ink transition-colors hover:bg-canvas"
         (click)="discard()"
       >
         {{ t('customerForm.discard') }}
@@ -342,7 +347,7 @@
       <button
         type="button"
         autofocus
-        class="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover"
+        class="cursor-pointer rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-medium text-brand-contrast shadow-[0_1px_2px_var(--ui-color-shadow),inset_0_1px_0_rgb(255_255_255/14%)] transition-colors hover:bg-brand-hover"
         (click)="keepEditing()"
       >
         {{ t('customerForm.keepEditing') }}

@@ -12,6 +12,8 @@
     -->
     <link rel="stylesheet" href="/components/style.css" />
     <link rel="stylesheet" href="/components/theme-default.css" />
+    <!-- Meridian's palette. The release build imports it from src/app.css. -->
+    <link rel="stylesheet" href="/src/brand.css" data-artifact="source-only" />
 
     <!--
       The import map must precede module scripts. `npm run importmap` generates the
@@ -59,6 +61,21 @@
       same map for the production build.
     -->
     <style type="text/tailwindcss">
+      /*
+        `dark:` follows the resolved theme rather than the OS, so a light choice on a
+        dark system stays light. `ocean` is this application's dark registered theme.
+      */
+      @custom-variant dark {
+        &:where([data-theme='dark'], [data-theme='dark'] *, [data-theme='ocean'], [data-theme='ocean'] *) {
+          @slot;
+        }
+        @media (prefers-color-scheme: dark) {
+          &:where(:root:not([data-theme]), :root:not([data-theme]) *) {
+            @slot;
+          }
+        }
+      }
+
       @theme inline {
         --color-canvas: var(--ui-color-canvas);
         --color-surface: var(--ui-color-surface);

@@ -101,15 +101,6 @@ export class MovementsPage extends SignalElement {
   }
 
   /** @param {unknown} row */
-  renderKind = (row) => {
-    const movement = /** @type {Movement} */ (row);
-    const badge = document.createElement('app-badge');
-    badge.setAttribute('tone', movement.kind === 'issue' ? 'warn' : 'good');
-    badge.textContent = t(`movements.kind.${movement.kind}`);
-    return badge;
-  };
-
-  /** @param {unknown} row */
   filterKind = (row) => t(`movements.kind.${/** @type {Movement} */ (row).kind}`);
 
   /** @param {unknown} row */

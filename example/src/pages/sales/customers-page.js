@@ -10,9 +10,12 @@ import { ANY_COLUMN } from '@components/data/filter-descriptor.js';
 import { UiTable } from '@components/data/ui-table.js';
 import { UiTableColumn } from '@components/data/ui-table-column.js';
 import { UiCombobox } from '@components/inputs/ui-combobox.js';
+import { UiAvatar } from '@components/shell/ui-avatar.js';
 
 import { AppCard } from '../../ui/app-card.js';
 import { AppNotice } from '../../ui/app-notice.js';
+import { AppBadge } from '../../ui/app-badge.js';
+import { avatarTone } from '../../ui/avatar-tone.js';
 import { SALES_SERVICE } from '../../services/sales-service.js';
 
 /** @import { Customer } from '../../services/sales-service.js' */
@@ -101,8 +104,10 @@ export class CustomersPage extends SignalElement {
   /** @param {unknown} row */
   renderSince = (row) => dt(/** @type {Customer} */ (row).since, { dateStyle: 'medium' });
 
-  /** @param {unknown} row */
-  renderSegment = (row) => t(`customers.segmentValue.${/** @type {Customer} */ (row).segment}`);
+  /** @param {string} name */
+  avatarTone(name) {
+    return avatarTone(name);
+  }
 
   /** @param {unknown} row */
   renderOpenOrders = (row) => num(/** @type {Customer} */ (row).openOrders);
@@ -134,7 +139,8 @@ export class CustomersPage extends SignalElement {
     const customer = /** @type {Customer} */ (row);
     const link = document.createElement('a');
     link.href = `/sales/customers/${encodeURIComponent(customer.id)}`;
-    link.className = 'font-semibold text-accent underline-offset-2 hover:underline';
+    link.className =
+      'inline-flex rounded-lg border border-ui-border px-2.5 py-1 text-[12.5px] font-medium text-ink shadow-[0_1px_2px_var(--ui-color-shadow)] transition-colors hover:bg-canvas';
     link.textContent = t('customers.open');
     return link;
   };
@@ -144,5 +150,5 @@ await defineComponent({
   tag: 'customers-page',
   element: CustomersPage,
   module: import.meta.url,
-  uses: [AppCard, AppNotice, UiTable, UiTableColumn, UiCombobox],
+  uses: [AppCard, AppNotice, AppBadge, UiTable, UiTableColumn, UiCombobox, UiAvatar],
 });

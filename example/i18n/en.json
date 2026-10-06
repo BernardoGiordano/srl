@@ -23,6 +23,7 @@
 
   "nav": {
     "dashboard": "Dashboard",
+    "workspace": "Workspace",
     "sales": "Sales",
     "salesOrders": "Orders",
     "salesCustomers": "Customers",
@@ -139,6 +140,12 @@
   },
 
   "dashboard": {
+    "greeting": {
+      "morning": "Good morning, {name}",
+      "afternoon": "Good afternoon, {name}",
+      "evening": "Good evening, {name}"
+    },
+    "greetingLead": "Here is how sales and stock look right now.",
     "kpi": {
       "openOrders": "Open orders",
       "pipeline": "Pipeline value",

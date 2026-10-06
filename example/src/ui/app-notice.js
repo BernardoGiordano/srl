@@ -21,7 +21,7 @@ export class AppNotice extends SignalElement {
   get toneClasses() {
     switch (this.variant) {
       case 'error':
-        return 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200';
+        return 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200';
       case 'empty':
         return 'border-ui-border bg-canvas text-muted';
       default:

@@ -19,6 +19,7 @@
 
   "nav": {
     "dashboard": "لوحة المعلومات",
+    "workspace": "مساحة العمل",
     "sales": "المبيعات",
     "salesOrders": "الطلبات",
     "salesCustomers": "العملاء",
@@ -121,6 +122,12 @@
   },
 
   "dashboard": {
+    "greeting": {
+      "morning": "صباح الخير، {name}",
+      "afternoon": "مساء الخير، {name}",
+      "evening": "مساء الخير، {name}"
+    },
+    "greetingLead": "إليك وضع المبيعات والمخزون الآن.",
     "kpi": {
       "openOrders": "الطلبات المفتوحة",
       "pipeline": "قيمة الفرص",

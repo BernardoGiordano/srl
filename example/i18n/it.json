@@ -7,6 +7,7 @@
 
   "nav": {
     "dashboard": "Cruscotto",
+    "workspace": "Area di lavoro",
     "sales": "Vendite",
     "salesOrders": "Ordini",
     "salesCustomers": "Clienti",
@@ -117,6 +118,12 @@
   },
 
   "dashboard": {
+    "greeting": {
+      "morning": "Buongiorno, {name}",
+      "afternoon": "Buon pomeriggio, {name}",
+      "evening": "Buonasera, {name}"
+    },
+    "greetingLead": "Ecco come vanno vendite e magazzino in questo momento.",
     "kpi": {
       "openOrders": "Ordini aperti",
       "pipeline": "Valore in pipeline",

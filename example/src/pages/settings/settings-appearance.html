@@ -1,6 +1,6 @@
 <div class="space-y-6">
   <section>
-    <h3 class="text-[14px] font-bold text-ink">{{ t('theme.label') }}</h3>
+    <h3 class="text-[14px] font-semibold text-ink">{{ t('theme.label') }}</h3>
     <p class="mt-1 text-[13px] text-muted">{{ t('settings.themeLead') }}</p>
 
     <div class="mt-3 flex flex-wrap gap-2">
@@ -22,14 +22,14 @@
   </section>
 
   <section>
-    <h3 class="text-[14px] font-bold text-ink">{{ t('app.language') }}</h3>
+    <h3 class="text-[14px] font-semibold text-ink">{{ t('app.language') }}</h3>
     <p class="mt-1 text-[13px] text-muted">{{ t('settings.localeLead') }}</p>
 
     <div class="mt-3 flex flex-wrap items-center gap-3">
       <label>
         <span class="sr-only">{{ t('app.language') }}</span>
         <select
-          class="cursor-pointer rounded-md border border-ui-border bg-surface-raised px-3 py-2 text-[13px] font-medium text-ink outline-none"
+          class="cursor-pointer rounded-lg border border-ui-border bg-surface-raised shadow-[0_1px_2px_var(--ui-color-shadow)] px-3 py-2 text-[13px] font-medium text-ink outline-none"
           [aria-label]="t('app.language')"
           (change)="selectLocale($event)"
         >
@@ -51,20 +51,20 @@
   </section>
 
   <section>
-    <h3 class="text-[14px] font-bold text-ink">{{ t('settings.storedState') }}</h3>
+    <h3 class="text-[14px] font-semibold text-ink">{{ t('settings.storedState') }}</h3>
     <p class="mt-1 text-[13px] leading-relaxed text-muted">{{ t('settings.storedStateLead') }}</p>
 
     <div class="mt-3 flex flex-wrap gap-2">
       <button
         type="button"
-        class="cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+        class="cursor-pointer rounded-lg border border-ui-border bg-surface px-3 py-1.5 text-[12.5px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] text-ink transition-colors hover:bg-canvas"
         (click)="resetTables()"
       >
         {{ t('settings.clearTables') }}
       </button>
       <button
         type="button"
-        class="cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+        class="cursor-pointer rounded-lg border border-ui-border bg-surface px-3 py-1.5 text-[12.5px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] text-ink transition-colors hover:bg-canvas"
         (click)="resetSidebar()"
       >
         {{ t('settings.clearSidebar') }}

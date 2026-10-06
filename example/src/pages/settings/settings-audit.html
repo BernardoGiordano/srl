@@ -3,7 +3,7 @@
     <p class="text-[13px] text-muted">{{ t('settings.auditLead') }}</p>
     <button
       type="button"
-      class="ms-auto cursor-pointer rounded-md border border-ui-border px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+      class="ms-auto cursor-pointer rounded-lg border border-ui-border bg-surface px-3 py-1.5 text-[12.5px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] text-ink transition-colors hover:bg-canvas"
       [?disabled]="loading"
       (click)="load()"
     >

@@ -1,7 +1,6 @@
 <div class="p-4 sm:p-6">
   <app-card
     flush
-    eyebrow="{{ t('nav.sales') }}"
     heading="{{ t('nav.salesCustomers') }}"
     lead="{{ t('customers.lead') }}"
   >
@@ -13,9 +12,20 @@
       type="button"
       [?disabled]="!canWrite"
       [title]="writeHint"
-      class="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+      class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[13px] font-medium text-brand-contrast shadow-[0_1px_2px_var(--ui-color-shadow),inset_0_1px_0_rgb(255_255_255/14%)] transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
       (click)="create()"
     >
+      <svg
+        class="size-3.5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.4"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <path d="M12 5v14 M5 12h14"></path>
+      </svg>
       {{ t('customers.new') }}
     </button>
 
@@ -24,7 +34,7 @@
         <span class="sr-only">{{ t('table.filterPlaceholder') }}</span>
         <input
           type="search"
-          class="w-full rounded-md border border-ui-border bg-surface-raised px-3 py-2 text-[13px] text-ink outline-none focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+          class="w-full rounded-lg border border-ui-border bg-surface-raised px-3 py-2 text-[13px] text-ink shadow-[0_1px_2px_var(--ui-color-shadow)] outline-none placeholder:text-muted focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent"
           placeholder="{{ t('table.filterPlaceholder') }}"
           [.value]="search"
           (input)="changeSearch($event)"
@@ -39,7 +49,7 @@
         [.options]="segmentOptions"
         label="{{ t('customers.segment') }}"
         placeholder="{{ t('customers.anySegment') }}"
-        control-class="flex min-h-[38px] w-full flex-wrap items-center gap-1.5 rounded-md border border-ui-border bg-surface-raised px-2 py-1.5 text-[13px]"
+        control-class="flex min-h-[38px] w-full flex-wrap items-center gap-1.5 rounded-lg border border-ui-border bg-surface-raised shadow-[0_1px_2px_var(--ui-color-shadow)] px-2 py-1.5 text-[13px]"
         input-class="min-w-24 flex-1 bg-transparent text-[13px] text-ink outline-none"
         panel-class="z-50 max-h-72 w-[min(22rem,90vw)] overflow-y-auto rounded-lg border border-ui-border bg-surface-raised py-1 text-[13px] shadow-[0_12px_32px_var(--ui-color-shadow)]"
         chip-class="inline-flex items-center gap-1 rounded-full bg-canvas px-2 py-0.5 text-[12px] text-ink"
@@ -75,16 +85,36 @@
         label="{{ t('customers.name') }}"
         sortable
         sticky="start"
-        width="220"
-      ></ui-table-column>
+        width="260"
+      >
+        <template *fragment="cell(customer of rows)">
+          <span class="flex min-w-0 items-center gap-2.5">
+            <ui-avatar
+              name="{{ customer.name }}"
+              fallback-class="flex size-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold {{ avatarTone(customer.name) }}"
+            ></ui-avatar>
+            <span class="min-w-0">
+              <a
+                class="block truncate font-medium text-ink hover:text-accent"
+                href="/sales/customers/{{ customer.id }}"
+                >{{ customer.name }}</a
+              >
+              <span class="block truncate text-[12px] text-muted">{{ customer.email }}</span>
+            </span>
+          </span>
+        </template>
+      </ui-table-column>
       <ui-table-column
         key="segment"
         label="{{ t('customers.segment') }}"
         sortable
         hideable
-        width="140"
-        [.renderer]="renderSegment"
-      ></ui-table-column>
+        width="160"
+      >
+        <template *fragment="cell(customer of rows)">
+          <app-badge>{{ t('customers.segmentValue.' + customer.segment) }}</app-badge>
+        </template>
+      </ui-table-column>
       <ui-table-column key="city" label="{{ t('customers.city') }}" sortable hideable width="150"></ui-table-column>
       <ui-table-column key="country" label="{{ t('customers.country') }}" sortable hideable width="110"></ui-table-column>
       <ui-table-column
@@ -116,7 +146,17 @@
         [.renderer]="renderRevenue"
         [.sort-value]="sortRevenue"
       ></ui-table-column>
-      <ui-table-column key="owner" label="{{ t('orders.owner') }}" sortable hideable width="170"></ui-table-column>
+      <ui-table-column key="owner" label="{{ t('orders.owner') }}" sortable hideable width="190">
+        <template *fragment="cell(customer of rows)">
+          <span class="flex min-w-0 items-center gap-2">
+            <ui-avatar
+              name="{{ customer.owner }}"
+              fallback-class="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold {{ avatarTone(customer.owner) }}"
+            ></ui-avatar>
+            <span class="truncate">{{ customer.owner }}</span>
+          </span>
+        </template>
+      </ui-table-column>
       <!-- A control rather than a field, so `locked` and no sorting. -->
       <ui-table-column
         key="action"

@@ -12,6 +12,8 @@ import { UiAvatar } from '@components/shell/ui-avatar.js';
 
 import { AppCard } from '../../ui/app-card.js';
 import { AppNotice } from '../../ui/app-notice.js';
+import { AppBadge } from '../../ui/app-badge.js';
+import { avatarTone } from '../../ui/avatar-tone.js';
 import { PEOPLE_SERVICE } from '../../services/people-service.js';
 import { LOOKUP_SERVICE } from '../../services/lookup-service.js';
 
@@ -112,8 +114,15 @@ export class EmployeesPage extends SignalElement {
   /** @param {unknown} row */
   renderHiredOn = (row) => dt(/** @type {Employee} */ (row).hiredOn, { dateStyle: 'medium' });
 
-  /** @param {unknown} row */
-  renderStatus = (row) => t(`people.statusValue.${/** @type {Employee} */ (row).status}`);
+  /** @param {string} name */
+  avatarTone(name) {
+    return avatarTone(name);
+  }
+
+  /** @param {string} status */
+  statusTone(status) {
+    return status === 'active' ? 'good' : 'warn';
+  }
 
   /** @param {unknown} row */
   rowKey = (row) => /** @type {Employee} */ (row).id;
@@ -154,5 +163,5 @@ await defineComponent({
   tag: 'employees-page',
   element: EmployeesPage,
   module: import.meta.url,
-  uses: [AppCard, AppNotice, UiTable, UiTableColumn, UiDynamicFilter, UiAvatar],
+  uses: [AppCard, AppNotice, AppBadge, UiTable, UiTableColumn, UiDynamicFilter, UiAvatar],
 });

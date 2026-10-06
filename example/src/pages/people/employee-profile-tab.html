@@ -15,7 +15,7 @@
     <app-field label="{{ t('people.location') }}">{{ record.location }}</app-field>
     <app-field label="{{ t('people.manager') }}">{{ record.manager }}</app-field>
     <app-field label="{{ t('people.phone') }}">
-      <a class="text-brand hover:text-accent-strong" [href]="'tel:' + record.phone">{{ record.phone }}</a>
+      <a class="text-accent hover:text-accent-strong" [href]="'tel:' + record.phone">{{ record.phone }}</a>
     </app-field>
     <app-field label="{{ t('people.status') }}">{{ statusLabel }}</app-field>
     <app-field label="{{ t('people.hiredOn') }}">

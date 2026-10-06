@@ -67,7 +67,17 @@
     caption="{{ t('nav.settingsUsers') }}"
     empty-label="{{ t('settings.usersEmpty') }}"
   >
-    <ui-table-column key="name" label="{{ t('settings.name') }}" sortable width="200"></ui-table-column>
+    <ui-table-column key="name" label="{{ t('settings.name') }}" sortable width="220">
+      <template *fragment="cell(user of rows)">
+        <span class="flex min-w-0 items-center gap-2.5">
+          <ui-avatar
+            name="{{ user.name }}"
+            fallback-class="flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold {{ avatarTone(user.name) }}"
+          ></ui-avatar>
+          <span class="truncate font-medium">{{ user.name }}</span>
+        </span>
+      </template>
+    </ui-table-column>
     <ui-table-column key="email" label="{{ t('settings.email') }}" sortable width="240"></ui-table-column>
     <ui-table-column
       key="role"
@@ -81,9 +91,14 @@
       label="{{ t('settings.status') }}"
       sortable
       width="130"
-      [.renderer]="renderStatus"
       [.filter-value]="filterStatus"
-    ></ui-table-column>
+    >
+      <template *fragment="cell(user of rows)">
+        <app-badge [tone]="user.status === 'active' ? 'good' : 'bad'">
+          {{ t('settings.userStatus.' + user.status) }}
+        </app-badge>
+      </template>
+    </ui-table-column>
     <ui-table-column
       key="lastSeen"
       label="{{ t('settings.lastSeen') }}"

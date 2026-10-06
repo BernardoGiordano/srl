@@ -1,7 +1,6 @@
 <div class="p-4 sm:p-6">
   <app-card
     flush
-    eyebrow="{{ t('nav.inventory') }}"
     heading="{{ t('nav.inventoryMovements') }}"
     lead="{{ t('movements.lead') }}"
   >
@@ -62,10 +61,15 @@
         key="kind"
         label="{{ t('movements.kindLabel') }}"
         sortable
-        width="130"
-        [.renderer]="renderKind"
+        width="140"
         [.filter-value]="filterKind"
-      ></ui-table-column>
+      >
+        <template *fragment="cell(movement of rows)">
+          <app-badge [tone]="movement.kind === 'issue' ? 'warn' : 'good'">
+            {{ t('movements.kind.' + movement.kind) }}
+          </app-badge>
+        </template>
+      </ui-table-column>
       <ui-table-column key="sku" label="{{ t('products.sku') }}" sortable hideable width="130"></ui-table-column>
       <ui-table-column key="warehouse" label="{{ t('products.warehouse') }}" sortable hideable width="130"></ui-table-column>
       <ui-table-column

@@ -15,15 +15,15 @@ export class AppBadge extends SignalElement {
   get toneClasses() {
     switch (this.tone) {
       case 'info':
-        return 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300';
+        return 'bg-sky-50 text-sky-700 ring-sky-600/15 dark:bg-sky-400/10 dark:text-sky-300 dark:ring-sky-400/20';
       case 'good':
-        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300';
+        return 'bg-emerald-50 text-emerald-700 ring-emerald-600/15 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20';
       case 'warn':
-        return 'bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300';
+        return 'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20';
       case 'bad':
-        return 'bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300';
+        return 'bg-rose-50 text-rose-700 ring-rose-600/15 dark:bg-rose-400/10 dark:text-rose-300 dark:ring-rose-400/20';
       default:
-        return 'bg-canvas text-muted';
+        return 'bg-canvas text-muted ring-ui-border';
     }
   }
 }

@@ -12,6 +12,7 @@ import { AppField } from '../../ui/app-field.js';
 import { AppNotice } from '../../ui/app-notice.js';
 import { AppTabs } from '../../ui/app-tabs.js';
 import { ORDER_RECORDS } from '../../state/order-records.js';
+import { orderStatusTone } from './order-status.js';
 import { ApiError } from '@core/http/client.js';
 
 /** @import { OrderRecord } from '../../state/order-records.js' */
@@ -56,17 +57,7 @@ export class OrderDetailPage extends SignalElement {
   }
 
   get statusTone() {
-    switch (this.status) {
-      case 'shipped':
-      case 'invoiced':
-        return 'good';
-      case 'cancelled':
-        return 'bad';
-      case 'confirmed':
-        return 'info';
-      default:
-        return 'neutral';
-    }
+    return orderStatusTone(this.status);
   }
 
   get customerName() {

@@ -1,7 +1,6 @@
 <div class="p-4 sm:p-6">
   <app-card
     flush
-    eyebrow="{{ t('nav.sales') }}"
     heading="{{ t('nav.salesOrders') }}"
     lead="{{ t('orders.lead') }}"
   >
@@ -69,8 +68,13 @@
         sortable
         hideable
         width="130"
-        [.renderer]="renderStatus"
-      ></ui-table-column>
+      >
+        <template *fragment="cell(order of rows)">
+          <app-badge [tone]="statusTone(order.status)">
+            {{ t('orders.statusValue.' + order.status) }}
+          </app-badge>
+        </template>
+      </ui-table-column>
       <ui-table-column
         key="channel"
         label="{{ t('orders.channel') }}"

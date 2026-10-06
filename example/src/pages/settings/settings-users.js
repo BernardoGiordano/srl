@@ -7,8 +7,10 @@ import { dt, t } from '@core/localization/i18n.js';
 import { AUTH_SESSION } from '@auth/session.js';
 import { UiTable } from '@components/data/ui-table.js';
 import { UiTableColumn } from '@components/data/ui-table-column.js';
+import { UiAvatar } from '@components/shell/ui-avatar.js';
 
 import { AppBadge } from '../../ui/app-badge.js';
+import { avatarTone } from '../../ui/avatar-tone.js';
 import { ago } from '../../format.js';
 import { AppNotice } from '../../ui/app-notice.js';
 import { ADMIN_SERVICE } from '../../services/admin-service.js';
@@ -140,18 +142,10 @@ export class SettingsUsers extends SignalElement {
 
   /* ── Cells ──────────────────────────────────────────────────────────────── */
 
-  /**
-   * Render `AppBadge` after its module has defined the element.
-   *
-   * @param {unknown} row
-   */
-  renderStatus = (row) => {
-    const user = /** @type {AccountUser} */ (row);
-    const badge = document.createElement('app-badge');
-    badge.setAttribute('tone', user.status === 'active' ? 'good' : 'bad');
-    badge.textContent = t(`settings.userStatus.${user.status}`);
-    return badge;
-  };
+  /** @param {string} name */
+  avatarTone(name) {
+    return avatarTone(name);
+  }
 
   /** @param {unknown} row */
   filterStatus = (row) => t(`settings.userStatus.${/** @type {AccountUser} */ (row).status}`);
@@ -178,7 +172,7 @@ export class SettingsUsers extends SignalElement {
     const button = document.createElement('button');
     button.type = 'button';
     button.className =
-      'cursor-pointer rounded-md border border-ui-border px-2.5 py-1 text-[12px] font-semibold transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50';
+      'cursor-pointer rounded-lg border border-ui-border bg-surface px-2.5 py-1 text-[12px] font-medium shadow-[0_1px_2px_var(--ui-color-shadow)] transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50';
     button.textContent = t(user.status === 'active' ? 'settings.suspend' : 'settings.activate');
     button.disabled = !this.canWrite || this.busy;
     if (!this.canWrite) button.title = t('settings.needsWriteScope');
@@ -194,5 +188,5 @@ await defineComponent({
   tag: 'settings-users',
   element: SettingsUsers,
   module: import.meta.url,
-  uses: [AppBadge, AppNotice, UiTable, UiTableColumn],
+  uses: [AppBadge, AppNotice, UiTable, UiTableColumn, UiAvatar],
 });

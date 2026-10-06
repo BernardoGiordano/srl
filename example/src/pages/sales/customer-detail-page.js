@@ -321,11 +321,11 @@ export class CustomerDetailPage extends SignalElement {
    */
 
   get inputClass() {
-    return 'mt-1 w-full rounded-md border border-ui-border bg-surface-raised px-3 py-2 text-[13.5px] text-ink outline-none focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent aria-[invalid=true]:border-rose-500 disabled:cursor-not-allowed disabled:opacity-60';
+    return 'mt-1 w-full rounded-lg border border-ui-border bg-surface-raised shadow-[0_1px_2px_var(--ui-color-shadow)] px-3 py-2 text-[13.5px] text-ink outline-none focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent aria-[invalid=true]:border-rose-500 disabled:cursor-not-allowed disabled:opacity-60';
   }
 
   get comboboxControlClass() {
-    return 'flex min-h-[38px] w-full flex-wrap items-center gap-1.5 rounded-md border border-ui-border bg-surface-raised px-2 py-1.5 text-[13px] data-[invalid=true]:border-rose-500';
+    return 'flex min-h-[38px] w-full flex-wrap items-center gap-1.5 rounded-lg border border-ui-border bg-surface-raised shadow-[0_1px_2px_var(--ui-color-shadow)] px-2 py-1.5 text-[13px] data-[invalid=true]:border-rose-500';
   }
 
   get comboboxPanelClass() {

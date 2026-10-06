@@ -3,12 +3,12 @@
   with the content below.
 -->
 <nav [aria-label]="label" class="border-b border-ui-border">
-  <ul class="-mb-px flex flex-wrap gap-1 px-0.5 sm:px-1.5">
+  <ul class="-mb-px flex flex-wrap gap-4 px-4 sm:px-5">
     <li *for="item of items; key: item.key">
       <a
         [href]="item.href"
         [aria-current]="currentAttr(item)"
-        class="block border-b-2 px-3.5 py-2.5 text-[13.5px] font-medium transition-colors {{ linkClasses(item) }}"
+        class="block border-b-2 py-3 text-[13.5px] font-medium transition-colors {{ linkClasses(item) }}"
       >
         {{ item.label }}
       </a>
