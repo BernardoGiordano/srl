@@ -70,12 +70,13 @@ const USAGE = `usage: srl <command> [options]
 Project
   new <project> [--app <name>] [--json]
                             a new project directory: package.json pinning the
-                            matching @srljs/core and @srljs/cli with dev, check
-                            and build scripts, .gitignore, AGENTS.md,
-                            tsconfig.json, and an application at
-                            <project>/web/ (--app renames it) that boots
-                            through startApplication with one route. Installs
-                            nothing. Refuses an existing directory
+                            matching @srljs/core and @srljs/cli with dev, check,
+                            build and test scripts, .gitignore, AGENTS.md,
+                            tsconfig.json, web-test-runner.config.mjs, and an
+                            application at <project>/web/ (--app renames it)
+                            that boots through startApplication with one route
+                            and one test. Installs nothing. Refuses an existing
+                            directory
   generate app <name> [--json]
                             add an application to the current project
   generate component <[dir/]tag> [--app <name>] [--styles] [--json]
@@ -89,6 +90,7 @@ Development
         [--proxy <prefix>=<origin>]...
                             static server for one application: the library's
                             mounts, history fallback, watch and live reload.
+                            Failures in the page are printed with their codes.
                             --proxy forwards a prefix to a backend instead of
                             serving it from disk, so an application with an API
                             develops on one origin:
@@ -126,14 +128,16 @@ Checks
 
 Delivery
   build [--app <name>] [--out <dir>] [--remote <name>]
-        [--templates split|bundle]
+        [--templates split|split-lazy|bundle]
                             the production artifact: minified, hash-named
                             chunks, a production index.html pinning a sha384
                             for each, and artifact.json describing all of it.
                             Templates are minified and emitted one immutable
-                            file each, fetched by the component that needs
-                            them; --templates bundle adds the single JSON the
-                            manifest seeds from at startup instead
+                            file each. split (the default) starts each chunk's
+                            templates beside its code; split-lazy announces
+                            none and each component fetches its own; bundle
+                            adds the single JSON the manifest seeds from at
+                            startup
   templates [--app <name>]  the per-application template bundle for a
                             deployment with no build step
   importmap [--write]       print the import-map fragment an application pastes
