@@ -22,7 +22,7 @@ index at the package root. `npm run package` writes both.
 | [Application startup](guide/startup.md) | Startup APIs and hook order. |
 | [Defining a component](guide/components.md) | Element definitions, dependencies, styles, and data loading. |
 | [The template language](guide/templates.md) | Bindings, directives, DOM security, and static checks. |
-| [Editor support](guide/editor-support.md) | VS Code, WebStorm, and generic LSP setup. |
+| [Editor support](guide/editor-support.md) | VS Code, WebStorm, generic LSP setup, and the MCP server for agents. |
 | [Routing](guide/routing.md) | Routes, guards, child layouts, and dynamic mounts. |
 | [Internationalisation](guide/i18n.md) | Locales, plurals, RTL, and component text. |
 | [Preferences](guide/preferences.md) | Storage adapters and themes. |
@@ -38,6 +38,7 @@ index at the package root. `npm run package` writes both.
 | Page | Subject |
 |---|---|
 | [Project index](reference/project-index.md) | Generated inventory of elements, globals, and applications. |
+| [Components](reference/components.md) | Generated inputs, events, and projection names of every published element. |
 | [Template dialect](reference/template-dialect.md) | Generated bindings, directives, expressions, and security contexts. |
 | [Diagnostic codes](reference/diagnostic-codes.md) | Generated list of every code `srl check` reports. |
 | [Source layout](reference/source-layout.md) | Directory ownership and dependencies. |

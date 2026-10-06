@@ -48,6 +48,7 @@ const COMMANDS = {
   retention: '../delivery/retention.mjs',
   check: '../checks/index.mjs',
   'language-server': '../language-server/server.mjs',
+  mcp: '../mcp/server.mjs',
 };
 
 /**
@@ -92,9 +93,11 @@ Development
                             serving it from disk, so an application with an API
                             develops on one origin:
                               --proxy /api/=http://127.0.0.1:8001
-  model [--app <name>] [--element <tag> | --json]
+  model [--app <name>] [--element <tag> | --json | --custom-elements]
                             every element, global and template static discovery
-                            can see
+                            can see. --json is versioned by schemaVersion, and
+                            --custom-elements prints the application's elements
+                            as a Custom Elements Manifest
 
 Checks
   check [<subject>...] [--app <name>] [--json]
@@ -154,6 +157,8 @@ Other
   --version                 the installed version
   language-server           LSP server over stdio, used by VS Code, WebStorm and
                             any editor with a generic LSP client
+  mcp                       Model Context Protocol server over stdio, for an
+                            agent: check, codes, elements, element and docs
   layout [--deploy-pairs | --apps]
                             the mount table and the application list, for a
                             consumer that cannot import

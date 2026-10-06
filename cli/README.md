@@ -66,6 +66,8 @@ can discover it.
 | `srl build --app web` | Produce minified, hash-named assets, checked templates, CSS, and an artifact report. |
 | `srl model --app web --json` | List discovered elements, globals, and applications. |
 | `srl language-server` | Start the language server over stdio for an editor client. |
+| `srl mcp` | Start a Model Context Protocol server over stdio, so an agent can run checks, read elements and read the shipped docs. |
+| `srl model --custom-elements` | Print the application's elements as a Custom Elements Manifest. |
 
 `srl check --json` prints every finding with a stable code and a file
 position, and exits non-zero when any finding is an error.

@@ -2,6 +2,7 @@
  * One interpretation of this project's source.
  *
  *   node cli/project-model/index.mjs [--app example] [--element ui-table] [--json]
+ *                                    [--custom-elements]
  *
  * It owns which custom elements exist, the class and module that declare each one,
  * public inputs and internal state across inheritance, events they dispatch,
@@ -834,7 +835,8 @@ export function shippedTemplates(model) {
  *
  * Stability is what makes it usable. A README table, an editor and an agent all read
  * this, so two runs on two checkouts must produce identical bytes, with no absolute
- * path, no `Map` iteration order and no timestamps.
+ * path, no `Map` iteration order and no timestamps. `schemaVersion` says which shape
+ * a reader holds. ADR-0127.
  *
  * @param {ProjectModel} model
  * @returns {ProjectIndex}
@@ -844,6 +846,7 @@ export function projectIndex(model) {
   const rel = (path) => (path === null ? null : repoPath(path));
 
   return {
+    schemaVersion: 1,
     app: model.app.name,
     root: repoPath(model.app.dir),
     entry: rel(model.entry),
@@ -1060,6 +1063,15 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
     console.log(describeElement(model, tag));
   } else if (process.argv.includes('--json')) {
     console.log(JSON.stringify(projectIndex(model), null, 2));
+  } else if (process.argv.includes('--custom-elements')) {
+    // The application's own elements. The library ships the manifest for its own.
+    const { customElementsManifest } = await import('./custom-elements.mjs');
+    const manifest = customElementsManifest(model, {
+      base: REPO,
+      include: (record) =>
+        record.module.startsWith(app.dir + sep) && !relative(app.dir, record.module).split(sep).includes('test'),
+    });
+    console.log(JSON.stringify(manifest, null, 2));
   } else {
     const all = await apps();
     const notes = model.diagnostics.length - projectErrors(model).length;
@@ -1068,7 +1080,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
         `${String(model.templates.size)} template(s), ${String(model.globals.size)} template ` +
         `global(s), ${String(projectErrors(model).length)} error(s), ${String(notes)} note(s). ` +
         `Applications: ${all.map((one) => one.name).join(', ')}.\n` +
-        'usage: node cli/project-model/index.mjs [--app <name>] [--element <tag> | --json]',
+        'usage: node cli/project-model/index.mjs [--app <name>] [--element <tag> | --json | --custom-elements]',
     );
   }
   for (const diagnostic of projectErrors(model)) console.error(`  error: ${diagnostic.message}`);

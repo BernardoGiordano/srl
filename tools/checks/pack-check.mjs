@@ -47,7 +47,7 @@
  * not have to scrape a terminal for it. ADR-0072, ADR-0098.
  */
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
@@ -431,6 +431,87 @@ async function shippedDocs(project, name) {
 }
 
 /**
+ * Run the installed `srl mcp`, write the requests to its stdin, and collect its stdout
+ * once it exits.
+ *
+ * @param {string} project
+ * @param {object[]} requests
+ * @returns {Promise<{ output: string }>}
+ */
+function exchange(project, requests) {
+  return new Promise((done) => {
+    const child = spawn('npx', ['--offline', '--no-install', 'srl', 'mcp'], {
+      cwd: project,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.on('data', (chunk) => {
+      output += String(chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      output += String(chunk);
+    });
+    child.on('close', () => done({ output }));
+    child.stdin.end(`${requests.map((request) => JSON.stringify(request)).join('\n')}\n`);
+  });
+}
+
+/**
+ * The core's Custom Elements Manifest is where its `customElements` field says, and
+ * `srl mcp` answers a check and a documentation request from the installed packages.
+ * ADR-0127.
+ *
+ * @param {string} project
+ * @returns {Promise<Diagnostic[]>}
+ */
+async function modelAdapters(project) {
+  /** @type {Diagnostic[]} */
+  const found = [];
+  const core = join(project, 'node_modules', '@srljs', 'core');
+  const manifest = /** @type {{ customElements?: string }} */ (
+    JSON.parse(await readFile(join(core, 'package.json'), 'utf8'))
+  );
+  const elements = manifest.customElements === undefined ? null : join(core, manifest.customElements);
+  const tags =
+    elements !== null && (await exists(elements))
+      ? /** @type {{ modules: Array<{ declarations: Array<{ tagName?: string }> }> }} */ (
+          JSON.parse(await readFile(elements, 'utf8'))
+        ).modules.flatMap((module) => module.declarations.map((declaration) => declaration.tagName))
+      : [];
+  found.push(
+    tags.includes('ui-table')
+      ? info('pack/custom-elements', `@srljs/core describes ${String(tags.length)} element(s) in its Custom Elements Manifest`, { group: GROUP })
+      : refuse('pack/no-custom-elements', `@srljs/core names no Custom Elements Manifest that describes <ui-table>.`),
+  );
+
+  const requests = [
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'pack-check', version: '1' } } },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'check', arguments: { subjects: ['project'] } } },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'docs', arguments: { path: 'guide/testing.md' } } },
+  ];
+  const served = await exchange(project, requests);
+  /** @type {Map<unknown, { result?: { isError?: boolean, structuredContent?: { ok?: boolean, text?: string } } }>} */
+  const answers = new Map(
+    served.output
+      .split('\n')
+      .filter((line) => line.startsWith('{'))
+      .map((line) => {
+        const reply = JSON.parse(line);
+        return [reply.id, reply];
+      }),
+  );
+  const checked = answers.get(2)?.result?.structuredContent?.ok === true;
+  const documented = (answers.get(3)?.result?.structuredContent?.text ?? '').startsWith('# Writing tests');
+  found.push(
+    checked && documented
+      ? info('pack/mcp', '`srl mcp` runs a check and serves the installed documentation', { group: GROUP })
+      : refuse('pack/mcp-failed', `\`srl mcp\` did not answer as expected:\n\n${indent(served.output)}`),
+  );
+  return found;
+}
+
+/**
  * Drive the installed project, and say what each step found.
  *
  * @param {string} project
@@ -546,6 +627,10 @@ async function check(project) {
   /* ── Each package carries its documentation ──────────────────────────── */
 
   for (const name of PACKAGES) found.push(...(await shippedDocs(project, name)));
+
+  /* ── The model's adapters work from the install ─────────────────────── */
+
+  found.push(...(await modelAdapters(project)));
 
   /* ── The artifact is real, and is the installed library's ─────────────── */
 

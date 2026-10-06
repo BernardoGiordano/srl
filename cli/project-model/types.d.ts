@@ -263,8 +263,14 @@ export interface MessageReference {
   column: number;
 }
 
-/** The JSON projection: sorted, repository-relative, no absolute path anywhere. */
+/**
+ * The JSON projection: sorted, repository-relative, no absolute path anywhere.
+ *
+ * `schemaVersion` changes when a field is removed or changes meaning. An added field
+ * keeps it, so a reader that ignores unknown fields keeps working. ADR-0127.
+ */
 export interface ProjectIndex {
+  schemaVersion: 1;
   app: string;
   root: string;
   entry: string | null;

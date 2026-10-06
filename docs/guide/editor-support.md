@@ -111,3 +111,32 @@ capability, changes outside open buffers require a restart.
 An `.html` file receives srl template behavior when the project model links
 it to a static `defineComponent()` declaration. Other HTML files keep the
 editor's ordinary HTML support.
+
+## Agents and other tools
+
+`srl mcp` runs a Model Context Protocol server over stdio for a coding agent.
+It reads the same project model and runs the same checks as the language
+server.
+
+| Tool | Answer |
+|---|---|
+| `check` | The `srl check` findings, with codes, files and positions. `subjects` and `app` narrow the run. |
+| `codes` | Every diagnostic code and its meaning. |
+| `elements` | Every element an application can use. |
+| `element` | One element's inputs, attributes, events, projection names and users. |
+| `docs` | `llms.txt`, or one page of the documentation the installed packages ship. |
+
+A client that reads the common `mcpServers` configuration starts it from the
+project root.
+
+```json
+{ "mcpServers": { "srl": { "command": "npx", "args": ["--no-install", "srl", "mcp"] } } }
+```
+
+Two more adapters read the same model.
+
+- `srl model --json` prints the whole model. `schemaVersion` changes only when a
+  field is removed or changes meaning.
+- `srl model --custom-elements` prints the application's elements as a Custom
+  Elements Manifest. `@srljs/core` ships its own as `custom-elements.json`,
+  named by the `customElements` field Storybook and IDE plugins read.

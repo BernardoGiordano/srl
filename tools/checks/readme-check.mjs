@@ -5,9 +5,10 @@
  *   node tools/checks/readme-check.mjs --write    rewrite the generated sections
  *   node tools/checks/readme-check.mjs --file X   operate on X, a copy of one page
  *
- * Three pages carry generated blocks.
+ * Four pages carry generated blocks.
  *
  *   project-index.md     tags, modules, templates and `uses`, from the project model
+ *   components.md        each published element's inputs, events and projection names
  *   template-dialect.md  the template dialect, from source/lib/core/template/
  *   diagnostic-codes.md  every `srl check` code, from cli/diagnostics/catalog.mjs
  *
@@ -146,6 +147,58 @@ async function projectSections() {
 }
 
 /**
+ * One section per published element, naming what a template can bind, listen to and
+ * project. The project index counts these, and this page lists them. ADR-0127.
+ *
+ * @returns {Promise<Map<string, string>>}
+ */
+async function componentSections() {
+  const [app] = await apps();
+  if (app === undefined) throw new Error('No application found to read.');
+  const model = await readProject(app);
+
+  /** @param {readonly string[]} names */
+  const quoted = (names) => names.map((name) => `\`${name}\``);
+  /** @param {readonly string[]} cells @param {boolean} [known] */
+  const list = (cells, known = true) =>
+    `${cells.length === 0 ? 'none' : cells.join(', ')}${known ? '' : ', and more not readable statically'}`;
+
+  const sections = publishedElements(model).map((record) => {
+    const inputs = record.propertyDeclarations
+      .filter((property) => property.kind === 'input')
+      .map((property) =>
+        typeof property.attribute === 'string' && property.attribute !== property.name.toLowerCase()
+          ? `\`${property.name}\` (\`${property.attribute}\`)`
+          : `\`${property.name}\``,
+      );
+    const projection =
+      record.slots === null
+        ? 'not readable statically'
+        : record.slots.length === 0
+          ? 'none'
+          : record.slots.map((name) => (name === '' ? 'default' : `\`${name}\``)).join(', ');
+    return [
+      `### \`<${record.tag}>\``,
+      '',
+      `\`${record.className}\`, defined in ${code(repoPath(record.module))}.`,
+      '',
+      table(
+        ['Surface', 'Names'],
+        [
+          ['Inputs', list(inputs, record.surfaceKnown)],
+          ['Observed attributes', record.observedAttributes === null ? 'not readable statically' : list(quoted(record.observedAttributes))],
+          ['Events', list(quoted(record.events.map((event) => event.name)), record.eventsKnown)],
+          ['Projection', projection],
+          ['Uses', list(quoted(record.uses.map((use) => use.tag ?? use.className)))],
+        ],
+      ),
+    ].join('\n');
+  });
+
+  return new Map([['components', sections.join('\n\n')]]);
+}
+
+/**
  * The diagnostic code table, in catalogue order.
  *
  * @returns {Map<string, string>}
@@ -162,6 +215,7 @@ function codeSections() {
  */
 const PAGES = [
   { page: 'docs/reference/project-index.md', sections: projectSections },
+  { page: 'docs/reference/components.md', sections: componentSections },
   { page: 'docs/reference/template-dialect.md', sections: dialectSections },
   { page: 'docs/reference/diagnostic-codes.md', sections: codeSections },
 ];
