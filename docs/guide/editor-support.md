@@ -43,7 +43,9 @@ npm install --save-dev @srljs/core@0.9.0 @srljs/cli@0.9.0
 
 ## VS Code
 
-Build and install the extension from this repository.
+A release tag publishes the extension, `bernardogiordano.srl`, to the Visual
+Studio Marketplace and Open VSX once the repository holds their tokens. To try a
+change, build and install it from this repository.
 
 ```bash
 cd editors/vscode
@@ -65,8 +67,10 @@ adds syntax scopes and snippets for srl markup.
 
 ## WebStorm
 
-Build with Java 21 and install the resulting ZIP through **Settings | Plugins |
-Install Plugin from Disk**.
+A release tag publishes the plugin, `dev.santella.srl`, to the JetBrains
+Marketplace once its first version is listed there. To try a change, build with
+Java 21 and install the resulting ZIP through **Settings | Plugins | Install
+Plugin from Disk**.
 
 ```bash
 cd editors/webstorm

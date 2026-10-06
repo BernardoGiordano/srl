@@ -4,13 +4,14 @@ The development server runs the source files directly. The production build
 creates a verified artifact from the same application.
 
 ```bash
-node cli/dev/serve.mjs --app example --open
-npm run build -- --app example
+npx --no-install srl serve --app web --open
+npx --no-install srl build --app web
 ```
 
-The dev server needs no install. It serves the application, `/lib/`, and
-`/components/` on one origin, supports history fallback, and sends updates
-to open pages. The example's Node server also serves its API and sign-in routes.
+The dev server serves the application, `/lib/`, and `/components/` on one
+origin, supports history fallback, and sends updates to open pages. In this
+repository, `npm start` serves the example and `npm run build -- --app example`
+builds it. The example's Node server also serves its API and sign-in routes.
 
 ## Templates in a built artifact
 
@@ -25,9 +26,9 @@ manifest announces before that point.
 | `bundle` | `templateBundle` | Fetches one bundle and seeds the cache before mounting. |
 
 ```bash
-npm run build -- --app example
-npm run build -- --app example --templates split-lazy
-npm run build -- --app example --templates bundle
+npx --no-install srl build --app web
+npx --no-install srl build --app web --templates split-lazy
+npx --no-install srl build --app web --templates bundle
 ```
 
 `split` avoids serial template requests within a code chunk. It starts only
@@ -39,8 +40,8 @@ request but refetches the whole bundle when any template changes. The
 
 Every mode still emits individual immutable template files. The build checks
 that minification leaves each template's parsed structure intact.
-`npm run templates` offers a separate authored-byte bundle for a deployment
-that skips the production build.
+`srl templates --app web` writes a separate authored-byte bundle for a
+deployment that skips the production build.
 
 ## Templates in development
 
@@ -110,7 +111,8 @@ package. The core tarball serves two consumers.
 | Browser with an import map | Published import-map fragment | Source modules, components, and sibling templates. |
 | Node or a bundler | Package `exports` | Generated core and component bundles with declarations. |
 
-Run the package build and repository checks before inspecting a tarball.
+In this repository, run the package build and repository checks before
+inspecting a tarball.
 
 ```bash
 npm run package
@@ -127,8 +129,8 @@ package build checks that another bundle does not still import that name.
 The browser loads committed Lit, signals, and development Tailwind files from
 `source/lib/vendor/`. Their provenance and hashes live beside them.
 Import-map integrity pins apply to these same-origin files in the browser.
-`npm run vendor` checks the committed bytes; its fetch mode refuses a
-download whose hash differs from the recorded value.
+This repository's `npm run vendor` checks the committed bytes, and its fetch
+mode refuses a download whose hash differs from the recorded value.
 
 ## Third-party notices
 
@@ -141,7 +143,7 @@ notices for the third-party bytes it serves.
 ## Deployment checks
 
 A strict CSP needs the hash of the inline import map in `script-src`.
-`npm run verify` computes that hash. When configuring nginx, set security
+`srl check importmap` reports that hash under `importmap/csp-hash`. When configuring nginx, set security
 headers where all relevant responses inherit them; a `location` with its
 own `add_header` directives can replace headers set at server level.
 

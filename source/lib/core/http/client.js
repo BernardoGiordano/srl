@@ -121,7 +121,10 @@ export class ApiClient {
    */
   constructor(baseUrl, options) {
     this.#baseUrl = baseUrl.replace(/\/+$/u, '');
-    this.#fetch = options.fetch;
+    // Called without a receiver. `this.#fetch(...)` would pass the client as `this`, and
+    // `globalThis.fetch` throws "Illegal invocation" for any receiver but the window.
+    const send = options.fetch;
+    this.#fetch = /** @type {HttpTransport} */ ((url, init) => send(url, init));
     this.#errorCode = options.errorCode ?? defaultErrorCode;
   }
 

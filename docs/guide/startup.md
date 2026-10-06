@@ -4,17 +4,31 @@ An application starts with one call in `main.js`. It supplies configuration and
 providers; the library runs the startup steps in order.
 
 ```js
-import { startHostedApplication } from '@srljs/core';
+import {
+  AUTH_SESSION,
+  AuthSession,
+  configureTheme,
+  inject,
+  provide,
+  startHostedApplication,
+} from '@srljs/core';
+
+import { CookieTokenStore } from './auth/cookie-token-store.js';
 
 await startHostedApplication({
   configure: () => configureTheme({ defaultTheme: 'system' }),
   providers: () => {
-    provide(AUTH_SESSION, () => new AuthSession(new BffCookieTokenStore('/auth')));
+    provide(AUTH_SESSION, () => new AuthSession(new CookieTokenStore('/auth')));
   },
   ready: () => inject(AUTH_SESSION).init(),
   root: { load: () => import('./app-root.js').then((m) => m.AppRoot) },
 });
 ```
+
+`CookieTokenStore` stands for the application's own token store. The library
+ships none, because a store holds one backend's endpoints and field names.
+[Authentication and remotes](auth-and-remotes.md) describes the interface, and
+the example application carries three stores to adapt.
 
 Use `startApplication` when an application has no remotes. `startHostedApplication` adds the default `REMOTE_HOST`
 provider before the application's providers run. The example uses it for its

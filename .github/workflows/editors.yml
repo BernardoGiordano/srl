@@ -3,6 +3,7 @@ name: editors
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 # The two plugins are the only things in this repository a user installs rather than
@@ -13,6 +14,9 @@ on:
 jobs:
   vscode:
     runs-on: ubuntu-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +43,27 @@ jobs:
           name: vsix
           path: editors/vscode/*.vsix
 
+      # A release tag publishes the packaged file, to each marketplace whose token the
+      # repository holds. The tag must name the extension's version.
+      - name: The tag names the extension's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: editors/vscode
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+
+      - name: Publish to the Visual Studio Marketplace
+        if: startsWith(github.ref, 'refs/tags/v') && env.VSCE_PAT != ''
+        working-directory: editors/vscode
+        run: npx --no-install vsce publish --packagePath srl-*.vsix
+
+      - name: Publish to Open VSX
+        if: startsWith(github.ref, 'refs/tags/v') && env.OVSX_PAT != ''
+        working-directory: editors/vscode
+        run: npx --yes ovsx@1.2.0 --pat "$OVSX_PAT" publish srl-*.vsix
+
   webstorm:
     runs-on: ubuntu-latest
+    env:
+      JETBRAINS_TOKEN: ${{ secrets.JETBRAINS_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +84,19 @@ jobs:
         with:
           name: webstorm-plugin
           path: editors/webstorm/target/*.zip
+
+      # The Marketplace upload API adds a version to a plugin that already exists, so
+      # the first version is uploaded by hand on plugins.jetbrains.com.
+      - name: Publish to the JetBrains Marketplace
+        if: startsWith(github.ref, 'refs/tags/v') && env.JETBRAINS_TOKEN != ''
+        working-directory: editors/webstorm
+        run: |
+          curl --fail-with-body -sS \
+            --header "Authorization: Bearer $JETBRAINS_TOKEN" \
+            -F xmlId=dev.santella.srl \
+            -F file=@"$(ls target/*.zip)" \
+            -F channel=stable \
+            https://plugins.jetbrains.com/api/updates/upload
 
   # Packaging proves the artifact; this proves installing it does anything. The two
   # editions are the minimum `engines.vscode` claims and current stable, which is where

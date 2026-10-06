@@ -21,6 +21,7 @@ index at the package root. `npm run package` writes both.
 |---|---|
 | [Application startup](guide/startup.md) | Startup APIs and hook order. |
 | [Defining a component](guide/components.md) | Element definitions, dependencies, styles, and data loading. |
+| [Signals, services and HTTP](guide/state-and-services.md) | Reactive state, injection, and the API client. |
 | [The template language](guide/templates.md) | Bindings, directives, DOM security, and static checks. |
 | [Editor support](guide/editor-support.md) | VS Code, WebStorm, generic LSP setup, and the MCP server for agents. |
 | [Routing](guide/routing.md) | Routes, guards, child layouts, and dynamic mounts. |

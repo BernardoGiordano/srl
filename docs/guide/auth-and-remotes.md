@@ -7,8 +7,15 @@ payloads, and headers. The library supplies `AuthSession` and the store
 interface. The example has memory, BFF cookie, and DPoP stores to copy and adapt.
 
 ```js
-provide(AUTH_SESSION, () => new AuthSession(new BffCookieTokenStore('/auth')));
+import { AUTH_SESSION, AuthSession, provide } from '@srljs/core';
+
+import { CookieTokenStore } from './auth/cookie-token-store.js';
+
+provide(AUTH_SESSION, () => new AuthSession(new CookieTokenStore('/auth')));
 ```
+
+`CookieTokenStore` is the application's adaptation of the example's
+`BffCookieTokenStore`.
 
 A store authorizes a `Request`; it does not return a token to callers. This
 allows the BFF store to work even though JavaScript cannot read its HttpOnly
@@ -86,9 +93,9 @@ use it. It requires same-origin, root-relative URLs; checks locale patterns
 against allowed locales; rejects duplicate or nested remote mounts; refuses
 keys it does not know; and freezes the admitted result. An application without
 remotes or an API leaves `remotes` and `auth` out, as
-[startup](startup.md#the-manifest) shows. The browser and `npm run verify` run the same
-policy. The remote entry and its imports also need matching integrity hashes
-in the manifest and import map.
+[startup](startup.md#the-manifest) shows. The browser and this repository's
+`npm run verify` run the same policy. The remote entry and its imports also
+need matching integrity hashes in the manifest and import map.
 
 Adding a remote means adding its manifest entry, import-map pins, and a
 `nav.<name>` message key.

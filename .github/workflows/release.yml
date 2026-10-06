@@ -1,0 +1,54 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+# A release is a tag. The workflow publishes the tagged commit rather than a working
+# tree, so the tag names exactly what npm serves. It refuses a tag that disagrees with
+# either package version, proves the packed pair installs, scaffolds, checks, builds and
+# tests, and only then publishes, core first because the CLI pins it exactly. The editor
+# extensions publish from editors.yml on the same tag.
+permissions:
+  contents: read
+  # npm provenance signs each tarball with this run's identity.
+  id-token: write
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - name: The tag names the version both packages carry
+        run: |
+          core="v$(node -p "require('./source/package.json').version")"
+          cli="v$(node -p "require('./cli/package.json').version")"
+          if [ "$core" != "$GITHUB_REF_NAME" ] || [ "$cli" != "$GITHUB_REF_NAME" ]; then
+            echo "The tag is $GITHUB_REF_NAME, @srljs/core is $core and @srljs/cli is $cli."
+            exit 1
+          fi
+
+      - name: Locate Chrome
+        run: echo "CHROME_PATH=$(which google-chrome)" >> "$GITHUB_ENV"
+
+      - run: npm run package
+
+      - run: npm run pack:check
+
+      - run: npm publish --workspace source --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - run: npm publish --workspace cli --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

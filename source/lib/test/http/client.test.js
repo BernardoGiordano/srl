@@ -133,6 +133,14 @@ describe('ApiClient', () => {
   });
 
   describe('the request it sends', () => {
+    it('calls the browser fetch it was given without a receiver of its own', async () => {
+      // `globalThis.fetch` called with the client as `this` throws "Illegal invocation".
+      // The library's import map fragment is a JSON file the test origin serves.
+      const client = new ApiClient('/lib', { fetch: globalThis.fetch });
+      const fragment = /** @type {{ imports?: unknown }} */ (await client.get('/importmap.json'));
+      assert.ok(typeof fragment.imports === 'object');
+    });
+
     it('asks for JSON on every call', async () => {
       const sent = transport();
       await new ApiClient('/api', { fetch: sent.fetch }).get('/orders');

@@ -65,3 +65,29 @@ explains conformance runs against installed VS Code and WebStorm clients.
 Describe the behavior changed, the checks run, and any measurement behind a
 performance claim. Keep a change focused enough that its tests and reasoning
 can be reviewed together.
+
+## Releasing
+
+`@srljs/core`, `@srljs/cli` and both editor extensions release together at one
+version, and a release is a pushed tag.
+
+1. Set the version in `source/package.json`, `cli/package.json` (its own version
+   and the exact `@srljs/core` peer), `editors/vscode/package.json` and
+   `editors/webstorm/pom.xml`.
+2. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under the new
+   version.
+3. Commit, then tag and push the tag, such as `git tag v0.10.0 && git push origin v0.10.0`.
+
+The `release` workflow refuses a tag that disagrees with either package version,
+runs the packaged-install probe and publishes the core, then the CLI, with npm
+provenance. The `editors` workflow publishes each extension to every marketplace
+whose token the repository holds.
+
+| Secret | Publishes |
+|---|---|
+| `NPM_TOKEN` | `@srljs/core` and `@srljs/cli` |
+| `VSCE_PAT` | The VS Code extension to the Visual Studio Marketplace |
+| `OVSX_PAT` | The VS Code extension to Open VSX |
+| `JETBRAINS_TOKEN` | The WebStorm plugin, after its first version is uploaded by hand |
+
+Report security issues as [SECURITY.md](SECURITY.md) describes.
