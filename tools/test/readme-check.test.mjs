@@ -110,7 +110,7 @@ void test('the template dialect page drifts when a generated row is edited', asy
   const dir = await mkdtemp(join(tmpdir(), 'readme-check-'));
   const file = join(dir, 'template-dialect.md');
   const text = await readFile(join(REPO, 'docs/reference/template-dialect.md'), 'utf8');
-  await writeFile(file, text.replace('| Arrow function | `(item) => item.id` | no | no |', '| Arrow function | `(item) => item.id` | yes | yes |'), 'utf8');
+  await writeFile(file, text.replace('| Arrow function | `(item) => item.id` | no, `templates/expression-syntax` |', '| Arrow function | `(item) => item.id` | yes |'), 'utf8');
 
   const { drifted } = await checkReadme({ file });
   assert.deepEqual(drifted, ['dialect-expressions']);

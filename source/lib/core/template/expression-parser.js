@@ -17,8 +17,9 @@ import { refusedMember } from './dialect.js';
 
 /** @import { ExprNode } from '@core/template/types.js' */
 
+// `=>` is one token, so an arrow function is a syntax error rather than an assignment.
 const TOKEN =
-  /\s+|(\d+(?:\.\d+)?)|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|([A-Za-z_$][A-Za-z0-9_$]*)|(\?\.|===|!==|==|!=|<=|>=|&&|\|\||\?\?|[()[\]{}.,:?!+\-*/%<>=&])/gy;
+  /\s+|(\d+(?:\.\d+)?)|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|([A-Za-z_$][A-Za-z0-9_$]*)|(\?\.|===|!==|==|=>|!=|<=|>=|&&|\|\||\?\?|[()[\]{}.,:?!+\-*/%<>=&])/gy;
 
 /**
  * Names that read as values rather than as members of the component.
@@ -34,6 +35,24 @@ export const WORD_LITERALS = new Map([
 
 /** @typedef {{ type: 'number' | 'string' | 'name' | 'punct', text: string, at: number }} Token */
 
+/**
+ * The problem an `ExpressionError` names. The template checker reports the code as it
+ * stands, so the browser and the checker give one problem one name.
+ *
+ * @typedef {'templates/expression-syntax' | 'templates/expression-assignment' | 'templates/expression-member'} ExpressionErrorCode
+ */
+
+/** A binding expression the dialect cannot parse or refuses. */
+export class ExpressionError extends Error {
+  /** @param {ExpressionErrorCode} code @param {string} message */
+  constructor(code, message) {
+    super(message);
+    this.name = 'ExpressionError';
+    /** @readonly */
+    this.code = code;
+  }
+}
+
 /** @param {string} source @param {string} where @returns {Token[]} */
 function tokenize(source, where) {
   /** @type {Token[]} */
@@ -43,7 +62,7 @@ function tokenize(source, where) {
     const at = TOKEN.lastIndex;
     const match = TOKEN.exec(source);
     if (match === null || match.index !== at) {
-      throw syntaxError(source, at, where, `Unexpected character ${JSON.stringify(source[at])}`);
+      throw expressionError('templates/expression-syntax', source, at, where, `Unexpected character ${JSON.stringify(source[at])}`);
     }
     const [, number, string, name, punct] = match;
     if (number !== undefined) tokens.push({ type: 'number', text: number, at });
@@ -64,9 +83,15 @@ function unescape(quoted) {
   });
 }
 
-/** @param {string} source @param {number} at @param {string} where @param {string} message */
-function syntaxError(source, at, where, message) {
-  return new Error(`${message} in ${where}\n    ${source}\n    ${' '.repeat(at)}^`);
+/**
+ * @param {ExpressionErrorCode} code
+ * @param {string} source
+ * @param {number} at
+ * @param {string} where
+ * @param {string} message
+ */
+function expressionError(code, source, at, where, message) {
+  return new ExpressionError(code, `${message} in ${where}\n    ${source}\n    ${' '.repeat(at)}^`);
 }
 
 class Parser {
@@ -87,6 +112,9 @@ class Parser {
     if (this.#tokens.length === 0) throw this.#error(0, 'Empty expression');
     const node = allowAssignment ? this.#assignment() : this.#conditional();
     const extra = this.#peek();
+    if (extra?.type === 'punct' && extra.text === '=') {
+      throw this.#error(extra.at, 'Only an event binding may assign', 'templates/expression-assignment');
+    }
     if (extra !== undefined) throw this.#error(extra.at, `Unexpected ${JSON.stringify(extra.text)}`);
     return node;
   }
@@ -96,7 +124,7 @@ class Parser {
     const target = this.#conditional();
     if (!this.#eat('=')) return target;
     if (target.kind !== 'name' && target.kind !== 'member' && target.kind !== 'index') {
-      throw this.#error(0, 'Assignment target must be a name or a member access');
+      throw this.#error(0, 'Assignment target must be a name or a member access', 'templates/expression-assignment');
     }
     return { kind: 'assign', target, value: this.#assignment() };
   }
@@ -232,7 +260,7 @@ class Parser {
   /** @param {string} name @param {number} at */
   #refuseMember(name, at) {
     const refusal = refusedMember(name);
-    if (refusal !== undefined) throw this.#error(at, refusal);
+    if (refusal !== undefined) throw this.#error(at, refusal, 'templates/expression-member');
   }
 
   /** @returns {Token | undefined} */
@@ -255,8 +283,10 @@ class Parser {
       `Expected ${JSON.stringify(text)}${token === undefined ? ' but the expression ended' : ` and found ${JSON.stringify(token.text)}`}`,
     );
   }
-  /** @param {number} at @param {string} message */
-  #error(at, message) { return syntaxError(this.#source, at, this.#where, message); }
+  /** @param {number} at @param {string} message @param {ExpressionErrorCode} [code] */
+  #error(at, message, code = 'templates/expression-syntax') {
+    return expressionError(code, this.#source, at, this.#where, message);
+  }
 }
 
 /**
