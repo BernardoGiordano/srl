@@ -105,7 +105,7 @@ ${facts.importMap.trimEnd()}
 </html>
 `;
 
-  const main = `import { startApplication } from '@core/application/runtime.js';
+  const main = `import { startApplication } from '@srljs/core';
 
 // The library runs startup in a fixed order: manifest, templates, locale, providers,
 // then the root. Add \`configure\`, \`providers\` or \`ready\` here as the application
@@ -115,9 +115,7 @@ await startApplication({
 });
 `;
 
-  const root = `import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
-import { attachRouter } from '@core/navigation/router.js';
+  const root = `import { attachRouter, defineComponent, SignalElement } from '@srljs/core';
 
 import { routes } from './routes.js';
 
@@ -144,10 +142,7 @@ export const routes = [
 ];
 `;
 
-  const home = `import { defineComponent } from '@core/elements/component.js';
-import { SignalElement } from '@core/elements/signal-element.js';
-import { signal } from '@core/foundation/reactive.js';
-import { t } from '@core/localization/i18n.js';
+  const home = `import { defineComponent, signal, SignalElement, t } from '@srljs/core';
 
 export class HomePage extends SignalElement {
   #count = signal(0);

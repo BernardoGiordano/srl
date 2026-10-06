@@ -63,7 +63,8 @@ import ts from 'typescript';
 
 import { minifyTemplate } from '../../cli/delivery/template-html.mjs';
 import { REPO, exists, walk } from '../../cli/layout.mjs';
-import { barrelSource, declarationBarrelSource, moduleDoor } from '../../cli/package/door.mjs';
+import { barrelSource, declarationBarrelSource } from '../../cli/package/door.mjs';
+import { bundleDoors, bundleMembers, isTestSource } from '../../cli/package/entry.mjs';
 import {
   BUNDLES,
   DECLARATION_TREE,
@@ -121,61 +122,6 @@ const EXTERNAL = Object.keys(/** @type {Record<string, string>} */ (MANIFEST.srl
   // index.html.
   (specifier) => specifier !== '@tailwindcss/browser',
 );
-
-/**
- * Test source, decided on the path relative to the package rather than the absolute
- * one. It is the same rule the project model follows, for the same reason, because a
- * checkout that happens to sit under a directory called `test` is not a suite.
- *
- * @param {string} path
- * @returns {boolean}
- */
-function isTestSource(path) {
-  const inside = relative(PACKAGE, path);
-  return inside.split(sep).includes('test') || inside.endsWith('.test.js');
-}
-
-/**
- * The modules one bundle is a barrel over, sorted so the emitted entry is stable
- * byte for byte across machines.
- *
- * @param {import('../../cli/package/interface.mjs').PackageBundle} bundle
- * @returns {Promise<string[]>}
- */
-async function membersOf(bundle) {
-  /** @type {string[]} */
-  const files = [];
-  for (const root of bundle.roots) files.push(...(await walk(root, /\.js$/u)));
-  return [...new Set(files)]
-    .filter((file) => !isTestSource(file))
-    .filter((file) => !bundle.excluded.some((dir) => file.startsWith(dir + sep)))
-    .sort();
-}
-
-/**
- * What each member offers, read out of the members rather than written.
- *
- * Still derived, because the list of members is the walk above and no name is typed
- * anywhere. Each member is asked which of its exports are part of the door, so a name
- * the source documents as test-only or internal does not become a promise to a
- * registry consumer. `cli/package/door.mjs` owns the rule and the marker, and this
- * reads the files for it. ADR-0066.
- *
- * Read once and used twice, by the JavaScript barrel and by the declaration barrel, so
- * the bundle's runtime surface and its type surface are the same set of names by
- * construction.
- *
- * @param {string[]} members
- * @returns {Promise<Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>>}
- */
-async function doorsOf(members) {
-  /** @type {Array<{ file: string, door: import('../../cli/package/door.mjs').ModuleDoor }>} */
-  const doors = [];
-  for (const file of members) {
-    doors.push({ file, door: moduleDoor(await readFile(file, 'utf8'), file) });
-  }
-  return doors;
-}
 
 /**
  * Resolve the library's own prefixes to files on disk.
@@ -925,12 +871,12 @@ export async function buildPackageBundles({ into = DIST } = {}) {
   const built = [];
 
   for (const bundle of BUNDLES) {
-    const members = await membersOf(bundle);
+    const members = await bundleMembers(bundle);
     if (members.length === 0) throw new Error(`${bundle.name} has no members; the roots are wrong.`);
     // Built once and reused for both minification settings, because reading and
   // parsing
     // every member is the cost, and it does not change with the minifier.
-    const doors = await doorsOf(members);
+    const doors = await bundleDoors(members);
     const entrySource = barrelSource(doors);
     lines.push(`  ok   ${bundle.name.padEnd(24)} ${String(members.length).padStart(8)} module(s)`);
     for (const minify of [false, true]) lines.push(await emit(bundle, entrySource, minify, into));

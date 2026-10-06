@@ -26,6 +26,7 @@ import { nothing } from 'lit';
  *
  * @param {string} value
  * @returns {string | typeof nothing}
+ * @internal
  */
 export function optionalAttr(value) {
   return value === '' ? nothing : value;
@@ -40,6 +41,7 @@ export function optionalAttr(value) {
  *
  * @param {Element} element
  * @returns {boolean}
+ * @internal
  */
 export function isRtl(element) {
   return getComputedStyle(element).direction === 'rtl';
@@ -54,6 +56,7 @@ export function isRtl(element) {
  *
  * @param {Element} element
  * @returns {-1 | 1}
+ * @internal
  */
 export function directionSign(element) {
   return isRtl(element) ? -1 : 1;
@@ -72,6 +75,7 @@ let nextId = 0;
  *
  * @param {string} prefix
  * @returns {string}
+ * @internal
  */
 export function nextElementId(prefix) {
   nextId += 1;

@@ -84,7 +84,8 @@
   "//srl": [
     "mounts maps browser URL prefixes to package directories. imports maps bare",
     "specifiers to those directories. bundles names the generated registry",
-    "entries. vendor maps third-party specifiers to committed browser files."
+    "entries, and an entry module gives a bundle's name to the import map too.",
+    "vendor maps third-party specifiers to committed browser files."
   ],
   "srl": {
     "mounts": {
@@ -100,13 +101,13 @@
     "bundles": {
       "srl-core": {
         "subpath": ".",
+        "entry": "lib/srl-core.js",
         "imports": ["@core/", "@auth/", "@host/"]
       },
       "srl-components": {
         "subpath": "./components",
         "imports": ["@components/"],
-        "extends": "srl-core",
-        "exclude": ["components/internal"]
+        "extends": "srl-core"
       }
     },
     "vendor": {

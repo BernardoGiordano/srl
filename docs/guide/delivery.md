@@ -80,7 +80,7 @@ worker leaves remote assets to their own deployer.
 An application opts into registration after startup.
 
 ```js
-import { registerServiceWorker } from '@core/application/worker.js';
+import { registerServiceWorker } from '@srljs/core';
 
 await startApplication({ /* … */ });
 await registerServiceWorker();

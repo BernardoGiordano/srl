@@ -90,7 +90,12 @@
     // `components/`, through tsconfig.source.json. It edits the modules this tree is
     // built from, and a table pointing at the build output would check it against
     // whatever the last `npm run package` left behind.
+    //
+    // `@srljs/core` resolves through `exports` as well. It is listed so that tsc and
+    // the import map name the same entries, and it lands on the barrel over the same
+    // tree, so a class imported under either spelling is one type. ADR-0124.
     "paths": {
+      "@srljs/core": ["./dist/srl-core.d.ts"],
       "@core/*": ["./dist/types/lib/core/*"],
       "@auth/*": ["./dist/types/lib/auth/*"],
       "@host/*": ["./dist/types/lib/host/*"],

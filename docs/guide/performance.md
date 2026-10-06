@@ -305,8 +305,7 @@ rendered and which compiled bindings patched their DOM parts
 `@core/diagnostics/updates.js` records both, around whatever you want explained:
 
 ```js
-import { recordUpdates } from '@core/diagnostics/updates.js';
-import { formatUpdateReport } from '@core/diagnostics/report.js';
+import { recordUpdates, formatUpdateReport } from '@srljs/core';
 
 const stop = recordUpdates();
 await theInteractionThatFeelsWrong();

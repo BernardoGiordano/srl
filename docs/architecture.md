@@ -70,6 +70,7 @@ boundaries have one production implementation and a test adapter.
 | Identity, refresh and reader lifetime of the example's shared order | `example/src/state/order-records.js` |
 | The collection's own strings | `source/components/internal/text.js` |
 | What "filtered" means | `source/components/data/filter-descriptor.js` |
+| Which names `@srljs/core` offers, in a bundle and in an import map | `cli/package/door.mjs` decides, `tools/delivery/package-bundle.mjs` writes `dist/srl-core.js`, and `cli/package/entry.mjs` writes `source/lib/srl-core.js` |
 | The mounts `/lib/`, `/components/` and the specifiers they serve | `source/package.json` — the library declares them; `cli/package/interface.mjs` reads them for the dev server, the test runner, the benchmark origin and the delivery tooling |
 | How a URL becomes a file, and what may answer a request that has none | `cli/origin/index.mjs` — mounts, the traversal refusal, the directory index and the history fallback; the dev server, the benchmark origin, the artifact test origin and the test runner's rewrite are adapters over it |
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
