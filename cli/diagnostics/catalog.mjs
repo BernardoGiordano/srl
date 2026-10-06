@@ -1,5 +1,6 @@
 /**
- * Every code `srl check` reports, with one sentence saying what it means.
+ * Every code `srl check` reports, and every code `srl serve` relays from a page, with
+ * one sentence saying what it means.
  *
  * A code names one problem. The message beside it says where and how to fix this
  * instance, and this entry says what the problem is, so an agent or a person can look a
@@ -91,6 +92,11 @@ export const CODES = Object.freeze({
   'messages/unknown-key': 'A reference names a key no bundle it can reach declares, so the page shows the key.',
   'messages/missing-parameter': 'A message interpolates a placeholder the call does not pass, so the page shows the braces.',
   'messages/unused-parameter': 'A call passes a parameter its message does not interpolate.',
+
+  'runtime/startup': 'A step of application startup failed, so the root never mounted. The message names the step and its cause.',
+  'runtime/uncaught': 'An error with no code of its own reached the page uncaught.',
+  'runtime/module-load': 'A module script, or a module it imports, did not load, so nothing after it ran.',
+  'runtime/unknown-binding': 'A template reads a name no local, member or template global answers, so it renders as undefined.',
 });
 
 /**

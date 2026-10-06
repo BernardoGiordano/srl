@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { planUpdate } from '../dev/update-client.js';
+import { diagnosticFromError, planUpdate, unknownNameDiagnostic } from '../dev/update-client.js';
 import { startUpdateSession } from '../dev/updates.mjs';
 import { serveApplication } from '../dev/serve.mjs';
 import { apps } from '../layout.mjs';
@@ -285,7 +285,12 @@ void test('the served entry document carries the update client', async () => {
   try {
     const document = await (await fetch(`${server.url}/`)).text();
     assert.match(document, /new EventSource\('\/__updates'\)/);
-    assert.match(document, /import \{ applyUpdate \} from '\/__updates\/client\.js'/);
+    assert.match(document, /import \{ applyUpdate, watchFailures \} from '\/__updates\/client\.js'/);
+
+    // The failure queue comes first in the head, ahead of the import map and every
+    // module script, so a failure while the entry evaluates is not lost. ADR-0125.
+    const queue = document.indexOf('globalThis.__srlFailures = []');
+    assert.ok(queue !== -1 && queue < document.indexOf('<script type="importmap">'));
 
     const client = await fetch(`${server.url}/__updates/client.js`);
     assert.equal(client.status, 200);
@@ -345,4 +350,82 @@ void test('the client turns changed URLs into what the page should do', () => {
     stylesheets: [],
     modules: [],
   });
+});
+
+void test('a failure the page posts is printed with the file its URL names', async () => {
+  const app = (await apps()).find((candidate) => candidate.name === 'example');
+  assert.ok(app !== undefined, 'the example application is missing');
+
+  /** @type {string[]} */
+  const lines = [];
+  const server = await serveApplication({
+    app,
+    port: 0,
+    host: '127.0.0.1',
+    watch: true,
+    log: (format, ...values) => lines.push(values.length === 0 ? format : String(values[0])),
+  });
+  const post = (/** @type {unknown} */ body) =>
+    fetch(`${server.url}/__updates/diagnostics`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  try {
+    const posted = await post({
+      severity: 'error',
+      code: 'runtime/startup',
+      message: 'Application startup failed at step "root": boom',
+      url: '/src/main.js',
+      line: 12,
+      column: 3,
+    });
+    assert.equal(posted.status, 204);
+    assert.ok(
+      lines.includes('  FAIL runtime/startup  example/src/main.js:12:3: Application startup failed at step "root": boom'),
+      lines.join('\n'),
+    );
+
+    // A body that is not a diagnostic is refused, and nothing is printed for it.
+    const before = lines.length;
+    assert.equal((await post({ severity: 'error', code: 'Not A Code', message: 'x' })).status, 400);
+    assert.equal((await post('runtime/startup')).status, 400);
+    assert.equal((await fetch(`${server.url}/__updates/diagnostics`)).status, 405);
+    assert.equal(lines.length, before);
+  } finally {
+    await server.close();
+  }
+});
+
+void test('the client names a failure by its innermost code and its place', () => {
+  // The startup error says where the problem surfaced, and its cause says what it is.
+  const cause = Object.assign(new Error('Unexpected "+" in /src/page.html'), { code: 'templates/expression-syntax' });
+  const startup = Object.assign(new Error('Application startup failed at step "root"', { cause }), {
+    code: 'runtime/startup',
+  });
+  const named = diagnosticFromError(startup, { url: '/src/main.js', line: 4, column: 1 });
+  assert.equal(named.code, 'templates/expression-syntax');
+  assert.equal(named.message, 'Application startup failed at step "root"');
+  assert.deepEqual([named.url, named.line, named.column], ['/src/main.js', 4, 1]);
+
+  // No code anywhere, and no place but the stack.
+  const plain = new Error('nope');
+  plain.stack = 'Error: nope\n    at render (http://localhost:8000/src/app-root.js:9:15)';
+  const uncaught = diagnosticFromError(plain);
+  assert.equal(uncaught.code, 'runtime/uncaught');
+  assert.deepEqual([uncaught.url, uncaught.line, uncaught.column], ['/src/app-root.js', 9, 15]);
+
+  // A lazy route whose module did not load names the module.
+  const lazy = diagnosticFromError(
+    new TypeError('Failed to fetch dynamically imported module: http://localhost:8000/src/pages/x.js'),
+  );
+  assert.equal(lazy.code, 'runtime/module-load');
+  assert.equal(lazy.url, '/src/pages/x.js');
+
+  const unknown = unknownNameDiagnostic('missing', 'http://localhost:8000/src/page.html {{ missing }}');
+  assert.equal(unknown.severity, 'warning');
+  assert.equal(unknown.code, 'runtime/unknown-binding');
+  assert.equal(unknown.url, '/src/page.html');
+  assert.match(unknown.message, /^\{\{ missing \}\} reads "missing"/);
 });

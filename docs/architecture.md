@@ -75,6 +75,7 @@ boundaries have one production implementation and a test adapter.
 | How a URL becomes a file, and what may answer a request that has none | `cli/origin/index.mjs` — mounts, the traversal refusal, the directory index and the history fallback; the dev server, the benchmark origin, the artifact test origin and the test runner's rewrite are adapters over it |
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
 | What a saved file does to a page that is already open | `cli/dev/updates.mjs` owns the watching, the URL identity and the delivery; `cli/dev/update-client.js` decides whether a change is a template revision, a component stylesheet revision, a stylesheet swap or a reload |
+| What a failure in the page tells the terminal | `cli/dev/update-client.js` turns it into a diagnostic and posts it; `cli/dev/updates.mjs` maps its URL to a file and prints it |
 | What a correct srl project, application and component are made of | `cli/scaffold/` — `project.mjs` for `srl new`, `application.mjs` and `component.mjs` for `srl generate`; `tools/fixtures/installed-layout.mjs` owns the dependency set its installed adapters prove |
 | What a package ships besides its source | `tools/delivery/package-bundle.mjs` writes `dist/`; `tools/delivery/package-docs.mjs` copies `docs/` and writes `llms.txt` |
 | What static discovery knows about the project | `cli/project-model/` |

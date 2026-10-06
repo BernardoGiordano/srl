@@ -93,5 +93,33 @@ Each step also emits a `srl:startup:<step>`
 measure. Profilers and benchmarks can read it without the return value.
 
 `ApplicationStartupError` names the failed step and preserves the original
-error as `cause`. Root mounting uses the same definition check as routes and
-outlets.
+error as `cause`. Its `code` is `runtime/startup`. Root mounting uses the same
+definition check as routes and outlets.
+
+## Failures during development
+
+`srl serve` prints what fails in the page, so a blank page has a reason in the
+terminal. The page reports four kinds of failure.
+
+| Code | Severity | Cause |
+|---|---|---|
+| `runtime/startup` | error | A startup step failed. |
+| `runtime/module-load` | error | A module, or one it imports, did not load. |
+| `runtime/uncaught` | error | An error with no code of its own reached the page. |
+| `runtime/unknown-binding` | warning | A template read a name nothing answers. |
+
+An error whose `cause` carries a catalogued code is printed under that code,
+such as `templates/expression-syntax` for a binding that does not parse. Each
+line names the file the failing URL is served from. Errors also appear in a
+panel at the bottom of the page.
+
+```text
+  FAIL runtime/startup  node_modules/@srljs/core/lib/core/application/runtime.js:156:11: Application startup failed at step "manifest": /app.manifest.json has a key admission does not know, "remots". …
+```
+
+A startup failure is thrown inside the library, so its place is the library's
+file, and the message names the step and the cause.
+
+The reporting is injected by the development server. The file on disk and the
+production build carry none of it. A suite or a staging build can install its
+own reporter for unknown names with `reportUnknownNames` from `@srljs/core`.
