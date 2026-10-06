@@ -220,13 +220,25 @@ void test('an existing application directory is refused whole, and an existing t
 
 /* ── The project ─────────────────────────────────────────────────────────── */
 
-void test('a project is its manifest, ignore file and agent notes around one application', () => {
+void test('a project is its manifest, ignore file, agent notes and tests around one application', () => {
   const files = projectFiles(PROJECT);
 
   assert.deepEqual(
     [...files.keys()],
-    ['package.json', '.gitignore', 'AGENTS.md', ...applicationFiles(APP).keys()],
+    [
+      'package.json',
+      '.gitignore',
+      'AGENTS.md',
+      'web-test-runner.config.mjs',
+      ...applicationFiles(APP).keys(),
+      'web/test/home-page.test.js',
+    ],
   );
+
+  // The tests run through the CLI's preset and import the published harness. ADR-0126.
+  assert.match(files.get('web-test-runner.config.mjs') ?? '', /testRunnerConfig\(\{ app: 'web' \}\)/u);
+  assert.match(files.get('web/test/home-page.test.js') ?? '', /from '@srljs\/core\/testing\/harness\.js'/u);
+  assert.deepEqual(JSON.parse(files.get('tsconfig.json') ?? '').compilerOptions, { types: ['mocha', 'node'] });
 
   // The pair pinned exactly to each other, and the tools the build shells out to.
   assert.deepEqual(JSON.parse(files.get('package.json') ?? ''), {
@@ -239,6 +251,7 @@ void test('a project is its manifest, ignore file and agent notes around one app
       dev: 'srl serve --app web',
       check: 'srl check',
       build: 'srl build --app web',
+      test: 'web-test-runner',
     },
     dependencies: { '@srljs/core': '1.2.3' },
     devDependencies: {
@@ -260,6 +273,7 @@ void test('a project is its manifest, ignore file and agent notes around one app
     'node_modules/@srljs/core/llms.txt',
     'node_modules/@srljs/cli/docs/reference/diagnostic-codes.md',
     '`web/index.html`',
+    '`npm test`',
   ]) {
     assert.ok(agents.includes(fact), `AGENTS.md mentions ${fact}`);
   }

@@ -72,7 +72,8 @@ boundaries have one production implementation and a test adapter.
 | What "filtered" means | `source/components/data/filter-descriptor.js` |
 | Which names `@srljs/core` offers, in a bundle and in an import map | `cli/package/door.mjs` decides, `tools/delivery/package-bundle.mjs` writes `dist/srl-core.js`, and `cli/package/entry.mjs` writes `source/lib/srl-core.js` |
 | The mounts `/lib/`, `/components/` and the specifiers they serve | `source/package.json` — the library declares them; `cli/package/interface.mjs` reads them for the dev server, the test runner, the benchmark origin and the delivery tooling |
-| How a URL becomes a file, and what may answer a request that has none | `cli/origin/index.mjs` — mounts, the traversal refusal, the directory index and the history fallback; the dev server, the benchmark origin, the artifact test origin and the test runner's rewrite are adapters over it |
+| How a URL becomes a file, and what may answer a request that has none | `cli/origin/index.mjs` — mounts, the traversal refusal, the directory index and the history fallback; the dev server, the benchmark origin, the artifact test origin and the test runner preset are adapters over it |
+| How a project's component tests reach the library and the application | `cli/testing/web-test-runner.mjs`, the preset `srl new` projects and this repository both run |
 | Which directories are applications, and where the repository's root is | `cli/layout.mjs` |
 | What a saved file does to a page that is already open | `cli/dev/updates.mjs` owns the watching, the URL identity and the delivery; `cli/dev/update-client.js` decides whether a change is a template revision, a component stylesheet revision, a stylesheet swap or a reload |
 | What a failure in the page tells the terminal | `cli/dev/update-client.js` turns it into a diagnostic and posts it; `cli/dev/updates.mjs` maps its URL to a file and prints it |

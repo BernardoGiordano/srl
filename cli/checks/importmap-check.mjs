@@ -41,6 +41,7 @@ import { pathToFileURL } from 'node:url';
 import { error, info, outputFormat, report, warning } from '../diagnostics/index.mjs';
 import { REPO, apps, exists, readText, selectedApp } from '../layout.mjs';
 import {
+  ENTRY_SPECIFIERS,
   IMPORT_MAP_FILE,
   PACKAGE,
   SPECIFIER_DIRS,
@@ -226,12 +227,15 @@ async function checkApplication(app, fragment) {
 
   /* ── 4. Vendored URLs the map names, and classic script tags ─────────── */
 
+  // The library's entry module is library source, like the files under its prefixes,
+  // so it is unpinned for the same reason they are. ADR-0124.
+  const entries = new Set(Object.values(ENTRY_SPECIFIERS));
   const unhashed = [];
   for (const url of new Set(Object.values(imports))) {
     if (!url.startsWith('/')) continue; // A bare specifier is somebody else's resolver.
     if (!(await exists(urlToFile(app.dir, url)))) {
       refuse('importmap/target-missing', `the import map points at ${url}, which does not exist.`);
-    } else if (integrity[url] === undefined && !url.endsWith('/')) {
+    } else if (integrity[url] === undefined && !url.endsWith('/') && !entries.has(url)) {
       unhashed.push(url);
     }
   }

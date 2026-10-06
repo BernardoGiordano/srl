@@ -1,5 +1,5 @@
 import { AuthRejected, AuthUnavailable } from '@auth/session-policy.js';
-import { assert, present } from '../../source/lib/test/harness.js';
+import { assert, present } from '@srljs/core/testing/harness.js';
 
 import { BffCookieTokenStore } from '../src/auth/bff-cookie-store.js';
 import { DpopTokenStore } from '../src/auth/dpop-store.js';

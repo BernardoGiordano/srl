@@ -1,7 +1,7 @@
 import { navigate, navigationSettled } from '@core/navigation/router.js';
 import { locale, setLocale } from '@core/localization/i18n.js';
 import { configurePreferences, createMemoryStorage } from '@core/preferences/persistence.js';
-import { assert, present, settled, unmountAll } from '../../source/lib/test/harness.js';
+import { assert, present, settled, unmountAll } from '@srljs/core/testing/harness.js';
 
 import { expireAccessToken, installFakeEventSource, installFakeServer, requested } from './fake-server.js';
 

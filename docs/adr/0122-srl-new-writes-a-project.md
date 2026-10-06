@@ -40,7 +40,8 @@ Four alternatives lost.
 ## Decision
 
 **`srl new <project>` writes a new project directory.** It contains `package.json`,
-`.gitignore`, `AGENTS.md`, `tsconfig.json` and an application at `<project>/web/`.
+`.gitignore`, `AGENTS.md`, `tsconfig.json`, `web-test-runner.config.mjs` and an
+application at `<project>/web/` with one test.
 `--app` renames the application. `package.json` pins `@srljs/core` and `@srljs/cli`
 exactly, pins the application-owned Tailwind packages and Node types, and declares
 `dev`, `check` and `build` scripts. The command installs nothing and does not run Git.
@@ -94,8 +95,8 @@ conformance builds its projects the same way (ADR-0097).
 - The first `npm run build` still needs a Git commit. `srl new` says so when it finishes.
 - A Tailwind upgrade in this repository fails `npm run verify` until
   `scaffold.devDependencies` follows it.
-- The scaffold writes no test and no `test` script. It gains both when the test runner's
-  URL rewrite is published.
+- The scaffold writes one test and a `test` script, run through the CLI's test runner
+  preset (ADR-0126).
 - The scaffolded manifest carries `$schema` and one `i18n` section, because a plain
   application may omit the host sections (ADR-0123).
 - ADR-0073's choice of the smallest application that runs no longer holds. Its other

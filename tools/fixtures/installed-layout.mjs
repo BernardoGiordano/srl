@@ -54,7 +54,9 @@ const PAIR = Object.freeze({
 const APPLICATION_DEPENDENCIES = Object.freeze({
   ...PAIR,
   '@tailwindcss/cli': developmentVersion(repositoryPackage, '@tailwindcss/cli'),
+  '@types/mocha': lockedVersion(repositoryLock, '@types/mocha'),
   '@types/node': lockedVersion(repositoryLock, '@types/node'),
+  '@web/test-runner': lockedVersion(repositoryLock, '@web/test-runner'),
   tailwindcss: developmentVersion(repositoryPackage, 'tailwindcss'),
 });
 

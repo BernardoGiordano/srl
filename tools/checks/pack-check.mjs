@@ -27,7 +27,8 @@
  *   2. Adds a styled component with `srl generate component`, puts it on the home
  *      page, and commits with `git add .`, which the scaffolded .gitignore has to keep
  *      out of node_modules and dist.
- *   3. Runs the scaffolded `npm run check` and `npm run build`.
+ *   3. Runs the scaffolded `npm run check`, `npm run build` and `npm run test`, the
+ *      last through the CLI's test runner preset in Chrome. ADR-0126.
  *   4. Typechecks a consumer of the other audience, a bundler user with no import map,
  *      against nothing but the package's `exports`. ADR-0066.
  *   5. Typechecks a strict consumer of the import-map audience as one whole program,
@@ -456,7 +457,7 @@ async function check(project) {
 
   /* ── The scaffolded scripts, through the published bin ────────────────── */
 
-  for (const name of ['check', 'build']) {
+  for (const name of ['check', 'build', 'test']) {
     const result = await script(project, name);
     if (result.code === 0) {
       found.push(info('pack/tool', `npm run ${name}`, { group: GROUP }));
