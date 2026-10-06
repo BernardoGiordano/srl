@@ -90,6 +90,13 @@ export class AuthSession {
   /** Store mutations run in order, including cleanup after a superseded exchange. */
   #storeWork = Promise.resolve();
 
+  /**
+   * Settles when the latest login, logout or restore has reached the store. Requests
+   * wait for it before authorizing, but never for a refresh alone, because a refresh
+   * keeps the subject and the current token stays valid until it lands.
+   */
+  #identityWork = Promise.resolve();
+
   /** @param {TokenStore} store */
   constructor(store) {
     this.#store = store;
@@ -128,7 +135,7 @@ export class AuthSession {
         case 'logout':
           this.#changeGeneration();
           this.#apply(null);
-          void this.#withStore(() => this.#store.logout()).catch(() => undefined);
+          void this.#withIdentity(() => this.#store.logout()).catch(() => undefined);
           break;
         case 'changed': {
           // Another tab signed in or refreshed. Read this tab's own store rather
@@ -138,7 +145,7 @@ export class AuthSession {
           // it.
           this.#changeGeneration();
           const generation = this.#generation;
-          void this.#withStore(() => this.#store.init())
+          void this.#withIdentity(() => this.#store.init())
             .then((next) => {
               this.#applyIfCurrent(generation, next);
             })
@@ -151,11 +158,11 @@ export class AuthSession {
     };
 
     const generation = this.#generation;
-    const restored = await this.#withStore(() => this.#store.init());
+    const restored = await this.#withIdentity(() => this.#store.init());
     if (generation !== this.#generation && !this.#disposed) {
       // A login, a logout or another tab decided the session during the restore.
       // Startup receives that decision once its store work lands, not a failure.
-      await this.#storeWork;
+      await this.#identityWork;
       return this.session.value;
     }
     this.#assertCurrent(generation);
@@ -174,7 +181,7 @@ export class AuthSession {
   async login(credentials) {
     this.#changeGeneration();
     const generation = this.#generation;
-    const next = await this.#withStore(() => {
+    const next = await this.#withIdentity(() => {
       this.#assertCurrent(generation);
       return this.#store.login(credentials);
     });
@@ -192,7 +199,7 @@ export class AuthSession {
     this.#apply(null);
     this.#refreshInFlight = undefined;
     this.#broadcast('logout');
-    await this.#withStore(() => this.#store.logout());
+    await this.#withIdentity(() => this.#store.logout());
   }
 
   /**
@@ -204,10 +211,9 @@ export class AuthSession {
    */
   async authorize(request) {
     const generation = this.#generation;
-    const authorized = await this.#withStore(() => {
-      this.#assertCurrent(generation);
-      return this.#store.authorize(request);
-    });
+    await this.#identityWork;
+    this.#assertCurrent(generation);
+    const authorized = await this.#store.authorize(request);
     this.#assertCurrent(generation);
     return authorized;
   }
@@ -371,6 +377,13 @@ export class AuthSession {
   #withStore(operation) {
     const next = this.#storeWork.then(operation);
     this.#storeWork = next.then(() => {}, () => {});
+    return next;
+  }
+
+  /** @template T @param {() => Promise<T>} operation @returns {Promise<T>} */
+  #withIdentity(operation) {
+    const next = this.#withStore(operation);
+    this.#identityWork = this.#storeWork;
     return next;
   }
 

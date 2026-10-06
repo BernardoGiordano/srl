@@ -491,6 +491,47 @@ describe('auth session lifecycle', () => {
     assert.equal(authorized, false);
   });
 
+  it('sends requests while a refresh is pending', async () => {
+    const pending = deferred();
+    const entered = deferred();
+    globalThis.fetch = () => Promise.resolve(new Response('ok'));
+    const { auth } = start({ refresh: () => { entered.resolve(null); return pending.promise; } });
+    await auth.login({});
+    const refreshing = auth.refresh();
+    await entered.promise;
+
+    const sent = await Promise.race([
+      auth.fetch('/api/me').then(() => true),
+      after(50).then(() => false),
+    ]);
+    pending.resolve(session());
+    await refreshing;
+
+    assert.ok(sent, 'the current token stays valid until the refresh lands');
+  });
+
+  it('authorizes after logout only once the pending refresh and cleanup have run', async () => {
+    const pending = deferred();
+    const entered = deferred();
+    const order = /** @type {string[]} */ ([]);
+    globalThis.fetch = () => Promise.resolve(new Response('ok'));
+    const { auth } = start({
+      refresh: () => { entered.resolve(null); return pending.promise; },
+      logout: () => { order.push('logout'); return Promise.resolve(); },
+      authorize: (request) => { order.push('authorize'); return Promise.resolve(request); },
+    });
+    await auth.login({});
+    const refreshing = auth.refresh();
+    await entered.promise;
+
+    const loggingOut = auth.logout();
+    const sending = auth.fetch('/api/public');
+    pending.resolve(session());
+    await Promise.all([refreshing, loggingOut, sending]);
+
+    assert.sameArray(order, ['logout', 'authorize']);
+  });
+
   it('does not let a refresh in flight survive a logout', async () => {
     const pending = deferred();
     const { auth } = start({ refresh: () => pending.promise });

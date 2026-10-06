@@ -30,7 +30,8 @@ Signing in, signing out, cross-tab changes, and disposal cancel pending requests
 and response body reads with `AbortError`. A request is never retried under a
 later sign-in. Callers sharing an in-flight GET receive the cancellation too;
 a later GET starts a new request. Store exchanges run in order so a late login
-or refresh cannot restore credentials after logout. Local logout state clears
+or refresh cannot restore credentials after logout. Requests wait for a pending
+login, logout, or restore before authorizing, but not for a refresh. Local logout state clears
 immediately, while its promise waits for earlier exchanges and store cleanup.
 When one of these changes lands during `init()`, the restore resolves with the
 session that change produced instead of failing startup.
