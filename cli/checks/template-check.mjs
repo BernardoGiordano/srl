@@ -30,6 +30,7 @@ import {
   FOR_KEY_CLAUSE,
   FOR_LOCALS,
   INTERPOLATION,
+  isAnimationSink,
   parseFragmentHead,
   refusedProperty,
   securityContextFor,
@@ -544,6 +545,12 @@ class ShimBuilder {
     for (const attr of node.attributes) {
       if (skip.has(attr.name)) continue;
       const syntax = classifyAttributeName(attr.name);
+      const target = syntax.kind === 'binding' ? classifyBindingTarget(syntax.target).name : attr.name;
+      if (isAnimationSink(node.tag, target) && (syntax.kind === 'binding' || attr.value.includes('{{'))) {
+        this.problem('templates/animation-binding', attr.at,
+          `${this.component.template}: dynamic SVG animation targets and values are forbidden. Use static animation attributes.`);
+        continue;
+      }
       if (syntax.kind === 'inline-handler') {
         this.problem(
           'templates/inline-handler',

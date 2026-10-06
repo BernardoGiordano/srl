@@ -300,6 +300,18 @@ export const STYLE_SINKS = new Set(['csstext', 'style']);
 export const URL_SET_SINKS = new Set(['srcset']);
 
 /**
+ * Animation values can write other attributes, including executable URLs. Dynamic
+ * targets and values are refused rather than guessing the destination's context.
+ * @param {string} tag
+ * @param {string} name
+ * @internal
+ */
+export function isAnimationSink(tag, name) {
+  return /^(?:animate|animatemotion|animatetransform|set)$/u.test(tag.toLowerCase()) &&
+    /^(?:attributename|attributetype|values|from|to|by)$/u.test(name.toLowerCase());
+}
+
+/**
  * The security context of a value written to `tag`.`name`, or `undefined` when
  * escaping is enough.
  *

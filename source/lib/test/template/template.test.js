@@ -184,6 +184,35 @@ describe('template compiler', () => {
     );
   });
 
+  it('refuses dynamic SVG animation sinks including indirect targets', () => {
+    for (const tag of ['animate', 'set', 'animateTransform', 'animateMotion']) {
+      for (const binding of ['[values]="payload"', 'to="{{ payload }}"', '[from]="payload"', '[by]="payload"', '[attributeName]="payload"', '[?values]="payload"']) {
+        assert.throws(
+          () => paint(`<svg><a href="#"><${tag} attributeName="href" ${binding}></${tag}></a></svg>`, {
+            payload: 'javascript:alert(1)',
+          }),
+          'animation',
+        );
+      }
+    }
+    paint('<svg><circle><animate attributeName="r" from="1" to="10" dur="1s"></animate></circle></svg>', {});
+    assert.equal(present(host.querySelector('animate')).getAttribute('to'), '10');
+  });
+
+  it('refuses CSS image-set resources and comment-obscured functions', () => {
+    for (const style of [
+      'background-image: image-set("https://example.invalid/pixel" 1x)',
+      'background-image: -webkit-image-set("https://example.invalid/pixel" 1x)',
+      'background-image: image("https://example.invalid/pixel")',
+      'background-image: src("https://example.invalid/pixel")',
+      'background-image: image-set/**/("https://example.invalid/pixel" 1x)',
+      'background-image: url/**/(https://example.invalid/pixel)',
+    ]) {
+      paint('<div [style]="style"></div>', { style });
+      assert.notOk(present(host.querySelector('div')).hasAttribute('style'));
+    }
+  });
+
   it('allows relative, web and non-active media URLs', () => {
     paint('<a [href]="target">go</a><img [src]="image">', {
       target: '/users/7?tab=profile',

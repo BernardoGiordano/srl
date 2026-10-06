@@ -26,6 +26,15 @@ concurrent requests in that session, cross-tab coordination, and disposal.
 `AuthSession.fetch()` and `.json()` send authorized requests. Route guards
 use `requireSession` and `requireScope(scope)`.
 
+Signing in, signing out, cross-tab changes, and disposal cancel pending requests
+and response body reads with `AbortError`. A request is never retried under a
+later sign-in. Callers sharing an in-flight GET receive the cancellation too;
+a later GET starts a new request. Store exchanges run in order so a late login
+or refresh cannot restore credentials after logout. Local logout state clears
+immediately, while its promise waits for earlier exchanges and store cleanup.
+When one of these changes lands during `init()`, the restore resolves with the
+session that change produced instead of failing startup.
+
 A store calls `sessionFrom()` in `source/lib/auth/session-policy.js` to admit
 a server response. It validates the identity, scopes, and expiry before the
 rest of the library sees a session. The module also gives stores field readers

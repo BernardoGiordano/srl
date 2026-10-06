@@ -1,5 +1,6 @@
 import { AuthSession } from '@auth/session.js';
 import { AuthRejected, AuthUnavailable } from '@auth/session-policy.js';
+import { ApiClient } from '@core/http/client.js';
 import { assert, present } from '../harness.js';
 
 /** @import { Session, TokenStore } from '@auth/types.js' */
@@ -345,19 +346,165 @@ describe('auth session lifecycle', () => {
 
   /* ── Ordering ──────────────────────────────────────────────────────────── */
 
+  it('never retries an old POST as the next signed-in user', async () => {
+    let answer = /** @type {(response: Response) => void} */ (() => {});
+    let sent = /** @type {() => void} */ (() => {});
+    const started = new Promise((resolve) => { sent = () => resolve(undefined); });
+    const pending = /** @type {Promise<Response>} */ (new Promise((resolve) => { answer = resolve; }));
+    let requests = 0;
+    globalThis.fetch = async () => {
+      requests += 1;
+      sent();
+      return pending;
+    };
+    const { auth } = start();
+    await auth.login({});
+    const writing = auth.fetch('/api/payments', { method: 'POST', body: 'old-user-payment' });
+    const rejected = assert.rejects(() => writing, 'session');
+    await started;
+    await auth.logout();
+    await auth.login({});
+    answer(new Response('', { status: 401 }));
+    await rejected;
+    assert.equal(requests, 1);
+  });
+
+  it('does not deliver a shared GET from an earlier sign-in', async () => {
+    let answer = /** @type {(response: Response) => void} */ (() => {});
+    let sent = /** @type {() => void} */ (() => {});
+    const started = new Promise((resolve) => { sent = () => resolve(undefined); });
+    const pending = /** @type {Promise<Response>} */ (new Promise((resolve) => { answer = resolve; }));
+    globalThis.fetch = () => { sent(); return pending; };
+    const { auth } = start();
+    await auth.login({});
+    const client = new ApiClient('/api', { fetch: (url, init) => auth.fetch(url, init) });
+    const oldRead = client.get('/me');
+    const oldRejected = assert.rejects(() => oldRead, 'session');
+    await started;
+    await auth.logout();
+    await auth.login({});
+    const nextRead = client.get('/me');
+    const nextRejected = assert.rejects(() => nextRead, 'session');
+    answer(Response.json({ private: 'previous user' }));
+    await Promise.all([oldRejected, nextRejected]);
+    globalThis.fetch = () => Promise.resolve(Response.json({ private: 'current user' }));
+    const fresh = /** @type {{ private: string }} */ (await client.get('/me'));
+    assert.equal(fresh.private, 'current user');
+  });
+
+  it('keeps a late login from restoring a logged-out session or credential', async () => {
+    const pending = deferred();
+    const entered = deferred();
+    let credential = false;
+    const { auth } = start({
+      login: async () => {
+        entered.resolve(null);
+        const next = present(await pending.promise);
+        credential = true;
+        return next;
+      },
+      logout: () => { credential = false; return Promise.resolve(); },
+    });
+    const loggingIn = auth.login({});
+    const rejected = assert.rejects(() => loggingIn, 'session');
+    await entered.promise;
+    const loggingOut = auth.logout();
+    assert.equal(auth.session.value, null);
+    pending.resolve(session());
+    await Promise.all([rejected, loggingOut]);
+    assert.equal(auth.session.value, null);
+    assert.equal(credential, false);
+  });
+
+  it('keeps a late restore from undoing logout', async () => {
+    const pending = deferred();
+    const entered = deferred();
+    const { auth } = start({ init: () => { entered.resolve(null); return pending.promise; } });
+    const restoring = auth.init();
+    await entered.promise;
+    const loggingOut = auth.logout();
+    pending.resolve(session());
+    const [restored] = await Promise.all([restoring, loggingOut]);
+    assert.equal(restored, null, 'startup sees the logout rather than a failure');
+    assert.equal(auth.session.value, null);
+  });
+
+  it('resolves a restore with the sign-in another tab made during it', async () => {
+    const pending = deferred();
+    const entered = deferred();
+    let reads = 0;
+    const { auth } = start({ init: () => {
+      reads += 1;
+      if (reads > 1) return Promise.resolve(session({ subject: 'user-bob' }));
+      entered.resolve(null);
+      return pending.promise;
+    } });
+    const restoring = auth.init();
+    await entered.promise;
+
+    const channel = new BroadcastChannel('auth');
+    channel.postMessage({ kind: 'changed' });
+    await after(20);
+    channel.close();
+
+    pending.resolve(session());
+    const restored = present(await restoring);
+    assert.equal(restored.subject, 'user-bob');
+    assert.equal(present(auth.session.value).subject, 'user-bob');
+  });
+
+  it('aborts response body reads when the account changes', async () => {
+    let requestSignal = /** @type {AbortSignal | undefined} */ (undefined);
+    globalThis.fetch = (input) => {
+      requestSignal = /** @type {Request} */ (input).signal;
+      return Promise.resolve(new Response('private'));
+    };
+    const { auth } = start();
+    await auth.login({});
+    await auth.fetch('/api/me');
+    assert.equal(present(requestSignal).aborted, false);
+    await auth.logout();
+    assert.equal(present(requestSignal).aborted, true);
+  });
+
+  it('does not retry a request when refresh restores another subject', async () => {
+    let requests = 0;
+    globalThis.fetch = () => {
+      requests += 1;
+      return Promise.resolve(new Response('', { status: 401 }));
+    };
+    const { auth } = start({ refresh: () => Promise.resolve(session({ subject: 'another-user' })) });
+    await auth.login({});
+    await assert.rejects(() => auth.fetch('/api/payments', { method: 'POST' }), 'session');
+    assert.equal(requests, 1);
+    assert.equal(present(auth.session.value).subject, 'another-user');
+  });
+
+  it('rejects outbound requests after disposal without authorizing them', async () => {
+    let authorized = false;
+    const { auth } = start({ authorize: (request) => {
+      authorized = true;
+      return Promise.resolve(request);
+    } });
+    auth.dispose();
+    await assert.rejects(() => auth.fetch('/api/me'), 'session');
+    assert.equal(authorized, false);
+  });
+
   it('does not let a refresh in flight survive a logout', async () => {
     const pending = deferred();
     const { auth } = start({ refresh: () => pending.promise });
     auth.session.value = session();
 
     const refreshing = auth.refresh();
-    await auth.logout();
+    await Promise.resolve();
+    const loggingOut = auth.logout();
     assert.equal(auth.session.value, null, 'logout applies immediately');
 
     // The exchange the user signed out from underneath now answers. Applying it
     // would sign them back in.
     pending.resolve(session());
-    await refreshing;
+    await Promise.all([refreshing, loggingOut]);
 
     assert.equal(auth.session.value, null);
   });

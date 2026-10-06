@@ -27,6 +27,7 @@ import {
   FOR_KEY_CLAUSE,
   FOR_LOCALS,
   INTERPOLATION,
+  isAnimationSink,
   parseFragmentHead,
   refusedProperty,
   securityContextFor,
@@ -962,6 +963,11 @@ function compileAttributes(element, context, chunks) {
     }
 
     const syntax = classifyAttributeName(name);
+    const target = syntax.kind === 'binding' ? classifyBindingTarget(syntax.target).name : name;
+    if (isAnimationSink(element.localName, target) &&
+        (syntax.kind === 'binding' || splitPlaceholders(value).some((piece) => typeof piece !== 'string'))) {
+      throw new Error(`${context.where} binds an SVG animation target or value. Use static animation attributes.`);
+    }
 
     if (syntax.kind === 'inline-handler') {
       throw new Error(

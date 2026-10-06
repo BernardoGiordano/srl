@@ -127,6 +127,12 @@ attributes reject active schemes. Resource-loading sinks require an explicit
 trusted resource URL. HTML sinks remove active markup. Unsafe event-handler,
 `outerHTML`, prototype, and dynamic style bindings are refused.
 
+SVG animation targets and values must be static. Bindings and interpolation in
+`attributeName`, `attributeType`, `values`, `from`, `to`, and `by` are refused
+because animation can write a different attribute, including an executable URL.
+Dynamic styles containing resources, including `image-set()`, CSS comments, or
+escapes require a reviewed `bypassSecurityTrustStyle` value.
+
 The same rules apply to interpolated attributes and property bindings. A
 deployment can enforce Trusted Types through its CSP. Review every explicit
 bypass beside the validation that makes its value safe.

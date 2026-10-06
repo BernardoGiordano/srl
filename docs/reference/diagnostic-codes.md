@@ -43,6 +43,7 @@ problem, and the finding's message says where it is and how to fix it. `srl chec
 | `templates/fragment-on-sink` | A `*fragment` names a property that takes text or a URL, not markup. |
 | `templates/duplicate-fragment` | One element receives two fragments for the same property. |
 | `templates/inline-handler` | An `on...` attribute or binding is refused. Bind the event as `(event)="handler()"`. |
+| `templates/animation-binding` | Dynamic SVG animation targets and values can write executable attributes. Use static animation attributes. |
 | `templates/empty-binding` | A binding has brackets and no name, such as `[]` or `[.]`. |
 | `templates/refused-property` | A property binding names an event handler, `outerHTML` or a reserved member. |
 | `templates/state-binding` | A binding writes an element's internal state, which is not a public input. |

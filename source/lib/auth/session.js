@@ -85,6 +85,11 @@ export class AuthSession {
 
   #disposed = false;
 
+  #requests = new AbortController();
+
+  /** Store mutations run in order, including cleanup after a superseded exchange. */
+  #storeWork = Promise.resolve();
+
   /** @param {TokenStore} store */
   constructor(store) {
     this.#store = store;
@@ -106,9 +111,13 @@ export class AuthSession {
    * was down would be indistinguishable, to the user, from one that had signed them
    * out.
    *
+   * A login, logout or cross-tab change that lands during the restore wins. `init`
+   * then resolves with the session that change produced.
+   *
    * @returns {Promise<Session | null>}
    */
   async init() {
+    this.#assertCurrent(this.#generation);
     // Tabs coordinate so that a logout in one is a logout in all, and so a
     // refresh in one does not race N-1 duplicate refreshes in the others.
     this.#channel = new BroadcastChannel('auth');
@@ -117,8 +126,9 @@ export class AuthSession {
       // than asserted.
       switch (readKind(event.data)) {
         case 'logout':
-          this.#generation += 1;
+          this.#changeGeneration();
           this.#apply(null);
+          void this.#withStore(() => this.#store.logout()).catch(() => undefined);
           break;
         case 'changed': {
           // Another tab signed in or refreshed. Read this tab's own store rather
@@ -126,10 +136,9 @@ export class AuthSession {
           // postMessage may introduce. A failure here leaves this tab's state as it
           // was, and the tab that performed the exchange is the one that reports
           // it.
-          this.#generation += 1;
+          this.#changeGeneration();
           const generation = this.#generation;
-          void this.#store
-            .init()
+          void this.#withStore(() => this.#store.init())
             .then((next) => {
               this.#applyIfCurrent(generation, next);
             })
@@ -141,7 +150,15 @@ export class AuthSession {
       }
     };
 
-    const restored = await this.#store.init();
+    const generation = this.#generation;
+    const restored = await this.#withStore(() => this.#store.init());
+    if (generation !== this.#generation && !this.#disposed) {
+      // A login, a logout or another tab decided the session during the restore.
+      // Startup receives that decision once its store work lands, not a failure.
+      await this.#storeWork;
+      return this.session.value;
+    }
+    this.#assertCurrent(generation);
     this.#apply(restored);
     return restored;
   }
@@ -155,8 +172,13 @@ export class AuthSession {
    * @returns {Promise<Session>}
    */
   async login(credentials) {
-    const next = await this.#store.login(credentials);
-    this.#generation += 1;
+    this.#changeGeneration();
+    const generation = this.#generation;
+    const next = await this.#withStore(() => {
+      this.#assertCurrent(generation);
+      return this.#store.login(credentials);
+    });
+    this.#assertCurrent(generation);
     this.#apply(next);
     this.#broadcast('changed');
     return next;
@@ -166,11 +188,11 @@ export class AuthSession {
     // Local state goes first and unconditionally. A logout that left the session
     // signal set because the revocation call failed would leave the user looking
     // at a screen they believe they have left.
-    this.#generation += 1;
+    this.#changeGeneration();
     this.#apply(null);
     this.#refreshInFlight = undefined;
     this.#broadcast('logout');
-    await this.#store.logout();
+    await this.#withStore(() => this.#store.logout());
   }
 
   /**
@@ -180,8 +202,14 @@ export class AuthSession {
    * @param {Request} request
    * @returns {Promise<Request>}
    */
-  authorize(request) {
-    return this.#store.authorize(request);
+  async authorize(request) {
+    const generation = this.#generation;
+    const authorized = await this.#withStore(() => {
+      this.#assertCurrent(generation);
+      return this.#store.authorize(request);
+    });
+    this.#assertCurrent(generation);
+    return authorized;
   }
 
   /**
@@ -217,11 +245,24 @@ export class AuthSession {
    * @returns {Promise<Response>}
    */
   async fetch(input, init) {
+    const generation = this.#generation;
+    this.#assertCurrent(generation);
+    const signal = AbortSignal.any([
+      this.#requests.signal,
+      ...(init?.signal === null || init?.signal === undefined ? [] : [init.signal]),
+    ]);
     // A Request is consumed when sent, so a retry needs a fresh one built from
     // the original inputs rather than a clone of a spent object.
-    const build = () => new Request(input, init);
+    const build = () => new Request(input, { ...init, signal });
 
-    const response = await globalThis.fetch(await this.authorize(build()));
+    const send = async () => {
+      const authorized = await this.authorize(build());
+      this.#assertCurrent(generation);
+      // Keep cancellation even if a store rebuilt the request without its signal.
+      return globalThis.fetch(new Request(authorized, { signal }));
+    };
+    const response = await send();
+    this.#assertCurrent(generation);
     if (response.status !== 401) return response;
 
     // The access token may simply have aged out between the scheduled refresh and
@@ -235,12 +276,16 @@ export class AuthSession {
     } catch (cause) {
       // Could not tell. The 401 already in hand is the honest answer, and a retry
       // would send the same unauthorized request a second time.
+      this.#assertCurrent(generation);
       if (cause instanceof AuthUnavailable) return response;
       throw cause;
     }
+    this.#assertCurrent(generation);
     if (renewed === null) return response;
 
-    return globalThis.fetch(await this.authorize(build()));
+    const retried = await send();
+    this.#assertCurrent(generation);
+    return retried;
   }
 
   /**
@@ -253,6 +298,7 @@ export class AuthSession {
    * @returns {Promise<T>}
    */
   async json(input, init) {
+    const generation = this.#generation;
     const response = await this.fetch(input, {
       ...init,
       headers: { Accept: 'application/json', ...init?.headers },
@@ -260,7 +306,9 @@ export class AuthSession {
     if (!response.ok) {
       throw new Error(`${String(response.status)} ${response.statusText} for ${String(input)}`);
     }
-    return readJson(response);
+    const body = /** @type {unknown} */ (await readJson(response));
+    this.#assertCurrent(generation);
+    return /** @type {T} */ (body);
   }
 
   /**
@@ -276,7 +324,7 @@ export class AuthSession {
    */
   dispose() {
     this.#disposed = true;
-    this.#generation += 1;
+    this.#changeGeneration();
     this.#clearTimer();
     this.#refreshInFlight = undefined;
     this.#channel?.close();
@@ -297,7 +345,10 @@ export class AuthSession {
 
     const settled = (async () => {
       try {
-        const next = await this.#store.refresh();
+        const next = await this.#withStore(() => {
+          this.#assertCurrent(generation);
+          return this.#store.refresh();
+        });
         if (!this.#applyIfCurrent(generation, next)) return this.session.value;
         if (next === null) this.#broadcast('logout');
         return next;
@@ -310,9 +361,31 @@ export class AuthSession {
       }
     })();
 
-    return settled.finally(() => {
-      this.#refreshInFlight = undefined;
+    const shared = settled.finally(() => {
+      if (this.#refreshInFlight === shared) this.#refreshInFlight = undefined;
     });
+    return shared;
+  }
+
+  /** @template T @param {() => Promise<T>} operation @returns {Promise<T>} */
+  #withStore(operation) {
+    const next = this.#storeWork.then(operation);
+    this.#storeWork = next.then(() => {}, () => {});
+    return next;
+  }
+
+  #changeGeneration() {
+    this.#generation += 1;
+    this.#requests.abort(new DOMException('The authentication session changed.', 'AbortError'));
+    this.#requests = new AbortController();
+    this.#refreshInFlight = undefined;
+  }
+
+  /** @param {number} generation */
+  #assertCurrent(generation) {
+    if (this.#disposed || generation !== this.#generation) {
+      throw new DOMException('The authentication session changed.', 'AbortError');
+    }
   }
 
   /**
@@ -366,6 +439,10 @@ export class AuthSession {
    */
   #applyIfCurrent(generation, next) {
     if (generation !== this.#generation) return false;
+    const current = this.session.value;
+    if (current !== null && next !== null && current.subject !== next.subject) {
+      this.#changeGeneration();
+    }
     this.#apply(next);
     return true;
   }

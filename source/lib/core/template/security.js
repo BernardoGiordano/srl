@@ -339,7 +339,7 @@ function withoutAsciiControls(value) {
     .join('');
 }
 
-const ACTIVE_STYLE = /(?:url\s*\(|@import\b|expression\s*\(|(?:-moz-)?binding\s*:|behavior\s*:|\\)/iu;
+const ACTIVE_STYLE = /(?:(?:url|src|image|(?:-webkit-)?image-set)\s*\(|@import\b|expression\s*\(|(?:-moz-)?binding\s*:|behavior\s*:|\\|\/\*)/iu;
 
 /** @param {string} value @returns {string | null} */
 function sanitizeStyle(value) {
