@@ -31,6 +31,7 @@ import ts from 'typescript';
 import { build as viteBuild } from 'vite';
 
 import { scopeStylesheet } from '@srljs/core/lib/core/elements/style-scope.js';
+import { PROBE_PIN, PROBE_SPECIFIER } from '@srljs/core/lib/core/foundation/pins.js';
 import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
 import { checkProject } from '../checks/index.mjs';
 import { errors, formatText } from '../diagnostics/index.mjs';
@@ -49,7 +50,7 @@ import {
   writeReport,
 } from './artifact-report.mjs';
 import { withEntryHints } from './entry-hints.mjs';
-import { WORKER, serviceWorkerSource } from './service-worker.mjs';
+import { WORKER, retiringWorkerSource, serviceWorkerSource } from './service-worker.mjs';
 import { minifyTemplate } from './template-html.mjs';
 import { verifyPublishedRelease } from './verify-release.mjs';
 
@@ -62,6 +63,13 @@ const CACHE = {
   metadata: null,
 };
 const HASHED_JAVASCRIPT = /-[A-Za-z0-9_-]{8}\.js$/u;
+
+/**
+ * Where the pin probe is emitted. Every import map pins it to `PROBE_PIN`, which its
+ * bytes never match, so the runtime can prove the engine enforces pins. ADR-0129.
+ */
+const PROBE_PATH = /^assets\/pin-probe-[0-9a-f]{16}\.js$/u;
+const PROBE_SOURCE = join(PACKAGE, 'lib', 'core', 'foundation', 'pin-probe.js');
 
 /**
  * How a built application's templates reach the browser. All three emit one
@@ -107,7 +115,11 @@ const TEMPLATE_DELIVERY = new Set(['split', 'split-lazy', 'bundle']);
  * never read from the Remote's own paperwork.
  * @typedef {RemoteArtifactReport | RetainedRemoteRelease} RemoteInput
  *
- * @typedef {{ app: BuildApplication, outDir?: string, release?: ReleaseInput, remotes?: ReadonlyArray<RemoteInput>, templates?: TemplateDelivery }} BuildOptions
+ * The generated worker. `retire` emits the kill switch in its place, which retires every
+ * installed worker at the next navigation. ADR-0129.
+ * @typedef {'cache' | 'retire'} WorkerMode
+ *
+ * @typedef {{ app: BuildApplication, outDir?: string, release?: ReleaseInput, remotes?: ReadonlyArray<RemoteInput>, templates?: TemplateDelivery, worker?: WorkerMode }} BuildOptions
  * @typedef {{ tag: string, module: string, template: string, url: string, path: string, source: string }} TemplateAsset
  */
 
@@ -123,9 +135,13 @@ export async function buildArtifact({
   release = {},
   remotes = [],
   templates: delivery = 'split',
+  worker = 'cache',
 }) {
   validateApp(app);
   validateDelivery(app, delivery);
+  if (worker !== 'cache' && worker !== 'retire') {
+    throw artifactError(app, 'worker', `--worker must be cache or retire, got ${String(worker)}.`);
+  }
   const root = validateOutput(outDir, app);
   const normalizedRelease = normalizeRelease(release, app);
   const model = await readProject(app);
@@ -216,6 +232,9 @@ export async function buildArtifact({
       templateOutput.delivery === 'split'
         ? groupTemplates(app, templates.assets(), chunks, entry)
         : null;
+    // Everything the manifest names is pinned before the manifest is admitted, because
+    // admission refuses a URL the page doesn't pin. ADR-0129.
+    const pins = await payloadPins(publicDir, templateOutput, localeFiles);
     await emitApplicationManifest(
       app,
       publicDir,
@@ -224,14 +243,19 @@ export async function buildArtifact({
       templateGroups,
       composition.remotes,
       localeFiles,
+      {
+        ...pins,
+        ...Object.fromEntries(composition.assets.map((asset) => [asset.url, asset.integrity])),
+      },
     );
     await emitReleaseIdentity(publicDir, normalizedRelease, app);
-    const security = await emitSecurity(
+    const { security, integrity } = await emitSecurity(
       app,
       publicDir,
       chunks,
       shared,
-      composition.moduleAssets,
+      pins,
+      composition.assets,
     );
     // The graph exists now, so the document can name it. Last write to index.html
     // before it is inventoried, and after the import map, which a modulepreload has
@@ -249,7 +273,16 @@ export async function buildArtifact({
     // artifact nothing proved. ADR-0088.
     await writeFile(
       join(publicDir, WORKER),
-      serviceWorkerSource({ app: app.name, entry, chunks, templateGroups, stylesheet }),
+      worker === 'retire'
+        ? retiringWorkerSource({ app: app.name })
+        : serviceWorkerSource({
+            app: app.name,
+            entry,
+            chunks,
+            templateGroups,
+            stylesheet,
+            pins: integrity,
+          }),
     );
     const files = verifyPayload(app, await inventory(stage), templateOutput, chunks, localeFiles);
 
@@ -331,7 +364,9 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
       pins: () => currentMap.integrity,
     });
     const composition = composeRemotes(app, currentManifest, releases);
-    const shared = Object.keys(currentMap.imports).sort((left, right) => left.localeCompare(right));
+    const shared = Object.keys(currentMap.imports)
+      .filter((specifier) => specifier !== PROBE_SPECIFIER)
+      .sort((left, right) => left.localeCompare(right));
     if (JSON.stringify(shared) !== JSON.stringify(composition.shared)) {
       throw artifactError(
         app,
@@ -340,20 +375,16 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
       );
     }
 
-    const oldRemoteModules = new Set(
-      currentManifest.remotes.flatMap((remote) =>
-        (remote.assets ?? [])
-          .filter((asset) => asset.type === 'module')
-          .map((asset) => asset.url),
-      ),
+    const oldRemoteAssets = new Set(
+      currentManifest.remotes.flatMap((remote) => (remote.assets ?? []).map((asset) => asset.url)),
     );
     /** @type {Record<string, string>} */
     const integrity = Object.fromEntries(
-      Object.entries(currentMap.integrity).filter(([url]) => !oldRemoteModules.has(url)),
+      Object.entries(currentMap.integrity).filter(([url]) => !oldRemoteAssets.has(url)),
     );
-    for (const remote of composition.moduleAssets) {
+    for (const remote of composition.assets) {
       if (integrity[remote.url] !== undefined && integrity[remote.url] !== remote.integrity) {
-        throw artifactError(app, 'compose', `two module assets claim ${remote.url}.`);
+        throw artifactError(app, 'compose', `two assets claim ${remote.url}.`);
       }
       integrity[remote.url] = remote.integrity;
     }
@@ -371,7 +402,7 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
 
     const security = {
       importMap: { source: importMap, sha256: inlineHash },
-      modules: Object.entries(integrity).map(([path, value]) => ({ path, integrity: value })),
+      pins: Object.entries(integrity).map(([path, value]) => ({ path, integrity: value })),
       csp: cspForImportMap(inlineHash),
     };
     // The stylesheet is the bytes the build already proved carry every Element's scoped
@@ -492,7 +523,7 @@ export async function buildRemoteArtifact({
       templateAssets.length === 0
         ? null
         : await emitTemplateFiles(app, publicDir, templateAssets, publicationBase, delivery);
-    const locales = await emitRemoteLocales(
+    const { patterns: locales, files: localeFiles } = await emitRemoteLocales(
       app,
       remoteDir,
       publicDir,
@@ -523,7 +554,14 @@ export async function buildRemoteArtifact({
     if (remoteEntry === undefined) {
       throw artifactError(app, 'remote', `${name} generated no hash-named entry chunk.`);
     }
-    const assets = await remoteAssetRecords(publicDir, publicationBase, chunks, payload, templateOutput);
+    const assets = await remoteAssetRecords(
+      publicDir,
+      publicationBase,
+      chunks,
+      payload,
+      templateOutput,
+      localeFiles,
+    );
     const remoteTemplates = templateAnnouncement(templateOutput, publicationBase);
     const entryAsset = assets.find(
       (asset) => asset.type === 'module' && asset.url === `${publicationBase}${remoteEntry}`,
@@ -612,7 +650,7 @@ async function sourceManifest(app) {
 function composeRemotes(app, source, reports) {
   if (source.remotes.length === 0) {
     if (reports.length > 0) throw artifactError(app, 'remotes', 'application declares no remotes.');
-    return { remotes: [], shared: [], moduleAssets: [] };
+    return { remotes: [], shared: [], assets: [] };
   }
 
   /** @type {Map<string, RemoteTransport>} */
@@ -657,12 +695,12 @@ function composeRemotes(app, source, reports) {
   }
 
   const shared = [...new Set(composed.flatMap((remote) => remote.shared))].sort();
-  const moduleAssets = composed.flatMap((remote) =>
-    remote.assets
-      .filter((asset) => asset.type === 'module')
-      .map((asset) => ({ url: asset.url, integrity: asset.integrity })),
+  // Every asset a remote publishes enters the shell's pin table, whatever its type, so
+  // its loader can fetch it under a pin the manifest can't change. ADR-0129.
+  const assets = composed.flatMap((remote) =>
+    remote.assets.map((asset) => ({ url: asset.url, integrity: asset.integrity })),
   );
-  return { remotes: composed, shared, moduleAssets };
+  return { remotes: composed, shared, assets };
 }
 
 /**
@@ -926,8 +964,18 @@ function groupTemplates(app, assets, chunks, entry) {
  *   `split` delivery, and null under every other mode.
  * @param {AppManifest['remotes']} remotes
  * @param {Record<string, string>} localeFiles
+ * @param {Readonly<Record<string, string>>} pins every payload pin the import map will carry
  */
-async function emitApplicationManifest(app, publicDir, source, templates, groups, remotes, localeFiles) {
+async function emitApplicationManifest(
+  app,
+  publicDir,
+  source,
+  templates,
+  groups,
+  remotes,
+  localeFiles,
+  pins,
+) {
   const {
     templateBundle: _configured,
     templateFiles: _listed,
@@ -949,13 +997,6 @@ async function emitApplicationManifest(app, publicDir, source, templates, groups
       : groups === null
         ? { ...localized, remotes, templateFiles: announced.files }
         : { ...localized, remotes, templateGroups: groups };
-  const pins = Object.fromEntries(
-    remotes.flatMap((remote) =>
-      remote.assets
-        .filter((asset) => asset.type === 'module')
-        .map((asset) => [asset.url, asset.integrity]),
-    ),
-  );
   const admitted = admitManifest(manifest, {
     url: `${app.name}/app.manifest.json`,
     base: 'https://artifact.invalid/',
@@ -1017,9 +1058,13 @@ function remoteImportResolver(app, shared) {
  * @param {string} base
  * @param {import('@srljs/core/lib/core/localization/types.js').I18nConfig} i18n
  * @param {readonly string[]} patterns
+ * @returns {Promise<{ patterns: string[], files: string[] }>} the published patterns, and
+ *   the publication path of every file they resolve to, for its asset record
  */
 async function emitRemoteLocales(app, remoteDir, publicDir, base, i18n, patterns) {
   const emitted = [];
+  /** @type {string[]} */
+  const files = [];
   for (const pattern of patterns) {
     const marker = '__ARTIFACT_LOCALE__';
     const patternFile = urlToFile(app.dir, pattern.replaceAll('{locale}', marker));
@@ -1040,6 +1085,7 @@ async function emitRemoteLocales(app, remoteDir, publicDir, base, i18n, patterns
       const bytes = await readFile(source, 'utf8');
       JSON.parse(bytes);
       await writeFile(join(publicDir, destination), bytes);
+      files.push(destination.split(sep).join('/'));
       copied += 1;
     }
     if (copied === 0) throw artifactError(app, 'remote', `locale pattern has no files: ${pattern}`);
@@ -1049,7 +1095,7 @@ async function emitRemoteLocales(app, remoteDir, publicDir, base, i18n, patterns
       .replaceAll(marker, '{locale}');
     emitted.push(`${base}${relativePattern}`);
   }
-  return emitted;
+  return { patterns: emitted, files };
 }
 
 /**
@@ -1057,9 +1103,10 @@ async function emitRemoteLocales(app, remoteDir, publicDir, base, i18n, patterns
  * @param {string} base
  * @param {ReturnType<typeof chunkRelationships>} chunks
  * @param {Awaited<ReturnType<typeof inventory>>} payload
- * @param {{ bundle: string | null, url: string | null } | null} templates
+ * @param {ArtifactTemplates | null} templates
+ * @param {readonly string[]} localeFiles publication paths of the emitted locale files
  */
-async function remoteAssetRecords(publicDir, base, chunks, payload, templates) {
+async function remoteAssetRecords(publicDir, base, chunks, payload, templates, localeFiles) {
   const records = [];
   for (const chunk of chunks) {
     records.push({
@@ -1078,8 +1125,46 @@ async function remoteAssetRecords(publicDir, base, chunks, payload, templates) {
       url: templates.url,
       integrity: await sri384(join(publicDir, templates.bundle)),
     });
+  } else if (templates !== null) {
+    // Split templates are fetched one by one, so each needs its own pin. ADR-0129.
+    for (const path of templates.files) {
+      records.push({
+        type: 'template',
+        url: `${base}${path}`,
+        integrity: await sri384(join(publicDir, path)),
+      });
+    }
+  }
+  for (const path of localeFiles) {
+    records.push({
+      type: 'locale',
+      url: `${base}${path}`,
+      integrity: await sri384(join(publicDir, path)),
+    });
   }
   return records;
+}
+
+/**
+ * The pins the shell's own payload needs beyond its chunks: every template file, the
+ * template bundle and every locale file. Chunks, the stylesheet and the probe are
+ * pinned when the import map is written. ADR-0129.
+ *
+ * @param {string} publicDir
+ * @param {ArtifactTemplates} templates
+ * @param {Record<string, string>} localeFiles
+ * @returns {Promise<Record<string, string>>}
+ */
+async function payloadPins(publicDir, templates, localeFiles) {
+  /** @type {Record<string, string>} */
+  const pins = {};
+  const paths = [
+    ...templates.files,
+    ...(templates.bundle === null ? [] : [templates.bundle]),
+    ...Object.values(localeFiles).map((url) => url.slice(1)),
+  ];
+  for (const path of paths) pins[`/${path}`] = await sri384(join(publicDir, path));
+  return pins;
 }
 
 /** @param {string} path */
@@ -1639,38 +1724,82 @@ async function emitReleaseIdentity(publicDir, release, app) {
 }
 
 /**
- * Bind every emitted module URL to its exact bytes through import-map integrity and
- * return the exact CSP header that admits the generated inline map.
+ * Write the page's pin table and return the exact CSP header that admits it.
+ *
+ * The import map's integrity block binds every emitted chunk, every payload pin, the
+ * probe, the stylesheet and every remote asset to their bytes. The stylesheet's
+ * `<link>` carries its pin too, because browsers read a stylesheet's integrity only
+ * from the element. The probe is pinned to `PROBE_PIN`, which its bytes never match.
+ * ADR-0129.
+ *
+ * Remote pins come last. Composition removes and appends them, so a recomposed shell
+ * keeps the order of the one it came from, and a rollback restores the same bytes.
  *
  * @param {BuildApplication} app
  * @param {string} publicDir
  * @param {ReturnType<typeof chunkRelationships>} chunks
- * @param {Record<string, string>} imports
- * @param {Array<{ url: string, integrity: string }>} remoteModules
+ * @param {Record<string, string>} shared the shared facade entries
+ * @param {Readonly<Record<string, string>>} pins from `payloadPins`
+ * @param {ReadonlyArray<{ url: string, integrity: string }>} remoteAssets
  */
-async function emitSecurity(app, publicDir, chunks, imports, remoteModules) {
+async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) {
   /** @type {Record<string, string>} */
   const integrity = {};
   for (const chunk of chunks) {
-    const bytes = await readFile(join(publicDir, chunk.path));
-    integrity[`/${chunk.path}`] = `sha384-${createHash('sha384').update(bytes).digest('base64')}`;
-  }
-  for (const remote of remoteModules) {
-    if (integrity[remote.url] !== undefined && integrity[remote.url] !== remote.integrity) {
-      throw artifactError(app, 'security', `two module assets claim ${remote.url}.`);
-    }
-    integrity[remote.url] = remote.integrity;
+    integrity[`/${chunk.path}`] = await sri384(join(publicDir, chunk.path));
   }
   if (Object.keys(integrity).length === 0) {
     throw artifactError(app, 'security', 'generated module graph is empty.');
   }
+  for (const [url, digest] of Object.entries(pins)) {
+    if (integrity[url] !== undefined && integrity[url] !== digest) {
+      throw artifactError(app, 'security', `two assets claim ${url}.`);
+    }
+    integrity[url] = digest;
+  }
 
-  const importMap = JSON.stringify({ imports, integrity });
-  const inlineHash = importMapHash(importMap);
+  const probe = await readFile(PROBE_SOURCE);
+  const probePath = `assets/pin-probe-${contentHash(probe.toString('utf8'))}.js`;
+  await writeFile(join(publicDir, probePath), probe);
+  integrity[`/${probePath}`] = PROBE_PIN;
+  const imports = { ...shared, [PROBE_SPECIFIER]: `/${probePath}` };
+
   const htmlPath = join(publicDir, 'index.html');
   const document = /** @type {HtmlNode} */ (
     /** @type {unknown} */ (parse(await readFile(htmlPath, 'utf8')))
   );
+  /** @type {HtmlNode[]} */
+  const stylesheets = [];
+  visitHtml(document, (node) => {
+    if (node.tagName === 'link' && htmlAttribute(node, 'rel') === 'stylesheet') {
+      stylesheets.push(node);
+    }
+  });
+  for (const link of stylesheets) {
+    const href = htmlAttribute(link, 'href');
+    if (href === undefined || !href.startsWith('/assets/')) {
+      throw artifactError(
+        app,
+        'security',
+        `production HTML links a stylesheet outside /assets/, ${String(href)}, which it can't pin.`,
+      );
+    }
+    const digest = await sri384(join(publicDir, href.slice(1)));
+    integrity[href] = digest;
+    link.attrs = [
+      ...(link.attrs ?? []).filter((attribute) => attribute.name !== 'integrity'),
+      { name: 'integrity', value: digest },
+    ];
+  }
+  for (const asset of remoteAssets) {
+    if (integrity[asset.url] !== undefined && integrity[asset.url] !== asset.integrity) {
+      throw artifactError(app, 'security', `two assets claim ${asset.url}.`);
+    }
+    integrity[asset.url] = asset.integrity;
+  }
+
+  const importMap = JSON.stringify({ imports, integrity });
+  const inlineHash = importMapHash(importMap);
   /** @type {HtmlNode[]} */
   const heads = [];
   visitHtml(document, (node) => {
@@ -1698,9 +1827,12 @@ async function emitSecurity(app, publicDir, chunks, imports, remoteModules) {
   await writeFile(htmlPath, html);
 
   return {
-    importMap: { source: importMap, sha256: inlineHash },
-    modules: Object.entries(integrity).map(([path, value]) => ({ path, integrity: value })),
-    csp: cspForImportMap(inlineHash),
+    security: {
+      importMap: { source: importMap, sha256: inlineHash },
+      pins: Object.entries(integrity).map(([path, value]) => ({ path, integrity: value })),
+      csp: cspForImportMap(inlineHash),
+    },
+    integrity,
   };
 }
 
@@ -1714,7 +1846,7 @@ function cspForImportMap(inlineHash) {
   return (
     `default-src 'self'; script-src 'self' '${inlineHash}'; ` +
     `style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; ` +
-    `object-src 'none'; base-uri 'none'; frame-ancestors 'none'; ` +
+    `object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; ` +
     `trusted-types lit-html ui-test ui-test-template srl-worker; require-trusted-types-for 'script'`
   );
 }
@@ -2421,8 +2553,15 @@ function verifyPayload(app, files, templates, chunks, localeFiles) {
   // classic script at a fixed URL, in no import map and in no module graph, so the
   // hash-naming and one-file-per-chunk rules below are not true of it and must not
   // be asked of it. It is checked instead by being required output. ADR-0088.
+  // The pin probe is the other. It is emitted beside the chunks and imported by no
+  // module, and its pin is wrong on purpose. ADR-0129.
+  const probes = files.filter((file) => PROBE_PATH.test(file.path.replace(/^public\//u, '')));
+  if (probes.length !== 1) {
+    throw artifactError(app, 'verify', `expected one pin probe; saw ${String(probes.length)}.`);
+  }
   const javascript = files.filter(
-    (file) => file.path.endsWith('.js') && file.path !== `${PUBLIC}/${WORKER}`,
+    (file) =>
+      file.path.endsWith('.js') && file.path !== `${PUBLIC}/${WORKER}` && !probes.includes(file),
   );
   if (javascript.length < 2) {
     throw artifactError(app, 'verify', 'expected entry and lazy JavaScript chunks.');
@@ -2692,6 +2831,11 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     if (deliveryIndex !== -1 && delivery === undefined) {
       throw new Error('usage: --templates split|split-lazy|bundle');
     }
+    const workerIndex = process.argv.indexOf('--worker');
+    const worker = workerIndex === -1 ? undefined : process.argv[workerIndex + 1];
+    if (workerIndex !== -1 && worker === undefined) {
+      throw new Error('usage: --worker cache|retire');
+    }
     const baseIndex = process.argv.indexOf('--base');
     const base = baseIndex === -1 ? undefined : process.argv[baseIndex + 1];
     if (baseIndex !== -1 && base === undefined) {
@@ -2734,6 +2878,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
             release,
             remotes: remoteReports,
             templates: /** @type {TemplateDelivery | undefined} */ (delivery),
+            worker: /** @type {WorkerMode | undefined} */ (worker),
           })
         : await buildRemoteArtifact({
             app,

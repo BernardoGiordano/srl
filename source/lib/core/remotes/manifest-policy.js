@@ -15,6 +15,11 @@
  * Every URL in the manifest must be a same-origin, root-relative path. Admission
  * rejects anything else and never repairs it.
  *
+ * The manifest names bytes and the page pins them. Every asset a remote publishes,
+ * every template file it announces, the template bundle and every hash-named locale
+ * file must carry the page's pin, so a changed manifest can point only at bytes the
+ * document already vouches for. ADR-0129.
+ *
  * A section may be absent. An absent `remotes` means none, an absent `auth` means no
  * API location, and an absent `i18n` means one locale with no bundles. A present value
  * is still checked in full, and a key admission does not know is refused, so a
@@ -95,7 +100,7 @@ export const MANIFEST_PATTERNS = Object.freeze({
  *
  * @internal
  */
-export const ASSET_TYPES = Object.freeze(['module', 'style', 'template']);
+export const ASSET_TYPES = Object.freeze(['module', 'style', 'template', 'locale']);
 
 /**
  * Admission state for one document: its URL, the base its paths resolve against, and
@@ -160,7 +165,11 @@ export function admitManifest(value, source) {
     templateBundle:
       templateBundle === undefined
         ? undefined
-        : admitPath(templateBundle, `${url}: templateBundle`, policy),
+        : requirePin(
+            admitPath(templateBundle, `${url}: templateBundle`, policy),
+            `${url}: templateBundle`,
+            policy,
+          ),
     templateGroups,
     // The flat list stays derived, so a caller that wants every template doesn't need
     // to know how the document was grouped.
@@ -294,20 +303,18 @@ function admitRemote(value, index, policy, supportedLocales) {
       ? undefined
       : admitPath(entry.templates, `${where} templates`, policy);
   const templateFiles = admitTemplateFiles(entry.templateFiles, `${where} templateFiles`, policy);
+  for (const [index, file] of templateFiles.entries()) {
+    requirePin(file, `${where} templateFiles[${String(index)}]`, policy);
+  }
+  const locales = admitBundlePatterns(entry.locales, `${where} locales`, supportedLocales, policy);
   if (
     assets.length > 0 &&
     !assets.some((asset) => asset.type === 'module' && asset.url === url && asset.integrity === integrity)
   ) {
     throw new Error(`${where} assets must include its entry module with the same URL and integrity.`);
   }
-  const templateAssets = assets.filter((asset) => asset.type === 'template');
-  if (
-    (templates === undefined && templateAssets.length !== 0) ||
-    (templates !== undefined &&
-      (templateAssets.length !== 1 || templateAssets[0]?.url !== templates))
-  ) {
-    throw new Error(`${where} templates must name its single template asset.`);
-  }
+  assertTemplateAssets(assets, templates, templateFiles, where);
+  assertLocaleAssets(assets, locales, supportedLocales, where);
 
   return Object.freeze({
     name,
@@ -315,7 +322,7 @@ function admitRemote(value, index, policy, supportedLocales) {
     integrity,
     assets,
     shared: admitShared(entry.shared, where),
-    locales: admitBundlePatterns(entry.locales, `${where} locales`, supportedLocales, policy),
+    locales,
     templates,
     templateFiles,
     mount: admitMount(entry.mount, where, policy),
@@ -350,7 +357,7 @@ function admitRemoteAssets(value, where, policy) {
     if (!SHA384.test(integrity)) {
       throw new Error(`${assetWhere}.integrity must be one sha384 SRI digest.`);
     }
-    if (type === 'module') assertPinned(url, integrity, assetWhere, policy);
+    assertPinned(url, integrity, assetWhere, policy);
     return Object.freeze({ type, url, integrity });
   });
   return Object.freeze(assets);
@@ -375,8 +382,8 @@ function admitShared(value, where) {
 
 /**
  * Require the manifest's digest to match the page's static import map pin. The
- * browser enforces that pin on dynamic imports, so a mutable manifest can't choose new
- * code at runtime.
+ * browser enforces that pin on dynamic imports, and every other loader passes it to
+ * `fetch`, so a mutable manifest can't choose new bytes at runtime.
  *
  * @param {string} url
  * @param {string} integrity
@@ -391,6 +398,77 @@ function assertPinned(url, integrity, where, policy) {
     throw new Error(
       `${where} integrity does not match the page's static import-map pin for ${url}.`,
     );
+  }
+}
+
+/**
+ * Require the page to pin a URL the manifest names without a digest of its own, and
+ * return the URL. The loader fetches it under that pin.
+ *
+ * @param {string} url
+ * @param {string} where
+ * @param {Policy} policy
+ * @returns {string}
+ */
+function requirePin(url, where, policy) {
+  const pin = policy.pins().get(url);
+  if (pin === undefined || !SHA384.test(pin)) {
+    throw new Error(
+      `${where} names ${url}, which the page's import map doesn't pin. The manifest may only ` +
+        `point at bytes the document vouches for.`,
+    );
+  }
+  return url;
+}
+
+/**
+ * A remote's template assets are its bundle, or its split files. Under a bundle there
+ * is exactly one. Without one, every announced file needs a record, so composition can
+ * carry its digest into the shell's import map.
+ *
+ * @param {ReadonlyArray<import('@core/remotes/types.js').RemoteAsset>} assets
+ * @param {string | undefined} templates
+ * @param {readonly string[]} templateFiles
+ * @param {string} where
+ */
+function assertTemplateAssets(assets, templates, templateFiles, where) {
+  const templateAssets = assets.filter((asset) => asset.type === 'template');
+  if (templates !== undefined) {
+    if (templateAssets.length !== 1 || templateAssets[0]?.url !== templates) {
+      throw new Error(`${where} templates must name its single template asset.`);
+    }
+    return;
+  }
+  if (assets.length === 0) return;
+  const recorded = new Set(templateAssets.map((asset) => asset.url));
+  const missing = templateFiles.filter((file) => !recorded.has(file));
+  if (missing.length > 0) {
+    throw new Error(`${where} announces templates with no asset record: ${missing.join(', ')}.`);
+  }
+}
+
+/**
+ * A locale asset must be a file one of the remote's patterns resolves to for a
+ * supported locale. Any other is a file the runtime never fetches.
+ *
+ * @param {ReadonlyArray<import('@core/remotes/types.js').RemoteAsset>} assets
+ * @param {readonly string[]} patterns
+ * @param {readonly string[]} supportedLocales
+ * @param {string} where
+ */
+function assertLocaleAssets(assets, patterns, supportedLocales, where) {
+  const resolvable = new Set(
+    patterns.flatMap((pattern) =>
+      supportedLocales.map((locale) => pattern.split(LOCALE_PLACEHOLDER).join(locale)),
+    ),
+  );
+  for (const asset of assets) {
+    if (asset.type === 'locale' && !resolvable.has(asset.url)) {
+      throw new Error(
+        `${where} has a locale asset ${asset.url} that no locale pattern resolves to for a ` +
+          'supported locale.',
+      );
+    }
   }
 }
 
@@ -656,7 +734,9 @@ function admitBundleFiles(value, where, patterns, supportedLocales, policy) {
           `mapping the runtime never looks up is a file that is emitted and never fetched.`,
       );
     }
-    files[url] = admitPath(emitted, entryWhere, policy);
+    // A build emits this map and pins every file in it, so a manifest can't remap a
+    // locale to bytes the document doesn't vouch for. ADR-0129.
+    files[url] = requirePin(admitPath(emitted, entryWhere, policy), entryWhere, policy);
   }
   return Object.freeze(files);
 }

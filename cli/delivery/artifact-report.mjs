@@ -81,7 +81,9 @@ const INLINE_HASH = /^sha256-[A-Za-z0-9+/]+={0,2}$/u;
  * Everything a host has to send for the page to be admitted by its own policy. That
  * is the import map as it appears in the document, its inline hash, the SRI digest
  * of every module the map pins, and the CSP that admits exactly those.
- * @typedef {{ importMap: { source: string, sha256: string }, modules: Array<{ path: string, integrity: string }>, csp: string }} ArtifactSecurity
+ * `pins` lists every entry of the import map's integrity block, which pins modules,
+ * templates, locale files, the stylesheet and the probe alike. ADR-0129.
+ * @typedef {{ importMap: { source: string, sha256: string }, pins: Array<{ path: string, integrity: string }>, csp: string }} ArtifactSecurity
  *
  * What a Remote publishes about itself, which is the transport half of a manifest
  * entry and the same declaration the runtime admits rather than a second copy of it.
@@ -346,10 +348,10 @@ function admitSecurity(value, where) {
   const importMap = record(security.importMap, where, 'security.importMap');
   text(importMap.source, where, 'security.importMap.source');
   const hash = text(importMap.sha256, where, 'security.importMap.sha256');
-  for (const module of list(security.modules, where, 'security.modules')) {
-    const entry = record(module, where, 'security module');
-    text(entry.path, where, 'security module path');
-    text(entry.integrity, where, 'security module integrity');
+  for (const pin of list(security.pins, where, 'security.pins')) {
+    const entry = record(pin, where, 'security pin');
+    text(entry.path, where, 'security pin path');
+    text(entry.integrity, where, 'security pin integrity');
   }
   if (!INLINE_HASH.test(hash)) {
     refuse(where, `import map hash is not a base64 SHA-256: ${hash}`);

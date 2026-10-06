@@ -1,0 +1,7 @@
+{
+  "$comment": "A remote's bundle the page never pins. Registered as pinned-only, it reads as empty and is never requested.",
+
+  "unpinned-remote": {
+    "title": "Unpinned title"
+  }
+}

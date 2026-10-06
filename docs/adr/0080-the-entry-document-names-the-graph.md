@@ -80,7 +80,7 @@ The list is, in the order the browser should begin the transfers:
 Each `modulepreload` repeats the `sha384` digest the page's own import map already pins for
 that URL. Without it the hint and the later module request carry different integrity
 metadata, which is a second fetch rather than a reused one. The digest comes from
-`security.modules`, so the two can only agree.
+`security.pins`, so the two can only agree.
 
 Both kinds of hint carry `crossorigin`. A module script is always fetched in CORS mode, and
 a `fetch()` of a same-origin JSON document defaults to CORS mode with same-origin

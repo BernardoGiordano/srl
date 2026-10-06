@@ -30,6 +30,7 @@ export * from '@core/forms/validators.js';
 export * from '@core/foundation/clock.js';
 export { token, provide, inject } from '@core/foundation/inject.js';
 export * from '@core/foundation/json.js';
+import '@core/foundation/pins.js';
 export * from '@core/foundation/reactive.js';
 export * from '@core/foundation/resource.js';
 export * from '@core/http/client.js';

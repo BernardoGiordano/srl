@@ -459,4 +459,6 @@ export const REFUSED_ELEMENTS = new Map([
   ['base', 'It acts on the whole document, so it belongs in index.html.'],
   ['link', 'It acts on the whole document, so it belongs in index.html.'],
   ['meta', 'It acts on the whole document, such as a refresh that navigates away, so it belongs in index.html.'],
+  ['object', 'It loads a plugin document, which the production CSP refuses with object-src \'none\'.'],
+  ['embed', 'It loads a plugin document, which the production CSP refuses with object-src \'none\'.'],
 ]);

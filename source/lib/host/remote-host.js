@@ -70,6 +70,17 @@ function guardFor(remote) {
 }
 
 /**
+ * The rules a remote's locale bundle loads under. Its keys stay under its own name,
+ * and only files the page pins load. ADR-0129.
+ *
+ * @param {RemoteDescriptor} remote
+ * @returns {import('@core/localization/types.js').BundleRules}
+ */
+function remoteBundleRules(remote) {
+  return { namespace: remote.name, pinned: true };
+}
+
+/**
  * Build one remote's capabilities.
  *
  * @param {RemoteDescriptor} remote
@@ -266,7 +277,7 @@ function connect(remote) {
       },
       register(pattern) {
         alive();
-        return registerMessages(pattern);
+        return registerMessages(pattern, remoteBundleRules(remote));
       },
       onChange(listener) {
         // Both, because a remote loading later merges its bundle into the table

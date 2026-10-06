@@ -96,7 +96,7 @@
 
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { error, info, outputFormat, report, warning } from '../../cli/diagnostics/index.mjs';
 import { REPO, apps, exists, readText, walk } from '../../cli/layout.mjs';
@@ -111,6 +111,7 @@ import {
   LIB,
   MANIFEST,
   PACKAGE,
+  PROBE_URL,
   SPECIFIER_DIRS,
   SPECIFIERS,
   VENDOR,
@@ -118,6 +119,7 @@ import {
   fileToUrl,
   importMapFragment,
   importMapText,
+  mountedFile,
   packageExports,
   urlToFile,
 } from '../../cli/package/interface.mjs';
@@ -617,7 +619,18 @@ export async function verifyDependencies() {
       );
     }
 
-    for (const remote of admitted?.remotes ?? []) {
+    /**
+     * A remote contributes no byte the page doesn't pin. The runtime refuses a remote
+     * whose announced template is unpinned and reads an unpinned remote locale bundle
+     * as empty, and the browser enforces each module pin. So every module the entry
+     * reaches, every template source delivery announces for the remote, and every
+     * locale bundle on disk must carry a pin that matches its bytes. ADR-0129.
+     */
+    const remotes = admitted?.remotes ?? [];
+    const shipped =
+      remotes.length === 0 ? [] : shippedTemplates(await readProject(app)).map((template) => String(template.url));
+
+    for (const remote of remotes) {
       const name = remote.name;
       const url = remote.url;
 
@@ -627,36 +640,79 @@ export async function verifyDependencies() {
         continue;
       }
 
-      const artifacts = await walk(dirname(entry), /\.js$/u);
-      for (const artifact of artifacts) {
-        const artifactUrl = fileToUrl(app.dir, artifact);
-        if (artifactUrl === null) continue;
-        const expected = integrity[artifactUrl];
+      // The graph finds a module outside the entry's directory, and the sibling walk
+      // finds one only a computed `import()` reaches.
+      const graph = await remoteGraph(app.dir, entry);
+      for (const { from, specifier } of graph.unresolved) {
+        refuse(
+          'deps/remote-import-missing',
+          `remote "${name}" module ${from} imports "${specifier}", which resolves to no file.`,
+          index,
+        );
+      }
+      const siblings = await walk(dirname(entry), /\.js$/u);
+      const modules = [...new Set([...graph.files, ...siblings])];
+
+      const base = url.slice(0, url.lastIndexOf('/') + 1);
+      const templates = shipped.filter((template) => template.startsWith(base));
+      const locales = [];
+      for (const pattern of remote.locales) {
+        for (const locale of admitted?.i18n.supportedLocales ?? []) {
+          const localeUrl = pattern.split('{locale}').join(locale);
+          if (await exists(urlToFile(app.dir, localeUrl))) locales.push(localeUrl);
+        }
+      }
+
+      /** @type {Array<{ kind: string, url: string, file: string }>} */
+      const pinned = [
+        ...modules.flatMap((file) => {
+          const moduleUrl = fileToUrl(app.dir, file);
+          return moduleUrl === null ? [] : [{ kind: 'module', url: moduleUrl, file }];
+        }),
+        ...templates.map((template) => ({
+          kind: 'template',
+          url: template,
+          file: urlToFile(app.dir, template),
+        })),
+        ...locales.map((locale) => ({
+          kind: 'locale bundle',
+          url: locale,
+          file: urlToFile(app.dir, locale),
+        })),
+      ];
+
+      let matched = 0;
+      for (const artifact of pinned) {
+        const expected = integrity[artifact.url];
         if (expected === undefined) {
           refuse(
             'deps/remote-artifact-unpinned',
-            `remote "${name}" artifact ${artifactUrl} has no static import-map integrity pin. A ` +
-              `relative sub-import must be pinned as well as its entry.`,
+            `remote "${name}" ${artifact.kind} ${artifact.url} has no static import-map integrity ` +
+              `pin. Everything a remote contributes must be pinned, or the runtime refuses it or ` +
+              `the browser runs it unverified.`,
             index,
           );
           continue;
         }
         const actual = `sha384-${createHash('sha384')
-          .update(await readFile(artifact))
+          .update(await readFile(artifact.file))
           .digest('base64')}`;
         if (actual !== expected) {
           refuse(
             'deps/remote-artifact-hash',
-            `integrity mismatch for remote artifact ${artifactUrl}\n` +
+            `integrity mismatch for remote ${artifact.kind} ${artifact.url}\n` +
               `    in index.html: ${expected}\n    actual:        ${actual}`,
             index,
           );
+          continue;
         }
+        matched += 1;
       }
       pass(
         'deps/remote-pinned',
-        `${name} remote: same-origin, manifest pin matches, ${String(artifacts.length)} ` +
-          `artifact(s) pinned`,
+        `${name} remote: same-origin, manifest pin matches, ${String(matched)} of ` +
+          `${String(pinned.length)} file(s) pinned (${String(modules.length)} module(s), ` +
+          `${String(templates.length)} template(s), ${String(locales.length)} locale bundle(s))`,
         { group },
       );
     }
@@ -838,7 +894,15 @@ export async function verifyDependencies() {
       }
     }
     for (const [url, hash] of Object.entries(fragment.integrity)) {
-      if (integrity[url] !== hash) {
+      if (url === PROBE_URL && integrity[url] !== hash) {
+        refuse(
+          'deps/probe-pin',
+          `${url} is pinned to ${integrity[url] ?? 'nothing'}, and it must be pinned to ${hash}, ` +
+            `which never matches it. The runtime refuses remotes unless the engine refuses the ` +
+            `probe. Run \`npm run importmap\` and paste the result.`,
+          index,
+        );
+      } else if (integrity[url] !== hash) {
         refuse(
           'deps/edited-hash',
           `${url} is pinned to ${integrity[url] ?? 'nothing'}, and its bytes hash to ${hash}. Run ` +
@@ -1521,6 +1585,56 @@ export async function verifyDependencies() {
  */
 function withoutComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^[ \t]*\/\/.*$/gmu, '');
+}
+
+/** A static import, a re-export, a side-effect import or a string-literal `import()`. */
+const IMPORT_SPECIFIER = /(?:^|[\s{(,;])(?:import|from)\s*\(?\s*["']([^"']+)["']/gmu;
+
+/**
+ * Every module a remote's entry reaches through relative and root-absolute
+ * specifiers, the entry included.
+ *
+ * Bare specifiers are the shared interface, and a URL under a library mount is the
+ * library's own, so neither is followed. A specifier computed at runtime is invisible
+ * to a scan of the source.
+ *
+ * @param {string} appDir
+ * @param {string} entry
+ * @returns {Promise<{ files: string[], unresolved: Array<{ from: string, specifier: string }> }>}
+ */
+async function remoteGraph(appDir, entry) {
+  const files = [entry];
+  const seen = new Set(files);
+  /** @type {Array<{ from: string, specifier: string }>} */
+  const unresolved = [];
+
+  for (const file of files) {
+    const source = withoutComments(await readFile(file, 'utf8'));
+    for (const match of source.matchAll(IMPORT_SPECIFIER)) {
+      const specifier = match[1];
+      if (specifier === undefined) continue;
+      const path = specifier.split(/[?#]/u)[0] ?? specifier;
+      let target;
+      if (path.startsWith('./') || path.startsWith('../')) {
+        target = resolve(dirname(file), path);
+      } else if (path.startsWith('/') && !path.startsWith('//')) {
+        if (mountedFile(path) !== null) continue;
+        target = urlToFile(appDir, path);
+      } else {
+        continue;
+      }
+      const url = fileToUrl(appDir, target);
+      if (url !== null && mountedFile(url) !== null) continue;
+      if (seen.has(target)) continue;
+      seen.add(target);
+      if (!(await exists(target))) {
+        unresolved.push({ from: fileToUrl(appDir, file) ?? show(file), specifier });
+        continue;
+      }
+      files.push(target);
+    }
+  }
+  return { files, unresolved };
 }
 
 /**

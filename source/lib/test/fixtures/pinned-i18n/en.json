@@ -1,0 +1,7 @@
+{
+  "$comment": "A remote's bundle the test pins in the page's import map before registering it.",
+
+  "pinned-remote": {
+    "title": "Pinned title"
+  }
+}

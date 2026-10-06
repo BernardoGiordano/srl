@@ -11,15 +11,16 @@
  * capability object bounded by the remote's `grants` and revoked when its root
  * unmounts. ADR-0016. This module imports no auth, which is why it lives in `core/`.
  *
- * Locations, styles, templates and locales come from the manifest. The import map pins
- * module digests, and asset records carry stylesheet and template digests. Shared
- * dependencies work because module identity is URL identity, and a remote may only use
- * the bare specifiers it declares as shared. ADR-0017.
+ * Locations, styles, templates and locales come from the manifest. The page's import
+ * map pins every one of those bytes, and a remote loads only in an engine that enforces
+ * the pins. ADR-0129. Shared dependencies work because module identity is URL identity,
+ * and a remote may only use the bare specifiers it declares as shared. ADR-0017.
  */
 
 import { inject, token } from '@core/foundation/inject.js';
 import { requireElement } from '@core/elements/mount.js';
 import { readJson } from '@core/foundation/json.js';
+import { pageIntegrity, pinned, pinsEnforced } from '@core/foundation/pins.js';
 import { registerMessages } from '@core/localization/i18n.js';
 import { admitManifest } from '@core/remotes/manifest-policy.js';
 import { prefetchTemplates, seedTemplates } from '@core/template/template.js';
@@ -100,34 +101,7 @@ export async function loadManifest(url = '/app.manifest.json') {
   }
 
   const value = /** @type {unknown} */ (await response.json());
-  return admitManifest(value, { url, base: document.baseURI, pins: pagePins });
-}
-
-/**
- * The integrity block of the page's static import map, which the browser enforces when
- * a remote is imported. Read on demand, since an application without remotes never
- * needs it.
- *
- * @returns {Readonly<Record<string, unknown>>}
- */
-function pagePins() {
-  const script = document.querySelector('script[type="importmap"]');
-  if (script === null) {
-    throw new Error(
-      'A remote cannot be verified: the page has no import map, so nothing pins the bytes the ' +
-        'manifest names.',
-    );
-  }
-
-  /** @type {unknown} */
-  let parsed;
-  try {
-    parsed = JSON.parse(script.textContent ?? '');
-  } catch {
-    throw new Error("A remote cannot be verified: the page's import map is invalid JSON.");
-  }
-  const map = asRecord(parsed, 'the page import map');
-  return asRecord(map.integrity, 'the page import map integrity block');
+  return admitManifest(value, { url, base: document.baseURI, pins: pageIntegrity });
 }
 
 /**
@@ -197,16 +171,22 @@ const loadedAssets = new Map();
  * Load a remote's styles, templates and locales before its module evaluates. Guards run
  * first, so a refused route downloads nothing.
  *
+ * The engine is probed before anything loads, because a remote's code is pinned only by
+ * the import map. Its locale keys stay under its own name. ADR-0129.
+ *
  * @param {RemoteDescriptor} remote
  */
 async function prepareRemote(remote) {
+  await pinsEnforced();
   await Promise.all([
     ...(remote.assets ?? [])
       .filter((asset) => asset.type === 'style')
       .map((asset) => loadStyle(asset.url, asset.integrity)),
     seedRemoteTemplates(remote),
   ]);
-  for (const pattern of remote.locales ?? []) await registerMessages(pattern);
+  for (const pattern of remote.locales ?? []) {
+    await registerMessages(pattern, { namespace: remote.name, pinned: true });
+  }
   return importRemote(remote);
 }
 
@@ -237,8 +217,10 @@ function loadStyle(url, integrity) {
  * Start a remote's markup beside its entry module. ADR-0081.
  *
  * A template bundle is fetched, seeded and awaited, because the remote's components
- * read the cache as soon as its module evaluates. Split templates are separate files,
- * so their URLs are started now and nothing waits.
+ * read the cache as soon as its module evaluates. It seeds only URLs under the remote's
+ * own base, so it can't replace a shell template. Split templates are separate files,
+ * so their URLs are started now and nothing waits. Admission has already required a pin
+ * for every one of them. ADR-0129.
  *
  * @param {RemoteDescriptor} remote
  */
@@ -250,11 +232,10 @@ function seedRemoteTemplates(remote) {
   }
   let pending = loadedAssets.get(url);
   if (pending !== undefined) return pending;
-  const integrity = remote.assets?.find((asset) => asset.type === 'template' && asset.url === url)
-    ?.integrity;
-  pending = fetch(url, { cache: 'force-cache', integrity })
+  const base = new URL('./', new URL(remote.url, document.baseURI));
+  pending = fetch(url, pinned(url, { cache: 'force-cache' }))
     .then(async (response) => {
-      if (response.ok) seedTemplates(await readJson(response));
+      if (response.ok) seedTemplates(await readJson(response), base);
     })
     .then(() => undefined);
   loadedAssets.set(url, pending);
@@ -305,16 +286,4 @@ function assertRemoteModule(value, remote) {
   }
 
   return /** @type {RemoteModule} */ (candidate);
-}
-
-/**
- * @param {unknown} value
- * @param {string} where
- * @returns {Record<string, unknown>}
- */
-function asRecord(value, where) {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error(`${where} is not an object.`);
-  }
-  return /** @type {Record<string, unknown>} */ (value);
 }

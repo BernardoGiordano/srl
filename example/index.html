@@ -19,7 +19,9 @@
       The import map must precede module scripts. `npm run importmap` generates the
       library entries; this application adds its remote hashes. Application modules
       use relative paths because `@app/` cannot name more than one application.
-      The browser checks each listed file against its integrity hash.
+      The browser checks each listed module against its integrity hash, and the
+      runtime checks each remote template and locale bundle the same way. The probe
+      is pinned wrong on purpose, so a browser that loads it ignores the pins.
     -->
     <script type="importmap">
       {
@@ -39,10 +41,16 @@
         "integrity": {
           "/lib/vendor/lit-all.min.js": "sha384-qSoE0anPDAzsBuoT95C270Wd5oKtOOlLdEvSXEk9bRYTg+5ygjyt20ZuhzH0oNbt",
           "/lib/vendor/signals-core.mjs": "sha384-keryyWsAJJ2UD+2G3I6cCzzXkFvp97AwDUCMKAOYrVGK2iwcrnTYMpWMrq9xkPSm",
+          "/lib/core/foundation/pin-probe.js": "sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
           "/remotes/billing/remote-entry.js": "sha384-XLq/ucrJO4xd00F/oUEHSak2OJTqag8j2aX7+fgs3Ez73mPayACfLGLiHXqFW6yC",
           "/remotes/billing/billing-root.js": "sha384-cQDXGlibrC8pkgbuyRE7n2k4BSB+nUQMC5RExs5/e2eADBqH4zBJhzZomssao4vZ",
+          "/remotes/billing/billing-root.html": "sha384-6XiPL1r20+vJ0X7u66tXJ7vWVqA/TcMk0aVshBm+V3LCOzmTEoA8LEUw2u6eQYND",
+          "/remotes/billing/i18n/en.json": "sha384-NwsZNl+jTPbcmX20910CG2s4DWBAY+92EePf+59BPL8eT1rF+Oc2YOPGPIdJEZLa",
+          "/remotes/billing/i18n/it.json": "sha384-1pZPmfCEujpf4/oN+NI1jbIMvQ4JJYOsq1JP16VYifCE0PjXZ+vVHaCTPnC5B5kg",
           "/remotes/analytics/remote-entry.js": "sha384-f7Or3eTbD0Jfw0+P1NyIiAPgoJ37CcCWoZg7k659VzFESxpqXQ+b/KTVnkkbie1U",
-          "/remotes/analytics/analytics-root.js": "sha384-p/CJ3goW+kpycqxvvxZIEdbCgb7XAodCfZFONREc5clW2O/7iDRmeQHtXnPXXqhI"
+          "/remotes/analytics/analytics-root.js": "sha384-p/CJ3goW+kpycqxvvxZIEdbCgb7XAodCfZFONREc5clW2O/7iDRmeQHtXnPXXqhI",
+          "/remotes/analytics/i18n/en.json": "sha384-ovTnZznwqTDXEczcGkfAfi1gYuiFvjtG++Joj+m5WaVcQjmnd+mFOyITwRMHcBIg",
+          "/remotes/analytics/i18n/it.json": "sha384-eNrPu+A4OywKhzwtAvWG44cFJ6qqu7A2fbWbNZ84A5jUzLchaWreGyyA9SYF57RO"
         }
       }
     </script>

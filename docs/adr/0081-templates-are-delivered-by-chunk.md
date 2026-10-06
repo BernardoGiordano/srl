@@ -40,5 +40,5 @@ Source delivery has no chunks. `cli/delivery/source-manifest.mjs` fills a flat `
 - A signed-out visitor fetches only the templates the login screen needs.
 - A signed-in visitor fetches templates for the screens they open.
 - The first navigation into a chunk pays one extra round trip, because its templates start after the chunk evaluates.
-- Split templates carry no Subresource Integrity. They are same-origin and named by content hash.
+- The page's import map pins every split template, and each is fetched under its pin. ADR-0129.
 - If that extra round trip ever costs more than it saves, the fix is for the router to start a group beside the chunk request.

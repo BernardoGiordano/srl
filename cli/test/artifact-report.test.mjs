@@ -68,7 +68,7 @@ function shellReport() {
     remotes: [],
     security: {
       importMap: { source: '{"imports":{}}', sha256: IMPORT_MAP_HASH },
-      modules: [{ path: 'assets/entry-abcd1234.js', integrity: `sha384-${'A'.repeat(64)}` }],
+      pins: [{ path: 'assets/entry-abcd1234.js', integrity: `sha384-${'A'.repeat(64)}` }],
       csp: `script-src 'self' '${IMPORT_MAP_HASH}'`,
     },
     templates: {

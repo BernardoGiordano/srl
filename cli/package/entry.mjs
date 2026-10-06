@@ -54,7 +54,7 @@ export async function bundleMembers(bundle) {
   for (const root of bundle.roots) files.push(...(await walk(root, /\.js$/u)));
   return [...new Set(files)]
     .filter((file) => !isTestSource(file))
-    .filter((file) => !bundle.excluded.some((dir) => file.startsWith(dir + sep)))
+    .filter((file) => !bundle.excluded.some((path) => file === path || file.startsWith(path + sep)))
     .filter((file) => file !== bundle.entry)
     .sort();
 }

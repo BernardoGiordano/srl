@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { PROBE_PIN, PROBE_SPECIFIER } from '@srljs/core/lib/core/foundation/pins.js';
+
 import { buildArtifact, buildRemoteArtifact, composeArtifact } from '../delivery/build.mjs';
 import { entryHints } from '../delivery/entry-hints.mjs';
 import { minifyTemplate } from '../delivery/template-html.mjs';
@@ -60,10 +62,14 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.ok(billingTransport.assets.some((asset) => asset.type === 'style'));
     // Split delivery is the default, so a Remote's templates are files its own
     // components fetch and there is nothing for the shell to preload. ADR-0081.
-    // The shell does start them, from the list the descriptor carries, which is a
-    // list of URLs and not an asset it has to pin. ADR-0081.
-    assert.ok(!billingTransport.assets.some((asset) => asset.type === 'template'));
+    // Each one still carries an asset record, so composition can pin it in the
+    // shell's import map. ADR-0129.
+    const billingTemplates = billingTransport.assets
+      .filter((asset) => asset.type === 'template')
+      .map((asset) => asset.url);
     assert.ok(billingTransport.templateFiles.length > 0);
+    assert.deepEqual([...billingTemplates].sort(), [...billingTransport.templateFiles].sort());
+    assert.ok(billingTransport.assets.some((asset) => asset.type === 'locale'));
     assert.ok(
       billingTransport.templateFiles.every((url) => url.startsWith(String(billing.base))),
       'a Remote named a template outside its own publication base',
@@ -178,7 +184,30 @@ void test('example composes independently verified Remote artifacts', async () =
     const importMapSource = /<script type="importmap">([^<]+)<\/script>/u.exec(html)?.[1];
     assert.ok(importMapSource !== undefined);
     const importMap = JSON.parse(importMapSource);
-    assert.deepEqual(importMap.imports, shared);
+    const { [PROBE_SPECIFIER]: probe, ...facades } = importMap.imports;
+    assert.deepEqual(facades, shared);
+
+    // The import map is the page's one pin table. Every template, locale file and
+    // remote asset the manifest names carries a pin there, the stylesheet's link
+    // repeats its own, and the probe is pinned to bytes it never has. ADR-0129.
+    assert.match(String(probe), /^\/assets\/pin-probe-[0-9a-f]{16}\.js$/u);
+    assert.equal(importMap.integrity[String(probe)], PROBE_PIN);
+    for (const url of [
+      ...Object.values(groups).flat(),
+      ...Object.values(bundleFiles),
+      ...[billingTransport, analyticsTransport].flatMap((transport) =>
+        transport.assets.map((asset) => asset.url),
+      ),
+    ]) {
+      assert.match(String(importMap.integrity[url]), /^sha384-/u, `${url} is not pinned`);
+    }
+    const stylesheet = /<link rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/u.exec(html);
+    assert.ok(stylesheet !== null, 'the document links no stylesheet');
+    assert.ok(
+      stylesheet[0].includes(`integrity="${String(importMap.integrity[String(stylesheet[1])])}"`),
+      'the stylesheet link does not carry its pin',
+    );
+    assert.match(shell.security.csp, /form-action 'self'/u);
 
     // The document names the graph the report holds, and names it with the digests
     // the map above pins, so a hint and the module request it is for are one
@@ -197,7 +226,7 @@ void test('example composes independently verified Remote artifacts', async () =
     assert.ok(!html.includes(`rel="modulepreload" href="/${String(shell.entry)}"`));
     assert.ok(html.includes('<link rel="preload" href="/app.manifest.json" as="fetch" crossorigin="">'));
     for (const transport of [billingTransport, analyticsTransport]) {
-      for (const asset of transport.assets.filter((candidate) => candidate.type === 'module')) {
+      for (const asset of transport.assets) {
         assert.equal(importMap.integrity[asset.url], asset.integrity);
       }
     }

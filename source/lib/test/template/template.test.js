@@ -6,7 +6,12 @@ import {
   bypassSecurityTrustStyle,
   bypassSecurityTrustUrl,
 } from '@core/template/security.js';
-import { compileTemplate, loadTemplate, prefetchTemplates } from '@core/template/template.js';
+import {
+  compileTemplate,
+  loadTemplate,
+  prefetchTemplates,
+  seedTemplates,
+} from '@core/template/template.js';
 import { assert, present } from '../harness.js';
 
 /**
@@ -372,6 +377,27 @@ describe('template compiler', () => {
       assert.throws(() => compileTemplate(source, 'test'), 'index.html');
     }
     assert.throws(() => compileTemplate('<script></script>', 'test'), 'markup only');
+  });
+
+  it('refuses plugin elements the production CSP would block', () => {
+    // `object-src 'none'` refuses both in a built artifact, so a template that used
+    // them would work in development and break in production.
+    assert.throws(() => compileTemplate('<object data="/x.svg"></object>', 'test'), 'object-src');
+    assert.throws(() => compileTemplate('<embed src="/x.svg">', 'test'), 'object-src');
+  });
+
+  it('confines a bundle to the base it is seeded under', async () => {
+    // A remote's bundle that named a shell template would replace it, the login
+    // screen included. Nothing is seeded from a refused bundle. ADR-0129.
+    const inside = '/remotes/confined/inside.html';
+    const outside = '/lib/test/fixtures/never-seeded.html';
+    assert.throws(
+      () => seedTemplates({ [inside]: '<p>remote</p>', [outside]: '<p>stolen</p>' }, '/remotes/confined/'),
+      'outside it',
+    );
+    await assert.rejects(() => loadTemplate(outside), 'Cannot load template');
+    seedTemplates({ [inside]: '<p>remote</p>' }, '/remotes/confined/');
+    assert.equal(typeof (await loadTemplate(inside)), 'function');
   });
 
   it('refuses a static srcdoc and sanitizes a bound one', () => {

@@ -41,7 +41,9 @@ request but refetches the whole bundle when any template changes. The
 Every mode still emits individual immutable template files. The build checks
 that minification leaves each template's parsed structure intact.
 `srl templates --app web` writes a separate authored-byte bundle for a
-deployment that skips the production build.
+deployment that skips the production build. It prints the bundle's pin, which
+the application's import map must carry, because admission refuses a bundle the
+page doesn't pin.
 
 ## Templates in development
 
@@ -74,9 +76,11 @@ order or the startup steps.
 ```
 
 The build also generates `public/sw.js` from the artifact report. It
-precaches the entry graph and its templates. Hash-named assets use
-cache-first; fixed URLs use network-first with an offline fallback. The
-worker leaves remote assets to their own deployer.
+precaches the entry graph and its templates, each fetched against its
+import-map pin. Hash-named assets use cache-first, and the worker stores a
+response only when its request carried integrity. Fixed URLs use
+network-first with an offline fallback. The worker leaves remote assets to
+their own deployer.
 
 An application opts into registration after startup.
 
@@ -91,6 +95,33 @@ The worker does not call `skipWaiting()`, so an older tab keeps a worker
 matched to its modules. `watchRelease()` reads `build.json` at navigation
 commit boundaries and sets `releaseChanged` when the origin serves a new
 release. The application decides how to tell the user.
+
+To retire every installed worker, build with `--worker retire` and deploy
+that artifact. Its `sw.js` skips waiting, deletes the application's caches,
+unregisters and sends every request to the network. Browsers check the worker
+script on each navigation, so open tabs switch over without a reload. Deploy a
+normal build again when the origin is trusted.
+
+```bash
+npx srl build --worker retire
+```
+
+## The pin table
+
+The integrity block of the production import map pins every byte the page
+runs: chunks, templates, the template bundle, locale files, the stylesheet and
+every composed remote asset. Every loader fetches under its pin, so a changed
+file fails its request. Admission refuses a manifest that names a remote asset,
+remote template, template bundle or locale file the map doesn't pin.
+[ADR-0129](../adr/0129-one-pin-table-for-every-byte-the-page-runs.md) records
+the rule.
+
+Browsers apply import-map pins only to modules, and some engines ignore them.
+Before the first remote loads, the runtime imports a probe module pinned to the
+digest of zero bytes. An engine that enforces pins refuses it, which Chromium
+logs as one console error. An engine that loads it runs no remotes, and the
+error names the engine. The probe's pin is part of the library's import-map
+fragment, so `srl importmap` prints it.
 
 ## Example deployment
 
@@ -143,6 +174,7 @@ notices for the third-party bytes it serves.
 ## Deployment checks
 
 A strict CSP needs the hash of the inline import map in `script-src`.
+The build's CSP also sets `form-action 'self'` and `object-src 'none'`.
 `srl check importmap` reports that hash under `importmap/csp-hash`. When configuring nginx, set security
 headers where all relevant responses inherit them; a `location` with its
 own `add_header` directives can replace headers set at server level.

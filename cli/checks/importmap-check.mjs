@@ -18,6 +18,10 @@
  *     concerned.
  *  4. A vendored URL the map names and no file answers. A 404 on one route.
  *
+ * The probe at `PROBE_URL` is the one entry pinned to bytes it doesn't have. The
+ * runtime imports it before the first remote and refuses remotes on an engine that
+ * loads it, so its pin is compared to `PROBE_PIN` rather than to its file. ADR-0129.
+ *
  * The fourth thing it does is not a failure. It prints the `script-src` hash the map
  * needs. An import map is an inline script, so a CSP of `script-src 'self'` blocks
  * it, and the symptom is failure 1 with no visible violation in the console. Nobody
@@ -44,6 +48,8 @@ import {
   ENTRY_SPECIFIERS,
   IMPORT_MAP_FILE,
   PACKAGE,
+  PROBE_PIN,
+  PROBE_URL,
   SPECIFIER_DIRS,
   extractImportMap,
   importMapFragment,
@@ -147,7 +153,15 @@ async function checkApplication(app, fragment) {
     }
   }
   for (const [url, hash] of Object.entries(fragment.integrity)) {
-    if (integrity[url] !== hash) {
+    if (url === PROBE_URL && integrity[url] !== hash) {
+      verbatim = false;
+      refuse(
+        'importmap/probe-pin',
+        `${url} is pinned to ${integrity[url] ?? 'nothing'}, and it must be pinned to ${hash}. ` +
+          `The runtime imports it under that wrong pin before the first remote, and refuses ` +
+          `remotes unless the engine refuses the probe. Paste ${show(IMPORT_MAP_FILE)}.`,
+      );
+    } else if (integrity[url] !== hash) {
       verbatim = false;
       refuse(
         'importmap/edited-hash',
@@ -202,6 +216,16 @@ async function checkApplication(app, fragment) {
         'importmap/pinned-file-missing',
         `the integrity map pins ${url}, which resolves to ${show(file)} and is not there. The ` +
           `browser fetches the URL and gets a 404 on the route that imports it.`,
+      );
+      continue;
+    }
+    // The probe's pin is wrong on purpose, and section 1 has already compared it.
+    if (url === PROBE_URL) continue;
+    if (declared === PROBE_PIN) {
+      refuse(
+        'importmap/sentinel-pin',
+        `${url} is pinned to ${declared}, the digest only ${PROBE_URL} may carry. Pin it to ` +
+          `its own bytes.`,
       );
       continue;
     }

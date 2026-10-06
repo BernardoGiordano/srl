@@ -17,7 +17,12 @@ import test from 'node:test';
 import { createContext, runInContext } from 'node:vm';
 
 import { entryClosure } from '../delivery/artifact-report.mjs';
-import { WORKER, precacheList, serviceWorkerSource } from '../delivery/service-worker.mjs';
+import {
+  WORKER,
+  precacheList,
+  retiringWorkerSource,
+  serviceWorkerSource,
+} from '../delivery/service-worker.mjs';
 
 /** @import { ArtifactChunk } from '../delivery/artifact-report.mjs' */
 
@@ -70,7 +75,28 @@ function facts() {
       'chunk:assets/orders-FFFFFFFF.js': ['/assets/templates/orders-fedcba9876543210.html'],
     },
     stylesheet: '/assets/app-11111111.css',
+    pins: {
+      '/assets/app-11111111.css': pin('a'),
+      '/assets/app-root-CCCCCCCC.js': pin('b'),
+      '/assets/entry-AAAAAAAA.js': pin('c'),
+      '/assets/inject-DDDDDDDD.js': pin('d'),
+      '/assets/reactive-BBBBBBBB.js': pin('e'),
+      '/assets/signal-EEEEEEEE.js': pin('f'),
+      '/assets/signal-99999999.js': pin('g'),
+      '/assets/orders-FFFFFFFF.js': pin('h'),
+      '/assets/templates/app-root-0123456789abcdef.html': pin('i'),
+      '/assets/templates/orders-fedcba9876543210.html': pin('j'),
+    },
   };
+}
+
+/**
+ * A well-formed digest, distinct per letter.
+ *
+ * @param {string} letter
+ */
+function pin(letter) {
+  return `sha384-${letter.repeat(64)}`;
 }
 
 void test('the closure is the entry, its statics, and the root module it always imports', () => {
@@ -225,6 +251,203 @@ void test('activation claims the tabs it controls once the retirement is done', 
 
   assert.ok(claimed, 'a controlled tab would keep talking to the network until the next load');
 });
+
+void test('the install fetches every precached file against its pin', async () => {
+  const worker = loaded(serviceWorkerSource(facts()));
+
+  await worker.fire('install');
+
+  /** @type {Readonly<Record<string, string>>} */
+  const pins = facts().pins;
+  const expected = precacheList(facts()).map((url) => ({
+    url,
+    integrity: url === '/index.html' ? '' : (pins[url] ?? 'missing'),
+  }));
+  assert.deepEqual(worker.fetched, expected, 'the document is the only file fetched without a pin');
+  assert.deepEqual([...worker.stored()].sort(), [...precacheList(facts())].sort());
+});
+
+void test('a precached file without a pin is refused at build time', () => {
+  const unpinned = {
+    ...facts(),
+    pins: Object.fromEntries(
+      Object.entries(facts().pins).filter(([url]) => url !== '/assets/entry-AAAAAAAA.js'),
+    ),
+  };
+
+  assert.throws(() => serviceWorkerSource(unpinned), /entry-AAAAAAAA\.js is precached but has no pin/u);
+});
+
+void test('a changed digest renames the cache even under the same URL', () => {
+  const name = cacheNameOf(serviceWorkerSource(facts()));
+
+  const precached = facts();
+  precached.pins['/assets/inject-DDDDDDDD.js'] = pin('z');
+  assert.notEqual(cacheNameOf(serviceWorkerSource(precached)), name);
+
+  // A route chunk is not precached, so its digest is not part of the name.
+  const route = facts();
+  route.pins['/assets/orders-FFFFFFFF.js'] = pin('z');
+  assert.equal(cacheNameOf(serviceWorkerSource(route)), name);
+});
+
+void test('cache-first stores only bytes a pin checked', async () => {
+  const worker = loaded(serviceWorkerSource(facts()));
+  const url = 'https://example.test/assets/orders-FFFFFFFF.js';
+
+  await worker.fire('fetch', { request: { method: 'GET', mode: 'cors', url, integrity: '' } });
+  assert.equal(worker.fetched.length, 1, 'a request without integrity still reaches the network');
+  assert.deepEqual([...worker.stored()], [], 'bytes nothing checked were stored');
+
+  await worker.fire('fetch', { request: { method: 'GET', mode: 'cors', url, integrity: pin('h') } });
+  assert.deepEqual([...worker.stored()], ['/assets/orders-FFFFFFFF.js']);
+
+  await worker.fire('fetch', { request: { method: 'GET', mode: 'cors', url, integrity: '' } });
+  assert.equal(worker.fetched.length, 2, 'a stored file is answered from the cache');
+});
+
+void test('the retiring worker takes over at once and leaves nothing behind', async () => {
+  const source = retiringWorkerSource({ app: 'example' });
+  const worker = loaded(source, [
+    'srl:example:0123456789abcdef',
+    'srl:example:fedcba9876543210',
+    'srl:example-admin:0123456789abcdef',
+    'user-owned-cache',
+  ]);
+
+  assert.ok(!/^\s*(?:import|export)\s/mu.test(source), 'a module worker would need type: module');
+  assert.ok(!worker.handlers.has('fetch'), 'every request must reach the network');
+
+  await worker.fire('install');
+  assert.deepEqual(worker.calls, ['skipWaiting']);
+
+  await worker.fire('activate');
+  assert.deepEqual(worker.calls, [
+    'skipWaiting',
+    'delete srl:example:0123456789abcdef',
+    'delete srl:example:fedcba9876543210',
+    'unregister',
+    'claim',
+  ]);
+  assert.deepEqual(worker.names, ['srl:example-admin:0123456789abcdef', 'user-owned-cache']);
+});
+
+/**
+ * A generated worker loaded into enough of a worker global to fire its events.
+ *
+ * `fetch` answers every request with a complete same-origin response and records the
+ * URL and integrity it was asked for. `caches` keeps one store per name, keyed by
+ * path, and `self` records the lifecycle calls in order.
+ *
+ * @param {string} source
+ * @param {readonly string[]} [seeded] cache names the origin already holds
+ */
+function loaded(source, seeded = []) {
+  const names = [...seeded];
+  /** @type {Map<string, Map<string, unknown>>} */
+  const stores = new Map();
+  /** @type {Array<{ url: string, integrity: string }>} */
+  const fetched = [];
+  /** @type {string[]} */
+  const calls = [];
+  /** @type {Map<string, (event: any) => void>} */
+  const handlers = new Map();
+
+  /** @param {string | { url: string }} request */
+  const key = (request) =>
+    new URL(typeof request === 'string' ? request : request.url, 'https://example.test').pathname;
+
+  class FakeRequest {
+    /** @param {string} url @param {{ integrity?: string }} [init] */
+    constructor(url, init = {}) {
+      this.url = url;
+      this.integrity = init.integrity ?? '';
+    }
+  }
+
+  const context = createContext({
+    URL,
+    Request: FakeRequest,
+    fetch: (/** @type {{ url: string, integrity?: string }} */ request) => {
+      fetched.push({ url: request.url, integrity: request.integrity ?? '' });
+      const response = { ok: true, status: 200, type: 'basic', clone: () => response };
+      return Promise.resolve(response);
+    },
+    self: {
+      addEventListener: (/** @type {string} */ type, /** @type {any} */ handler) =>
+        handlers.set(type, handler),
+      skipWaiting: () => {
+        calls.push('skipWaiting');
+        return Promise.resolve();
+      },
+      registration: {
+        unregister: () => {
+          calls.push('unregister');
+          return Promise.resolve(true);
+        },
+      },
+      clients: {
+        claim: () => {
+          calls.push('claim');
+          return Promise.resolve();
+        },
+      },
+      location: { origin: 'https://example.test' },
+    },
+    caches: {
+      keys: () => Promise.resolve([...names]),
+      delete: (/** @type {string} */ name) => {
+        const at = names.indexOf(name);
+        if (at === -1) return Promise.resolve(false);
+        names.splice(at, 1);
+        stores.delete(name);
+        calls.push(`delete ${name}`);
+        return Promise.resolve(true);
+      },
+      open: (/** @type {string} */ name) => {
+        if (!names.includes(name)) names.push(name);
+        const store = stores.get(name) ?? new Map();
+        stores.set(name, store);
+        return Promise.resolve({
+          match: (/** @type {string | { url: string }} */ request) =>
+            Promise.resolve(store.get(key(request))),
+          put: (/** @type {string | { url: string }} */ request, /** @type {unknown} */ response) => {
+            store.set(key(request), response);
+            return Promise.resolve();
+          },
+        });
+      },
+    },
+  });
+  runInContext(source, context);
+
+  return {
+    handlers,
+    fetched,
+    calls,
+    names,
+    /** Every path stored under any cache name. */
+    stored: () => new Set([...stores.values()].flatMap((store) => [...store.keys()])),
+    /**
+     * Fire one event and wait for the work it handed to `waitUntil` or `respondWith`.
+     *
+     * @param {string} type
+     * @param {object} [event]
+     */
+    fire: async (type, event = {}) => {
+      const handler = handlers.get(type);
+      assert.ok(handler !== undefined, `the worker registers a ${type} handler`);
+      /** @type {Promise<unknown>[]} */
+      const pending = [];
+      handler({
+        ...event,
+        waitUntil: (/** @type {Promise<unknown>} */ work) => void pending.push(work),
+        respondWith: (/** @type {Promise<unknown>} */ work) => void pending.push(work),
+      });
+      await Promise.all(pending);
+    },
+  };
+}
 
 /**
  * The generated worker, activated against a seeded origin.

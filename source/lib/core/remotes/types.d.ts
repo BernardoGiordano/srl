@@ -38,10 +38,13 @@ export interface RemoteDescriptor {
 }
 
 export interface RemoteAsset {
-  readonly type: 'module' | 'style' | 'template';
+  readonly type: 'module' | 'style' | 'template' | 'locale';
   /** Same-origin root-relative publication URL. */
   readonly url: string;
-  /** SHA-384 digest enforced by import-map, link, or fetch integrity. */
+  /**
+   * SHA-384 digest. It must equal the page's import-map pin for `url`, which import
+   * maps, `<link>` and `fetch` enforce. ADR-0129.
+   */
   readonly integrity: string;
 }
 
@@ -140,7 +143,10 @@ export interface HostI18n {
   locale(): string;
   direction(): 'ltr' | 'rtl';
   t(key: string, params?: Readonly<Record<string, unknown>>): string;
-  /** Merge the remote's own bundle, a URL pattern containing `{locale}`. */
+  /**
+   * Merge the remote's own bundle, a URL pattern containing `{locale}`. Only keys under
+   * the remote's name merge, and only files the page pins load.
+   */
   register(pattern: string): Promise<void>;
   /** Fires on a locale change and when any bundle is merged. */
   onChange(listener: () => void): Unsubscribe;

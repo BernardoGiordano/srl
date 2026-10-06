@@ -59,7 +59,10 @@ describe('template dialect', () => {
   });
 
   it('refuses document-level elements and bindings inside raw text', () => {
-    assert.sameArray([...REFUSED_ELEMENTS.keys()].sort(), ['base', 'link', 'meta', 'script']);
+    assert.sameArray(
+      [...REFUSED_ELEMENTS.keys()].sort(),
+      ['base', 'embed', 'link', 'meta', 'object', 'script'],
+    );
     assert.includes(refusedContent('style') ?? '', 'CSS for the whole page');
     assert.includes(refusedContent('xmp') ?? '', 'raw text');
     assert.equal(refusedContent('textarea'), undefined);

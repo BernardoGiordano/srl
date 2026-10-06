@@ -16,6 +16,7 @@ import {
   loadPreference,
 } from '@core/preferences/persistence.js';
 import { assert, present } from '../harness.js';
+import { pinOf, withPagePins } from '../page-pins.js';
 
 /**
  * Internationalisation, tested against real message files over real HTTP. Nothing is
@@ -46,6 +47,11 @@ const LATE_BUNDLE = `${new URL('../fixtures/late/', import.meta.url).href}{local
  */
 const MAPPED = `${new URL('../fixtures/hashed/', import.meta.url).href}{locale}.json`;
 const EMITTED = new URL('../fixtures/hashed/en-0123456789abcdef.json', import.meta.url).href;
+
+/** Remote bundles, which load under a namespace and only where the page pins them. */
+const REMOTE = `${new URL('../fixtures/remote-i18n/', import.meta.url).href}{locale}.json`;
+const PINNED = `${new URL('../fixtures/pinned-i18n/', import.meta.url).href}{locale}.json`;
+const UNPINNED = `${new URL('../fixtures/unpinned-i18n/', import.meta.url).href}{locale}.json`;
 
 describe('i18n', () => {
   before(async () => {
@@ -196,6 +202,27 @@ describe('i18n', () => {
     });
     await registerMessages(MAPPED);
     assert.equal(t('hashed.only'), 'from the mapped file');
+  });
+
+  it('keeps a remote bundle to keys under its own name', async () => {
+    // A remote shipping `login.title` would otherwise replace the shell's sign-in
+    // text. Only the namespaced keys merge. ADR-0129.
+    await setLocale('en');
+    await registerMessages(REMOTE, { namespace: 'probe-remote' });
+    assert.equal(t('probe-remote.title'), 'Remote title');
+    assert.equal(t('login.title'), 'Sign in');
+  });
+
+  it('loads a pinned-only bundle only where the page pins it', async () => {
+    await setLocale('en');
+    await registerMessages(UNPINNED, { namespace: 'unpinned-remote', pinned: true });
+    assert.equal(t('unpinned-remote.title'), 'unpinned-remote.title', 'an unpinned file reads as empty');
+
+    const file = PINNED.replace('{locale}', 'en');
+    await withPagePins({ [new URL(file).pathname]: await pinOf(file) }, () =>
+      registerMessages(PINNED, { namespace: 'pinned-remote', pinned: true }),
+    );
+    assert.equal(t('pinned-remote.title'), 'Pinned title');
   });
 
   it('formats numbers, currency and dates per locale', async () => {

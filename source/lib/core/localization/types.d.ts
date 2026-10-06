@@ -18,3 +18,11 @@ export interface I18nConfig {
    */
   readonly bundleFiles?: Readonly<Record<string, string>>;
 }
+
+/** How a registered bundle loads. A remote's bundle sets both. ADR-0129. */
+export interface BundleRules {
+  /** Keep only keys under this dotted prefix, such as `billing` for `billing.title`. */
+  readonly namespace?: string;
+  /** Load a locale only when the page pins its file. An unpinned one reads as empty. */
+  readonly pinned?: boolean;
+}

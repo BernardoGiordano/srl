@@ -2,6 +2,7 @@ import { manifest, useManifest } from '@core/remotes/mfe.js';
 import { ApplicationStartupError, startApplication } from '@core/application/runtime.js';
 import { attachTemplate, loadTemplate } from '@core/template/template.js';
 import { assert, present } from '../harness.js';
+import { pinOf, withPagePins } from '../page-pins.js';
 
 /** @import { AppManifest } from '@core/remotes/types.js' */
 
@@ -18,6 +19,7 @@ const MANIFEST = new URL('../fixtures/startup-manifest.json', import.meta.url).h
 const BUNDLED = new URL('../fixtures/startup-bundled-manifest.json', import.meta.url).href;
 const MISSING_BUNDLE = new URL('../fixtures/startup-missing-bundle-manifest.json', import.meta.url)
   .href;
+const TAMPERED = new URL('../fixtures/startup-tampered-manifest.json', import.meta.url).href;
 const SPLIT = new URL('../fixtures/startup-split-manifest.json', import.meta.url).href;
 const GROUPED = new URL('../fixtures/startup-grouped-manifest.json', import.meta.url).href;
 
@@ -210,7 +212,11 @@ describe('application startup', () => {
   });
 
   it('seeds the template cache from the manifest bundle', async () => {
-    const started = await startApplication({ manifestUrl: BUNDLED });
+    // Admission refuses a bundle the page doesn't pin. ADR-0129.
+    const bundle = '/lib/test/fixtures/startup-templates.json';
+    const started = await withPagePins({ [bundle]: await pinOf(bundle) }, () =>
+      startApplication({ manifestUrl: BUNDLED }),
+    );
     assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
 
     // No such file exists. Resolving it proves the source came from the bundle,
@@ -220,12 +226,29 @@ describe('application startup', () => {
   });
 
   it('starts anyway when the configured template bundle is missing', async () => {
-    const started = await startApplication({ manifestUrl: MISSING_BUNDLE });
+    const started = await withPagePins(
+      { '/lib/test/fixtures/startup-no-such-bundle.json': `sha384-${'A'.repeat(64)}` },
+      () => startApplication({ manifestUrl: MISSING_BUNDLE }),
+    );
 
     // A bundle is an optimisation. Absent, every template costs its own request and
     // the page still works, so failing startup over it would trade a slower boot for
     // no boot.
     assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
+  });
+
+  it('seeds nothing from a bundle that fails its pin', async () => {
+    // A bundle can replace any template, so changed bytes must not reach the cache.
+    // Each template then loads on its own, under its own pin. ADR-0129.
+    const started = await withPagePins(
+      { '/lib/test/fixtures/startup-tampered-templates.json': `sha384-${'A'.repeat(64)}` },
+      () => startApplication({ manifestUrl: TAMPERED }),
+    );
+    assert.sameArray(names(started), ['manifest', 'templates', 'locale']);
+    await assert.rejects(
+      () => loadTemplate('/lib/test/fixtures/startup-tampered.html'),
+      'Cannot load template',
+    );
   });
 
   it('starts every template the manifest names without waiting for any of them', async () => {

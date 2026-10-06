@@ -1,0 +1,10 @@
+{
+  "$comment": "A remote's bundle that also names a shell key. Registered under the remote's namespace, only its own keys merge.",
+
+  "probe-remote": {
+    "title": "Remote title"
+  },
+  "login": {
+    "title": "Hijacked"
+  }
+}

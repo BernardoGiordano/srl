@@ -145,6 +145,8 @@ export async function activateRemoteRelease(options) {
   const root = safeRoot(options.root, 'remote-activate: root');
   const publicRoot = safeRoot(options.publicRoot, 'remote-activate: public root');
   const release = await readRemoteRelease(root, options.id, 'remote-activate');
+  // Verified here as well as on activation, because the version alias below exposes
+  // the bytes before the pointer moves.
   await verifyPublishedRelease({
     releaseDir: join(root, 'releases', release.id),
     assetsDir: join(root, 'assets'),
@@ -306,7 +308,7 @@ async function verifyRemoteArtifact(artifactRoot, artifact) {
   const seen = new Set();
   for (const asset of remote.assets) {
     if (
-      !['module', 'style', 'template'].includes(asset.type) ||
+      !['module', 'style', 'template', 'locale'].includes(asset.type) ||
       !asset.url.startsWith(artifact.base) ||
       !/^sha384-[A-Za-z0-9+/]{64}$/u.test(asset.integrity) ||
       seen.has(asset.url)
@@ -316,8 +318,12 @@ async function verifyRemoteArtifact(artifactRoot, artifact) {
     seen.add(asset.url);
     const path = `public/${asset.url.slice(artifact.base.length)}`;
     const file = byPath.get(path);
-    if (file === undefined || file.cache !== 'immutable') {
-      throw new Error(`remote-release: asset URL has no immutable payload: ${asset.url}`);
+    // A Remote's locale files keep their declared names under its versioned base, so
+    // they are revalidated rather than immutable. Their pin still fixes their bytes.
+    // ADR-0083, ADR-0129.
+    const cache = asset.type === 'locale' ? 'revalidate' : 'immutable';
+    if (file === undefined || file.cache !== cache) {
+      throw new Error(`remote-release: asset URL has no ${cache} payload: ${asset.url}`);
     }
     const integrity = `sha384-${createHash('sha384').update(file.content).digest('base64')}`;
     if (integrity !== asset.integrity) {

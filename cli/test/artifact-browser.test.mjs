@@ -62,9 +62,18 @@ void test('built example mounts independent Billing and Analytics artifacts', as
     const requests = [];
     /** @type {string[]} */
     const errors = [];
+    /** @type {string[]} */
+    const probeRefusals = [];
     page.on('request', (request) => requests.push(new URL(request.url()).pathname));
     page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text());
+      if (message.type() !== 'error') return;
+      // The engine refuses the pin probe on purpose. That refusal is how the runtime
+      // proves it enforces import-map integrity before a remote loads. ADR-0129.
+      if (/\/assets\/pin-probe-[0-9a-f]{16}\.js/u.test(message.text())) {
+        probeRefusals.push(message.text());
+      } else {
+        errors.push(message.text());
+      }
     });
     page.on('pageerror', (error) => errors.push(String(error)));
     page.on('requestfailed', (request) => {
@@ -122,6 +131,7 @@ void test('built example mounts independent Billing and Analytics artifacts', as
         /Analytics|Analisi/u,
       );
       assert.deepEqual(errors, []);
+      assert.equal(probeRefusals.length, 1, 'the probe runs once per page and Chromium refuses it');
 
       for (const report of [billing, analytics]) {
         const remote = report.remote;

@@ -1,19 +1,29 @@
 /** Atomically switch one versioned artifact release pointer. */
 
-import { readFile, readlink, rename, symlink } from 'node:fs/promises';
+import { readlink, rename, symlink } from 'node:fs/promises';
 import { basename, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-/** @param {{ root: string, id: string }} options */
+import { verifyPublishedRelease } from './verify-release.mjs';
+
+/**
+ * Select a release as current, after proving its bytes match its report. The
+ * versioned directory and the shared assets are hashed, so a release that drifted
+ * after publication is never the one visitors get.
+ *
+ * @param {{ root: string, id: string }} options
+ */
 export async function activateReleasePointer(options) {
   const root = resolve(options.root);
   const id = options.id;
   if (!/^[0-9a-f]{12}-[0-9a-f]{12}$/u.test(id)) {
     throw new Error(`release-activate: invalid release id ${id}`);
   }
-  const release = join(root, 'releases', id);
-  const report = JSON.parse(await readFile(join(release, 'release.json'), 'utf8'));
-  if (report.version !== 1 || report.id !== id) {
+  const verified = await verifyPublishedRelease({
+    releaseDir: join(root, 'releases', id),
+    assetsDir: join(root, 'assets'),
+  });
+  if (verified.id !== id) {
     throw new Error(`release-activate: ${id} has no matching verified release report.`);
   }
 

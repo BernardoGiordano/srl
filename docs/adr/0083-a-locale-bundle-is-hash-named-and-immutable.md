@@ -67,7 +67,9 @@ falls through and the dev server is untouched.
 **The mapping is admitted as one whole-document decision, per
 [ADR-0010](0010-manifest-admission-is-one-whole-document-decision.md).** `admitBundleFiles`
 refuses a key that is not a URL the pair (`bundles`, `supportedLocales`) actually resolves to,
-and puts every value through `admitPath`. Both checks need the rest of the document: a mapping
+and puts every value through `admitPath`. Every value must also carry the page's import-map
+pin, which the build writes, so a manifest can't remap a locale to other bytes
+([ADR-0129](0129-one-pin-table-for-every-byte-the-page-runs.md)). Both checks need the rest of the document: a mapping
 for a URL this manifest never produces is a file that is emitted and never fetched, and it is
 locally valid in precisely the way that module exists to catch.
 
@@ -83,7 +85,10 @@ carries the Remote's release, so their URLs change with every deploy that change
 `i18n/` clause in `cacheClass` remains for exactly that case and is now the only thing it
 covers. Hashing them would need the mapping to reach `load()` through
 `registerMessages`, which takes a pattern and nothing else. That is a wider interface change
-for a class of file that is not on the shell's startup path.
+for a class of file that is not on the shell's startup path. A Remote's locale files are
+pinned instead. Each carries an asset record, composition puts its digest in the shell's
+import map, and the runtime loads a Remote's locale file only when the page pins it
+([ADR-0129](0129-one-pin-table-for-every-byte-the-page-runs.md)).
 
 ## Consequences
 

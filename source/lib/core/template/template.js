@@ -37,6 +37,7 @@ import {
   VOID_ELEMENTS,
 } from '@core/template/dialect.js';
 import { effect } from '@core/foundation/reactive.js';
+import { pinned } from '@core/foundation/pins.js';
 import { beginBindingUpdate, labelBinding } from '@core/diagnostics/updates.js';
 import { OWNER_ATTRIBUTE } from '@core/elements/style-scope.js';
 import {
@@ -179,11 +180,14 @@ function sourceOf(href) {
 }
 
 /**
+ * Fetch a template under the page's pin, so changed bytes fail the request. A
+ * template is executable, because its bindings run against the component. ADR-0129.
+ *
  * @param {string} href
  * @returns {Promise<string>}
  */
 async function fetchSource(href) {
-  const response = await fetch(href);
+  const response = await fetch(href, pinned(href));
   if (!response.ok) {
     throw new Error(
       `Cannot load template ${href}: ${String(response.status)} ${response.statusText}`,
@@ -269,13 +273,24 @@ async function fetchAndCompile(href) {
  * Compilation is unchanged, so development and production run the same compiler
  * over the same bytes.
  *
+ * `within` confines a remote's bundle to URLs under its own base. Without it, the
+ * bundle could replace a shell template, such as the login screen. Every key is
+ * checked before any is seeded, so a refused bundle seeds nothing. ADR-0129.
+ *
  * @param {Readonly<Record<string, string>>} sources Keys are URLs, absolute or
  *   root-relative.
+ * @param {string | URL} [within] The base every key must resolve under.
  */
-export function seedTemplates(sources) {
-  for (const [url, source] of Object.entries(sources)) {
-    sourceByUrl.set(new URL(url, document.baseURI).href, source);
-  }
+export function seedTemplates(sources, within) {
+  const base = within === undefined ? undefined : new URL(within, document.baseURI).href;
+  const entries = Object.entries(sources).map(([url, source]) => {
+    const href = new URL(url, document.baseURI).href;
+    if (base !== undefined && !href.startsWith(base)) {
+      throw new Error(`A template bundle confined to ${base} names ${href}, which is outside it.`);
+    }
+    return /** @type {const} */ ([href, source]);
+  });
+  for (const [href, source] of entries) sourceByUrl.set(href, source);
 }
 
 /**

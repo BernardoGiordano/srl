@@ -79,7 +79,7 @@ export function entryHints(facts) {
     throw new Error(`entry-hints: the report names ${facts.entry}, which is not one of its chunks.`);
   }
 
-  const integrity = new Map(facts.security.modules.map((module) => [module.path, module.integrity]));
+  const integrity = new Map(facts.security.pins.map((pin) => [pin.path, pin.integrity]));
 
   // The entry chunk itself is already a <script src> in the document; preloading it
   // a second time is a duplicate request in every browser that does not de-duplicate

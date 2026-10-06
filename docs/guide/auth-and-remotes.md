@@ -104,11 +104,22 @@ against allowed locales; rejects duplicate or nested remote mounts; refuses
 keys it does not know; and freezes the admitted result. An application without
 remotes or an API leaves `remotes` and `auth` out, as
 [startup](startup.md#the-manifest) shows. The browser and this repository's
-`npm run verify` run the same policy. The remote entry and its imports also
-need matching integrity hashes in the manifest and import map.
+`npm run verify` run the same policy.
 
-Adding a remote means adding its manifest entry, import-map pins, and a
-`nav.<name>` message key.
+The page's import map pins every byte a remote contributes: its modules,
+stylesheets, templates and locale files. Admission refuses a remote asset whose
+digest differs from the page's pin, and a remote template the page doesn't pin.
+A remote's locale file loads only when the page pins it, and only its keys
+under the remote's name merge, so `billing.title` loads and `login.title`
+doesn't. A remote's template bundle seeds only URLs under its own folder. A
+remote loads only in a browser that enforces import-map pins.
+[ADR-0129](../adr/0129-one-pin-table-for-every-byte-the-page-runs.md) explains
+the probe that checks.
+
+Adding a remote means adding its manifest entry, import-map pins for every
+file it serves, and a `nav.<name>` message key. Under source delivery,
+`npm run verify` walks the remote's import graph and reports each file
+without a matching pin.
 
 ## Trust boundary
 

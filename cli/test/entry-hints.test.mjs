@@ -49,7 +49,7 @@ function facts() {
     ],
     security: {
       importMap: { source: '{}', sha256: 'sha256-AA==' },
-      modules: [
+      pins: [
         { path: '/assets/entry-AAAAAAAA.js', integrity: 'sha384-entry' },
         { path: '/assets/reactive-BBBBBBBB.js', integrity: 'sha384-reactive' },
         { path: '/assets/inject-DDDDDDDD.js', integrity: 'sha384-inject' },

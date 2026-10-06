@@ -13,11 +13,12 @@
  * reactive like `t`.
  */
 
+import { pinFor, pinned } from '@core/foundation/pins.js';
 import { batch, computed, signal } from '@core/foundation/reactive.js';
 import { registerTemplateGlobals } from '@core/template/expression.js';
 import { migrateLegacyKey, savePreference } from '@core/preferences/persistence.js';
 
-/** @import { I18nConfig, MessageTable } from '@core/localization/types.js' */
+/** @import { BundleRules, I18nConfig, MessageTable } from '@core/localization/types.js' */
 
 /**
  * The chosen locale is stored through the preference module, so swapping the store
@@ -44,8 +45,15 @@ let config = {
 /** @type {string[]} */
 const patterns = [];
 
+/**
+ * The rules a registered pattern loads under. A shell bundle has none.
+ *
+ * @type {Map<string, BundleRules>}
+ */
+const rulesByPattern = new Map();
+
 /** Tables by resolved bundle URL, so each bundle is fetched once. */
-/** @type {Map<string, MessageTable>} */
+/** @type {Map<string, Promise<MessageTable>>} */
 const fetched = new Map();
 
 /** The active locale. Read it to react to changes; write through `setLocale`. */
@@ -100,12 +108,18 @@ export async function configureI18n(next) {
  * Add a message bundle. It is safe after startup, and the merged table re-renders
  * whatever is on screen.
  *
+ * A remote's bundle passes `rules`. `namespace` keeps only the keys under it, so a
+ * remote can't replace a shell message. `pinned` loads a locale only when the page
+ * pins its file, and reads an unpinned one as empty. ADR-0129.
+ *
  * @param {string} pattern URL containing `{locale}`.
+ * @param {BundleRules} [rules]
  * @returns {Promise<void>}
  */
-export async function registerMessages(pattern) {
+export async function registerMessages(pattern, rules) {
   if (patterns.includes(pattern)) return;
   patterns.push(pattern);
+  if (rules !== undefined) rulesByPattern.set(pattern, rules);
   messages.value = await mergeFor(locale.value);
 }
 
@@ -343,7 +357,8 @@ function fallbackChain(tag) {
 
 /**
  * Load one bundle for a locale. A 404 or a failure yields an empty table, because a
- * missing translation file is normal during translation work.
+ * missing translation file is normal during translation work. A file that fails its
+ * pin is a failure too, so changed bytes read as untranslated text.
  *
  * The URL the pattern resolves to is the bundle's identity and cache key. `bundleFiles`
  * maps it to the hash-named file a build emitted.
@@ -354,21 +369,46 @@ function fallbackChain(tag) {
  */
 async function load(pattern, tag) {
   const url = pattern.replace('{locale}', tag);
-  const cached = fetched.get(url);
-  if (cached !== undefined) return cached;
+  const rules = rulesByPattern.get(pattern);
+  let pending = fetched.get(url);
+  if (pending === undefined) {
+    pending = fetchTable(config.bundleFiles?.[url] ?? url, rules?.pinned === true);
+    fetched.set(url, pending);
+  }
+  const table = await pending;
+  return rules?.namespace === undefined ? table : within(table, rules.namespace);
+}
 
-  let table = emptyTable();
+/**
+ * @param {string} file
+ * @param {boolean} pinnedOnly
+ * @returns {Promise<MessageTable>}
+ */
+async function fetchTable(file, pinnedOnly) {
+  if (pinnedOnly && pinFor(file) === undefined) return emptyTable();
   try {
-    const response = await fetch(config.bundleFiles?.[url] ?? url);
-    if (response.ok) {
-      table = flatten(/** @type {unknown} */ (await response.json()));
-    }
+    const response = await fetch(file, pinned(file));
+    if (response.ok) return flatten(/** @type {unknown} */ (await response.json()));
   } catch {
     // Fall back to the locales already merged. An untranslated page beats a blank one.
   }
+  return emptyTable();
+}
 
-  fetched.set(url, table);
-  return table;
+/**
+ * The keys of a table under one namespace, such as `billing.title` under `billing`.
+ *
+ * @param {MessageTable} table
+ * @param {string} namespace
+ * @returns {MessageTable}
+ */
+function within(table, namespace) {
+  const prefix = `${namespace}.`;
+  const kept = emptyTable();
+  for (const [key, value] of Object.entries(table)) {
+    if (key.startsWith(prefix)) kept[key] = value;
+  }
+  return kept;
 }
 
 /**

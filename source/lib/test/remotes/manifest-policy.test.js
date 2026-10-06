@@ -22,6 +22,12 @@ const OTHER_PIN = 'sha384-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
 const PINS = {
   '/remotes/one/entry.js': PIN,
   '/remotes/two/entry.js': OTHER_PIN,
+  '/remotes/one/app.css': OTHER_PIN,
+  '/remotes/one/templates.json': PIN,
+  '/remotes/one/a.html': PIN,
+  '/remotes/one/i18n/en.json': PIN,
+  '/templates.json': PIN,
+  '/assets/i18n/en-0123456789abcdef.json': PIN,
 };
 
 describe('manifest admission', () => {
@@ -300,7 +306,9 @@ describe('manifest admission', () => {
         () =>
           admit({
             remotes: [
-              remote({ assets: [{ type: 'style', url: '/remotes/one/app.css', integrity: PIN }] }),
+              remote({
+                assets: [{ type: 'style', url: '/remotes/one/app.css', integrity: OTHER_PIN }],
+              }),
             ],
           }),
         'assets must include its entry module',
@@ -452,6 +460,118 @@ describe('manifest admission', () => {
         i18n: { $comment: 'one locale', defaultLocale: 'en' },
       });
       assert.equal(admitted.i18n.defaultLocale, 'en');
+    });
+  });
+
+  describe('the page pins every byte the manifest names', () => {
+    // A manifest is fetched with no-cache and can change after the document did. Every
+    // URL it names must carry a pin the document already holds, so a changed manifest
+    // can point only at bytes the page vouches for. ADR-0129.
+    const entry = { type: 'module', url: '/remotes/one/entry.js', integrity: PIN };
+
+    it('refuses a style or template asset whose digest is not the page pin', () => {
+      assert.throws(
+        () =>
+          admit({
+            remotes: [
+              remote({
+                assets: [entry, { type: 'style', url: '/remotes/one/app.css', integrity: PIN }],
+              }),
+            ],
+          }),
+        "assets[1] integrity does not match the page's static import-map pin",
+      );
+      assert.throws(
+        () =>
+          admit({
+            remotes: [
+              remote({
+                assets: [entry, { type: 'template', url: '/remotes/one/b.html', integrity: PIN }],
+              }),
+            ],
+          }),
+        "does not match the page's static import-map pin for /remotes/one/b.html",
+      );
+    });
+
+    it('refuses a remote template file the page does not pin', () => {
+      assert.throws(
+        () => admit({ remotes: [remote({ templateFiles: ['/remotes/one/b.html'] })] }),
+        "templateFiles[0] names /remotes/one/b.html, which the page's import map doesn't pin",
+      );
+      const admitted = admit({ remotes: [remote({ templateFiles: ['/remotes/one/a.html'] })] });
+      assert.sameArray([...present(admitted.remotes[0]).templateFiles], ['/remotes/one/a.html']);
+    });
+
+    it('needs an asset record for every split template a built remote announces', () => {
+      // Composition carries a remote's digests into the shell's import map from its
+      // asset records, so an announced file without one would arrive unpinned.
+      assert.throws(
+        () =>
+          admit({
+            remotes: [remote({ assets: [entry], templateFiles: ['/remotes/one/a.html'] })],
+          }),
+        'announces templates with no asset record: /remotes/one/a.html',
+      );
+      const admitted = admit({
+        remotes: [
+          remote({
+            assets: [entry, { type: 'template', url: '/remotes/one/a.html', integrity: PIN }],
+            templateFiles: ['/remotes/one/a.html'],
+          }),
+        ],
+      });
+      assert.sameArray(
+        present(admitted.remotes[0]).assets.map((asset) => asset.type),
+        ['module', 'template'],
+      );
+    });
+
+    it('admits a locale asset only where a locale pattern resolves', () => {
+      const locales = ['/remotes/one/i18n/{locale}.json'];
+      assert.throws(
+        () =>
+          admit({
+            remotes: [
+              remote({
+                assets: [entry, { type: 'locale', url: '/remotes/one/a.html', integrity: PIN }],
+                locales,
+              }),
+            ],
+          }),
+        'no locale pattern resolves to',
+      );
+      const admitted = admit({
+        remotes: [
+          remote({
+            assets: [entry, { type: 'locale', url: '/remotes/one/i18n/en.json', integrity: PIN }],
+            locales,
+          }),
+        ],
+      });
+      assert.sameArray(
+        present(admitted.remotes[0]).assets.map((asset) => asset.type),
+        ['module', 'locale'],
+      );
+    });
+
+    it('refuses a template bundle the page does not pin', () => {
+      // A bundle seeds every template, the login screen included, so a manifest that
+      // could name any JSON on the origin could replace the shell's markup.
+      assert.throws(
+        () => admit({ templateBundle: '/remotes/one/upload.json' }),
+        "templateBundle names /remotes/one/upload.json, which the page's import map doesn't pin",
+      );
+      assert.equal(admit({ templateBundle: '/templates.json' }).templateBundle, '/templates.json');
+    });
+
+    it('refuses a locale mapping to a file the page does not pin', () => {
+      const i18n = { defaultLocale: 'en', supportedLocales: ['en'], bundles: BUNDLES };
+      assert.throws(
+        () =>
+          admit({ i18n: { ...i18n, bundleFiles: { '/i18n/en.json': '/remotes/one/en.json' } } }),
+        "doesn't pin",
+      );
     });
   });
 

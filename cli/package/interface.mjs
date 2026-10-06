@@ -454,9 +454,24 @@ export const IMPORT_MAP_URL = `${mountedUrl(MANIFEST.srl.mounts['/lib/'])}import
 export const MANIFEST_SCHEMA_FILE = join(LIB, 'core', 'remotes', 'app.manifest.schema.json');
 
 /**
+ * The module the runtime imports under a deliberately wrong pin before the first
+ * remote. An engine that loads it ignores import-map integrity, and remotes are
+ * refused there. ADR-0129.
+ */
+export const PROBE_URL = `${mountedUrl(MANIFEST.srl.mounts['/lib/'])}core/foundation/pin-probe.js`;
+
+/**
+ * The probe's pin, the digest of zero bytes, which only `PROBE_URL` may carry. It
+ * repeats `PROBE_PIN` in `@core/foundation/pins.js`, because this module imports
+ * nothing.
+ */
+export const PROBE_PIN = 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb';
+
+/**
  * The import-map fragment every application on this library carries. It holds the
  * vendored dependencies with the hashes of the bytes actually in lib/vendor, then
- * the library's entry specifiers and its own prefixes.
+ * the library's entry specifiers and its own prefixes. It also pins the probe to
+ * `PROBE_PIN`, so every application can prove its engine enforces pins.
  *
  * An application's own entries, such as its remotes and its `/src/`, are not here
  * and never can be. The fragment is what the library publishes and the map is the
@@ -476,6 +491,7 @@ export async function importMapFragment() {
     }
     integrity[url] = await subresourceIntegrity(file);
   }
+  integrity[PROBE_URL] = PROBE_PIN;
 
   return { imports: { ...vendor, ...ENTRY_SPECIFIERS, ...SPECIFIERS }, integrity };
 }

@@ -23,7 +23,9 @@
  *   node cli/delivery/bundle-templates.mjs [--app example]
  *
  * Then set `"templateBundle": "/templates.json"` in that application's
- * app.manifest.json. Its main.js seeds the template cache from it before the first
+ * app.manifest.json, and pin the file in its import map with the digest this prints.
+ * Admission refuses a bundle the page doesn't pin, because a bundle can replace any
+ * template. ADR-0129. Its main.js seeds the template cache from it before the first
  * component loads.
  *
  * It is per application because the keys are the URLs the browser will ask for, and
@@ -33,6 +35,7 @@
  * few milliseconds.
  */
 
+import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -77,12 +80,18 @@ if (count === 0) {
   process.exit(1);
 }
 
-await writeFile(OUTPUT, `${JSON.stringify(bundle)}\n`);
+const source = `${JSON.stringify(bundle)}\n`;
+await writeFile(OUTPUT, source);
+const pin = `sha384-${createHash('sha384').update(source).digest('base64')}`;
 console.log(
   '\n  %d template(s), %d bytes of markup -> %s/templates.json\n' +
-    '  Set "templateBundle": "/templates.json" in %s/app.manifest.json to use it.',
+    '  Set "templateBundle": "/templates.json" in %s/app.manifest.json to use it, and pin\n' +
+    '  it in the integrity block of %s/index.html\'s import map:\n\n' +
+    '    "/templates.json": "%s"',
   count,
   bytes,
   app.name,
   app.name,
+  app.name,
+  pin,
 );

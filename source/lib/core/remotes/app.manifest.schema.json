@@ -210,7 +210,8 @@
           "enum": [
             "module",
             "style",
-            "template"
+            "template",
+            "locale"
           ]
         },
         "url": {

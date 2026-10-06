@@ -17,6 +17,7 @@ import { configureI18n } from '@core/localization/i18n.js';
 import { loadManifest, useManifest } from '@core/remotes/mfe.js';
 import { defineTag } from '@core/elements/mount.js';
 import { readJson } from '@core/foundation/json.js';
+import { pinned } from '@core/foundation/pins.js';
 import {
   prefetchTemplates,
   registerTemplateGroups,
@@ -162,16 +163,23 @@ async function step(name, steps, body) {
 }
 
 /**
- * Fetch the template bundle and seed the cache.
+ * Fetch the template bundle under its pin and seed the cache.
  *
  * A missing bundle isn't a startup failure. The page still works with one request per
- * template, and `npm run verify` reports a stale bundle.
+ * template, and `npm run verify` reports a stale bundle. A bundle that fails its pin
+ * seeds nothing, so each template loads on its own under its own pin. ADR-0129.
  *
  * @param {string} url
  * @returns {Promise<void>}
  */
 async function seedTemplateBundle(url) {
-  const response = await fetch(url, { cache: 'no-cache' });
+  /** @type {Response} */
+  let response;
+  try {
+    response = await fetch(url, pinned(url, { cache: 'no-cache' }));
+  } catch {
+    return;
+  }
   if (response.ok) seedTemplates(await readJson(response));
 }
 
