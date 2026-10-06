@@ -177,6 +177,7 @@ describe('application startup', () => {
     assert.ok(caught instanceof ApplicationStartupError, 'the failure must name the step');
     const failure = /** @type {ApplicationStartupError} */ (caught);
     assert.equal(failure.step, 'ready');
+    assert.equal(failure.code, 'runtime/startup', 'srl serve reports the failure under this code');
     assert.equal(failure.cause, cause, 'the original error must survive');
     assert.includes(
       failure.message,

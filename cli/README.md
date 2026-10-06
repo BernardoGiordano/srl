@@ -59,7 +59,7 @@ can discover it.
 | `srl new my-app` | Write a new project with one application. |
 | `srl generate component user-card` | Add a component and its template. |
 | `srl generate app admin` | Add another application to the project. |
-| `srl serve --app web --open` | Serve source, library, and components on one origin with history fallback and live updates. |
+| `srl serve --app web --open` | Serve source, library, and components on one origin with history fallback and live updates. Failures in the page are printed with their codes. |
 | `srl check` | Check the project model, types, templates, import map, and messages in one run. |
 | `srl check templates importmap` | Run only the named checks: `project`, `types`, `templates`, `importmap`, or `messages`. |
 | `srl check messages --write` | Add missing message keys to the default-locale bundle. |

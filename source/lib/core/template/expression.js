@@ -41,6 +41,25 @@ export function registerTemplateGlobals(values) {
   for (const [name, value] of Object.entries(values)) globalsByName.set(name, value);
 }
 
+/**
+ * Told about a name that no local, member or template global answers, which renders as
+ * `undefined`. None by default, because a production page has nobody to tell. The
+ * development client installs one, so the read reaches the terminal. ADR-0125.
+ *
+ * @type {((name: string, where: string) => void) | undefined}
+ */
+let unknownNameReporter;
+
+/**
+ * Install or remove the reporter for unknown names. `srl serve` installs one, and a
+ * suite or a staging build can install its own.
+ *
+ * @param {((name: string, where: string) => void) | undefined} reporter
+ */
+export function reportUnknownNames(reporter) {
+  unknownNameReporter = reporter;
+}
+
 /* ── Compiler ──────────────────────────────────────────────────────────── */
 
 /**
@@ -340,8 +359,9 @@ function compileNameRead(name, where) {
   return (scope) => {
     if (name in scope.locals) return scope.locals[name];
     if (name in scope.host) return scope.host[name];
-    // An unknown name falls through to the globals.
-    return globalsByName.get(name);
+    const global = globalsByName.get(name);
+    if (global === undefined && !globalsByName.has(name)) unknownNameReporter?.(name, where);
+    return global;
   };
 }
 

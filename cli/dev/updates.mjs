@@ -21,6 +21,9 @@
  *   gaps         a batch carries an id, and a reconnecting browser says which one it
  *                had. Anything it missed is replayed, and anything older than the
  *                retained window, or from a previous process, is a reload.
+ *   failures     the way back. The page posts each failure it sees as a diagnostic,
+ *                and the session prints it with the file the URL names, so a
+ *                blank page reaches the terminal. ADR-0125.
  *   disposal     watchers, the pending timer and open connections all end with
  *                `close()`. Without cancellation a suite that started a server and
  *                closed it would keep a recursive watch of the repository for the
@@ -38,6 +41,9 @@ import { randomUUID } from 'node:crypto';
 import { sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { error, formatLine, warning } from '../diagnostics/index.mjs';
+import { toFile } from '../origin/index.mjs';
+
 /** @import { IncomingMessage, ServerResponse } from 'node:http' */
 
 /**
@@ -49,6 +55,10 @@ import { fileURLToPath } from 'node:url';
  */
 const STREAM = '/__updates';
 const CLIENT = '/__updates/client.js';
+const DIAGNOSTICS = '/__updates/diagnostics';
+
+/** The most a page may post as one diagnostic. A stack trace fits many times over. */
+const DIAGNOSTIC_BYTES = 64 * 1024;
 
 const CLIENT_FILE = fileURLToPath(new URL('update-client.js', import.meta.url));
 
@@ -62,10 +72,25 @@ const CLIENT_FILE = fileURLToPath(new URL('update-client.js', import.meta.url));
 const CLIENT_TAG = `
 <script type="module">
   // Development only, injected by cli/dev/updates.mjs. Not present in the file on disk.
-  import { applyUpdate } from '${CLIENT}';
+  import { applyUpdate, watchFailures } from '${CLIENT}';
+  void watchFailures();
   new EventSource('${STREAM}').addEventListener('message', (event) => {
     void applyUpdate(JSON.parse(event.data));
   });
+</script>
+`;
+
+/**
+ * Injected first in the head, so a failure while the entry module evaluates is queued
+ * for the client rather than lost. A classic script runs before every module script,
+ * and it may precede the import map. `watchFailures` drains the queue and replaces it.
+ */
+const QUEUE_TAG = `
+<script>
+  // Development only, injected by cli/dev/updates.mjs. Not present in the file on disk.
+  globalThis.__srlFailures = [];
+  addEventListener('error', (event) => globalThis.__srlFailures.push(event), true);
+  addEventListener('unhandledrejection', (event) => globalThis.__srlFailures.push(event));
 </script>
 `;
 
@@ -278,7 +303,77 @@ export function startUpdateSession(options) {
     })();
   }
 
-  /* ── The two URLs ────────────────────────────────────────────────────── */
+  /* ── Failures ────────────────────────────────────────────────────────── */
+
+  /**
+   * A diagnostic the page posted, checked and placed, or null when the body is not
+   * one. The URL becomes the file it is served from, so the line names what to edit.
+   *
+   * @param {unknown} value
+   * @returns {import('../diagnostics/types.js').Diagnostic | null}
+   */
+  function pageDiagnostic(value) {
+    if (typeof value !== 'object' || value === null) return null;
+    const { severity, code, message, url, line, column } = /** @type {Record<string, unknown>} */ (value);
+    if (severity !== 'error' && severity !== 'warning') return null;
+    if (typeof code !== 'string' || !/^[a-z]+\/[a-z0-9-]+$/u.test(code)) return null;
+    if (typeof message !== 'string') return null;
+
+    const position = (/** @type {unknown} */ number) =>
+      Number.isInteger(number) && /** @type {number} */ (number) > 0 ? /** @type {number} */ (number) : null;
+    const path = typeof url === 'string' && url.startsWith('/') ? url.split('?')[0] ?? url : null;
+    const where = {
+      group: 'browser',
+      file: path === null ? null : (toFile(decodeURIComponent(path), mounts) ?? path),
+      line: position(line),
+      column: position(column),
+    };
+    const make = severity === 'error' ? error : warning;
+    return make(code, message.slice(0, 4000), where);
+  }
+
+  /**
+   * @param {IncomingMessage} request
+   * @param {ServerResponse} response
+   */
+  async function receive(request, response) {
+    if (request.method !== 'POST') {
+      response.writeHead(405, { Allow: 'POST' });
+      response.end();
+      return;
+    }
+
+    /** @type {Buffer[]} */
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of request) {
+      size += /** @type {Buffer} */ (chunk).length;
+      if (size > DIAGNOSTIC_BYTES) {
+        response.writeHead(413);
+        response.end();
+        return;
+      }
+      chunks.push(/** @type {Buffer} */ (chunk));
+    }
+
+    let diagnostic = null;
+    try {
+      diagnostic = pageDiagnostic(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+    } catch {
+      diagnostic = null;
+    }
+    if (diagnostic === null) {
+      response.writeHead(400);
+      response.end();
+      return;
+    }
+
+    log('%s', formatLine(diagnostic));
+    response.writeHead(204);
+    response.end();
+  }
+
+  /* ── The URLs ────────────────────────────────────────────────────────── */
 
   /**
    * @param {IncomingMessage} request
@@ -293,6 +388,11 @@ export function startUpdateSession(options) {
         'Cache-Control': 'no-store',
       });
       response.end(await readFile(CLIENT_FILE));
+      return true;
+    }
+
+    if (url.pathname === DIAGNOSTICS) {
+      await receive(request, response);
       return true;
     }
 
@@ -330,9 +430,14 @@ export function startUpdateSession(options) {
    * @returns {string}
    */
   function inject(html) {
-    return html.includes('</body>')
-      ? html.replace('</body>', `${CLIENT_TAG}</body>`)
-      : html + CLIENT_TAG;
+    const head = /<head[^>]*>/iu.exec(html);
+    const queued =
+      head === null
+        ? QUEUE_TAG + html
+        : html.slice(0, head.index + head[0].length) + QUEUE_TAG + html.slice(head.index + head[0].length);
+    return queued.includes('</body>')
+      ? queued.replace('</body>', `${CLIENT_TAG}</body>`)
+      : queued + CLIENT_TAG;
   }
 
   async function close() {

@@ -1,5 +1,5 @@
 import { signal } from '@core/foundation/reactive.js';
-import { compileExpression } from '@core/template/expression.js';
+import { compileExpression, reportUnknownNames } from '@core/template/expression.js';
 import { ExpressionError, parseExpression } from '@core/template/expression-parser.js';
 import { assert } from '../harness.js';
 
@@ -207,10 +207,26 @@ describe('expression language', () => {
   /* ── Refusals ──────────────────────────────────────────────────────────── */
 
   it('resolves an unknown name to undefined, leaving the report to the checker', () => {
-    // Not a throw, because the evaluator has no development mode to be loud in and
-    // `npm run templates:check` types every expression against the component class, so
-    // a name the component does not have never reaches a browser.
+    // Not a throw, because `srl check templates` types every expression against the
+    // component class, so a name the component does not have never reaches a browser
+    // that ran the checks. The development server's hook covers one that did not.
     assert.equal(evaluate('nope', {}), undefined);
+  });
+
+  it('tells the installed reporter about an unknown name, and only an unknown one', () => {
+    /** @type {string[]} */
+    const reported = [];
+    reportUnknownNames((name, where) => reported.push(`${name} in ${where}`));
+    try {
+      assert.equal(evaluate('nope', {}), undefined);
+      evaluate('known', { known: undefined });
+      evaluate('item', {}, { item: 1 });
+      assert.sameArray(reported, ['nope in test']);
+    } finally {
+      reportUnknownNames(undefined);
+    }
+    evaluate('nope', {});
+    assert.equal(reported.length, 1, 'a removed reporter hears nothing');
   });
 
   it('refuses to reach Object.prototype through an identifier', () => {

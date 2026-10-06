@@ -26,8 +26,8 @@ const CORE = fileURLToPath(new URL('../../source/lib/core/', import.meta.url));
 const BIN = join(CLI, 'bin', 'srl.mjs');
 const FIXTURES = join(CLI, 'test', 'fixtures', 'project-model');
 
-/** Namespaces `srl check` reports under. Other tools own the rest. */
-const CHECKED = /['"`]((?:check|project|types|templates|importmap|messages)\/[a-z][a-z0-9-]*)['"`]/gu;
+/** Namespaces `srl check` reports under, and `runtime/`, which `srl serve` relays. Other tools own the rest. */
+const CHECKED = /['"`]((?:check|project|types|templates|importmap|messages|runtime)\/[a-z][a-z0-9-]*)['"`]/gu;
 
 /**
  * Run the published command.
@@ -49,7 +49,7 @@ async function srl(args, env = process.env) {
 void test('every code a published check reports is catalogued, and every entry is reported', async () => {
   // The core throws coded errors the checks report as they stand, so its source counts.
   const sources = [
-    ...(await walk(CLI, /\.mjs$/u)).filter(
+    ...(await walk(CLI, /\.m?js$/u)).filter(
       (file) =>
         !relative(CLI, file).split(sep).includes('test') && !file.endsWith(join('diagnostics', 'catalog.mjs')),
     ),

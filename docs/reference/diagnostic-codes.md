@@ -82,6 +82,10 @@ problem, and the finding's message says where it is and how to fix it. `srl chec
 | `messages/unknown-key` | A reference names a key no bundle it can reach declares, so the page shows the key. |
 | `messages/missing-parameter` | A message interpolates a placeholder the call does not pass, so the page shows the braces. |
 | `messages/unused-parameter` | A call passes a parameter its message does not interpolate. |
+| `runtime/startup` | A step of application startup failed, so the root never mounted. The message names the step and its cause. |
+| `runtime/uncaught` | An error with no code of its own reached the page uncaught. |
+| `runtime/module-load` | A module script, or a module it imports, did not load, so nothing after it ran. |
+| `runtime/unknown-binding` | A template reads a name no local, member or template global answers, so it renders as undefined. |
 | `types/ts<number>` | TypeScript reports this error in a file tsconfig.json includes. The number is TypeScript's own. |
 | `templates/ts<number>` | TypeScript reports this error in a template binding, placed at the binding. The number is TypeScript's own. |
 

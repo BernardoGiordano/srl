@@ -164,6 +164,19 @@ function line(diagnostic) {
 }
 
 /**
+ * One finding as one terminal line, code included, for a stream that reports each
+ * finding as it arrives rather than a run that reports at the end.
+ *
+ * @param {Diagnostic} diagnostic
+ * @returns {string}
+ */
+export function formatLine(diagnostic) {
+  const place = position(diagnostic);
+  const label = LABELS[diagnostic.severity].padEnd(LABEL_WIDTH);
+  return `  ${label}${diagnostic.code}  ${place === '' ? '' : `${place}: `}${diagnostic.message}`;
+}
+
+/**
  * The terminal report, as the two streams it belongs on.
  *
  * Progress goes to stdout in the order it was found, under a heading whenever the

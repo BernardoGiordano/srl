@@ -37,10 +37,17 @@ export const STARTUP_MEASURE = 'srl:startup:';
 
 /**
  * A step of startup failed. `step` names which one, `cause` is what went wrong.
+ *
+ * `code` is the catalogue's name for the problem, so the development server reports it
+ * as it reports a check. A cause with a code of its own names the problem more
+ * precisely, and the reporter prefers it. ADR-0125.
  */
 export class ApplicationStartupError extends Error {
   /** @type {StartupStep} */
   step;
+
+  /** @readonly */
+  code = 'runtime/startup';
 
   /**
    * @param {StartupStep} step
