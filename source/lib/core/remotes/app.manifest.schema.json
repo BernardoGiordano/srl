@@ -1,0 +1,286 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "srl app.manifest.json",
+  "description": "Runtime configuration an srl application fetches at startup. Generated from the admission policy, which has the final word.",
+  "type": "object",
+  "properties": {
+    "remotes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/remote"
+      },
+      "uniqueItems": true,
+      "description": "Micro-frontends this application mounts. Absent means none."
+    },
+    "auth": {
+      "$ref": "#/definitions/auth",
+      "description": "Where the application API lives. Absent means the application calls no API through the manifest."
+    },
+    "i18n": {
+      "$ref": "#/definitions/i18n",
+      "description": "Locales and message bundles. Absent means one locale, \"en\", with no bundles."
+    },
+    "templateBundle": {
+      "type": "string",
+      "pattern": "^/(?!/)[^\\\\#]*$",
+      "description": "One JSON file holding every template. `srl build --templates bundle` writes it."
+    },
+    "templateGroups": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^/(?!/)[^\\\\#]*$",
+          "description": "A template URL."
+        },
+        "uniqueItems": true,
+        "description": "The templates one chunk names."
+      },
+      "description": "Templates grouped by the chunk that names them. `srl build` writes it."
+    },
+    "templateFiles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^/(?!/)[^\\\\#]*$",
+        "description": "A template URL."
+      },
+      "uniqueItems": true,
+      "description": "Every template, fetched at startup. Leave it to the build."
+    }
+  },
+  "patternProperties": {
+    "^\\$": {}
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "auth": {
+      "type": "object",
+      "properties": {
+        "apiBaseUrl": {
+          "type": "string",
+          "pattern": "^/(?!/)[^\\\\#]*$",
+          "description": "The root-relative base URL of the application API."
+        }
+      },
+      "patternProperties": {
+        "^\\$": {}
+      },
+      "additionalProperties": false,
+      "required": [
+        "apiBaseUrl"
+      ]
+    },
+    "i18n": {
+      "type": "object",
+      "properties": {
+        "defaultLocale": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+          "description": "The locale every translation falls back to. Absent means the first supported locale, or \"en\"."
+        },
+        "supportedLocales": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Every locale the application offers. Absent means the default locale alone."
+        },
+        "bundles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^/(?!/)[^\\\\#]*\\{locale\\}[^\\\\#]*$",
+            "description": "A root-relative URL with a {locale} placeholder."
+          },
+          "uniqueItems": true,
+          "description": "Message bundle URL patterns, resolved once per supported locale."
+        },
+        "bundleFiles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^/(?!/)[^\\\\#]*$",
+            "description": "The emitted file."
+          },
+          "description": "The emitted file for each resolved bundle URL. `srl build` writes it."
+        }
+      },
+      "patternProperties": {
+        "^\\$": {}
+      },
+      "additionalProperties": false
+    },
+    "remote": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique per manifest. The import cache key and the nav message key."
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^/(?!/)[^\\\\#]*$",
+          "description": "The remote entry module."
+        },
+        "integrity": {
+          "type": "string",
+          "pattern": "^sha384-[A-Za-z0-9+/]{64}$",
+          "description": "The sha384 digest the page import map pins for `url`."
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/asset"
+          },
+          "uniqueItems": true,
+          "description": "Every file the remote publishes, entry module included."
+        },
+        "shared": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "not": {
+              "pattern": "^(?:\\.|\\/|(?:https?:)?\\/\\/)"
+            }
+          },
+          "uniqueItems": true,
+          "description": "Bare specifiers the shell supplies."
+        },
+        "locales": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^/(?!/)[^\\\\#]*\\{locale\\}[^\\\\#]*$",
+            "description": "A root-relative URL with a {locale} placeholder."
+          },
+          "uniqueItems": true,
+          "description": "The remote message bundle URL patterns."
+        },
+        "templates": {
+          "type": "string",
+          "pattern": "^/(?!/)[^\\\\#]*$",
+          "description": "The remote template bundle, named again in `assets`."
+        },
+        "templateFiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^/(?!/)[^\\\\#]*$",
+            "description": "A template URL."
+          },
+          "uniqueItems": true,
+          "description": "The remote templates, started beside its entry module."
+        },
+        "mount": {
+          "type": "string",
+          "pattern": "^/(?!/)[^\\\\#*:?]*[^\\\\#*:?/][^\\\\#*:?]*$",
+          "description": "The path prefix the remote owns, such as \"/billing\". Not \"/\"."
+        },
+        "requires": {
+          "$ref": "#/definitions/requires",
+          "description": "Checked before the remote code is fetched."
+        },
+        "grants": {
+          "$ref": "#/definitions/grants",
+          "description": "The most the remote host context may do."
+        }
+      },
+      "patternProperties": {
+        "^\\$": {}
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "url",
+        "integrity",
+        "mount"
+      ]
+    },
+    "asset": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "module",
+            "style",
+            "template"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^/(?!/)[^\\\\#]*$",
+          "description": "Where the asset is published."
+        },
+        "integrity": {
+          "type": "string",
+          "pattern": "^sha384-[A-Za-z0-9+/]{64}$"
+        }
+      },
+      "patternProperties": {
+        "^\\$": {}
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "url",
+        "integrity"
+      ]
+    },
+    "requires": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "boolean",
+          "description": "Redirect to /login without a session."
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Redirect to /forbidden unless the session holds all of these."
+        }
+      },
+      "patternProperties": {
+        "^\\$": {}
+      },
+      "additionalProperties": false
+    },
+    "grants": {
+      "type": "object",
+      "properties": {
+        "api": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^/.*/$"
+          },
+          "uniqueItems": true,
+          "description": "Root-relative path prefixes, each ending in \"/\", the remote may call."
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Permissions the remote may ask about."
+        }
+      },
+      "patternProperties": {
+        "^\\$": {}
+      },
+      "additionalProperties": false
+    }
+  }
+}

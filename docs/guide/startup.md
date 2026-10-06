@@ -33,6 +33,40 @@ Every hook is optional. The library awaits each step before moving to the next.
 | `ready` | Settle work needed before mounting, such as session restoration. |
 | `root` | Load, define, and mount the root element. |
 
+## The manifest
+
+`app.manifest.json` sits beside `index.html`. Every section is optional, so an
+application with one locale, no remotes and no API can ship this much.
+
+```json
+{
+  "$schema": "../node_modules/@srljs/core/lib/core/remotes/app.manifest.schema.json",
+  "i18n": { "defaultLocale": "en", "bundles": ["/i18n/{locale}.json"] }
+}
+```
+
+| Section | Holds | When absent |
+|---|---|---|
+| `i18n` | `defaultLocale`, `supportedLocales`, `bundles` URL patterns | One locale, `en`, with no bundles |
+| `auth` | `apiBaseUrl`, the root-relative base of the application API | `manifest.auth` is undefined |
+| `remotes` | One entry per micro-frontend, described in [authentication and remotes](auth-and-remotes.md) | No remotes |
+| `templateBundle`, `templateGroups`, `templateFiles` | Template delivery, written by `srl build` | Templates load on demand |
+
+`defaultLocale` and `supportedLocales` stand in for each other. With only
+`defaultLocale`, that locale is the only one supported. With only
+`supportedLocales`, the first one is the default.
+
+Admission refuses a key it does not know, so a misspelled section fails at
+startup and does not read as an absent one. A key starting with `$` is an
+annotation, as `$schema` and `$comment` are. A present section is checked in
+full, and a bad value is refused, never replaced by its default.
+
+`$schema` points an editor at the JSON Schema the library ships, which gives
+completion and underlines a wrong key as you type. The schema is generated
+from the admission policy. Admission still has the final word, because some
+rules, such as the import map pin and two remotes on one mount, need the whole
+document and the page.
+
 ## Template loading
 
 The manifest chooses how templates enter the cache.

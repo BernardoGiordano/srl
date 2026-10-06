@@ -83,8 +83,10 @@ own authorization.
 
 `manifest-policy.js` admits the whole manifest before routes or requests
 use it. It requires same-origin, root-relative URLs; checks locale patterns
-against allowed locales; rejects duplicate or nested remote mounts; and
-freezes the admitted result. The browser and `npm run verify` run the same
+against allowed locales; rejects duplicate or nested remote mounts; refuses
+keys it does not know; and freezes the admitted result. An application without
+remotes or an API leaves `remotes` and `auth` out, as
+[startup](startup.md#the-manifest) shows. The browser and `npm run verify` run the same
 policy. The remote entry and its imports also need matching integrity hashes
 in the manifest and import map.
 

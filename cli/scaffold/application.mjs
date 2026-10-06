@@ -36,6 +36,7 @@ import { exists, readText } from '../layout.mjs';
 import {
   COMPONENTS,
   IMPORT_MAP_FILE,
+  MANIFEST_SCHEMA_FILE,
   PACKAGE,
   VENDOR,
   fileToUrl,
@@ -56,6 +57,7 @@ import { applicationNameProblem, writeFiles } from './files.mjs';
  * @property {string} tailwindIntegrity its sha384, from the bytes in the package
  * @property {string[]} stylesheetUrls the collection stylesheets, as the document links them
  * @property {string[]} stylesheetPaths the same files, as `<name>/src/app.css` imports them
+ * @property {string} manifestSchemaPath the manifest's JSON Schema, as `<name>/app.manifest.json` names it
  */
 
 /** The stylesheets the collection publishes, in cascade order. */
@@ -196,14 +198,12 @@ await defineComponent({
 `;
 
   /*
-   * The three required top-level sections, each at its smallest admissible value. That
-   * is one locale with one bundle, and no remotes. The library's own admission policy
-   * checks this at startup. ADR-0010.
+   * One locale with one bundle, and nothing a host or a session needs. `$schema` gives
+   * the editor completion from the installed library. ADR-0010, ADR-0123.
    */
   const manifest = {
-    auth: { apiBaseUrl: '/api' },
-    i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: ['/i18n/{locale}.json'] },
-    remotes: [],
+    $schema: facts.manifestSchemaPath,
+    i18n: { defaultLocale: 'en', bundles: ['/i18n/{locale}.json'] },
   };
 
   // Extended, never copied, so `@core/` resolves for tsc from one table. ADR-0068.
@@ -272,6 +272,10 @@ export async function applicationFacts(root, name, library = PACKAGE) {
       const installed = join(library, relative(PACKAGE, join(COMPONENTS, file)));
       return relative(src, installed).split(sep).join('/');
     }),
+    manifestSchemaPath: relative(
+      join(root, name),
+      join(library, relative(PACKAGE, MANIFEST_SCHEMA_FILE)),
+    ).split(sep).join('/'),
   };
 }
 

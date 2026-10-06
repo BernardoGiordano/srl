@@ -416,6 +416,9 @@ export async function subresourceIntegrity(file) {
 export const IMPORT_MAP_FILE = join(LIB, 'importmap.json');
 export const IMPORT_MAP_URL = `${mountedUrl(MANIFEST.srl.mounts['/lib/'])}importmap.json`;
 
+/** The JSON Schema for `app.manifest.json`, generated from the admission policy. ADR-0123. */
+export const MANIFEST_SCHEMA_FILE = join(LIB, 'core', 'remotes', 'app.manifest.schema.json');
+
 /**
  * The import-map fragment every application on this library carries. It holds the
  * vendored dependencies with the hashes of the bytes actually in lib/vendor, then

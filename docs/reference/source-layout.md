@@ -27,6 +27,7 @@ authentication policy.
 | `navigation/router.js` | Route matching, guards, nested layouts, and lazy loading. |
 | `application/runtime.js` | Ordered application startup. |
 | `remotes/mfe.js` | Remote contract, validation, and mount lifecycle. |
+| `remotes/manifest-policy.js` | Manifest admission, and the generated `app.manifest.schema.json` beside it. |
 | `http/client.js` | API requests through an injected transport. |
 | `preferences/persistence.js` | Synchronous UI preference storage. |
 | `localization/i18n.js` | Message lookup and locale-aware formatting. |

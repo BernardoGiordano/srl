@@ -184,15 +184,18 @@ export interface RemoteHostProvider {
  * and the object is frozen.
  */
 export interface AppManifest {
+  /** Empty when the document has no `remotes`. */
   readonly remotes: readonly RemoteDescriptor[];
   /**
-   * Where the application's API lives. Authentication strategy and endpoint names are
-   * application configuration and don't belong in the manifest.
+   * Where the application's API lives, or undefined when the document has no `auth`.
+   * Authentication strategy and endpoint names are application configuration and
+   * don't belong in the manifest.
    */
-  readonly auth: {
+  readonly auth?: {
     /** Root-relative. Requests carry the session's authorization material. */
     readonly apiBaseUrl: string;
   };
+  /** One locale, `en`, with no bundles when the document has no `i18n`. */
   readonly i18n: I18nConfig;
   /**
    * Optional `{ url: source }` map of every template, fetched once at startup. Emitted

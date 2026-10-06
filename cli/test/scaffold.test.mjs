@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
+
 import { errors, hasErrors } from '../diagnostics/index.mjs';
 import { applicationFiles, emitApplication } from '../scaffold/application.mjs';
 import { componentClassName, componentFiles, emitComponent } from '../scaffold/component.mjs';
@@ -29,6 +31,7 @@ const APP = {
     '../../node_modules/@srljs/core/components/style.css',
     '../../node_modules/@srljs/core/components/theme-default.css',
   ],
+  manifestSchemaPath: '../node_modules/@srljs/core/lib/core/remotes/app.manifest.schema.json',
 };
 
 const PROJECT = {
@@ -148,11 +151,18 @@ void test('every message the locale bundle holds is one the application asks for
 void test('the manifest is the smallest one the library admits, and the tsconfig extends', () => {
   const files = applicationFiles(APP);
 
-  assert.deepEqual(JSON.parse(files.get('web/app.manifest.json') ?? ''), {
-    auth: { apiBaseUrl: '/api' },
-    i18n: { defaultLocale: 'en', supportedLocales: ['en'], bundles: ['/i18n/{locale}.json'] },
-    remotes: [],
+  const manifest = JSON.parse(files.get('web/app.manifest.json') ?? '');
+  assert.deepEqual(manifest, {
+    $schema: APP.manifestSchemaPath,
+    i18n: { defaultLocale: 'en', bundles: ['/i18n/{locale}.json'] },
   });
+  const admitted = admitManifest(manifest, {
+    url: 'web/app.manifest.json',
+    base: 'https://app.invalid/',
+    pins: () => ({}),
+  });
+  assert.deepEqual(admitted.remotes, []);
+  assert.equal(admitted.auth, undefined);
 
   // ADR-0068: extended, never copied.
   assert.deepEqual(JSON.parse(files.get('tsconfig.json') ?? ''), {

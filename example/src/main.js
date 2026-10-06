@@ -63,7 +63,11 @@ await startHostedApplication({
     // One HTTP client, one base URL, from the manifest. The client is the
     // library's; what this application supplies is where the API is and that its
     // calls go out as the signed-in user.
-    provide(API_CLIENT, () => new ApiClient(manifest.auth.apiBaseUrl, { fetch: sessionFetch }));
+    const apiBaseUrl = manifest.auth?.apiBaseUrl;
+    if (apiBaseUrl === undefined) {
+      throw new Error('app.manifest.json has no auth.apiBaseUrl, and every service here calls the API.');
+    }
+    provide(API_CLIENT, () => new ApiClient(apiBaseUrl, { fetch: sessionFetch }));
 
     // The domain services. Each takes the client and nothing else, which is what
     // keeps them testable without a browser and replaceable without a page.

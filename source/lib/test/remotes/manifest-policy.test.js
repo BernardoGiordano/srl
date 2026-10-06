@@ -71,7 +71,7 @@ describe('manifest admission', () => {
 
     it('normalizes a destination to the path it actually reaches', () => {
       const admitted = admit({ auth: authWith({ apiBaseUrl: '/api/v2/../v1/' }) });
-      assert.equal(admitted.auth.apiBaseUrl, '/api/v1/');
+      assert.equal(present(admitted.auth).apiBaseUrl, '/api/v1/');
     });
 
     it('refuses a template bundle or locale bundle on another origin', () => {
@@ -407,6 +407,54 @@ describe('manifest admission', () => {
     });
   });
 
+  describe('absent sections', () => {
+    it('admits an empty document as a plain application', () => {
+      // No remotes, no API and one locale, which is what an application that mounts
+      // nothing and signs nobody in actually has. ADR-0123.
+      const admitted = admitDocument({});
+      assert.sameArray([...admitted.remotes], []);
+      assert.equal(admitted.auth, undefined);
+      assert.equal(admitted.i18n.defaultLocale, 'en');
+      assert.sameArray([...admitted.i18n.supportedLocales], ['en']);
+      assert.sameArray([...admitted.i18n.bundles], []);
+    });
+
+    it('lets each locale field follow the other', () => {
+      assert.sameArray([...admitDocument({ i18n: { defaultLocale: 'it' } }).i18n.supportedLocales], ['it']);
+      assert.equal(admitDocument({ i18n: { supportedLocales: ['it', 'en'] } }).i18n.defaultLocale, 'it');
+    });
+
+    it('still refuses a present section with a bad value', () => {
+      // A default stands in for a missing section. It never repairs a written one.
+      assert.throws(() => admitDocument({ remotes: {} }), 'remotes must be an array');
+      assert.throws(() => admitDocument({ auth: {} }), 'auth.apiBaseUrl must be a non-empty string');
+      assert.throws(
+        () => admitDocument({ i18n: { supportedLocales: [] } }),
+        'i18n.supportedLocales must be a non-empty array',
+      );
+      assert.throws(() => admitDocument({ i18n: { defaultLocale: '../x' } }), 'i18n.defaultLocale must be');
+    });
+
+    it('refuses a key it does not know, so a misspelled section cannot read as absent', () => {
+      assert.throws(() => admitDocument({ remote: [] }), 'does not know, "remote"');
+      assert.throws(() => admitDocument({ auth: { apiBase: '/api' } }), 'does not know, "apiBase"');
+      assert.throws(() => admit({ remotes: [remote({ mounts: '/one' })] }), 'does not know, "mounts"');
+      assert.throws(
+        () => admit({ remotes: [remote({ grants: { apis: ['/api/'] } })] }),
+        'does not know, "apis"',
+      );
+    });
+
+    it('allows annotations anywhere', () => {
+      const admitted = admitDocument({
+        $schema: './app.manifest.schema.json',
+        $comment: ['Annotations are for people and editors.'],
+        i18n: { $comment: 'one locale', defaultLocale: 'en' },
+      });
+      assert.equal(admitted.i18n.defaultLocale, 'en');
+    });
+  });
+
   describe('the admitted value', () => {
     it('is frozen all the way down', () => {
       // Downstream modules read this instead of the fetched document, so a
@@ -463,6 +511,20 @@ function admit(overrides) {
     // deep-linked to and a manifest path may not mean two different files because of
     // it.
     base: 'https://app.example/deep/route',
+    pins: () => PINS,
+  });
+}
+
+/**
+ * Admit a document as written, with none of the sections `admit` fills in.
+ *
+ * @param {Record<string, unknown>} document
+ * @returns {import('@core/remotes/types.js').AppManifest}
+ */
+function admitDocument(document) {
+  return admitManifest(document, {
+    url: '/app.manifest.json',
+    base: 'https://app.example/',
     pins: () => PINS,
   });
 }

@@ -11,6 +11,9 @@
  *   template-dialect.md  the template dialect, from source/lib/core/template/
  *   diagnostic-codes.md  every `srl check` code, from cli/diagnostics/catalog.mjs
  *
+ * One file is generated whole. `app.manifest.schema.json` comes from the manifest
+ * admission policy, through `manifest-schema.mjs`.
+ *
  * Restating those facts by hand is how a manual starts lying, because an element renamed
  * in one commit stays right in the source and wrong in the document nobody re-read. Every
  * fact in a generated block comes from the module the runtime or the toolchain reads, so
@@ -34,11 +37,13 @@ import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 import { catalogEntries } from '../../cli/diagnostics/catalog.mjs';
-import { error, outputFormat, report } from '../../cli/diagnostics/index.mjs';
+import { error, info, outputFormat, report } from '../../cli/diagnostics/index.mjs';
 import { apps, readText, repoPath, REPO } from '../../cli/layout.mjs';
 import { readProject } from '../../cli/project-model/index.mjs';
+import { MANIFEST_SCHEMA_FILE } from '../../cli/package/interface.mjs';
 import { dialectSections } from './dialect-reference.mjs';
 import { rewriteGenerated, table } from './generated.mjs';
+import { manifestSchemaText } from './manifest-schema.mjs';
 
 /** @import { Diagnostic } from '../../cli/diagnostics/types.js' */
 
@@ -162,6 +167,38 @@ const PAGES = [
 ];
 
 /**
+ * Every file generated whole, and what generates it.
+ *
+ * @type {ReadonlyArray<{ file: string, text: () => string }>}
+ */
+const FILES = [{ file: MANIFEST_SCHEMA_FILE, text: manifestSchemaText }];
+
+/**
+ * Hold one whole file against its generator.
+ *
+ * @param {string} file
+ * @param {() => string} text
+ * @param {boolean} write
+ * @returns {Promise<Diagnostic[]>}
+ */
+async function checkFile(file, text, write) {
+  const expected = text();
+  const actual = await readText(file).catch(() => null);
+  if (actual === expected) return [info('docs/current', 'generated file is current', { file })];
+  if (write) {
+    await writeFile(file, expected, 'utf8');
+    return [info('docs/rewritten', 'rewrote the file', { file })];
+  }
+  return [
+    error(
+      'docs/generated-drift',
+      'no longer matches what generates it.\n    Run `npm run docs:write` and commit the result.',
+      { file },
+    ),
+  ];
+}
+
+/**
  * Hold one page against its generator.
  *
  * @param {string} file
@@ -221,6 +258,11 @@ export async function checkReadme(options = {}) {
     const checked = await checkPage(join(REPO, page), sections, write);
     diagnostics.push(...checked.diagnostics);
     drifted.push(...checked.drifted);
+  }
+  for (const { file, text } of FILES) {
+    const checked = await checkFile(file, text, write);
+    diagnostics.push(...checked);
+    if (checked.some((diagnostic) => diagnostic.code !== 'docs/current')) drifted.push(file);
   }
   return { diagnostics, drifted, text: null };
 }
