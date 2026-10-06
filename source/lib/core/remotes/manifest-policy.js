@@ -14,6 +14,11 @@
  *
  * Every URL in the manifest must be a same-origin, root-relative path. Admission
  * rejects anything else and never repairs it.
+ *
+ * A section may be absent. An absent `remotes` means none, an absent `auth` means no
+ * API location, and an absent `i18n` means one locale with no bundles. A present value
+ * is still checked in full, and a key admission does not know is refused, so a
+ * misspelled section fails instead of reading as absent. ADR-0123.
  */
 
 /** @import { I18nConfig } from '@core/localization/types.js' */
@@ -33,6 +38,64 @@ const LOCALE = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u;
 
 /** The placeholder every bundle pattern must contain. */
 const LOCALE_PLACEHOLDER = '{locale}';
+
+/** A relative path, a root path or a URL, none of which is a bare specifier. */
+const NOT_BARE = /^(?:\.|\/|(?:https?:)?\/\/)/u;
+
+/**
+ * The locale a manifest without `i18n.defaultLocale` or `i18n.supportedLocales` gets.
+ *
+ * @internal
+ */
+export const DEFAULT_LOCALE = 'en';
+
+/**
+ * The keys each object in the document may hold. Admission refuses any other key
+ * except one starting with `$`, which annotates the document, as `$schema` and
+ * `$comment` do. The published JSON Schema lists the same keys.
+ *
+ * @internal
+ */
+export const MANIFEST_KEYS = Object.freeze({
+  manifest: Object.freeze(['remotes', 'auth', 'i18n', 'templateBundle', 'templateGroups', 'templateFiles']),
+  auth: Object.freeze(['apiBaseUrl']),
+  i18n: Object.freeze(['defaultLocale', 'supportedLocales', 'bundles', 'bundleFiles']),
+  remote: Object.freeze([
+    'name',
+    'url',
+    'integrity',
+    'assets',
+    'shared',
+    'locales',
+    'templates',
+    'templateFiles',
+    'mount',
+    'requires',
+    'grants',
+  ]),
+  asset: Object.freeze(['type', 'url', 'integrity']),
+  requires: Object.freeze(['session', 'permissions']),
+  grants: Object.freeze(['api', 'permissions']),
+});
+
+/**
+ * The patterns admission applies to a string, for the JSON Schema to repeat.
+ *
+ * @internal
+ */
+export const MANIFEST_PATTERNS = Object.freeze({
+  integrity: SHA384.source,
+  locale: LOCALE.source,
+  localePlaceholder: LOCALE_PLACEHOLDER,
+  notBare: NOT_BARE.source,
+});
+
+/**
+ * The asset types a remote may publish.
+ *
+ * @internal
+ */
+export const ASSET_TYPES = Object.freeze(['module', 'style', 'template']);
 
 /**
  * Admission state for one document: its URL, the base its paths resolve against, and
@@ -58,7 +121,7 @@ const LOCALE_PLACEHOLDER = '{locale}';
  */
 export function admitManifest(value, source) {
   const url = source.url;
-  const root = asRecord(value, url);
+  const root = asRecord(value, url, MANIFEST_KEYS.manifest);
 
   /** @type {Policy} */
   const policy = {
@@ -69,9 +132,9 @@ export function admitManifest(value, source) {
   };
 
   const i18n = admitI18n(root.i18n, policy);
-  const remotes = root.remotes;
+  const remotes = root.remotes ?? [];
   if (!Array.isArray(remotes)) {
-    throw new Error(`${url} is missing a \`remotes\` array.`);
+    throw new Error(`${url}: remotes must be an array.`);
   }
 
   const admitted = /** @type {unknown[]} */ (remotes).map((entry, index) =>
@@ -126,7 +189,7 @@ function admitTemplateGroups(value, where, policy) {
   const empty = Object.create(null);
   const groups = /** @type {Record<string, readonly string[]>} */ (empty);
   if (value === undefined) return Object.freeze(groups);
-  const record = asRecord(value, where);
+  const record = asRecord(value, where, undefined);
   const seen = new Set();
 
   for (const [name, entries] of Object.entries(record)) {
@@ -218,7 +281,7 @@ function admitPath(value, where, policy) {
  * @returns {RemoteDescriptor}
  */
 function admitRemote(value, index, policy, supportedLocales) {
-  const entry = asRecord(value, `${policy.url} remotes[${String(index)}]`);
+  const entry = asRecord(value, `${policy.url} remotes[${String(index)}]`, MANIFEST_KEYS.remote);
   const name = requireString(entry.name, `${policy.url}: remotes[${String(index)}].name`);
   const where = `${policy.url}: remote "${name}"`;
 
@@ -273,10 +336,12 @@ function admitRemoteAssets(value, where, policy) {
   const seen = new Set();
   const assets = /** @type {unknown[]} */ (value).map((candidate, index) => {
     const assetWhere = `${where} assets[${String(index)}]`;
-    const asset = asRecord(candidate, assetWhere);
-    const type = requireString(asset.type, `${assetWhere}.type`);
-    if (type !== 'module' && type !== 'style' && type !== 'template') {
-      throw new Error(`${assetWhere}.type must be module, style or template.`);
+    const asset = asRecord(candidate, assetWhere, MANIFEST_KEYS.asset);
+    const type = /** @type {import('@core/remotes/types.js').RemoteAsset['type']} */ (
+      requireString(asset.type, `${assetWhere}.type`)
+    );
+    if (!ASSET_TYPES.includes(type)) {
+      throw new Error(`${assetWhere}.type must be one of ${ASSET_TYPES.join(', ')}.`);
     }
     const url = admitPath(asset.url, `${assetWhere}.url`, policy);
     if (seen.has(url)) throw new Error(`${where} assets names ${url} more than once.`);
@@ -299,7 +364,7 @@ function admitShared(value, where) {
   const shared = requireStringArray(value, `${where} shared`);
   const seen = new Set();
   for (const specifier of shared) {
-    if (/^(?:\.|\/|(?:https?:)?\/\/)/u.test(specifier)) {
+    if (NOT_BARE.test(specifier)) {
       throw new Error(`${where} shared entry ${JSON.stringify(specifier)} must be a bare specifier.`);
     }
     if (seen.has(specifier)) throw new Error(`${where} shared names ${specifier} more than once.`);
@@ -427,7 +492,7 @@ function covers(outer, inner) {
  */
 function admitRequirements(value, where) {
   if (value === undefined) return Object.freeze({ session: false, permissions: Object.freeze([]) });
-  const requires = asRecord(value, `${where} requires`);
+  const requires = asRecord(value, `${where} requires`, MANIFEST_KEYS.requires);
 
   const session = requires.session;
   if (session !== undefined && typeof session !== 'boolean') {
@@ -461,7 +526,7 @@ function admitGrants(value, where) {
   if (value === undefined) {
     return Object.freeze({ api: Object.freeze([]), permissions: Object.freeze([]) });
   }
-  const grants = asRecord(value, `${where} grants`);
+  const grants = asRecord(value, `${where} grants`, MANIFEST_KEYS.grants);
 
   const api = requireStringArray(grants.api, `${where}: grants.api`).map((prefix) => {
     if (!prefix.startsWith('/')) {
@@ -493,7 +558,8 @@ function admitGrants(value, where) {
  * @returns {AppManifest['auth']}
  */
 function admitAuth(value, policy) {
-  const auth = asRecord(value, `${policy.url} auth`);
+  if (value === undefined) return undefined;
+  const auth = asRecord(value, `${policy.url} auth`, MANIFEST_KEYS.auth);
 
   // One key, and it's a location. Which store an application uses and what its
   // endpoints are called is application configuration. ADR-0021.
@@ -509,16 +575,22 @@ function admitAuth(value, policy) {
  */
 function admitI18n(value, policy) {
   const url = policy.url;
-  const i18n = asRecord(value, `${url} i18n`);
-  const defaultLocale = admitLocale(i18n.defaultLocale, `${url}: i18n.defaultLocale`);
+  const i18n = asRecord(value ?? {}, `${url} i18n`, MANIFEST_KEYS.i18n);
 
-  const supported = i18n.supportedLocales;
+  // Each absent field follows the other, so `{ "defaultLocale": "it" }` supports one
+  // locale and `{ "supportedLocales": ["it", "en"] }` defaults to the first.
+  const declaredDefault =
+    i18n.defaultLocale === undefined
+      ? undefined
+      : admitLocale(i18n.defaultLocale, `${url}: i18n.defaultLocale`);
+  const supported = i18n.supportedLocales ?? [declaredDefault ?? DEFAULT_LOCALE];
   if (!Array.isArray(supported) || supported.length === 0) {
     throw new Error(`${url}: i18n.supportedLocales must be a non-empty array.`);
   }
   const supportedLocales = /** @type {unknown[]} */ (supported).map((entry, index) =>
     admitLocale(entry, `${url}: i18n.supportedLocales[${String(index)}]`),
   );
+  const defaultLocale = declaredDefault ?? supportedLocales[0] ?? DEFAULT_LOCALE;
   if (!supportedLocales.includes(defaultLocale)) {
     throw new Error(
       `${url}: i18n.defaultLocale "${defaultLocale}" is not in supportedLocales. Every ` +
@@ -567,7 +639,7 @@ function admitI18n(value, policy) {
  */
 function admitBundleFiles(value, where, patterns, supportedLocales, policy) {
   if (value === undefined) return Object.freeze({});
-  const declared = asRecord(value, where);
+  const declared = asRecord(value, where, undefined);
   const resolvable = new Set(
     patterns.flatMap((pattern) =>
       supportedLocales.map((locale) => pattern.split(LOCALE_PLACEHOLDER).join(locale)),
@@ -681,13 +753,26 @@ function requireStringArray(value, where) {
 }
 
 /**
+ * Require an object, and with `keys`, refuse a key outside them. A key starting with
+ * `$` is an annotation and is always allowed.
+ *
  * @param {unknown} value
  * @param {string} where
+ * @param {readonly string[] | undefined} keys
  * @returns {Record<string, unknown>}
  */
-function asRecord(value, where) {
+function asRecord(value, where, keys) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${where} is not an object.`);
+  }
+  if (keys !== undefined) {
+    for (const key of Object.keys(value)) {
+      if (key.startsWith('$') || keys.includes(key)) continue;
+      throw new Error(
+        `${where} has a key admission does not know, ${JSON.stringify(key)}. It takes ` +
+          `${keys.map((known) => JSON.stringify(known)).join(', ')}, and \`$\` keys as annotations.`,
+      );
+    }
   }
   return /** @type {Record<string, unknown>} */ (value);
 }

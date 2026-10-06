@@ -62,6 +62,7 @@ boundaries have one production implementation and a test adapter.
 | Route matching, guards, child routes, link interception | `source/lib/core/navigation/router.js` |
 | The order of application startup | `source/lib/core/application/runtime.js` |
 | What a remote may do | `source/lib/core/remotes/mfe.js` (contract), `source/lib/host/remote-host.js` (adapter) |
+| What `app.manifest.json` may hold, and what an absent section means | `source/lib/core/remotes/manifest-policy.js`, which `tools/checks/manifest-schema.mjs` turns into the published JSON Schema |
 | Where a UI preference is stored | `source/lib/core/preferences/persistence.js` |
 | How an application talks to its API | `source/lib/core/http/client.js` (the client), `source/lib/auth/session-fetch.js` (the authorized transport) |
 | Locale negotiation, plurals, formatters | `source/lib/core/localization/i18n.js` |

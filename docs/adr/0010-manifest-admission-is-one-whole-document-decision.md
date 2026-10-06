@@ -16,6 +16,8 @@ Checking fields one at a time misses the dangerous cases, because each of them i
 
 Every URL in the manifest must be a same-origin, root-relative path. Admission rejects anything else and never repairs it, because a repaired URL is a tampered file that loaded anyway. Remote code runs in the shell's realm, the token endpoint receives credentials and the API base receives authorization, so none of them may leave the origin.
 
+A section may be absent, and admission fills in its default. A key admission does not know is refused, so a misspelled section cannot read as an absent one. ADR-0123 explains both.
+
 The module imports nothing. `npm run verify` loads it in Node and admits every checked-in manifest with the rules the browser applies, so a bad manifest fails in CI before it fails in production.
 
 ## Consequences

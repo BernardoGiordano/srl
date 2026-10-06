@@ -1,4 +1,5 @@
 {
+  "$schema": "../source/lib/core/remotes/app.manifest.schema.json",
   "$comment": [
     "Runtime configuration, fetched by src/main.js on every load with cache: no-cache.",
     "Source delivery declares Remote locations here and pins executable bytes in index.html.",

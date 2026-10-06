@@ -43,7 +43,7 @@ describe('application startup', () => {
     // The skipped steps are absent rather than run with a default, which is what keeps
     // an optional feature optional.
     assert.sameArray(names(started), ['manifest', 'locale']);
-    assert.equal(started.manifest.auth.apiBaseUrl, '/api/');
+    assert.equal(present(started.manifest.auth).apiBaseUrl, '/api/');
     assert.equal(manifest(), started.manifest, 'startup must install what it validated');
   });
 
@@ -64,7 +64,7 @@ describe('application startup', () => {
       // invisible until a guard races a session restore.
       providers: async (received) => {
         await new Promise((resolve) => setTimeout(resolve, 10));
-        order.push(`providers:${received.auth.apiBaseUrl}`);
+        order.push(`providers:${present(received.auth).apiBaseUrl}`);
       },
       ready: () => {
         order.push('ready');

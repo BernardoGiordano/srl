@@ -1110,12 +1110,13 @@ export async function verifyDependencies() {
     const shellKeys = shell?.locales.get(shell.defaultLocale)?.keys;
 
     if (shell !== undefined && shellKeys !== undefined) {
-      for (const remote of manifest.remotes) {
-        const key = `nav.${String(remote.name)}`;
+      const remotes = admitted?.remotes ?? [];
+      for (const remote of remotes) {
+        const key = `nav.${remote.name}`;
         if (shellKeys.has(key)) continue;
         refuse(
           'deps/remote-without-nav-label',
-          `remote "${String(remote.name)}" is mounted at ${String(remote.mount)} but ` +
+          `remote "${remote.name}" is mounted at ${remote.mount} but ` +
             `${show(shell.defaultPath)} has no "${key}". ui-nav builds its remote links from ` +
             `the manifest, so the header would show the raw key.`,
           { group, file: shell.defaultPath },
@@ -1123,7 +1124,7 @@ export async function verifyDependencies() {
       }
       pass(
         'deps/nav-labels',
-        `${String(manifest.remotes.length)} remote(s) have a nav label`,
+        `${String(remotes.length)} remote(s) have a nav label`,
         { group },
       );
     }

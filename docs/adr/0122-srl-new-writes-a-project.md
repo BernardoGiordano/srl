@@ -96,8 +96,8 @@ conformance builds its projects the same way (ADR-0097).
   `scaffold.devDependencies` follows it.
 - The scaffold writes no test and no `test` script. It gains both when the test runner's
   URL rewrite is published.
-- The scaffolded manifest still carries `auth` and `remotes`, because admission requires
-  every section (ADR-0010).
+- The scaffolded manifest carries `$schema` and one `i18n` section, because a plain
+  application may omit the host sections (ADR-0123).
 - ADR-0073's choice of the smallest application that runs no longer holds. Its other
   decisions do.
 - Reopen this if another package manager becomes a supported install path, or if

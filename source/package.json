@@ -49,6 +49,7 @@
     "./lib/core/template/types.js": { "types": "./lib/core/template/types.d.ts" },
     "./testing/harness.js": "./lib/test/harness.js",
     "./importmap.json": "./lib/importmap.json",
+    "./app.manifest.schema.json": "./lib/core/remotes/app.manifest.schema.json",
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./package.json": "./package.json"
   },

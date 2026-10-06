@@ -124,6 +124,15 @@ async function create(probe, tarballs) {
     info('pack/install', '`npm install` resolved the scaffolded manifest', { group: GROUP }),
   ];
 
+  // The editor resolves `$schema` against the manifest's own directory. ADR-0123.
+  const manifestDir = join(project, APP);
+  const { $schema: schema } = JSON.parse(await readFile(join(manifestDir, 'app.manifest.json'), 'utf8'));
+  found.push(
+    typeof schema === 'string' && (await exists(join(manifestDir, schema)))
+      ? info('pack/manifest-schema', 'the scaffolded manifest names the installed JSON Schema', { group: GROUP })
+      : refuse('pack/manifest-schema-missing', `the scaffolded manifest names ${String(schema)}, and no file is there.`),
+  );
+
   const generated = await srl(project, ['generate', 'component', COMPONENT, '--styles']);
   if (generated.code !== 0) {
     found.push(

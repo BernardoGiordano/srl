@@ -107,7 +107,7 @@ describe('hosted application startup', () => {
       // An application whose remotes get a different set of capabilities is the
       // reason `@core/remotes/mfe.js` injects the provider instead of importing one.
       providers: (received) => {
-        seen.push(received.auth.apiBaseUrl);
+        seen.push(present(received.auth).apiBaseUrl);
         provide(REMOTE_HOST, () => policy);
       },
     });
