@@ -36,7 +36,7 @@ import {
   strictOperator,
   VOID_ELEMENTS,
 } from '@srljs/core/lib/core/template/dialect.js';
-import { parseExpression } from '@srljs/core/lib/core/template/expression-parser.js';
+import { ExpressionError, parseExpression } from '@srljs/core/lib/core/template/expression-parser.js';
 import { error, info, outputFormat, report, warning } from '../diagnostics/index.mjs';
 import { apps, REPO } from '../layout.mjs';
 import { readProject } from '../project-model/index.mjs';
@@ -854,7 +854,8 @@ class ShimBuilder {
       const emitted = this.emit(ast, scope, true, binding.at);
       this.file.mapped(emitted, this.component.template, binding.at);
     } catch (error) {
-      this.problem('templates/expression', binding.at, error instanceof Error ? error.message : String(error));
+      if (!(error instanceof ExpressionError)) throw error;
+      this.problem(error.code, binding.at, error.message);
       this.file.write('undefined');
     }
   }

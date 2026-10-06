@@ -30,6 +30,7 @@ import {
 } from '@srljs/core/lib/core/template/dialect.js';
 import {
   BINARY_LEVELS,
+  ExpressionError,
   parseExpression,
   WORD_LITERALS,
 } from '@srljs/core/lib/core/template/expression-parser.js';
@@ -210,8 +211,9 @@ function parses(source, allowAssignment) {
   try {
     parseExpression(source, 'the reference', { allowAssignment });
     return 'yes';
-  } catch {
-    return 'no';
+  } catch (error) {
+    if (!(error instanceof ExpressionError)) throw error;
+    return `no, ${code(error.code)}`;
   }
 }
 

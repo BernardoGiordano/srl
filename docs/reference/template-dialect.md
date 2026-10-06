@@ -125,23 +125,23 @@ The word literals are `true`, `false`, `null`, `undefined`. Numbers are decimal,
 | Array literal | `[first, second]` | yes | yes |
 | Object literal | `{ id: row.id, 'aria-label': label }` | yes | yes |
 | Signal reference | `&panel` | yes | yes |
-| Assignment | `selected = row` | no | yes |
-| Compound assignment | `count += 1` | no | no |
-| Increment | `count++` | no | no |
-| Arrow function | `(item) => item.id` | no | no |
-| `new` | `new Date()` | no | no |
-| Template literal | `` `Hello ${name}` `` | no | no |
-| Bitwise operator | `flags \| mask` | no | no |
-| `typeof` | `typeof value` | no | no |
-| `in` | `'id' in row` | no | no |
-| Unary plus | `+value` | no | no |
-| Comma operator | `first, second` | no | no |
-| Spread | `[...items]` | no | no |
-| Computed object key | `{ [key]: value }` | no | no |
-| Shorthand object property | `{ id }` | no | no |
-| Exponent or hex literal | `1e3` | no | no |
-| Regular expression | `/^a/.test(name)` | no | no |
-| Reserved member | `user.constructor` | no | no |
+| Assignment | `selected = row` | no, `templates/expression-assignment` | yes |
+| Compound assignment | `count += 1` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Increment | `count++` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Arrow function | `(item) => item.id` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| `new` | `new Date()` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Template literal | `` `Hello ${name}` `` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Bitwise operator | `flags \| mask` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| `typeof` | `typeof value` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| `in` | `'id' in row` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Unary plus | `+value` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Comma operator | `first, second` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Spread | `[...items]` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Computed object key | `{ [key]: value }` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Shorthand object property | `{ id }` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Exponent or hex literal | `1e3` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Regular expression | `/^a/.test(name)` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Reserved member | `user.constructor` | no, `templates/expression-member` | no, `templates/expression-member` |
 
 <!-- /generated:dialect-expressions -->
 

@@ -48,7 +48,9 @@ problem, and the finding's message says where it is and how to fix it. `srl chec
 | `templates/state-binding` | A binding writes an element's internal state, which is not a public input. |
 | `templates/property-without-attribute` | An attribute names a property that has no attribute. Bind it as `[.name]`. |
 | `templates/unknown-attribute` | A custom element does not observe the attribute the markup writes. |
-| `templates/expression` | A binding expression does not parse, or uses something the dialect refuses. |
+| `templates/expression-syntax` | A binding expression is not written in the dialect's grammar. `docs/reference/template-dialect.md` lists what parses. |
+| `templates/expression-assignment` | A binding assigns where only an event binding may, or assigns to something other than a name or a member. |
+| `templates/expression-member` | A binding names `__proto__`, `constructor` or `prototype`, which no expression may read, call or write. |
 | `templates/missing-use` | The template names a defined element that the component does not list in `uses`. |
 | `templates/unknown-element` | The template names an element that is neither standard markup nor a defined component. |
 | `importmap/no-fragment` | The installed library has no `lib/importmap.json` to compare against. |

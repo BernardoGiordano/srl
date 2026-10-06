@@ -74,7 +74,9 @@ language server handles one diagnostic type.
 - A full `srl check` over this repository takes about six seconds, with two compiler
   programs. If that grows, sharing parsed source files between the two programs comes
   first.
-- Every expression refusal shares `templates/expression`, because the core expression
-  parser throws plain errors. A code per refusal would need codes in the parser.
+- The core expression parser throws an `ExpressionError` whose `code` the template check
+  reports as it stands, so a refused binding has the same code in the browser and in the
+  checker. The parser names three problems, `templates/expression-syntax`,
+  `templates/expression-assignment` and `templates/expression-member`.
 - Reopen this if a check needs a `Diagnostic` field beyond its code and message, or if one
   code starts to cover two problems.

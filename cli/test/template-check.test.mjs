@@ -270,7 +270,9 @@ void test('each dialect refusal carries a code of its own', () => {
     ],
     ['templates/property-without-attribute', '<test-child items="x"></test-child>'],
     ['templates/unknown-attribute', '<test-child labell="x"></test-child>'],
-    ['templates/expression', '<p>{{ rows.constructor }}</p>'],
+    ['templates/expression-syntax', '<p>{{ rows + }}</p>'],
+    ['templates/expression-assignment', '<p>{{ rows = 1 }}</p>'],
+    ['templates/expression-member', '<p>{{ rows.constructor }}</p>'],
     ['templates/unknown-element', '<mystery-widget></mystery-widget>'],
   ]);
 

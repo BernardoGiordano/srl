@@ -1,5 +1,6 @@
 import { signal } from '@core/foundation/reactive.js';
 import { compileExpression } from '@core/template/expression.js';
+import { ExpressionError, parseExpression } from '@core/template/expression-parser.js';
 import { assert } from '../harness.js';
 
 // A side effect, because i18n registers `t`, `num`, `dt` and the rest as template
@@ -180,8 +181,27 @@ describe('expression language', () => {
   it('refuses assignment where it is not allowed', () => {
     assert.throws(
       () => compileExpression('x = 1', 'test')({ host: { x: 1 }, locals: {}, version: 0 }),
-      'Unexpected "="',
+      'Only an event binding may assign',
     );
+  });
+
+  it('names each parse refusal with the code the template checker reports', () => {
+    /** @param {string} source @param {boolean} allowAssignment @returns {string | undefined} */
+    const refusal = (source, allowAssignment) => {
+      try {
+        parseExpression(source, 'test', { allowAssignment });
+        return undefined;
+      } catch (error) {
+        assert.equal(error instanceof ExpressionError, true, source);
+        return /** @type {ExpressionError} */ (error).code;
+      }
+    };
+    assert.equal(refusal('rows +', false), 'templates/expression-syntax');
+    assert.equal(refusal('(item) => item.id', true), 'templates/expression-syntax');
+    assert.equal(refusal('x = 1', false), 'templates/expression-assignment');
+    assert.equal(refusal('x() = 1', true), 'templates/expression-assignment');
+    assert.equal(refusal('x.constructor', false), 'templates/expression-member');
+    assert.equal(refusal('x = 1', true), undefined);
   });
 
   /* ── Refusals ──────────────────────────────────────────────────────────── */

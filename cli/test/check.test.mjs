@@ -22,6 +22,7 @@ import { readProject } from '../project-model/index.mjs';
 
 const run = promisify(execFile);
 const CLI = fileURLToPath(new URL('..', import.meta.url));
+const CORE = fileURLToPath(new URL('../../source/lib/core/', import.meta.url));
 const BIN = join(CLI, 'bin', 'srl.mjs');
 const FIXTURES = join(CLI, 'test', 'fixtures', 'project-model');
 
@@ -46,10 +47,14 @@ async function srl(args, env = process.env) {
 }
 
 void test('every code a published check reports is catalogued, and every entry is reported', async () => {
-  const sources = (await walk(CLI, /\.mjs$/u)).filter(
-    (file) =>
-      !relative(CLI, file).split(sep).includes('test') && !file.endsWith(join('diagnostics', 'catalog.mjs')),
-  );
+  // The core throws coded errors the checks report as they stand, so its source counts.
+  const sources = [
+    ...(await walk(CLI, /\.mjs$/u)).filter(
+      (file) =>
+        !relative(CLI, file).split(sep).includes('test') && !file.endsWith(join('diagnostics', 'catalog.mjs')),
+    ),
+    ...(await walk(CORE, /\.js$/u)),
+  ];
   /** @type {Set<string>} */
   const reported = new Set();
   for (const file of sources) {
