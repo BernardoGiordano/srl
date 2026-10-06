@@ -1,7 +1,7 @@
 import { signal } from '@core/foundation/reactive.js';
 import { compileExpression, reportUnknownNames } from '@core/template/expression.js';
 import { ExpressionError, parseExpression } from '@core/template/expression-parser.js';
-import { assert } from '../harness.js';
+import { assert, present } from '../harness.js';
 
 // A side effect, because i18n registers `t`, `num`, `dt` and the rest as template
 // globals. Imported explicitly here because expression.js on its own has none, and in
@@ -176,6 +176,38 @@ describe('expression language', () => {
     assert.equal(host.flag, true);
     evaluate('nested.n = 4', host);
     assert.equal(host.nested.n, 4);
+  });
+
+  it('writes an element through the sink a property binding to it would use', () => {
+    const target = document.createElement('div');
+    evaluate('target.innerHTML = payload', {
+      target,
+      payload: '<b onclick="steal()">kept</b><script>steal()</script>',
+    });
+    assert.equal(target.querySelector('script'), null);
+    assert.notOk(present(target.querySelector('b')).hasAttribute('onclick'));
+    assert.equal(present(target.querySelector('b')).textContent, 'kept');
+
+    const link = document.createElement('a');
+    evaluate("link.href = 'javascript:steal()'", { link });
+    assert.equal(link.getAttribute('href'), 'unsafe:javascript:steal()');
+
+    // A host that is an element, as every component is, gets the same sink by name.
+    const host = Object.assign(document.createElement('div'), {
+      payload: '<b onclick="steal()">kept</b>',
+    });
+    compileExpression('innerHTML = payload', 'test', { allowAssignment: true })({
+      host: /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (host)),
+      locals: {},
+      version: 0,
+    });
+    assert.notOk(present(host.querySelector('b')).hasAttribute('onclick'));
+
+    assert.throws(() => evaluate("target.outerHTML = '<p></p>'", { target }), 'outerHTML');
+    assert.throws(
+      () => evaluate("sheet.textContent = 'p { color: red }'", { sheet: document.createElement('style') }),
+      'CSS for the whole page',
+    );
   });
 
   it('refuses assignment where it is not allowed', () => {

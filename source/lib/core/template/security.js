@@ -5,7 +5,9 @@
  * have their own rules, and a value is sanitized right before lit writes it.
  *
  * The sink is chosen at compile time. `attributeSinkFor` and `propertySinkFor` return
- * the one sanitizer a binding needs, or `null` when it needs none.
+ * the one sanitizer a binding needs, or `null` when it needs none. An assignment in an
+ * event binding and an outlet's props meet their element only at runtime, so
+ * `assignProperty` chooses the sink then. ADR-0128.
  *
  * The four `bypassSecurityTrust*` functions are the escape hatch. Their names are
  * noisy on purpose, so every use stands out in review next to the validation that
@@ -13,6 +15,7 @@
  */
 
 import {
+  refusedContent,
   refusedProperty,
   RESOURCE_URL_SINKS,
   securityContextFor,
@@ -50,12 +53,52 @@ const nativeFactory = /** @type {{ trustedTypes?: NativePolicyFactory }} */ (
   /** @type {unknown} */ (globalThis)
 ).trustedTypes;
 
+/**
+ * Set while the sanitizer parses its input or a reviewed bypass mints its value. Only
+ * then does the policy return markup or a URL unchanged.
+ */
+let passThrough = false;
+
 // lit-html and the template compiler create their own policies for framework markup.
-// This one stays private to the sanitizer and covers HTML and resource URL sinks.
+// This one stays private to the sanitizer. Its createHTML runs the sanitizer, so every
+// TrustedHTML it issues is sanitized markup or a reviewed bypass.
 const nativePolicy = nativeFactory?.createPolicy('ui-test', {
-  createHTML: (value) => value,
-  createScriptURL: (value) => value,
+  createHTML: (value) => (passThrough ? value : sanitizeHtml(value)),
+  createScriptURL: (value) => {
+    if (passThrough) return value;
+    throw new Error('A resource URL needs bypassSecurityTrustResourceUrl() after application validation.');
+  },
 });
+
+/**
+ * Return `value` from the native policy unchanged, as a TrustedHTML under enforcement.
+ *
+ * @param {string} value
+ * @returns {unknown}
+ */
+function unchangedHtml(value) {
+  if (nativePolicy === undefined) return value;
+  passThrough = true;
+  try {
+    return nativePolicy.createHTML(value);
+  } finally {
+    passThrough = false;
+  }
+}
+
+/**
+ * @param {string} value
+ * @returns {unknown}
+ */
+function unchangedScriptUrl(value) {
+  if (nativePolicy === undefined) return value;
+  passThrough = true;
+  try {
+    return nativePolicy.createScriptURL(value);
+  } finally {
+    passThrough = false;
+  }
+}
 
 class TrustedValue {
   /** @type {typeof HTML | typeof STYLE | typeof URL_CONTEXT | typeof RESOURCE_URL} */
@@ -132,19 +175,6 @@ export function bypassSecurityTrustResourceUrl(value) {
 }
 
 /**
- * Assign framework-owned template source to a parser sink under
- * `require-trusted-types-for 'script'`.
- *
- * @param {HTMLTemplateElement} template
- * @param {string} source
- */
-function setTemplateSource(template, source) {
-  template.innerHTML = /** @type {string} */ (
-    /** @type {unknown} */ (nativePolicy?.createHTML(source) ?? source)
-  );
-}
-
-/**
  * Resolve the sink an attribute binding writes into. `null` means no security
  * context and no sanitizer.
  *
@@ -170,7 +200,7 @@ export function attributeSinkFor(tag, name, where) {
  * @returns {Sanitizer | null}
  */
 export function propertySinkFor(tag, name, where) {
-  switch (refusedProperty(name)) {
+  switch (refusedProperty(name, tag)) {
     case 'event-property':
       throw new Error(
         `${where} targets event property ${name}. Use an (event) binding; event properties are refused.`,
@@ -181,10 +211,59 @@ export function propertySinkFor(tag, name, where) {
       );
     case 'forbidden-member':
       throw new Error(`${where} targets forbidden property ${name}.`);
+    case 'raw-text-content':
+      throw new Error(`${where} writes the content of <${tag}>. ${refusedContent(tag) ?? ''}`);
     default:
       break;
   }
   return sinkFor(tag, name, where);
+}
+
+/**
+ * Write `receiver[name]` through the sink a property binding to the same element would
+ * use. The element's tag is read when the write happens, because an event binding's
+ * assignment and an outlet's props only meet their element then. A receiver that is
+ * neither an element nor a shadow root has no sink.
+ *
+ * Event properties stay writable here. A string written to one is inert, and a
+ * function is the component's own code.
+ *
+ * @param {object} receiver
+ * @param {string} name
+ * @param {unknown} value
+ * @param {string} where
+ * @internal
+ */
+export function assignProperty(receiver, name, value, where) {
+  /** @type {Record<string, unknown>} */ (receiver)[name] = assignedValue(receiver, name, value, where);
+}
+
+/**
+ * @param {object} receiver
+ * @param {string} name
+ * @param {unknown} value
+ * @param {string} where
+ * @returns {unknown}
+ */
+function assignedValue(receiver, name, value, where) {
+  /** @type {string} */
+  let tag;
+  if (receiver instanceof Element) tag = String(Reflect.get(Element.prototype, 'localName', receiver));
+  else if (receiver instanceof ShadowRoot) tag = '';
+  else return value;
+
+  switch (refusedProperty(name, tag)) {
+    case 'outer-html':
+      throw new Error(`${where} assigns outerHTML, which replaces the element. Assign innerHTML instead.`);
+    case 'forbidden-member':
+      throw new Error(`${where} assigns forbidden property ${name}.`);
+    case 'raw-text-content':
+      throw new Error(`${where} writes the content of <${tag}>. ${refusedContent(tag) ?? ''}`);
+    default:
+      break;
+  }
+  const sink = sinkFor(tag, name, where);
+  return sink === null ? value : sink(value);
 }
 
 /**
@@ -230,8 +309,10 @@ const SANITIZERS = {
 function sanitizeForHtml(value, where) {
   if (value === null || value === undefined) return null;
   const trusted = asTrustedValue(value);
-  if (trusted === null) return nativeHtml(sanitizeHtml(stringValue(value, where)));
-  return nativeHtml(trusted.unwrap(HTML));
+  if (trusted !== null) return unchangedHtml(trusted.unwrap(HTML));
+  // Under Trusted Types the policy runs the sanitizer itself.
+  const source = stringValue(value, where);
+  return nativePolicy === undefined ? sanitizeHtml(source) : nativePolicy.createHTML(source);
 }
 
 /** @param {unknown} value @param {string} where @returns {unknown | null} */
@@ -266,7 +347,7 @@ function sanitizeForResourceUrl(value, where) {
         `bypassSecurityTrustResourceUrl() after application validation.`,
     );
   }
-  return nativeScriptUrl(trusted.unwrap(RESOURCE_URL));
+  return unchangedScriptUrl(trusted.unwrap(RESOURCE_URL));
 }
 
 /** @param {unknown} value @param {string} where @returns {string} */
@@ -284,16 +365,6 @@ function asTrustedValue(value) {
   if (typeof value !== 'object' || value === null) return null;
   if (!(TRUSTED_VALUE in value) || !(value instanceof TrustedValue)) return null;
   return value;
-}
-
-/** @param {string} value @returns {unknown} */
-function nativeHtml(value) {
-  return nativePolicy?.createHTML(value) ?? value;
-}
-
-/** @param {string} value @returns {unknown} */
-function nativeScriptUrl(value) {
-  return nativePolicy?.createScriptURL(value) ?? value;
 }
 
 // Schemes browsers treat as ordinary navigation or fetch targets. Data URLs are
@@ -361,12 +432,14 @@ const BLOCKED_ELEMENTS = new Set([
   'style',
 ]);
 
+// Form controls are left out. A `<form>` exposes each control by name, and sanitized
+// markup has no business collecting input.
 const ALLOWED_ELEMENTS = new Set(
-  `a abbr address article aside b bdi bdo blockquote br button caption cite code col colgroup
-   data dd del details dfn dialog div dl dt em fieldset figcaption figure footer form h1 h2 h3 h4
-   h5 h6 header hgroup hr i img input ins kbd label legend li main mark menu meter nav ol optgroup
-   option output p picture pre progress q rp rt ruby s samp section select slot small source span
-   strong sub summary sup table tbody td textarea tfoot th thead time tr track u ul var video wbr`
+  `a abbr address article aside b bdi bdo blockquote br caption cite code col colgroup data
+   dd del details dfn dialog div dl dt em fieldset figcaption figure footer h1 h2 h3 h4 h5 h6
+   header hgroup hr i img ins kbd label legend li main mark menu meter nav ol p picture pre
+   progress q rp rt ruby s samp section slot small source span strong sub summary sup table
+   tbody td tfoot th thead time tr track u ul var video wbr`
     .split(/\s+/u)
     .filter(Boolean),
 );
@@ -382,59 +455,156 @@ const ALLOWED_ATTRIBUTES = new Set(
     .filter(Boolean),
 );
 
+/**
+ * `id` and `name` become named properties of `document` and `window`, so a sanitized
+ * `<img name="createElement">` would replace `document.createElement`. The prefix keeps
+ * every name the markup sets apart from the DOM's own.
+ */
+const NAMED_PREFIX = 'user-content-';
+
+/** Dropped from inline styles, so sanitized markup can't lay a layer over the page. */
+const PLACEMENT_PROPERTIES = ['position', 'z-index'];
+
+/**
+ * DOM accessors taken from the prototypes. A `<form>` exposes each control as a named
+ * property, so `form.children` or `form.removeAttribute` can be an `<input>` the markup
+ * chose. The sanitizer calls these instead, which keeps its reads out of the markup's
+ * reach. They are read once, on first use, so the module still loads without a DOM.
+ *
+ * @typedef {{
+ *   localName: (this: Element) => string,
+ *   childNodes: (this: Node) => NodeListOf<ChildNode>,
+ *   getAttributeNames: (this: Element) => string[],
+ *   getAttribute: (this: Element, name: string) => string | null,
+ *   setAttribute: (this: Element, name: string, value: string) => void,
+ *   removeAttribute: (this: Element, name: string) => void,
+ *   remove: (this: Element) => void,
+ *   replaceWith: (this: Element, ...nodes: Node[]) => void,
+ * }} DomAccess
+ */
+
+/** @type {DomAccess | undefined} */
+let dom;
+
+/** @returns {DomAccess} */
+function domAccess() {
+  if (dom === undefined) {
+    const element = Element.prototype;
+    dom = {
+      localName: own(element, 'localName'),
+      childNodes: own(Node.prototype, 'childNodes'),
+      getAttributeNames: own(element, 'getAttributeNames'),
+      getAttribute: own(element, 'getAttribute'),
+      setAttribute: own(element, 'setAttribute'),
+      removeAttribute: own(element, 'removeAttribute'),
+      remove: own(element, 'remove'),
+      replaceWith: own(element, 'replaceWith'),
+    };
+  }
+  return dom;
+}
+
+/**
+ * A prototype's own getter or method, as a function to call with an explicit `this`.
+ *
+ * @template {Function} T
+ * @param {object} prototype
+ * @param {string} name
+ * @returns {T}
+ */
+function own(prototype, name) {
+  const descriptor = /** @type {{ get?: unknown, value?: unknown } | undefined} */ (
+    Object.getOwnPropertyDescriptor(prototype, name)
+  );
+  const found = descriptor?.get ?? descriptor?.value;
+  if (typeof found !== 'function') throw new Error(`The DOM has no ${name} on its prototype.`);
+  return /** @type {T} */ (found);
+}
+
 /** @param {string} source @returns {string} */
 function sanitizeHtml(source) {
   const template = document.createElement('template');
-  setTemplateSource(template, source);
-  sanitizeChildren(template.content);
+  template.innerHTML = /** @type {string} */ (unchangedHtml(source));
+  const access = domAccess();
+  // A NodeIterator, because it stays valid when the node it stands on is removed.
+  const walk = document.createNodeIterator(template.content, NodeFilter.SHOW_ELEMENT);
+  for (let node = walk.nextNode(); node !== null; node = walk.nextNode()) {
+    sanitizeElement(/** @type {Element} */ (node), access);
+  }
   return template.innerHTML;
 }
 
-/** @param {DocumentFragment | Element} parent */
-function sanitizeChildren(parent) {
-  for (const child of [...parent.children]) sanitizeElement(child);
+/**
+ * Sanitize one element. The walk reaches its children afterwards, including the ones
+ * an unwrap moves into its place.
+ *
+ * @param {Element} element
+ * @param {DomAccess} access
+ */
+function sanitizeElement(element, access) {
+  const tag = access.localName.call(element);
+  if (BLOCKED_ELEMENTS.has(tag)) {
+    access.remove.call(element);
+    return;
+  }
+  if (!ALLOWED_ELEMENTS.has(tag)) {
+    access.replaceWith.call(element, ...access.childNodes.call(element));
+    return;
+  }
+  for (const name of access.getAttributeNames.call(element)) {
+    sanitizeAttribute(element, tag, name, access);
+  }
 }
 
-/** @param {Element} element */
-function sanitizeElement(element) {
-  const tag = element.localName;
-  if (BLOCKED_ELEMENTS.has(tag)) {
-    element.remove();
+/**
+ * @param {Element} element
+ * @param {string} tag
+ * @param {string} name
+ * @param {DomAccess} access
+ */
+function sanitizeAttribute(element, tag, name, access) {
+  const value = access.getAttribute.call(element, name) ?? '';
+  const lower = name.toLowerCase();
+  if (lower.startsWith('on') || lower === 'srcset' || RESOURCE_URL_SINKS.has(`${tag}:${lower}`)) {
+    access.removeAttribute.call(element, name);
     return;
   }
-
-  sanitizeChildren(element);
-  if (!ALLOWED_ELEMENTS.has(tag)) {
-    element.replaceWith(...element.childNodes);
+  if (lower === 'style') {
+    const safe = sanitizeInlineStyle(value);
+    if (safe === null) access.removeAttribute.call(element, name);
+    else access.setAttribute.call(element, name, safe);
     return;
   }
-
-  for (const attribute of [...element.attributes]) {
-    const name = attribute.name.toLowerCase();
-    if (name.startsWith('on') || name === 'srcset') {
-      element.removeAttribute(attribute.name);
-      continue;
+  if (lower === 'id' || lower === 'name') {
+    if (value !== '' && !value.startsWith(NAMED_PREFIX)) {
+      access.setAttribute.call(element, name, `${NAMED_PREFIX}${value}`);
     }
-    if (name === 'style') {
-      const safe = sanitizeStyle(attribute.value);
-      if (safe === null) element.removeAttribute(attribute.name);
-      else element.setAttribute(attribute.name, safe);
-      continue;
-    }
-    if (RESOURCE_URL_SINKS.has(`${tag}:${name}`)) {
-      element.removeAttribute(attribute.name);
-      continue;
-    }
-    if (URL_ATTRIBUTES.has(name)) {
-      element.setAttribute(attribute.name, sanitizeUrl(attribute.value));
-      continue;
-    }
-    if (
-      !ALLOWED_ATTRIBUTES.has(name) &&
-      !name.startsWith('aria-') &&
-      !name.startsWith('data-')
-    ) {
-      element.removeAttribute(attribute.name);
-    }
+    return;
   }
+  if (URL_ATTRIBUTES.has(lower)) {
+    access.setAttribute.call(element, name, sanitizeUrl(value));
+    return;
+  }
+  if (!ALLOWED_ATTRIBUTES.has(lower) && !lower.startsWith('aria-') && !lower.startsWith('data-')) {
+    access.removeAttribute.call(element, name);
+  }
+}
+
+/** @type {CSSStyleDeclaration | undefined} */
+let scratchStyle;
+
+/**
+ * The style sanitizer's rules, plus no placement. The browser parses the declarations,
+ * so a property can't hide from the removal behind odd spacing or case.
+ *
+ * @param {string} value
+ * @returns {string | null}
+ */
+function sanitizeInlineStyle(value) {
+  if (sanitizeStyle(value) === null) return null;
+  scratchStyle ??= document.createElement('div').style;
+  scratchStyle.cssText = value;
+  for (const property of PLACEMENT_PROPERTIES) scratchStyle.removeProperty(property);
+  const kept = scratchStyle.cssText;
+  return kept === '' ? null : kept;
 }

@@ -137,6 +137,19 @@ describe('createElement', () => {
     assert.notOk(element.hasAttribute('limit'));
   });
 
+  it('assigns props through the sink a property binding would use', async () => {
+    const element = /** @type {Beta} */ (
+      await requireElement({
+        where: 'test',
+        tag: 'mount-beta',
+        props: { innerHTML: '<b onclick="steal()">x</b>', limit: 3 },
+      })
+    );
+
+    assert.notOk(present(element.querySelector('b')).hasAttribute('onclick'));
+    assert.equal(element.limit, 3);
+  });
+
   it('returns null when the request names nothing to mount', async () => {
     // The router's componentless level, a parent contributing a prefix and a guard
     // and rendering nothing at all.

@@ -20,6 +20,8 @@ import {
   FORBIDDEN_MEMBERS,
   HTML_SINKS,
   parseFragmentHead,
+  RAW_TEXT_ELEMENTS,
+  REFUSED_ELEMENTS,
   refusedProperty,
   RESOURCE_URL_SINKS,
   strictOperator,
@@ -57,6 +59,9 @@ const BINDING_SAMPLES = [
   '[.constructor]',
   '[]',
   '[.]',
+  '.srcdoc',
+  '@click',
+  '[@click]',
 ];
 
 /** Fragment heads, as written inside `*fragment="…"`. */
@@ -125,7 +130,10 @@ const PROPERTY_REFUSAL = {
   'event-property': 'Refused. Bind the event in parentheses.',
   'outer-html': 'Refused, because it would replace the node Lit renders.',
   'forbidden-member': 'Refused, because the name is reserved.',
+  'raw-text-content': 'Refused on an element whose content is raw text, such as `<style>`.',
 };
+
+const RESERVED_NAME = 'Refused, because lit reads the name as its own binding syntax.';
 
 /** Prefix operators to try. The page lists the ones that parse. */
 const UNARY_CANDIDATES = ['!', '-', '+', '~', '&'];
@@ -165,6 +173,8 @@ function readBinding(written) {
       return `Listens for ${code(outer.event)}. \`$event\` is in scope.`;
     case 'inline-handler':
       return 'Refused. Bind the event in parentheses.';
+    case 'reserved-name':
+      return RESERVED_NAME;
     case 'binding':
       break;
     default:
@@ -178,12 +188,14 @@ function readBinding(written) {
     case 'boolean':
       return `Adds or removes attribute ${code(inner.name)}.`;
     case 'property': {
-      const refusal = refusedProperty(inner.name);
+      const refusal = refusedProperty(inner.name, '');
       if (refusal === undefined) return `Sets property ${code(inner.name)}.`;
       return PROPERTY_REFUSAL[refusal];
     }
     case 'inline-handler':
       return 'Refused. Bind the event in parentheses.';
+    case 'reserved-name':
+      return RESERVED_NAME;
     case 'empty-attribute':
     case 'empty-property':
       return 'Refused, because the binding names nothing.';
@@ -309,6 +321,14 @@ export function dialectSections() {
     ],
     ['dialect-members', `${codeList(FORBIDDEN_MEMBERS)}.`],
     ['dialect-sinks', sinks()],
+    [
+      'dialect-refused-elements',
+      table(
+        ['Element', 'Why'],
+        [...REFUSED_ELEMENTS].map(([tag, reason]) => [code(`<${tag}>`), reason]),
+      ),
+    ],
+    ['dialect-raw-text-elements', `${codeList(RAW_TEXT_ELEMENTS)}.`],
     ['dialect-void-elements', `${codeList(VOID_ELEMENTS)}.`],
   ]);
 }

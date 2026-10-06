@@ -206,25 +206,58 @@ export function strictOperator(operator) {
 /* ── Binding-syntax dispatch ───────────────────────────────────────────── */
 
 /**
+ * Spellings lit reads as its own syntax inside an attribute name.
+ *
+ * A leading `.`, `?` or `@` makes lit bind a property, a boolean or an event. A
+ * `$lit$` suffix marks a bound attribute. A quote or `=` ends lit's name early, so the
+ * value lands in no part and every later value shifts onto the wrong one. The compiler
+ * classifies a name before lit sees it, so any of these would put the value in a sink
+ * the compiler never chose. ADR-0128.
+ */
+const LIT_SYNTAX = /^[.?@]|\$lit\$|["'=]/u;
+
+/**
+ * Why lit would read a name differently than the dialect does, or `undefined`.
+ *
+ * @param {string} name The name the compiler hands lit, after any prefix it adds.
+ * @returns {string | undefined}
+ */
+function reservedName(name) {
+  if (!LIT_SYNTAX.test(name)) return undefined;
+  return (
+    `"${name}" is lit binding syntax, so lit would bind it to a sink the template ` +
+    'compiler never classified. Write [name], [.name], [?name] or (event) instead.'
+  );
+}
+
+/**
  * Classify an attribute name as written in the template.
  *
  * `(click)` is an event, `[href]` is a binding, `onclick` is an inline handler and
- * always an error, and anything else is a plain attribute that may interpolate.
+ * always an error, a name lit reads as its own syntax is reserved, and anything else is
+ * a plain attribute that may interpolate.
  *
  * @param {string} name
  * @returns {{ kind: 'event', event: string }
  *   | { kind: 'binding', target: string }
  *   | { kind: 'inline-handler', event: string }
+ *   | { kind: 'reserved-name', reason: string }
  *   | { kind: 'plain' }}
  *
  * @internal
  */
 export function classifyAttributeName(name) {
-  if (name.startsWith('(') && name.endsWith(')')) return { kind: 'event', event: name.slice(1, -1) };
+  if (name.startsWith('(') && name.endsWith(')')) {
+    const event = name.slice(1, -1);
+    const reason = reservedName(event);
+    return reason === undefined ? { kind: 'event', event } : { kind: 'reserved-name', reason };
+  }
   if (name.startsWith('[') && name.endsWith(']')) return { kind: 'binding', target: name.slice(1, -1) };
   // The parser already lowercased the name, and the evaluator refuses the same shape,
   // so both reject the same attributes.
   if (name.startsWith('on')) return { kind: 'inline-handler', event: name.slice(2) };
+  const reason = reservedName(name);
+  if (reason !== undefined) return { kind: 'reserved-name', reason };
   return { kind: 'plain' };
 }
 
@@ -249,13 +282,22 @@ export function classifyBindingTarget(target) {
   if (target.startsWith('.')) {
     const property = camelCase(target.slice(1));
     if (property === '') return { kind: 'empty-property', name: '' };
-    return { kind: 'property', name: property };
+    return unlessReserved({ kind: 'property', name: property });
   }
 
-  if (target.startsWith('?')) return { kind: 'boolean', name: target.slice(1) };
+  if (target.startsWith('?')) return unlessReserved({ kind: 'boolean', name: target.slice(1) });
   if (BOOLEAN_ATTRIBUTES.has(target)) return { kind: 'boolean', name: target };
 
-  return { kind: 'attribute', name: target };
+  return unlessReserved({ kind: 'attribute', name: target });
+}
+
+/**
+ * @param {TargetClassification} classified
+ * @returns {TargetClassification}
+ */
+function unlessReserved(classified) {
+  const reason = reservedName(classified.name);
+  return reason === undefined ? classified : { kind: 'reserved-name', name: classified.name, reason };
 }
 
 /* ── Sinks and their security contexts ─────────────────────────────────── */
@@ -334,16 +376,87 @@ export function securityContextFor(tag, name) {
 }
 
 /**
+ * Why a static attribute value is refused, or `undefined`. A literal `srcdoc` is a
+ * document the sanitizer never reads, so its markup has to arrive through a binding.
+ *
+ * @param {string} tag
+ * @param {string} name
+ * @returns {string | undefined}
+ * @internal
+ */
+export function refusedStaticAttribute(tag, name) {
+  if (securityContextFor(tag, name) !== 'html') return undefined;
+  return `A static ${name} is markup the sanitizer never reads. Bind it as [${name}].`;
+}
+
+/**
  * Why a property binding is refused, or `undefined` if it's allowed. It returns a
  * tag, so both adapters agree on which properties and phrase their own messages.
  *
  * @param {string} name camelCased property name.
- * @returns {'event-property' | 'outer-html' | 'forbidden-member' | undefined}
+ * @param {string} tag The element the property belongs to.
+ * @returns {'event-property' | 'outer-html' | 'forbidden-member' | 'raw-text-content' | undefined}
  * @internal
  */
-export function refusedProperty(name) {
+export function refusedProperty(name, tag) {
   if (name.toLowerCase().startsWith('on')) return 'event-property';
   if (name === 'outerHTML') return 'outer-html';
   if (FORBIDDEN_MEMBERS.has(name)) return 'forbidden-member';
+  if (RAW_TEXT_ELEMENTS.has(tag.toLowerCase()) && CONTENT_PROPERTIES.has(name.toLowerCase())) {
+    return 'raw-text-content';
+  }
   return undefined;
 }
+
+/* ── Elements a template may not hold ──────────────────────────────────── */
+
+/**
+ * Elements whose content the HTML parser reads as raw text. A binding inside one is
+ * refused. In `<style>` it would write CSS for the whole page, and in the others lit
+ * finds no binding marker, so every later value lands on the wrong binding. Lit binds
+ * `<textarea>` and `<title>` content as text, so those two are left out.
+ *
+ * @internal
+ */
+export const RAW_TEXT_ELEMENTS = new Set([
+  'iframe',
+  'noembed',
+  'noframes',
+  'noscript',
+  'plaintext',
+  'script',
+  'style',
+  'xmp',
+]);
+
+/** Properties that replace an element's content. Lowercase. */
+const CONTENT_PROPERTIES = new Set(['innerhtml', 'innertext', 'outertext', 'textcontent']);
+
+/**
+ * Why content written into `tag` is refused, or `undefined` when it is ordinary
+ * markup. Both a `{{ }}` inside the element and a content property binding ask here.
+ *
+ * @param {string} tag
+ * @returns {string | undefined}
+ * @internal
+ */
+export function refusedContent(tag) {
+  const lower = tag.toLowerCase();
+  if (!RAW_TEXT_ELEMENTS.has(lower)) return undefined;
+  if (lower === 'style') {
+    return 'Dynamic content in <style> writes CSS for the whole page. Bind [class] or [style] on the element instead.';
+  }
+  return `The parser reads <${lower}> content as raw text, where lit cannot place a binding.`;
+}
+
+/**
+ * Elements a template may not contain, with the reason.
+ *
+ * @internal
+ */
+export const REFUSED_ELEMENTS = new Map([
+  ['script', 'Templates are markup only, so behaviour belongs in the component\'s .js file.'],
+  ['base', 'It acts on the whole document, so it belongs in index.html.'],
+  ['link', 'It acts on the whole document, so it belongs in index.html.'],
+  ['meta', 'It acts on the whole document, such as a refresh that navigates away, so it belongs in index.html.'],
+]);

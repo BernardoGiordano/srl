@@ -3,7 +3,11 @@ import {
   classifyAttributeName,
   classifyBindingTarget,
   parseFragmentHead,
+  refusedContent,
   refusedMember,
+  refusedProperty,
+  refusedStaticAttribute,
+  REFUSED_ELEMENTS,
   securityContextFor,
   strictOperator,
 } from '@core/template/dialect.js';
@@ -39,6 +43,35 @@ describe('template dialect', () => {
     assert.equal(shape('onclick'), 'inline-handler:onclick');
     assert.equal(shape(''), 'empty-attribute:');
     assert.equal(shape('.'), 'empty-property:');
+  });
+
+  it('reserves every name lit would read as its own binding syntax', () => {
+    // Each of these would let lit bind a sink the compiler never classified.
+    for (const name of ['.srcdoc', '?hidden', '@click', 'title$lit$', 'a"b', "a'b", '=x']) {
+      assert.equal(classifyAttributeName(name).kind, 'reserved-name', name);
+    }
+    assert.equal(classifyAttributeName('(a"b)').kind, 'reserved-name');
+    assert.equal(classifyBindingTarget('@click').kind, 'reserved-name');
+    assert.equal(classifyBindingTarget('..srcdoc').kind, 'reserved-name');
+    assert.equal(classifyBindingTarget('??open').kind, 'reserved-name');
+    assert.equal(classifyAttributeName('xlink:href').kind, 'plain');
+    assert.equal(classifyAttributeName('data-row.id').kind, 'plain');
+  });
+
+  it('refuses document-level elements and bindings inside raw text', () => {
+    assert.sameArray([...REFUSED_ELEMENTS.keys()].sort(), ['base', 'link', 'meta', 'script']);
+    assert.includes(refusedContent('style') ?? '', 'CSS for the whole page');
+    assert.includes(refusedContent('xmp') ?? '', 'raw text');
+    assert.equal(refusedContent('textarea'), undefined);
+    assert.equal(refusedContent('title'), undefined);
+    assert.equal(refusedProperty('textContent', 'style'), 'raw-text-content');
+    assert.equal(refusedProperty('innerHTML', 'noscript'), 'raw-text-content');
+    assert.equal(refusedProperty('textContent', 'p'), undefined);
+  });
+
+  it('refuses static markup in an HTML sink', () => {
+    assert.includes(refusedStaticAttribute('iframe', 'srcdoc') ?? '', 'Bind it as [srcdoc]');
+    assert.equal(refusedStaticAttribute('iframe', 'title'), undefined);
   });
 
   it('names one security context per sink, however the sink is reached', () => {

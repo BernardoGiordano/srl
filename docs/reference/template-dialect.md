@@ -29,6 +29,9 @@ property binding is written in kebab-case and maps to camelCase.
 | `[.constructor]` | Refused, because the name is reserved. |
 | `[]` | Refused, because the binding names nothing. |
 | `[.]` | Refused, because the binding names nothing. |
+| `.srcdoc` | Refused, because lit reads the name as its own binding syntax. |
+| `@click` | Refused, because lit reads the name as its own binding syntax. |
+| `[@click]` | Refused, because lit reads the name as its own binding syntax. |
 
 <!-- /generated:dialect-bindings -->
 
@@ -173,6 +176,38 @@ binding table shows.
 | `url` | `action`, `background`, `cite`, `data`, `formaction`, `href`, `manifest`, `poster`, `src`, `xlink:href`, on any element | An active scheme such as `javascript:` gets an `unsafe:` prefix. `bypassSecurityTrustUrl` skips that. |
 
 <!-- /generated:dialect-sinks -->
+
+A static `srcdoc` or `innerhtml` attribute is refused, because the sanitizer never
+reads it. Bind it instead. An assignment in an event binding, such as
+`(click)="target.innerHTML = text"`, and an outlet's props pass the same sink as a
+property binding to that element.
+
+## Refused elements
+
+A template may not contain these elements:
+
+<!-- generated:dialect-refused-elements -->
+
+| Element | Why |
+|---|---|
+| `<script>` | Templates are markup only, so behaviour belongs in the component's .js file. |
+| `<base>` | It acts on the whole document, so it belongs in index.html. |
+| `<link>` | It acts on the whole document, so it belongs in index.html. |
+| `<meta>` | It acts on the whole document, such as a refresh that navigates away, so it belongs in index.html. |
+
+<!-- /generated:dialect-refused-elements -->
+
+A `{{ }}` binding inside one of these elements is refused, and so is a property
+binding that replaces its content, such as `[.text-content]`. The HTML parser reads
+their content as raw text. In `<style>` a binding would write CSS for the whole page,
+and in the others lit can't place one. `<textarea>` and `<title>` take bindings as
+text.
+
+<!-- generated:dialect-raw-text-elements -->
+
+`iframe`, `noembed`, `noframes`, `noscript`, `plaintext`, `script`, `style`, `xmp`.
+
+<!-- /generated:dialect-raw-text-elements -->
 
 ## Void elements
 

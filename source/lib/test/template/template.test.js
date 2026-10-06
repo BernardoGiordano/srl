@@ -288,6 +288,106 @@ describe('template compiler', () => {
     assert.throws(() => compileTemplate('<div [.__proto__]="value"></div>', 'test'), 'forbidden');
   });
 
+  it('sanitizes every node when a form redefines the DOM members the walk reads', () => {
+    // A form exposes each control by name, so `form.children` can be two inputs and
+    // hide the form's real children from a walk that reads the property.
+    for (const member of ['children', 'attributes', 'childNodes', 'localName', 'removeAttribute']) {
+      paint('<div [.inner-h-t-m-l]="content"></div>', {
+        content:
+          `<form><input name="${member}"><input name="${member}">` +
+          '<b onclick="steal()">x</b><a href="javascript:steal()">y</a></form>',
+      });
+      const div = present(host.querySelector('div'));
+      assert.equal(div.querySelector('[onclick]'), null, member);
+      assert.equal(present(div.querySelector('a')).getAttribute('href'), 'unsafe:javascript:steal()', member);
+    }
+  });
+
+  it('prefixes id and name, so sanitized markup cannot replace document members', () => {
+    paint('<div [.inner-h-t-m-l]="content"></div>', {
+      content: '<img name="createElement" id="getElementById" alt="x">',
+    });
+    const image = present(host.querySelector('img'));
+    assert.equal(image.getAttribute('name'), 'user-content-createElement');
+    assert.equal(image.getAttribute('id'), 'user-content-getElementById');
+    assert.equal(typeof document.createElement, 'function');
+    assert.equal(typeof document.getElementById, 'function');
+  });
+
+  it('drops placement and form controls from sanitized markup', () => {
+    paint('<div [.inner-h-t-m-l]="content"></div>', {
+      content:
+        '<p style="position: fixed; inset: 0; z-index: 9999; color: red">cover</p>' +
+        '<form action="/collect"><label>Password <input type="password"></label>' +
+        '<button>Sign in</button></form>',
+    });
+    const div = present(host.querySelector('div'));
+    const style = present(div.querySelector('p')).getAttribute('style') ?? '';
+    assert.notOk(style.includes('position'));
+    assert.notOk(style.includes('z-index'));
+    assert.includes(style, 'color');
+    assert.equal(div.querySelector('form, input, button'), null);
+    assert.includes(div.textContent ?? '', 'Sign in');
+  });
+
+  it('refuses attribute names lit reads as its own binding syntax', () => {
+    for (const source of [
+      '<iframe .srcdoc="{{ payload }}"></iframe>',
+      '<a ?href="{{ payload }}">x</a>',
+      '<a @click="{{ payload }}">x</a>',
+      '<p title$lit$="x"></p>',
+      '<p a"b="{{ payload }}"></p>',
+      '<p [@click]="payload"></p>',
+      '<p (a"b)="payload"></p>',
+    ]) {
+      assert.throws(() => compileTemplate(source, 'test'), 'lit binding syntax');
+    }
+  });
+
+  it('refuses bindings inside raw-text elements and writes to their content', () => {
+    assert.throws(
+      () => compileTemplate('<style>p { color: {{ tone }} }</style>', 'test'),
+      'CSS for the whole page',
+    );
+    assert.throws(
+      () => compileTemplate('<xmp>{{ text }}</xmp><a href="{{ link }}">x</a>', 'test'),
+      'raw text',
+    );
+    assert.throws(
+      () => compileTemplate('<style [.text-content]="css"></style>', 'test'),
+      'CSS for the whole page',
+    );
+
+    paint('<textarea>{{ text }}</textarea>', { text: '</textarea><b>escaped</b>' });
+    assert.equal(host.querySelector('b'), null);
+    assert.includes(present(host.querySelector('textarea')).value, '<b>escaped</b>');
+  });
+
+  it('refuses elements that act on the whole document', () => {
+    for (const source of [
+      '<meta http-equiv="refresh" content="0; url=/elsewhere">',
+      '<base href="/">',
+      '<link rel="stylesheet" href="/theme.css">',
+    ]) {
+      assert.throws(() => compileTemplate(source, 'test'), 'index.html');
+    }
+    assert.throws(() => compileTemplate('<script></script>', 'test'), 'markup only');
+  });
+
+  it('refuses a static srcdoc and sanitizes a bound one', () => {
+    assert.throws(
+      () => compileTemplate('<iframe srcdoc="<script>steal()</script>"></iframe>', 'test'),
+      'Bind it as [srcdoc]',
+    );
+
+    paint('<iframe [srcdoc]="doc"></iframe>', {
+      doc: '<p onclick="steal()">x</p><script>steal()</script>',
+    });
+    const srcdoc = present(host.querySelector('iframe')).getAttribute('srcdoc') ?? '';
+    assert.notOk(srcdoc.includes('script'));
+    assert.notOk(srcdoc.includes('onclick'));
+  });
+
   it('does not silently stringify a trusted value outside its sink', () => {
     // The throw is the contract under test; bypass wrappers intentionally have
     // no ordinary object stringification.

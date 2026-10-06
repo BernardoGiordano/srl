@@ -29,7 +29,10 @@ import {
   INTERPOLATION,
   isAnimationSink,
   parseFragmentHead,
+  refusedContent,
   refusedProperty,
+  refusedStaticAttribute,
+  REFUSED_ELEMENTS,
   securityContextFor,
   VOID_ELEMENTS,
 } from '@core/template/dialect.js';
@@ -51,6 +54,10 @@ import '@core/localization/i18n.js';
 /**
  * A Trusted Types policy for framework-owned template source. It stays private to
  * this module, so application code can't use it to bypass sanitization.
+ *
+ * It returns its input. Its only sink is the inert `<template>` the compiler walks,
+ * and the compiler refuses what a template may not hold before anything reaches lit.
+ * Sanitizing here would strip the bindings the compiler needs.
  *
  * @typedef {{ createHTML(value: string): unknown }} TemplatePolicy
  * @typedef {{ createPolicy(name: string, rules: { createHTML(value: string): string }): TemplatePolicy }} TemplatePolicyFactory
@@ -768,12 +775,8 @@ function compileText(text, context, chunks) {
 function compileElement(element, context, chunks, consumed) {
   const tag = element.localName;
 
-  if (tag === 'script') {
-    throw new Error(
-      `${context.where} contains a <script> element. Templates are markup only; ` +
-        `put behaviour in the component's .js file.`,
-    );
-  }
+  const refused = REFUSED_ELEMENTS.get(tag);
+  if (refused !== undefined) throw new Error(`${context.where} contains <${tag}>. ${refused}`);
 
   const structuralFor = element.getAttribute('*for');
   const structuralIf = element.getAttribute('*if');
@@ -842,6 +845,10 @@ function compileElement(element, context, chunks, consumed) {
   chunks.text('>');
 
   if (!VOID_ELEMENTS.has(tag)) {
+    const content = refusedContent(tag);
+    if (content !== undefined && PLACEHOLDER.test(element.textContent ?? '')) {
+      throw new Error(`<${tag}> in ${context.where} holds a {{ }} binding. ${content}`);
+    }
     compileNodes([...element.childNodes], context, chunks);
     chunks.text(`</${tag}>`);
   }
@@ -879,7 +886,7 @@ function takeFragments(element, context) {
     // A fragment is a function, and these names only accept strings (event
     // properties, forbidden members, markup or URL sinks), so the name is refused.
     if (
-      refusedProperty(property) !== undefined ||
+      refusedProperty(property, element.localName) !== undefined ||
       securityContextFor(element.localName, property) !== undefined
     ) {
       throw new Error(
@@ -976,6 +983,10 @@ function compileAttributes(element, context, chunks) {
       );
     }
 
+    if (syntax.kind === 'reserved-name') {
+      throw new Error(`<${element.localName}> in ${context.where}: ${syntax.reason}`);
+    }
+
     if (syntax.kind === 'event') {
       const { event } = syntax;
       const handler = compileExpression(value, `${context.where} (${event})`, {
@@ -1005,6 +1016,8 @@ function compileAttributes(element, context, chunks) {
     //   class="rounded border {{ active ? 'bg-sky-50' : 'bg-white' }}"
     const pieces = splitPlaceholders(value);
     if (pieces.length === 1 && typeof pieces[0] === 'string') {
+      const refused = refusedStaticAttribute(element.localName, name);
+      if (refused !== undefined) throw new Error(`<${element.localName}> in ${context.where}: ${refused}`);
       chunks.text(value === '' ? ` ${name}` : ` ${name}="${escapeAttribute(value)}"`);
       continue;
     }
@@ -1039,6 +1052,8 @@ function compileBinding(element, target, source, context, chunks) {
       throw new Error(`<${element.localName}> in ${context.where} has an empty property binding.`);
     case 'empty-attribute':
       throw new Error(`<${element.localName}> in ${context.where} has an empty [] binding.`);
+    case 'reserved-name':
+      throw new Error(`<${element.localName}> in ${context.where}: ${classified.reason ?? ''}`);
     default:
       break;
   }

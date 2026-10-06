@@ -15,6 +15,7 @@
  */
 
 import { resolveTag } from '@core/elements/component.js';
+import { assignProperty } from '@core/template/security.js';
 
 /** @import { MountRequest } from '@core/elements/types.js' */
 
@@ -102,8 +103,11 @@ export async function createElement(request) {
     create === undefined ? await fromTag(request) : await fromFactory(request, create);
   if (element === null) return null;
 
-  // Props are assigned as properties, because attributes would stringify objects.
-  Object.assign(element, request.props ?? {});
+  // Props are assigned as properties, because attributes would stringify objects. Each
+  // one passes the sink a property binding to the same element would use.
+  for (const [name, value] of Object.entries(request.props ?? {})) {
+    assignProperty(element, name, value, request.where);
+  }
   return element;
 }
 

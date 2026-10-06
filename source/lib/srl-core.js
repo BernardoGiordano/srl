@@ -41,7 +41,7 @@ export * from '@core/remotes/mfe.js';
 import '@core/template/dialect.js';
 export { ExpressionError, parseExpression } from '@core/template/expression-parser.js';
 export * from '@core/template/expression.js';
-export * from '@core/template/security.js';
+export { bypassSecurityTrustHtml, bypassSecurityTrustStyle, bypassSecurityTrustUrl, bypassSecurityTrustResourceUrl, attributeSinkFor, propertySinkFor } from '@core/template/security.js';
 export { loadTemplate, prefetchTemplates, registerTemplateGroups, seedTemplates, attachTemplate, templateFor } from '@core/template/template.js';
 export * from '@host/remote-host.js';
 export * from '@host/runtime.js';

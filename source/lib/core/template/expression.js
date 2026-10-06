@@ -19,6 +19,7 @@
 import { Signal } from '@core/foundation/reactive.js';
 import { FORBIDDEN_MEMBERS, refusedMember, strictOperator } from '@core/template/dialect.js';
 import { parseExpression } from '@core/template/expression-parser.js';
+import { assignProperty } from '@core/template/security.js';
 
 export { parseExpression } from '@core/template/expression-parser.js';
 
@@ -300,7 +301,7 @@ function compileAssignment(node, where) {
       if (current.value instanceof Signal) {
         current.value.value = next;
       } else if (isRecord(current.receiver)) {
-        current.receiver[name] = next;
+        assignProperty(current.receiver, name, next, where);
       } else {
         throw evaluationError(where, `Cannot assign to "${name}"`);
       }
@@ -328,7 +329,8 @@ function compileAssignment(node, where) {
     refuseForbiddenMember(name);
     const existing = receiver[name];
     if (existing instanceof Signal) existing.value = next;
-    else receiver[name] = next;
+    // An element receiver writes through the sink a binding to it would use.
+    else assignProperty(receiver, name, next, where);
     return next;
   };
 }

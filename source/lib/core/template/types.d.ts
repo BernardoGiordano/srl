@@ -17,12 +17,15 @@ export type BindingKind =
   | 'property'
   | 'empty-attribute'
   | 'empty-property'
-  | 'inline-handler';
+  | 'inline-handler'
+  | 'reserved-name';
 
 export interface TargetClassification {
   readonly kind: BindingKind;
   /** Camel-cased for `property`, stripped of `?` for `boolean`, empty for the errors. */
   readonly name: string;
+  /** Why the name is refused. Set only for `reserved-name`. */
+  readonly reason?: string;
 }
 
 /**

@@ -32,7 +32,10 @@ import {
   INTERPOLATION,
   isAnimationSink,
   parseFragmentHead,
+  refusedContent,
   refusedProperty,
+  refusedStaticAttribute,
+  REFUSED_ELEMENTS,
   securityContextFor,
   strictOperator,
   VOID_ELEMENTS,
@@ -541,6 +544,15 @@ class ShimBuilder {
       }
       return;
     }
+    const refusedElement = REFUSED_ELEMENTS.get(node.tag);
+    if (refusedElement !== undefined) {
+      this.problem(
+        'templates/refused-element',
+        node.at + 1,
+        `${this.component.template}: <${node.tag}> is refused. ${refusedElement}`,
+      );
+      return;
+    }
     this.checkTag(node);
     for (const attr of node.attributes) {
       if (skip.has(attr.name)) continue;
@@ -558,6 +570,10 @@ class ShimBuilder {
           `${this.component.template}: inline event handler attribute ${attr.name} is forbidden. ` +
             `Use (${syntax.event})="handler()".`,
         );
+        continue;
+      }
+      if (syntax.kind === 'reserved-name') {
+        this.problem('templates/reserved-name', attr.at, `${this.component.template}: ${syntax.reason}`);
         continue;
       }
       if (syntax.kind === 'event') {
@@ -584,6 +600,8 @@ class ShimBuilder {
             attr.at,
             `${this.component.template}: inline event attribute ${syntax.target} is forbidden`,
           );
+        } else if (classified.kind === 'reserved-name') {
+          this.problem('templates/reserved-name', attr.at, `${this.component.template}: ${classified.reason ?? ''}`);
         } else if (classified.kind === 'empty-attribute' || classified.kind === 'empty-property') {
           this.problem('templates/empty-binding', attr.at, `${this.component.template}: empty ${attr.name} binding`);
         } else if (classified.kind === 'boolean') {
@@ -592,8 +610,14 @@ class ShimBuilder {
           this.expression({ source: attr.value, at: attr.at }, scope, false);
           this.file.write(');\n');
         } else if (classified.kind === 'property') {
-          if (refusedProperty(name) !== undefined) {
-            this.problem('templates/refused-property', attr.at, `${this.component.template}: property ${name} is forbidden`);
+          const refusal = refusedProperty(name, node.tag);
+          if (refusal !== undefined) {
+            this.problem(
+              'templates/refused-property',
+              attr.at,
+              `${this.component.template}: property ${name} is forbidden` +
+                (refusal === 'raw-text-content' ? `. ${refusedContent(node.tag) ?? ''}` : ''),
+            );
             continue;
           }
           if (this.elements.get(node.tag)?.state?.includes(name) === true) {
@@ -626,8 +650,25 @@ class ShimBuilder {
         }
         continue;
       }
+      const staticRefusal = attr.value.search(INTERPOLATION) === -1
+        ? refusedStaticAttribute(node.tag, attr.name)
+        : undefined;
+      if (staticRefusal !== undefined) {
+        this.problem('templates/static-markup', attr.at, `${this.component.template}: ${staticRefusal}`);
+        continue;
+      }
       this.checkAttribute(node, attr, attr.name);
       this.interpolations(attr.value, attr.at, scope, indent);
+    }
+    const content = refusedContent(node.tag);
+    const bound = node.children.find((child) => child.kind === 'text' && child.value.search(INTERPOLATION) !== -1);
+    if (content !== undefined && bound !== undefined) {
+      this.problem(
+        'templates/raw-text-binding',
+        bound.at,
+        `${this.component.template}: <${node.tag}> holds a {{ }} binding. ${content}`,
+      );
+      return;
     }
     this.nodes(this.fragments(node, scope, indent), scope, indent);
   }
@@ -695,7 +736,7 @@ class ShimBuilder {
 
       const { property } = head;
       if (
-        refusedProperty(property) !== undefined ||
+        refusedProperty(property, node.tag) !== undefined ||
         securityContextFor(node.tag, property) !== undefined
       ) {
         this.problem(
