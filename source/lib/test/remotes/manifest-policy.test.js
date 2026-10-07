@@ -75,8 +75,16 @@ describe('manifest admission', () => {
       );
     });
 
-    it('normalizes a destination to the path it actually reaches', () => {
-      const admitted = admit({ auth: authWith({ apiBaseUrl: '/api/v2/../v1/' }) });
+    it('refuses a path with anything left to normalize', () => {
+      // A path one module reads one way and the next reads another is how a check
+      // passes on one string and a fetch goes to a different one. ADR-0132.
+      for (const apiBaseUrl of ['/api/v2/../v1/', '/api/./v1/', '/api/%2e%2e/v1/', '/api/</script>']) {
+        assert.throws(
+          () => admit({ auth: authWith({ apiBaseUrl }) }),
+          'auth.apiBaseUrl must be written in its normal form',
+        );
+      }
+      const admitted = admit({ auth: authWith({ apiBaseUrl: '/api/v1/' }) });
       assert.equal(present(admitted.auth).apiBaseUrl, '/api/v1/');
     });
 
@@ -91,7 +99,7 @@ describe('manifest admission', () => {
       );
     });
 
-    it('refuses a template list that leaves the origin, and normalizes the rest', () => {
+    it('refuses a template list that leaves the origin or repeats an entry', () => {
       // The runtime turns this list into `fetch` calls under `connect-src 'self'`,
       // so a cross-origin entry fails as a blocked request behind an optimisation
       // nobody is watching. One message at admission is the better failure.
@@ -100,12 +108,16 @@ describe('manifest admission', () => {
         'templateFiles[0] must be same-origin',
       );
       assert.throws(
-        () => admit({ templateFiles: ['/assets/templates/a.html', '/assets/x/../templates/a.html'] }),
+        () => admit({ templateFiles: ['/assets/templates/a.html', '/assets/templates/a.html'] }),
         'names /assets/templates/a.html more than once',
+      );
+      assert.throws(
+        () => admit({ templateFiles: ['/assets/x/../templates/a.html'] }),
+        'templateFiles[0] must be written in its normal form',
       );
       assert.throws(() => admit({ templateFiles: '/assets/templates/a.html' }), 'must be an array');
 
-      const admitted = admit({ templateFiles: ['/assets/x/../templates/a.html'] });
+      const admitted = admit({ templateFiles: ['/assets/templates/a.html'] });
       assert.sameArray([...admitted.templateFiles], ['/assets/templates/a.html']);
     });
 
@@ -138,7 +150,7 @@ describe('manifest admission', () => {
           admit({
             templateGroups: {
               entry: ['/assets/templates/a.html'],
-              'chunk:assets/x.js': ['/assets/x/../templates/a.html'],
+              'chunk:assets/x.js': ['/assets/templates/a.html'],
             },
           }),
         'names /assets/templates/a.html more than once',
@@ -146,7 +158,7 @@ describe('manifest admission', () => {
 
       const admitted = admit({
         templateGroups: {
-          entry: ['/assets/x/../templates/a.html'],
+          entry: ['/assets/templates/a.html'],
           'chunk:assets/x.js': ['/assets/templates/b.html'],
         },
       });
@@ -221,8 +233,16 @@ describe('manifest admission', () => {
         'must be same-origin',
       );
 
+      assert.throws(
+        () =>
+          admit({
+            i18n: { ...i18n, bundleFiles: { '/i18n/en.json': '/assets/x/../i18n/en-0123456789abcdef.json' } },
+          }),
+        'must be written in its normal form',
+      );
+
       const admitted = admit({
-        i18n: { ...i18n, bundleFiles: { '/i18n/en.json': '/assets/x/../i18n/en-0123456789abcdef.json' } },
+        i18n: { ...i18n, bundleFiles: { '/i18n/en.json': '/assets/i18n/en-0123456789abcdef.json' } },
       });
       assert.equal(
         admitted.i18n.bundleFiles?.['/i18n/en.json'],

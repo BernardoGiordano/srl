@@ -11,11 +11,12 @@
  * path.
  */
 
-import { copyFile, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { lstat, mkdir, readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { REPORT, isRemoteReport, readReport } from './artifact-report.mjs';
+import { copyWithin, listFiles, within, writeWithin } from './output-tree.mjs';
 import { sha256, staticTarget } from './release-target.mjs';
 
 /** @import { ArtifactFile, ArtifactReport, ShellArtifactReport } from './artifact-report.mjs' */
@@ -80,16 +81,16 @@ export async function prepareRelease(options) {
   /** @type {Array<{ target: 'asset' | 'release', path: string, bytes: number, sha256: string, kind: string }>} */
   const files = [];
   for (const file of artifact.files) {
-    const source = inside(artifactRoot, file.path);
+    const source = within(artifactRoot, file.path);
     if (file.cache === 'immutable') {
       const path = file.path.replace(/^public\/assets\//u, '');
       if (path === file.path) {
         throw new Error(`release:artifact: immutable file is outside public/assets: ${file.path}`);
       }
-      await copy(source, inside(assetOutput, path));
+      await copyWithin(assetOutput, path, source);
       files.push({ target: 'asset', path, bytes: file.bytes, sha256: file.sha256, kind: 'browser' });
     } else {
-      await copy(source, inside(releaseOutput, file.path));
+      await copyWithin(releaseOutput, file.path, source);
       files.push({
         target: 'release',
         path: file.path,
@@ -100,7 +101,7 @@ export async function prepareRelease(options) {
     }
   }
 
-  await copy(artifactPath, join(releaseOutput, REPORT));
+  await copyWithin(releaseOutput, REPORT, artifactPath);
   files.push({
     target: 'release',
     path: REPORT,
@@ -110,7 +111,7 @@ export async function prepareRelease(options) {
   });
 
   for (const file of payload) {
-    await write(inside(releaseOutput, file.path), file.bytes);
+    await writeWithin(releaseOutput, file.path, file.bytes);
     files.push({
       target: 'release',
       path: file.path,
@@ -135,7 +136,7 @@ export async function prepareRelease(options) {
     }) ?? {};
   for (const configuration of rendering.configurations ?? []) {
     const bytes = Buffer.from(configuration.source, 'utf8');
-    await write(inside(releaseOutput, configuration.path), bytes);
+    await writeWithin(releaseOutput, configuration.path, bytes);
     files.push({
       target: 'release',
       path: configuration.path,
@@ -161,7 +162,7 @@ export async function prepareRelease(options) {
   };
   const releaseReport = `${JSON.stringify(release, null, 2)}\n`;
   const releaseReportSha256 = sha256(releaseReport);
-  await writeFile(join(releaseOutput, 'release.json'), releaseReport);
+  await writeWithin(releaseOutput, 'release.json', releaseReport);
 
   const publication = {
     version: 1,
@@ -182,7 +183,7 @@ export async function prepareRelease(options) {
       bytes: files.reduce((total, file) => total + file.bytes, 0),
     },
   };
-  await writeFile(join(output, 'publication.json'), `${JSON.stringify(publication, null, 2)}\n`);
+  await writeWithin(output, 'publication.json', `${JSON.stringify(publication, null, 2)}\n`);
   return deepFreeze(publication);
 }
 
@@ -219,17 +220,14 @@ function admitReleasable(report, path, allowExperimental) {
 async function verifyArtifactFiles(artifactRoot, files) {
   const expected = new Set([REPORT]);
   for (const file of files) {
-    validateRelative(file.path);
     expected.add(file.path);
-    const bytes = await readFile(inside(artifactRoot, file.path));
+    const bytes = await readFile(within(artifactRoot, file.path));
     if (bytes.byteLength !== file.bytes || sha256(bytes) !== file.sha256) {
       throw new Error(`release:artifact: hash mismatch for ${file.path}`);
     }
   }
 
-  const actual = new Set(
-    (await walk(artifactRoot)).map((path) => relative(artifactRoot, path).split(sep).join('/')),
-  );
+  const actual = new Set(await listFiles(artifactRoot));
   if (expected.size !== actual.size || [...expected].some((path) => !actual.has(path))) {
     const extras = [...actual].filter((path) => !expected.has(path));
     const missing = [...expected].filter((path) => !actual.has(path));
@@ -250,47 +248,6 @@ async function requireMissing(path) {
   throw new Error(`release:prepare: output already exists: ${path}`);
 }
 
-/** @param {string} source @param {string} target */
-async function copy(source, target) {
-  await mkdir(dirname(target), { recursive: true });
-  await copyFile(source, target);
-}
-
-/** @param {string} target @param {Buffer} bytes */
-async function write(target, bytes) {
-  await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, bytes);
-}
-
-/** @param {string} root @param {string} path */
-function inside(root, path) {
-  validateRelative(path);
-  const target = resolve(root, path);
-  if (target !== root && !target.startsWith(`${root}${sep}`)) {
-    throw new Error(`release:path: ${path} escapes ${root}`);
-  }
-  return target;
-}
-
-/** @param {string} path */
-function validateRelative(path) {
-  if (path === '' || path.startsWith('/') || path.split('/').includes('..') || path.includes('\\')) {
-    throw new Error(`release:path: unsafe relative path ${path}`);
-  }
-}
-
-/** @param {string} root @returns {Promise<string[]>} */
-async function walk(root) {
-  /** @type {string[]} */
-  const files = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) files.push(...(await walk(path)));
-    else if (entry.isFile()) files.push(path);
-    else throw new Error(`release:path: symbolic or special file is not admitted: ${path}`);
-  }
-  return files.sort((left, right) => left.localeCompare(right));
-}
 
 /** @template T @param {T} value @returns {Readonly<T>} */
 function deepFreeze(value) {

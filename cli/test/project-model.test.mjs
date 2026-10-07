@@ -434,6 +434,37 @@ void test('an import from the library entry resolves to the module that declares
   }
 });
 
+void test('a defineComponent tag that is not a custom element name is an error', async () => {
+  // The build names a template's file after its tag, so `x/../../` would be a path.
+  // ADR-0132.
+  const dir = await mkdtemp(join(REPO, '.invalid-tag-fixture-'));
+  try {
+    await writeFile(
+      join(dir, 'index.html'),
+      '<script type="importmap">{ "imports": { "@srljs/core": "/lib/srl-core.js", "@core/": "/lib/core/" } }</script>\n' +
+        '<script type="module" src="/src/page.js"></script>\n',
+    );
+    await mkdir(join(dir, 'src'));
+    await writeFile(
+      join(dir, 'src', 'page.js'),
+      "import { defineComponent, SignalElement } from '@srljs/core';\n\n" +
+        'export class FxPage extends SignalElement {}\n' +
+        'export class FxGood extends SignalElement {}\n\n' +
+        "await defineComponent({ tag: 'x/../../', element: FxPage, module: import.meta.url });\n" +
+        "await defineComponent({ tag: 'fx-good', element: FxGood, module: import.meta.url });\n",
+    );
+
+    const model = await readProject({ name: 'invalid-tag', dir }, { roots: [dir] });
+    const invalid = projectErrors(model).filter(
+      (diagnostic) => diagnostic.code === 'project/invalid-tag',
+    );
+    assert.equal(invalid.length, 1);
+    assert.match(String(invalid[0]?.message), /"x\/\.\.\/\.\.\/" in .* is not a valid custom element name/u);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 void test('the JSON projection is versioned, and the Custom Elements Manifest is the same model', async () => {
   // ADR-0127. A reader holds `schemaVersion` and knows which shape it has.
   const model = await fixtureProject(APP_A);

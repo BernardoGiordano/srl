@@ -13,6 +13,22 @@ origin, supports history fallback, and sends updates to open pages. In this
 repository, `npm start` serves the example and `npm run build -- --app example`
 builds it. The example's Node server also serves its API and sign-in routes.
 
+## Where a build writes
+
+`srl build` writes `dist/<app>` by default, and `--out <dir>` names another
+directory. The build replaces that directory only when it is new, empty, or
+holds the `artifact.json` a previous build wrote. `--force` replaces any other
+directory, but never one that holds the project or your home directory.
+
+```bash
+npx --no-install srl build --app web --out /tmp/web
+npx --no-install srl build --app web --out build/web --force
+```
+
+Every file the build writes stays inside its output directory, and a symbolic
+link in the tree can't carry a write out of it. A component tag or locale URL
+that would name a path outside it fails the build. ADR-0132.
+
 ## Templates in a built artifact
 
 The build emits minified, hash-named template files. A component loads its
@@ -39,7 +55,9 @@ request but refetches the whole bundle when any template changes. The
 [template guide](templates.md#loading-and-caching) explains runtime caching.
 
 Every mode still emits individual immutable template files. The build checks
-that minification leaves each template's parsed structure intact.
+that minification leaves each template's parsed structure intact. A template
+the build's HTML parser reads differently from a current browser, such as a
+`<select>` holding a `<button>`, ships unminified.
 `srl templates --app web` writes a separate authored-byte bundle for a
 deployment that skips the production build. It prints the bundle's pin, which
 the application's import map must carry, because admission refuses a bundle the

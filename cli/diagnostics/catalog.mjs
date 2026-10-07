@@ -25,6 +25,7 @@ export const CODES = Object.freeze({
   'project/read': 'The project model read the application and found nothing that fails the build.',
   'project/dynamic': 'A component definition is built at runtime, so no static tool can see the element it defines.',
   'project/duplicate-tag': 'Two modules define the same tag, and whichever loads second throws.',
+  'project/invalid-tag': 'A `defineComponent` tag is not a valid custom element name, so the runtime throws and the build refuses it.',
   'project/unresolved-uses': 'A `uses` entry names a class that no module defines as a custom element.',
   'project/shadowed-lifecycle': 'A class field hides a method the class inherits, so calls reach the field instead.',
   'project/stylesheet-without-template': 'An element declares `styles: true` and renders no template for the stylesheet to reach.',

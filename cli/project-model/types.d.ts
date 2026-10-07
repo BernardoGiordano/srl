@@ -159,6 +159,7 @@ export interface ModelFinding {
   code:
     | 'project/dynamic'
     | 'project/duplicate-tag'
+    | 'project/invalid-tag'
     | 'project/unresolved-uses'
     | 'project/shadowed-lifecycle'
     | 'project/stylesheet-without-template'

@@ -127,7 +127,7 @@ Checks
   exit code are the same either way
 
 Delivery
-  build [--app <name>] [--out <dir>] [--remote <name>]
+  build [--app <name>] [--out <dir>] [--force] [--remote <name>]
         [--templates split|split-lazy|bundle] [--worker cache|retire]
                             the production artifact: minified, hash-named
                             chunks, a production index.html pinning a sha384
@@ -138,7 +138,10 @@ Delivery
                             none and each component fetches its own; bundle
                             adds the single JSON the manifest seeds from at
                             startup. --worker retire emits a sw.js that
-                            retires every installed worker
+                            retires every installed worker. --out replaces
+                            only a directory a build wrote, and --force
+                            replaces any other except one that holds the
+                            project or the home directory
   templates [--app <name>]  the per-application template bundle for a
                             deployment with no build step
   importmap [--write]       print the import-map fragment an application pastes

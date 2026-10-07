@@ -346,7 +346,12 @@ function admitSecurity(value, where) {
   const security = record(value, where, 'security');
   const csp = text(security.csp, where, 'security.csp');
   const importMap = record(security.importMap, where, 'security.importMap');
-  text(importMap.source, where, 'security.importMap.source');
+  const source = text(importMap.source, where, 'security.importMap.source');
+  // The source is the script element's text, so a character that can end the element
+  // means the document carries markup the report doesn't describe. ADR-0132.
+  if (/[<>&\u2028\u2029]/u.test(source)) {
+    refuse(where, 'import map source is not HTML-safe JSON.');
+  }
   const hash = text(importMap.sha256, where, 'security.importMap.sha256');
   for (const pin of list(security.pins, where, 'security.pins')) {
     const entry = record(pin, where, 'security pin');
