@@ -25,7 +25,9 @@
  *
  * The runner binds every interface whatever its `hostname`, and serves the whole
  * repository. The first middleware answers only a loopback peer, admits Host the way
- * `cli/origin/` does, and 404s dotfiles such as `.git/` and `.env`. ADR-0131.
+ * `cli/origin/` does, and 404s dotfiles such as `.git/` and `.env`. The WebSocket
+ * adapter shares peer and Host admission, requires the connection's complete
+ * browser Origin, and contains invalid messages and listener failures. ADR-0131.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -33,9 +35,10 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 import { LIB_MOUNT_ROUTES, REPO, repoPath } from '../layout.mjs';
-import { admitsHost, hidden, resolveMount } from '../origin/index.mjs';
+import { hidden, resolveMount } from '../origin/index.mjs';
 import { MANIFEST, PACKAGE, extractImportMap, fileToUrl } from '../package/interface.mjs';
 import { htmlAttribute, runnerAdmission, scriptJson } from './runner-admission.mjs';
+import { admitsRunnerRequest, runnerSockets } from './runner-sockets.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -100,19 +103,6 @@ function importMapFor(app) {
 }
 
 /**
- * Whether a socket's peer is this machine. A test browser always is, and anything
- * else reached the runner over the network.
- *
- * @param {string | undefined} address
- * @returns {boolean}
- */
-function loopbackPeer(address) {
-  if (address === undefined) return false;
-  const v4 = address.startsWith('::ffff:') ? address.slice(7) : address;
-  return v4 === '::1' || v4.startsWith('127.');
-}
-
-/**
  * Whether a request path, decoded, names a dotfile. A malformed escape counts, since
  * nothing the runner serves needs one.
  *
@@ -145,10 +135,11 @@ export function testRunnerConfig(options) {
     nodeResolve: false,
     concurrency: 1,
     reporters: [{ start: (args) => admission.start(args) }, defaultReporter()],
+    plugins: [runnerSockets((id) => admission.admitsSession(id))],
 
     middleware: [
       async (ctx, next) => {
-        if (!loopbackPeer(ctx.req.socket.remoteAddress) || !admitsHost(ctx.get('host'))) {
+        if (!admitsRunnerRequest(ctx.req)) {
           ctx.status = 403;
           return;
         }

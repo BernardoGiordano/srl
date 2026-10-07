@@ -78,8 +78,13 @@ export function runnerAdmission(policies) {
         return sessions !== undefined && path !== null && tests.has(path) &&
           (url.pathname === '/' || url.pathname === path);
       }
-      if (ids.length) return !!(sessions?.get(ids[0] ?? '') ?? sessions?.getDebug(ids[0] ?? ''));
+      if (ids.length) return this.admitsSession(ids[0] ?? '');
       return true;
+    },
+
+    /** @param {string} id */
+    admitsSession(id) {
+      return !!(sessions?.get(id) ?? sessions?.getDebug(id));
     },
 
     /**

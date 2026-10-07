@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-07
-- Affects: `cli/origin/index.mjs`, `cli/origin/types.d.ts`, `cli/dev/serve.mjs`, `cli/dev/updates.mjs`, `cli/diagnostics/index.mjs`, `cli/testing/web-test-runner.mjs`, `editors/vscode/package.json`, `SECURITY.md`
+- Affects: `cli/origin/index.mjs`, `cli/origin/types.d.ts`, `cli/dev/serve.mjs`, `cli/dev/updates.mjs`, `cli/diagnostics/index.mjs`, `cli/testing/web-test-runner.mjs`, `cli/testing/runner-sockets.mjs`, `editors/vscode/package.json`, `SECURITY.md`
 
 ## Context
 
@@ -78,6 +78,26 @@ and tabs. The update log and the proxy's error lines go through it too.
 The test-runner preset's first middleware answers only a loopback peer, admits Host
 with `admitsHost`, and 404s a dot segment.
 
+The runner's WebSocket adapter uses the same peer and Host admission before accepting
+the handshake. It also requires the browser Origin to match the connection's scheme,
+Host, and port. Missing, opaque, and foreign origins are refused. Forwarded headers
+and fetch metadata cannot substitute for that Origin.
+
+The adapter validates message types, live session IDs, and required command and
+result fields before the upstream parser or async API receives them. Result data
+cannot replace session identity or lifecycle fields. Invalid messages close their
+socket without stopping the runner. Frame errors, synchronous or returned async
+listener failures, and the API's detached command, result, and disconnect work stay
+inside the adapter. Rejection diagnostics and the runner's
+error logger pass untrusted text through `printable()`.
+
+The upstream dispatcher does not expose listener enumeration or rejection capture.
+The adapter isolates its access to the dispatcher's internal Node event emitter and
+the API's detached async methods. It refuses startup if those structures change.
+Real-runner regressions verify the
+handshake, invalid-session refusal, printable diagnostics, listener failure handling,
+and a subsequent valid command.
+
 `srl.nodePath` takes `machine` scope, so only user settings set it. The extension
 declares `untrustedWorkspaces: { supported: false }`.
 
@@ -90,8 +110,10 @@ declares `untrustedWorkspaces: { supported: false }`.
 - A workspace's `srl.nodePath` no longer applies.
 - `formatText` can still start a new line from a project string with a newline in it,
   though it can't send an escape sequence.
-- The test runner's WebSocket upgrade bypasses Koa middleware. Its commands need a
-  session id, which a page outside the Host check can't read.
+- The test runner's WebSocket upgrade bypasses Koa middleware, so its adapter admits
+  the handshake independently and validates messages before upstream dispatch.
+- A test-runner dependency update that changes its dispatcher requires an adapter
+  update before the preset can start.
 - MCP answers carry project text to the agent. The editor guide says so, and nothing
   filters it.
 - A page on another origin can still send a GET to the dev server, but without CORS

@@ -27,7 +27,7 @@ async function admit({ peer = '127.0.0.1', host = 'localhost:8000', path = '/exa
   const [first] = testRunnerConfig({ app: 'example' }).middleware ?? [];
   assert.ok(first !== undefined);
   const ctx = {
-    req: { socket: { remoteAddress: peer } },
+    req: { socket: { remoteAddress: peer }, headers: { host } },
     path,
     url: path,
     URL: new URL(path, `http://${host || 'localhost'}`),
@@ -86,7 +86,7 @@ void test('the shipped preset admits only registered debug tests and protects th
       files: ['source/lib/test/foundation/paths.test.js'],
       port: 0,
       manual: true,
-      plugins: [{
+      plugins: [...(preset.plugins ?? []), {
         name: 'test-address',
         serverStart({ server }) {
           const address = server?.address();
