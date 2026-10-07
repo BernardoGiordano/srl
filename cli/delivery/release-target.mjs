@@ -26,6 +26,8 @@
 
 import { createHash } from 'node:crypto';
 
+import { admitPath } from '@srljs/core/lib/core/foundation/paths.js';
+
 /**
  * A file a target adds to the release directory, beside the artifact's own.
  *
@@ -115,16 +117,19 @@ export function renderTemplate(template, values, what) {
  *
  * Every value validated here reaches a generated configuration file or an rsync
  * destination, so it is checked where it enters rather than trusted from the
- * environment variable that reached a shell script.
+ * environment variable that reached a shell script. The path must already be in its
+ * canonical form, so `/srv/..`, `/srv/./app` and `//srv` are refused rather than
+ * cleaned up. ADR-0133.
  *
  * @param {string} path
  * @param {string} what
  * @returns {string}
  */
 export function validateAbsolutePath(path, what) {
-  if (!/^\/[A-Za-z0-9._/-]+$/u.test(path) || path === '/' || path.includes('/../')) {
+  if (!/^\/[A-Za-z0-9._/-]+$/u.test(path) || path === '/') {
     throw new Error(`release:target: unsafe ${what} ${path}`);
   }
+  admitPath(path, `release:target: ${what}`);
   return path.replace(/\/$/u, '');
 }
 

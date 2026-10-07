@@ -1,6 +1,7 @@
 import { effect } from '@core/foundation/reactive.js';
 import { inject } from '@core/foundation/inject.js';
 import { readJson } from '@core/foundation/json.js';
+import { admitPathname, within } from '@core/foundation/paths.js';
 import { HOST_CONTRACT } from '@core/remotes/mfe.js';
 import { currentPath, navigate } from '@core/navigation/router.js';
 import { direction, locale, messageTable, registerMessages, t } from '@core/localization/i18n.js';
@@ -152,6 +153,9 @@ function connect(remote) {
    * the remote rather than a runtime condition to handle, and a thrown error names the
    * remote, the path and the grants it does have.
    *
+   * The path is admitted before it is compared, so the server routes the path the
+   * grant was checked against. ADR-0133.
+   *
    * @param {string} path
    * @returns {URL}
    */
@@ -165,9 +169,10 @@ function connect(remote) {
           `is not the shell's to issue.`,
       );
     }
-    if (!remote.grants.api.some((prefix) => url.pathname.startsWith(prefix))) {
+    const pathname = admitPathname(url, `Remote "${remote.name}" API path`);
+    if (!remote.grants.api.some((prefix) => within(prefix, pathname))) {
       throw new Error(
-        `Remote "${remote.name}" is not granted ${url.pathname}. app.manifest.json grants it ` +
+        `Remote "${remote.name}" is not granted ${pathname}. app.manifest.json grants it ` +
           `${remote.grants.api.length === 0 ? 'no API paths' : remote.grants.api.join(', ')}. ` +
           `Widen the grant in the manifest if this call is intended, so the change is reviewable ` +
           `where every other remote's authority is written down.`,
@@ -177,6 +182,10 @@ function connect(remote) {
   }
 
   /**
+   * The remote's request options, cancelled on revoke. A redirect fails the request,
+   * because the grant was checked against the path asked for, not the one a server
+   * points at.
+   *
    * @param {RequestInit | undefined} init
    * @returns {RequestInit}
    */
@@ -184,7 +193,7 @@ function connect(remote) {
     const signal = init?.signal === null || init?.signal === undefined
       ? requests.signal
       : AbortSignal.any([requests.signal, init.signal]);
-    return { ...init, signal };
+    return { ...init, signal, redirect: 'error' };
   }
 
   /** @returns {readonly string[]} */
@@ -268,7 +277,8 @@ function connect(remote) {
         //
         // The completion is dropped rather than handed across the seam, because a
         // remote that could await the shell's navigation would learn when a guard
-        // redirected it somewhere else.
+        // redirected it somewhere else. An href that is not http or https still
+        // throws here, at the remote's call.
         void navigate(to);
       },
       onChange(listener) {

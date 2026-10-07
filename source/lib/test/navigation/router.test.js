@@ -409,6 +409,30 @@ describe('router attachment', () => {
     );
   });
 
+  it('refuses a guard redirect that leaves the origin', async () => {
+    const host = mount('<div><main></main></div>');
+    history.replaceState(null, '', '/secret');
+
+    await assert.rejects(
+      () =>
+        attachRouter(host, [
+          { path: '/secret', component: 'test-guarded-view', canActivate: () => '//evil.example/x' },
+        ]),
+      'leaves the origin',
+    );
+  });
+
+  it('refuses to navigate to any scheme but http and https', async () => {
+    await startAt([{ path: '/', component: 'test-home-view' }], '/');
+
+    // The throw comes before anything is pushed or assigned, so `javascript:` never
+    // reaches `location.assign`, where it would run in the page. ADR-0133.
+    for (const href of ['javascript:alert(1)', ' JavaScript:alert(1)', 'data:text/html,x']) {
+      assert.throws(() => navigate(href), 'Only http and https');
+    }
+    assert.equal(location.pathname, '/');
+  });
+
   it('lazily loads a component on first match only', async () => {
     let loads = 0;
     const routes = [
@@ -1033,6 +1057,42 @@ describe('router attachment', () => {
 
       assert.equal(location.pathname, '/users/9');
       assert.equal(outlet.querySelector('.view')?.textContent, 'user:9');
+    } finally {
+      window.removeEventListener('click', blockDefault);
+      link.remove();
+    }
+  });
+
+  it('keeps a same-origin link on this origin when its path reads like another', async () => {
+    const outlet = await startAt(
+      [
+        { path: '/', component: 'test-home-view' },
+        { path: '*', component: 'test-login-view' },
+      ],
+      '/',
+    );
+
+    // `/.//evil.example/x` resolves to the pathname `//evil.example/x`. Parsed again as
+    // a reference, that pathname names evil.example, so the router passes the URL
+    // whole instead. ADR-0133.
+    const origin = location.origin;
+    const link = document.createElement('a');
+    link.href = '/.//evil.example/x';
+    document.body.append(link);
+
+    /** @param {Event} event */
+    const blockDefault = (event) => event.preventDefault();
+    window.addEventListener('click', blockDefault);
+
+    try {
+      link.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await navigationSettled();
+      await settled(present(outlet.firstElementChild));
+
+      assert.equal(location.origin, origin);
+      assert.equal(location.pathname, '//evil.example/x');
+      assert.equal(outlet.querySelector('.view')?.textContent, 'login', 'the catch-all answers it');
     } finally {
       window.removeEventListener('click', blockDefault);
       link.remove();

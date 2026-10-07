@@ -8,9 +8,8 @@
  * here refuses it for the evaluator and the checker at once. Names computed at
  * runtime, as in `row[key] = value`, are refused by the evaluator.
  *
- * The import is relative, the only relative import under source/lib. `@core/` is an
- * import map entry Node doesn't resolve, and the template checker loads this file by
- * path.
+ * The import is relative. `@core/` is an import map entry Node doesn't resolve, and
+ * the template checker loads this file by path.
  */
 
 import { refusedMember } from './dialect.js';
