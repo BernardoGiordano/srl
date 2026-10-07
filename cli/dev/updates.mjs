@@ -23,7 +23,9 @@
  *                retained window, or from a previous process, is a reload.
  *   failures     the way back. The page posts each failure it sees as a diagnostic,
  *                and the session prints it with the file the URL names, so a
- *                blank page reaches the terminal. ADR-0125.
+ *                blank page reaches the terminal. ADR-0125. Only a same-origin
+ *                JSON post is read, and every printed string is encoded, because
+ *                any page the developer has open can send one. ADR-0131.
  *   disposal     watchers, the pending timer and open connections all end with
  *                `close()`. Without cancellation a suite that started a server and
  *                closed it would keep a recursive watch of the repository for the
@@ -41,8 +43,8 @@ import { randomUUID } from 'node:crypto';
 import { sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { error, formatLine, warning } from '../diagnostics/index.mjs';
-import { toFile } from '../origin/index.mjs';
+import { error, formatLine, printable, warning } from '../diagnostics/index.mjs';
+import { sameOrigin, toFile } from '../origin/index.mjs';
 
 /** @import { IncomingMessage, ServerResponse } from 'node:http' */
 
@@ -231,7 +233,7 @@ export function startUpdateSession(options) {
     history.push({ id, urls });
     if (history.length > RETAINED) history.shift();
 
-    log('  update  %s', urls.join(' '));
+    log('  update  %s', printable(urls.join(' ')));
     publish(id, { changed: urls });
   }
 
@@ -298,7 +300,7 @@ export function startUpdateSession(options) {
         }
       } catch (cause) {
         if (closed) return;
-        log('  watch failed for %s: %s', target, String(cause));
+        log('  watch failed for %s: %s', printable(target), printable(String(cause)));
       }
     })();
   }
@@ -339,6 +341,20 @@ export function startUpdateSession(options) {
   async function receive(request, response) {
     if (request.method !== 'POST') {
       response.writeHead(405, { Allow: 'POST' });
+      response.end();
+      return;
+    }
+
+    // A cross-site page can send a text/plain POST without a preflight. Requiring
+    // JSON forces one, which this server never answers, and the origin check covers
+    // a browser that skips it.
+    if (!sameOrigin(request)) {
+      response.writeHead(403);
+      response.end();
+      return;
+    }
+    if (!/^application\/json\s*(?:;|$)/iu.test(request.headers['content-type'] ?? '')) {
+      response.writeHead(415);
       response.end();
       return;
     }
@@ -418,7 +434,7 @@ export function startUpdateSession(options) {
       // replay left it rather than replaying the same gap a second time. There is a
       // newest: a gap is measured against batches this session sent.
       const newest = /** @type {{ id: string, urls: string[] }} */ (history.at(-1));
-      log('  replay  %s', missed.join(' '));
+      log('  replay  %s', printable(missed.join(' ')));
       response.write(`id: ${newest.id}\ndata: ${JSON.stringify({ changed: missed })}\n\n`);
     }
 

@@ -22,13 +22,17 @@
  * `@web/test-runner` is the project's dependency rather than the CLI's, so a project
  * without browser tests installs no browser tooling. This module only builds the
  * configuration object and imports nothing from it.
+ *
+ * The runner binds every interface whatever its `hostname`, and serves the whole
+ * repository. The first middleware answers only a loopback peer, admits Host the way
+ * `cli/origin/` does, and 404s dotfiles such as `.git/` and `.env`. ADR-0131.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { LIB_MOUNT_ROUTES, REPO, repoPath } from '../layout.mjs';
-import { resolveMount } from '../origin/index.mjs';
+import { admitsHost, hidden, resolveMount } from '../origin/index.mjs';
 import { MANIFEST, PACKAGE, extractImportMap, fileToUrl } from '../package/interface.mjs';
 
 /**
@@ -94,6 +98,34 @@ function importMapFor(app) {
 }
 
 /**
+ * Whether a socket's peer is this machine. A test browser always is, and anything
+ * else reached the runner over the network.
+ *
+ * @param {string | undefined} address
+ * @returns {boolean}
+ */
+function loopbackPeer(address) {
+  if (address === undefined) return false;
+  const v4 = address.startsWith('::ffff:') ? address.slice(7) : address;
+  return v4 === '::1' || v4.startsWith('127.');
+}
+
+/**
+ * Whether a request path, decoded, names a dotfile. A malformed escape counts, since
+ * nothing the runner serves needs one.
+ *
+ * @param {string} path
+ * @returns {boolean}
+ */
+function hiddenPath(path) {
+  try {
+    return hidden(decodeURIComponent(path));
+  } catch {
+    return true;
+  }
+}
+
+/**
  * The configuration.
  *
  * @param {TestRunnerOptions} options
@@ -111,6 +143,17 @@ export function testRunnerConfig(options) {
     concurrency: 1,
 
     middleware: [
+      async (ctx, next) => {
+        if (!loopbackPeer(ctx.req.socket.remoteAddress) || !admitsHost(ctx.get('host'))) {
+          ctx.status = 403;
+          return;
+        }
+        if (hiddenPath(ctx.path)) {
+          ctx.status = 404;
+          return;
+        }
+        await next();
+      },
       async (ctx, next) => {
         // The path only. A query string is the runner's business, and percent escapes
         // are left alone because what is being rewritten is a URL, not a file path.

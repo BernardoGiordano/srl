@@ -29,6 +29,12 @@
   "extensionKind": [
     "workspace"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The extension runs the language server from the workspace's own node_modules, so it starts only in a trusted workspace."
+    }
+  },
   "activationEvents": [
     "onLanguage:html",
     "workspaceContains:**/node_modules/@srljs/cli/package.json",
@@ -47,8 +53,8 @@
         "srl.nodePath": {
           "type": "string",
           "default": "node",
-          "scope": "machine-overridable",
-          "description": "Node.js 22 or newer executable used to run the project-local srl language server."
+          "scope": "machine",
+          "description": "Node.js 22 or newer executable used to run the project-local srl language server. Set it in user settings, because workspace settings can't choose an executable."
         },
         "srl.trace.server": {
           "type": "string",

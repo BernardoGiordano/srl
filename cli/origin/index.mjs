@@ -17,6 +17,12 @@
  *   headers     extra response headers for a static hit
  *   fallback    the document a navigation with no file gets
  *
+ * Admission comes before all of them. A request whose Host names another site is
+ * refused before any route or mount sees it, because a page that rebinds its own
+ * hostname to 127.0.0.1 is otherwise a same-origin reader of everything served here.
+ * `allowedHosts` names any hostname beyond the loopback names and IP literals.
+ * ADR-0131.
+ *
  * Conditional requests are this module's rather than an option, because they are a
  * rule about files rather than a policy. A file streamed from disk is sent with an
  * `ETag`, and an `If-None-Match` naming it is answered 304. Whether a browser ever
@@ -36,8 +42,9 @@
  */
 
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { isIP } from 'node:net';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { contentType } from '../package/interface.mjs';
@@ -95,6 +102,74 @@ function noneMatch(header, etag) {
 }
 
 /**
+ * A Host header, split into the hostname it names. Null when the value is not a
+ * plain host and port, such as one carrying userinfo or a path.
+ *
+ * @param {string | undefined} host
+ * @returns {string | null}
+ */
+function hostnameOf(host) {
+  if (host === undefined) return null;
+  const match = /^(\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::\d{1,5})?$/iu.exec(host);
+  return match === null ? null : /** @type {string} */ (match[1]).toLowerCase();
+}
+
+/**
+ * Whether this origin answers a request addressed to `host`.
+ *
+ * DNS rebinding needs a hostname the attacker controls, and the browser sends that
+ * hostname as Host. So the loopback names pass, and so does any IP literal, because
+ * a browser sends one only when the page's own origin is that address. Browsers
+ * resolve `*.localhost` themselves and never ask DNS. Anything else must be listed.
+ *
+ * @param {string | undefined} host The request's Host header.
+ * @param {ReadonlyArray<string>} [allowed] More hostnames, as `allowedHosts` states them.
+ * @returns {boolean}
+ */
+export function admitsHost(host, allowed = []) {
+  const hostname = hostnameOf(host);
+  if (hostname === null) return false;
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+  if (isIP(hostname.replace(/^\[|\]$/gu, '')) !== 0) return true;
+  return allowed.some((name) => name.toLowerCase() === hostname);
+}
+
+/**
+ * Whether a request came from a page on this origin, or from no page at all.
+ *
+ * A browser marks a cross-site request with `Sec-Fetch-Site`, and an older one still
+ * sends `Origin` on every POST. A request carrying neither came from a tool such as
+ * curl, which can already reach a loopback port with any body it likes. An endpoint
+ * that acts on what it is sent checks this before reading the body.
+ *
+ * @param {IncomingMessage} request
+ * @returns {boolean}
+ */
+export function sameOrigin(request) {
+  const site = request.headers['sec-fetch-site'];
+  if (site !== undefined) return site === 'same-origin';
+  const { origin } = request.headers;
+  if (origin === undefined) return true;
+  try {
+    return new URL(origin).host === request.headers.host;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a decoded path names a dotfile or a dot directory, such as `/.env` or
+ * `/.git/config`. Those hold credentials and history, never something a page loads.
+ * `/.well-known/` is the one public namespace that starts with a dot (RFC 8615).
+ *
+ * @param {string} pathname Already percent-decoded.
+ * @returns {boolean}
+ */
+export function hidden(pathname) {
+  return pathname.split('/').some((segment) => segment.startsWith('.') && segment !== '.well-known');
+}
+
+/**
  * Which mount claims a path, and what is left of the path after the prefix.
  *
  * Pure string work over an already-decoded path, so the same table serves a file
@@ -124,35 +199,49 @@ export function resolveMount(pathname, mounts) {
 }
 
 /**
- * The file a URL path resolves to inside one of the mounts, or null when there is
- * no honest answer.
+ * The file a URL path resolves to inside one of the mounts, and that mount's
+ * directory, or null when there is no honest answer.
  *
  * Having several mounts rather than one does not weaken the traversal check. The
  * candidate is re-checked against the directory it resolved into, so
  * `GET /lib/../../.ssh/id_rsa` leaves that mount and is refused rather than climbing
- * out of the repository. A malformed percent escape and an embedded NUL are refused
- * too, because both are requests a caller can send and neither is a 500.
+ * out of the repository. A malformed percent escape, an embedded NUL and a dot
+ * segment are refused too, because all three are requests a caller can send and
+ * none is a 500.
  *
  * @param {string} pathname
  * @param {ReadonlyArray<Mount>} mounts
- * @returns {string | null}
+ * @returns {{ file: string, root: string } | null}
  */
-export function toFile(pathname, mounts) {
+function locate(pathname, mounts) {
   let decoded;
   try {
     decoded = decodeURIComponent(pathname);
   } catch {
     return null;
   }
-  if (decoded.includes('\0')) return null;
+  if (decoded.includes('\0') || hidden(decoded)) return null;
 
   const match = resolveMount(decoded, mounts);
   if (match === null) return null;
 
-  const dir = resolve(match.target);
-  const candidate = resolve(join(dir, normalize(match.rest)));
-  if (candidate !== dir && !candidate.startsWith(dir + sep)) return null;
-  return candidate;
+  const root = resolve(match.target);
+  const file = resolve(join(root, normalize(match.rest)));
+  if (file !== root && !file.startsWith(root + sep)) return null;
+  return { file, root };
+}
+
+/**
+ * The file a URL path resolves to inside one of the mounts, or null when there is
+ * no honest answer. The same string rules as the server applies, before it reads
+ * the disk.
+ *
+ * @param {string} pathname
+ * @param {ReadonlyArray<Mount>} mounts
+ * @returns {string | null}
+ */
+export function toFile(pathname, mounts) {
+  return locate(pathname, mounts)?.file ?? null;
 }
 
 /**
@@ -219,6 +308,38 @@ export function createOrigin(options) {
   const headersFor = options.headers ?? (() => NO_STORE);
   const transform = options.transform ?? null;
   const route = options.route ?? null;
+  const allowedHosts = options.allowedHosts ?? [];
+
+  /**
+   * Each mount's directory with its symlinks resolved, kept once found, because a
+   * mount table does not change while it is served.
+   *
+   * @type {Map<string, string>}
+   */
+  const realRoots = new Map();
+
+  /**
+   * Whether a file that exists stays inside its mount once symlinks are followed.
+   * The string check in `locate` cannot see a link inside the mount that points out
+   * of it.
+   *
+   * @param {string} file
+   * @param {string} root
+   * @returns {Promise<boolean>}
+   */
+  async function contained(file, root) {
+    try {
+      let base = realRoots.get(root);
+      if (base === undefined) {
+        base = await realpath(root);
+        realRoots.set(root, base);
+      }
+      const real = await realpath(file);
+      return real === base || real.startsWith(base + sep);
+    } catch {
+      return false;
+    }
+  }
 
   /**
    * @param {IncomingMessage} request
@@ -230,6 +351,11 @@ export function createOrigin(options) {
     // and a caller's Host header must not decide which file is read.
     const url = new URL(request.url ?? '/', 'http://origin.invalid');
 
+    if (!admitsHost(request.headers.host, allowedHosts)) {
+      response.writeHead(403, { 'Content-Type': 'text/plain' }).end('Host not allowed');
+      return;
+    }
+
     if (route !== null && (await route(request, response, url))) return;
 
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -237,18 +363,23 @@ export function createOrigin(options) {
       return;
     }
 
-    const resolved = toFile(url.pathname, mounts);
-    if (resolved === null) {
+    const located = locate(url.pathname, mounts);
+    if (located === null) {
       response.writeHead(403, { 'Content-Type': 'text/plain' }).end('Forbidden');
       return;
     }
 
-    let file = resolved;
+    let file = located.file;
     let stats = await statOrNull(file);
 
     if (stats?.isDirectory() === true) {
       file = join(file, 'index.html');
       stats = await statOrNull(file);
+    }
+
+    if (stats !== null && !(await contained(file, located.root))) {
+      response.writeHead(403, { 'Content-Type': 'text/plain' }).end('Forbidden');
+      return;
     }
 
     if (stats === null) {

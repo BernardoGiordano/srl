@@ -87,10 +87,15 @@ Project
 
 Development
   serve [--app <name>] [--port <n>] [--no-watch] [--open]
+        [--host <address>] [--allowed-host <hostname>]...
         [--proxy <prefix>=<origin>]...
                             static server for one application: the library's
                             mounts, history fallback, watch and live reload.
                             Failures in the page are printed with their codes.
+                            --host binds another address than 127.0.0.1, such
+                            as 0.0.0.0 to reach it from a phone on the network.
+                            --allowed-host answers a hostname beyond localhost
+                            and IP addresses, such as one in /etc/hosts.
                             --proxy forwards a prefix to a backend instead of
                             serving it from disk, so an application with an API
                             develops on one origin:
