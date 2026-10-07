@@ -624,12 +624,14 @@ export async function verifyDependencies() {
      * A remote contributes no byte the page doesn't pin. The runtime refuses a remote
      * whose announced template is unpinned and reads an unpinned remote locale bundle
      * as empty, and the browser enforces each module pin. So every module the entry
-     * reaches, every template source delivery announces for the remote, and every
-     * locale bundle on disk must carry a pin that matches its bytes. ADR-0129.
+     * reaches, every stylesheet its Elements own, every template source delivery
+     * announces for the remote, and every locale bundle on disk must carry a pin that
+     * matches its bytes. ADR-0129.
      */
     const remotes = admitted?.remotes ?? [];
+    const model = await readProject(app);
     const shipped =
-      remotes.length === 0 ? [] : shippedTemplates(await readProject(app)).map((template) => String(template.url));
+      remotes.length === 0 ? [] : shippedTemplates(model).map((template) => String(template.url));
 
     for (const remote of remotes) {
       const name = remote.name;
@@ -651,8 +653,12 @@ export async function verifyDependencies() {
           index,
         );
       }
-      const siblings = await walk(dirname(entry), /\.js$/u);
+      const siblings = await walk(dirname(entry), /\.m?js$/u);
       const modules = [...new Set([...graph.files, ...siblings])];
+      const moduleFiles = new Set(modules);
+      const stylesheets = [...new Set([...model.elements.values()]
+        .filter((record) => moduleFiles.has(record.module) && record.stylesheetExists === true)
+        .flatMap((record) => record.stylesheet === null ? [] : [record.stylesheet]))];
 
       const base = url.slice(0, url.lastIndexOf('/') + 1);
       const templates = shipped.filter((template) => template.startsWith(base));
@@ -669,6 +675,10 @@ export async function verifyDependencies() {
         ...modules.flatMap((file) => {
           const moduleUrl = fileToUrl(app.dir, file);
           return moduleUrl === null ? [] : [{ kind: 'module', url: moduleUrl, file }];
+        }),
+        ...stylesheets.flatMap((file) => {
+          const stylesheetUrl = fileToUrl(app.dir, file);
+          return stylesheetUrl === null ? [] : [{ kind: 'stylesheet', url: stylesheetUrl, file }];
         }),
         ...templates.map((template) => ({
           kind: 'template',
@@ -713,7 +723,8 @@ export async function verifyDependencies() {
         'deps/remote-pinned',
         `${name} remote: same-origin, manifest pin matches, ${String(matched)} of ` +
           `${String(pinned.length)} file(s) pinned (${String(modules.length)} module(s), ` +
-          `${String(templates.length)} template(s), ${String(locales.length)} locale bundle(s))`,
+          `${String(stylesheets.length)} stylesheet(s), ${String(templates.length)} template(s), ` +
+          `${String(locales.length)} locale bundle(s))`,
         { group },
       );
     }
@@ -995,8 +1006,6 @@ export async function verifyDependencies() {
      * definition indented inside a block, or a `template` key on a continuation line,
      * is invisible to one and visible to the other.
      */
-    const model = await readProject(app);
-
     // Already findings, under the model's own `project/` codes and this application's name.
     found.push(...projectErrors(model));
 

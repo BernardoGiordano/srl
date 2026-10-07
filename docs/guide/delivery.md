@@ -139,6 +139,12 @@ remote template, template bundle or locale file the map doesn't pin.
 [ADR-0129](../adr/0129-one-pin-table-for-every-byte-the-page-runs.md) records
 the rule.
 
+Under source delivery, an Element declared with `styles: true` fetches its sibling
+`.css` under the page's pin before defining its tag. `npm run verify` requires matching
+pins for Element stylesheets owned by a source remote, including imported modules
+outside its entry directory. Update those pins when changing remote CSS. Unpinned local
+shell Element stylesheets keep their development behavior.
+
 Browsers apply import-map pins only to modules, and some engines ignore them.
 Before the first remote loads, the runtime imports a probe module pinned to the
 digest of zero bytes. An engine that enforces pins refuses it, which Chromium

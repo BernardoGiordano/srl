@@ -12,6 +12,7 @@
  */
 
 import { scopeStylesheet } from '@core/elements/style-scope.js';
+import { pinned } from '@core/foundation/pins.js';
 
 /**
  * The tag and adopted sheet for each stylesheet URL. The promise is cached, so a
@@ -73,7 +74,7 @@ export async function reviseStylesheet(url, source) {
  * @returns {Promise<CSSStyleSheet>}
  */
 async function adopt(tag, href) {
-  const response = await fetch(href);
+  const response = await fetch(href, pinned(href));
   if (!response.ok) {
     throw new Error(
       `Cannot load stylesheet ${href}: ${String(response.status)} ${response.statusText}`,

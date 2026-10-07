@@ -31,11 +31,15 @@ An Element opts in with `styles: true`, and its stylesheet is the module's sibli
 
 | Path | What happens |
 |---|---|
-| Source | `defineComponent` fetches, scopes and adopts the sheet before `customElements.define` |
+| Source | `defineComponent` fetches under the page's integrity pin, scopes and adopts the sheet before `customElements.define` |
 | Production | The build turns `styles: true` into a virtual CSS module and folds every chunk's rules into one stylesheet |
 | Development edit | `reviseStylesheet` replaces the adopted sheet's rules in place |
 
 `npm run verify` refuses a missing or unscopable stylesheet at its line and column.
+For a source remote, it also requires a matching page pin for each Element-owned
+stylesheet in the remote's import graph or entry directory, including modules reached
+outside that directory. The browser passes that pin to Fetch before scoping or adopting
+the rules. A changed response refuses the remote before its Element is defined.
 
 ## Consequences
 

@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-06
-- Affects: `source/lib/core/foundation/pins.js`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/remotes/mfe.js`, `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `source/lib/core/localization/i18n.js`, `source/lib/host/remote-host.js`, `cli/delivery/build.mjs`, `cli/delivery/service-worker.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/activate-release.mjs`, `cli/package/interface.mjs`, `cli/checks/importmap-check.mjs`, `tools/checks/verify-deps.mjs`
+- Affects: `source/lib/core/foundation/pins.js`, `source/lib/core/elements/stylesheet.js`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/remotes/mfe.js`, `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `source/lib/core/localization/i18n.js`, `source/lib/host/remote-host.js`, `cli/delivery/build.mjs`, `cli/delivery/service-worker.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/activate-release.mjs`, `cli/package/interface.mjs`, `cli/checks/importmap-check.mjs`, `tools/checks/verify-deps.mjs`
 
 ## Context
 
@@ -102,7 +102,12 @@ which `object-src 'none'` already blocks in a built artifact.
 
 Release activation verifies the release's bytes before it moves the pointer. Under source
 delivery, `npm run verify` walks each remote's import graph and requires pins for every
-module, announced template and locale file it reaches.
+module, Element-owned stylesheet, announced template and locale file it reaches. The
+stylesheet inventory comes from the project model's `styles: true` declarations and
+includes modules in the entry directory and modules reached outside it. Source
+stylesheet loading passes the page pin to Fetch before any rules are adopted or the
+Element is defined. Chromium and WebKit regressions mount a styled source remote with
+matching CSS and refuse changed CSS without defining its tag or adopting its rules.
 
 ## Consequences
 
@@ -112,9 +117,9 @@ module, announced template and locale file it reaches.
   probe's refusal.
 - An engine that ignores import-map pins runs no remotes. The shell still runs there,
   and its own chunks go unverified on that engine.
-- Under source delivery, editing a remote's template or locale file means updating its
-  pin in `index.html`, as editing its modules already did. The shell's own templates stay
-  unpinned there, like its `/src/` modules.
+- Under source delivery, editing a remote's template, Element stylesheet or locale file
+  means updating its pin in `index.html`, as editing its modules already did. The shell's
+  own templates and Element stylesheets stay unpinned there, like its `/src/` modules.
 - Under source delivery with no `bundleFiles`, a changed manifest can still point the
   shell's `i18n.bundles` at another same-origin JSON file. `t()` renders text, so that
   reaches words and not markup.
