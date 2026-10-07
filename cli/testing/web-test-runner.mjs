@@ -20,8 +20,8 @@
  * published test harness. A test imports the harness under that name in both shapes.
  *
  * `@web/test-runner` is the project's dependency rather than the CLI's, so a project
- * without browser tests installs no browser tooling. This module only builds the
- * configuration object and imports nothing from it.
+ * without browser tests installs no browser tooling. Building this configuration
+ * loads the runner's default reporter alongside its admission reporter.
  *
  * The runner binds every interface whatever its `hostname`, and serves the whole
  * repository. The first middleware answers only a loopback peer, admits Host the way
@@ -29,11 +29,15 @@
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 import { LIB_MOUNT_ROUTES, REPO, repoPath } from '../layout.mjs';
 import { admitsHost, hidden, resolveMount } from '../origin/index.mjs';
 import { MANIFEST, PACKAGE, extractImportMap, fileToUrl } from '../package/interface.mjs';
+import { htmlAttribute, runnerAdmission, scriptJson } from './runner-admission.mjs';
+
+const require = createRequire(import.meta.url);
 
 /**
  * The Trusted Types policies the library and the harness create. A test page enforces
@@ -89,10 +93,8 @@ function importMapFor(app) {
   const pins = Object.fromEntries(
     Object.entries(integrity).filter(([url]) => !url.startsWith('/lib/vendor/')),
   );
-  const body = JSON.stringify(
+  const body = scriptJson(
     { imports: harnessUrl === null ? imports : { ...imports, [HARNESS]: harnessUrl }, integrity: pins },
-    null,
-    2,
   );
   return `<script type="importmap">\n${body}\n    </script>`;
 }
@@ -134,13 +136,15 @@ function hiddenPath(path) {
 export function testRunnerConfig(options) {
   const { app } = options;
   const routes = [...LIB_MOUNT_ROUTES, ...applicationRoutes(app)];
-  const policies = [...LIBRARY_POLICIES, ...(options.policies ?? [])].join(' ');
+  const admission = runnerAdmission([...LIBRARY_POLICIES, ...(options.policies ?? [])]);
+  const { defaultReporter } = /** @type {typeof import('@web/test-runner')} */ (require('@web/test-runner'));
 
   return {
     rootDir: REPO,
     files: [...(options.files ?? []), `${app}/test/**/*.test.js`],
     nodeResolve: false,
     concurrency: 1,
+    reporters: [{ start: (args) => admission.start(args) }, defaultReporter()],
 
     middleware: [
       async (ctx, next) => {
@@ -152,7 +156,16 @@ export function testRunnerConfig(options) {
           ctx.status = 404;
           return;
         }
+        if (!admission.admits(ctx.URL)) {
+          ctx.status = 403;
+          return;
+        }
         await next();
+        if (ctx.response.is('html') && typeof ctx.body === 'string') {
+          const protectedDocument = admission.protect(ctx.body);
+          ctx.body = protectedDocument.html;
+          ctx.set('Content-Security-Policy', protectedDocument.policy);
+        }
       },
       async (ctx, next) => {
         // The path only. A query string is the runner's business, and percent escapes
@@ -173,14 +186,10 @@ export function testRunnerConfig(options) {
     testRunnerHtml: (testFramework) => `<!doctype html>
 <html>
   <head>
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="trusted-types ${policies}; require-trusted-types-for 'script'"
-    >
     ${importMapFor(app)}
   </head>
   <body>
-    <script type="module" src="${testFramework}"></script>
+    <script type="module" src="${htmlAttribute(testFramework)}"></script>
   </body>
 </html>`,
   };

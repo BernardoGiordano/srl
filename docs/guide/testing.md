@@ -35,6 +35,13 @@ test page carries the application's own import map from `index.html`, plus
 `@srljs/core/testing/harness.js`. It enforces Trusted Types for the library's
 policies and the harness's.
 
+An HTTP Content Security Policy allows scripts from the test origin and authorizes
+the runner's inline scripts by their hashes. Manual debug URLs can select only
+canonical local paths in the current run's registered test set. External URLs,
+unregistered files, HTML delimiters, and arbitrary test-file queries are refused.
+Keep the preset's admission reporter when customizing `reporters`; it registers
+the selected tests and sessions before test requests are admitted.
+
 ## A test
 
 ```js
