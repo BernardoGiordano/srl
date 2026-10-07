@@ -269,6 +269,34 @@ describe('remote host contract', () => {
     assert.equal(sent.length, 0);
   });
 
+  it('refuses a path a server would route past the grant', async () => {
+    const { context } = createRemoteHostProvider().connect(descriptor());
+
+    // Each passes a string prefix check on /api/analytics/. nginx decodes `%2F` and
+    // `%5C` before it resolves dots, a servlet container reads `..;` as `..`, and a
+    // server that merges slashes reads `//` as `/`. ADR-0133.
+    for (const path of [
+      '/api/analytics/..%2f..%2fadmin',
+      '/api/analytics/..%5c..%5cadmin',
+      '/api/analytics/%2e%2e/%2e%2e/admin%2fkeys',
+      '/api/analytics/..;/..;/admin',
+      '/api/analytics//x',
+    ]) {
+      await assert.rejects(() => context.auth.fetch(path), 'API path must not');
+    }
+    assert.equal(sent.length, 0);
+  });
+
+  it('fails a granted call that the server redirects', async () => {
+    auth.session.value = session(['analytics:read']);
+    const { context } = createRemoteHostProvider().connect(descriptor());
+
+    // The grant was checked against the path asked for. Following a redirect would
+    // let a same-origin server send the credential to a path the remote isn't granted.
+    await context.auth.fetch('/api/analytics/summary', { redirect: 'follow' });
+    assert.equal(sent[0]?.redirect, 'error');
+  });
+
   it('throws on a non-2xx from json()', async () => {
     globalThis.fetch = () => Promise.resolve(new Response('nope', { status: 503 }));
     const { context } = createRemoteHostProvider().connect(descriptor());

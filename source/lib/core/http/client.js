@@ -1,4 +1,5 @@
 import { token } from '@core/foundation/inject.js';
+import { within } from '@core/foundation/paths.js';
 
 /**
  * The outbound JSON client every application on this library shares. ADR-0013.
@@ -108,6 +109,10 @@ function defaultErrorCode(status, body) {
 
 export class ApiClient {
   #baseUrl;
+
+  /** The base, resolved once. Every request URL must stay on its origin and below its path. */
+  #base;
+
   #fetch;
   #errorCode;
 
@@ -121,6 +126,7 @@ export class ApiClient {
    */
   constructor(baseUrl, options) {
     this.#baseUrl = baseUrl.replace(/\/+$/u, '');
+    this.#base = new URL(this.#baseUrl === '' ? '/' : this.#baseUrl, location.origin);
     // Called without a receiver. `this.#fetch(...)` would pass the client as `this`, and
     // `globalThis.fetch` throws "Illegal invocation" for any receiver but the window.
     const send = options.fetch;
@@ -130,7 +136,7 @@ export class ApiClient {
 
   /**
    * A GET that joins a read already in flight for the same URL. `signal` still cancels
-   * only this caller.
+   * only this caller. `async`, so a path outside the base rejects instead of throwing.
    *
    * @template T
    * @param {string} path
@@ -138,7 +144,7 @@ export class ApiClient {
    * @param {AbortSignal} [signal]
    * @returns {Promise<T>}
    */
-  get(path, query, signal) {
+  async get(path, query, signal) {
     const url = this.#url(path, query);
 
     // An already aborted signal rejects without joining, as `fetch` would.
@@ -210,13 +216,15 @@ export class ApiClient {
   }
 
   /**
+   * `async`, so a path outside the base rejects instead of throwing.
+   *
    * @template T
    * @param {string} path
    * @param {RequestInit} init
    * @param {Query} [query]
    * @returns {Promise<T>}
    */
-  #send(path, init, query) {
+  async #send(path, init, query) {
     return this.#sendUrl(this.#url(path, query), init, path);
   }
 
@@ -241,12 +249,21 @@ export class ApiClient {
   }
 
   /**
+   * The request URL, refused when it leaves the base. With a base of `/`, the path
+   * `//host/x` names another origin, and `/../x` climbs out of `/api`. ADR-0133.
+   *
    * @param {string} path
    * @param {Query} [query]
    * @returns {string}
    */
   #url(path, query) {
     const url = new URL(`${this.#baseUrl}${path}`, location.origin);
+    if (url.origin !== this.#base.origin || !within(this.#base.pathname, url.pathname)) {
+      throw new Error(
+        `ApiClient path ${JSON.stringify(path)} resolves to ${url.href}, outside the base ` +
+          `${this.#base.href}. A path must stay on the base's origin and below its path.`,
+      );
+    }
     for (const [key, value] of Object.entries(query ?? {})) {
       if (value === undefined) continue;
       // Append each value, so an array becomes `?status=a&status=b`, which survives

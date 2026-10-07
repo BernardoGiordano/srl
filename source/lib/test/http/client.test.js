@@ -111,6 +111,31 @@ describe('ApiClient', () => {
       assert.equal(present(sent.calls[0]).url, `${location.origin}/api/orders`);
     });
 
+    it('refuses a path that leaves the base, before anything is sent', async () => {
+      // With a base of `/`, `//host` and `/\host` parse as another origin, and `/../`
+      // climbs out of a base path. ADR-0133.
+      const sent = transport();
+      const root = new ApiClient('/', { fetch: sent.fetch });
+      const api = new ApiClient('/api', { fetch: sent.fetch });
+      await assert.rejects(() => root.get('//evil.example/x'), 'outside the base');
+      await assert.rejects(() => root.post('/\\evil.example/x', {}), 'outside the base');
+      await assert.rejects(() => api.get('/../admin'), 'outside the base');
+      await assert.rejects(() => api.delete('/orders/../../admin'), 'outside the base');
+      assert.throws(() => api.streamUrl('/../events'), 'outside the base');
+      assert.equal(sent.calls.length, 0);
+
+      await api.get('/orders/../orders/1');
+      assert.equal(present(sent.calls[0]).url, `${location.origin}/api/orders/1`);
+    });
+
+    it('keeps a cross-origin base on its own origin and path', async () => {
+      const sent = transport();
+      const client = new ApiClient('https://api.example/v1', { fetch: sent.fetch });
+      await assert.rejects(() => client.get('/../v2/x'), 'outside the base');
+      await client.get('/x');
+      assert.equal(present(sent.calls[0]).url, 'https://api.example/v1/x');
+    });
+
     it('drops an undefined parameter rather than sending the word', async () => {
       const sent = transport();
       await new ApiClient('/api', { fetch: sent.fetch }).get('/orders', { status: undefined, q: 'a' });

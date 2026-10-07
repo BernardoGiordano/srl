@@ -2,10 +2,12 @@ import { defineComponent } from '@core/elements/component.js';
 import { defineElementDefault } from '@core/elements/element-defaults.js';
 import { MountSequence, createElement } from '@core/elements/mount.js';
 import { whenRendered } from '@core/elements/settled.js';
+import { destination } from '@core/foundation/paths.js';
 import { signal } from '@core/foundation/reactive.js';
 
 /** @import { MountAttempt } from '@core/elements/mount.js' */
 /** @import { MountRequest } from '@core/elements/types.js' */
+/** @import { Destination } from '@core/foundation/paths.js' */
 /** @import { CompiledRoute, RouteDef, RouteMatch } from '@core/navigation/types.js' */
 
 /**
@@ -242,7 +244,7 @@ class AppRouter {
   #frames = [];
 
   /**
-   * The full href of the mounted chain, as published. A rollback restores it, and
+   * The absolute href of the mounted chain, as published. A rollback restores it, and
    * the query string matters because it can hold a table's filter state. Empty until
    * the first navigation commits.
    */
@@ -281,7 +283,7 @@ class AppRouter {
   async start() {
     const { signal: abort } = this.#listeners;
 
-    window.addEventListener('popstate', () => void this.#dispatch(currentHref(), false), {
+    window.addEventListener('popstate', () => void this.#dispatch(location.href, false), {
       signal: abort,
     });
 
@@ -289,7 +291,7 @@ class AppRouter {
     // later.
     document.addEventListener('click', (event) => this.#onClick(event), { signal: abort });
 
-    await this.#dispatch(currentHref(), false);
+    await this.#dispatch(location.href, false);
   }
 
   /** Detach listeners and release the whole active chain. */
@@ -320,22 +322,24 @@ class AppRouter {
    * Resolves when the navigation has settled, whether or not it succeeded. See
    * `navigationError`.
    *
-   * @param {string} href
+   * The URL travels whole from here on. Its pathname is never parsed again as a
+   * reference, where `//host/x` would name another origin. ADR-0133.
+   *
+   * @param {Destination} target
    * @param {{ replace?: boolean }} [options]
    * @returns {Promise<void>}
    */
-  async navigate(href, options) {
-    const url = new URL(href, location.origin);
-    if (url.origin !== location.origin) {
-      location.assign(url.href);
+  async navigate(target, options) {
+    const { href } = target.url;
+    if (target.kind === 'external') {
+      location.assign(href);
       return;
     }
 
-    const target = url.pathname + url.search + url.hash;
-    if (options?.replace === true) history.replaceState(null, '', target);
-    else history.pushState(null, '', target);
+    if (options?.replace === true) history.replaceState(null, '', href);
+    else history.pushState(null, '', href);
 
-    void this.#dispatch(target, true);
+    void this.#dispatch(href, true);
     await this.settled();
   }
 
@@ -405,11 +409,11 @@ class AppRouter {
     }
 
     event.preventDefault();
-    void this.navigate(url.pathname + url.search + url.hash);
+    void this.navigate({ kind: 'route', url });
   }
 
   /**
-   * @param {string} href
+   * @param {string} href Absolute, on this origin.
    * @param {boolean} isPush
    * @returns {Promise<void>}
    */
@@ -422,7 +426,7 @@ class AppRouter {
     isNavigating.value = true;
 
     try {
-      let target = href;
+      let url = new URL(href);
 
       // Frames that already agreed to be left during this navigation. A redirect hop
       // checks the chain again, and one click must not prompt twice.
@@ -430,7 +434,6 @@ class AppRouter {
       const cleared = new Set();
 
       for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-        const url = new URL(target, location.origin);
         const match = this.#match(url);
 
         // Ask about leaving before entering, fetching or tearing down, because a
@@ -458,13 +461,13 @@ class AppRouter {
           await this.#deactivateFrom(0);
           if (!attempt.live) return;
           publish(url, {});
-          this.#committed = url.pathname + url.search + url.hash;
+          this.#committed = url.href;
           return;
         }
 
         if (match.route.redirect !== undefined) {
-          target = match.route.redirect;
-          history.replaceState(null, '', target);
+          url = redirectUrl(match.route.redirect);
+          history.replaceState(null, '', url.href);
           continue;
         }
 
@@ -474,15 +477,15 @@ class AppRouter {
         const verdict = await this.#authorize(match, attempt);
         if (!attempt.live) return;
         if (verdict !== true) {
-          target = verdict;
-          history.replaceState(null, '', target);
+          url = redirectUrl(verdict);
+          history.replaceState(null, '', url.href);
           continue;
         }
 
         // Publish before creating the component, so its first render sees the right
         // params. `staged` lets a render that never reaches the screen roll this back.
         publish(url, match.params);
-        this.#committed = url.pathname + url.search + url.hash;
+        this.#committed = url.href;
 
         await this.#render(match, attempt, staged);
         if (!attempt.live) return;
@@ -915,9 +918,22 @@ function publish(url, params) {
   currentPath.value = url.pathname;
 }
 
-/** @returns {string} */
-function currentHref() {
-  return location.pathname + location.search + location.hash;
+/**
+ * A guard's or a route's redirect, as a URL on this origin. Leaving the origin is
+ * `navigate`'s job, so a redirect that tries is a configuration error.
+ *
+ * @param {string} href
+ * @returns {URL}
+ */
+function redirectUrl(href) {
+  const { kind, url } = destination(href, location.origin);
+  if (kind === 'external') {
+    throw new Error(
+      `Redirect to ${JSON.stringify(href)} leaves the origin. Guards and route redirects stay ` +
+        `on it, and \`navigate\` leaves.`,
+    );
+  }
+  return url;
 }
 
 /**
@@ -1003,13 +1019,26 @@ export class RouterAttachment {
    * Navigate, resolving when the navigation settles. `navigationError` says whether
    * it succeeded.
    *
+   * Throws synchronously for an href that is not http or https, before waiting on
+   * anything, so the error reaches the caller that wrote it.
+   *
    * @param {string} href
    * @param {{ replace?: boolean }} [options]
    * @returns {Promise<void>}
    */
-  async navigate(href, options) {
+  navigate(href, options) {
+    const target = destination(href, location.origin);
+    return this.#navigate(target, options);
+  }
+
+  /**
+   * @param {Destination} target
+   * @param {{ replace?: boolean }} [options]
+   * @returns {Promise<void>}
+   */
+  async #navigate(target, options) {
     const router = await this.#ready();
-    await router?.navigate(href, options);
+    await router?.navigate(target, options);
   }
 
   /**
@@ -1096,7 +1125,8 @@ export async function attachRouter(host, routes, options) {
  * never rejects, because `navigationError` holds the outcome, so an event handler can
  * `void` it.
  *
- * Throws synchronously when no router is attached, which is a misuse.
+ * Throws synchronously when no router is attached, or when `href` is not an http or
+ * https URL. Both are misuse, and `javascript:` is also an attack.
  *
  * @param {string} href
  * @param {{ replace?: boolean }} [options]

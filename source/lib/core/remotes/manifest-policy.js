@@ -7,10 +7,12 @@
  * built. Everything after it reads the admitted value, which is normalized, checked
  * for collisions and frozen.
  *
- * The module imports nothing, so `tools/checks/verify-deps.mjs` can load it in Node
- * and admit every checked-in manifest under the browser's rules. The page's import
- * map pins arrive as an argument, because the two callers read them from different
- * places. Fetching the document belongs to `remotes/mfe.js`.
+ * Its one import is `foundation/paths.js`, which imports nothing, so
+ * `tools/checks/verify-deps.mjs` can load it in Node and admit every checked-in
+ * manifest under the browser's rules. The import is relative, because Node doesn't
+ * resolve the `@core/` import map entry. The page's import map pins arrive as an
+ * argument, because the two callers read them from different places. Fetching the
+ * document belongs to `remotes/mfe.js`.
  *
  * Every URL in the manifest must be a same-origin, root-relative path. Admission
  * rejects anything else and never repairs it.
@@ -25,6 +27,8 @@
  * is still checked in full, and a key admission does not know is refused, so a
  * misspelled section fails instead of reading as absent. ADR-0123.
  */
+
+import { admitPath, within } from '../foundation/paths.js';
 
 /** @import { I18nConfig } from '@core/localization/types.js' */
 /** @import { AppManifest, ManifestSource, RemoteDescriptor, RemoteGrants, RemoteRequirements } from '@core/remotes/types.js' */
@@ -103,13 +107,11 @@ export const MANIFEST_PATTERNS = Object.freeze({
 export const ASSET_TYPES = Object.freeze(['module', 'style', 'template', 'locale']);
 
 /**
- * Admission state for one document: its URL, the base its paths resolve against, and
- * the page's integrity pins, read lazily and only when a remote needs them.
+ * Admission state for one document: its URL and the page's integrity pins, read lazily
+ * and only when a remote needs them.
  *
  * @typedef {{
  *   url: string,
- *   origin: string,
- *   base: string,
  *   pins: () => Map<string, string>,
  * }} Policy
  */
@@ -131,8 +133,6 @@ export function admitManifest(value, source) {
   /** @type {Policy} */
   const policy = {
     url,
-    origin: new URL(source.base).origin,
-    base: source.base,
     pins: pinIndex(source),
   };
 
@@ -148,9 +148,9 @@ export function admitManifest(value, source) {
   assertDistinct(admitted, policy);
 
   const templateBundle = root.templateBundle;
-  const templateGroups = admitTemplateGroups(root.templateGroups, `${url}: templateGroups`, policy);
+  const templateGroups = admitTemplateGroups(root.templateGroups, `${url}: templateGroups`);
   const grouped = Object.values(templateGroups).flat();
-  const listed = admitTemplateFiles(root.templateFiles, `${url}: templateFiles`, policy);
+  const listed = admitTemplateFiles(root.templateFiles, `${url}: templateFiles`);
   if (grouped.length > 0 && listed.length > 0) {
     throw new Error(
       `${url} names its templates twice, as \`templateGroups\` and as \`templateFiles\`. One ` +
@@ -166,7 +166,7 @@ export function admitManifest(value, source) {
       templateBundle === undefined
         ? undefined
         : requirePin(
-            admitPath(templateBundle, `${url}: templateBundle`, policy),
+            admitUrl(templateBundle, `${url}: templateBundle`),
             `${url}: templateBundle`,
             policy,
           ),
@@ -187,10 +187,9 @@ export function admitManifest(value, source) {
  *
  * @param {unknown} value
  * @param {string} where
- * @param {Policy} policy
  * @returns {Readonly<Record<string, readonly string[]>>}
  */
-function admitTemplateGroups(value, where, policy) {
+function admitTemplateGroups(value, where) {
   // No prototype, because the keys come from the document. `JSON.parse` makes
   // `__proto__` an own key, and writing it to a plain object would replace the
   // prototype.
@@ -205,7 +204,7 @@ function admitTemplateGroups(value, where, policy) {
     if (!Array.isArray(entries)) throw new Error(`${where}.${name} must be an array.`);
     groups[name] = Object.freeze(
       /** @type {unknown[]} */ (entries).map((entry, index) => {
-        const file = admitPath(entry, `${where}.${name}[${String(index)}]`, policy);
+        const file = admitUrl(entry, `${where}.${name}[${String(index)}]`);
         if (seen.has(file)) throw new Error(`${where} names ${file} more than once.`);
         seen.add(file);
         return file;
@@ -224,15 +223,14 @@ function admitTemplateGroups(value, where, policy) {
  *
  * @param {unknown} value
  * @param {string} where
- * @param {Policy} policy
  * @returns {readonly string[]}
  */
-function admitTemplateFiles(value, where, policy) {
+function admitTemplateFiles(value, where) {
   if (value === undefined) return Object.freeze([]);
   if (!Array.isArray(value)) throw new Error(`${where} must be an array.`);
   const seen = new Set();
   const files = /** @type {unknown[]} */ (value).map((entry, index) => {
-    const file = admitPath(entry, `${where}[${String(index)}]`, policy);
+    const file = admitUrl(entry, `${where}[${String(index)}]`);
     if (seen.has(file)) throw new Error(`${where} names ${file} more than once.`);
     seen.add(file);
     return file;
@@ -243,26 +241,16 @@ function admitTemplateFiles(value, where, policy) {
 /**
  * Apply the trust rule to one URL field and return its path.
  *
- * A value must already be in the form the URL parser gives back. `/api/../auth` is
- * `/auth` to a browser and something else to a string comparison, and `<` comes back
- * as `%3C`, so a value with anything left to normalize is refused rather than
- * repaired. ADR-0132. A backslash is refused before parsing, because the URL parser
- * treats it as a separator and `/\evil.example/x` would become another origin.
+ * The value must be same-origin and in the one canonical form every reader shares,
+ * so it is refused rather than repaired when anything is left to normalize. ADR-0133.
  *
  * @param {unknown} value
  * @param {string} where
- * @param {Policy} policy
  * @returns {string}
  */
-function admitPath(value, where, policy) {
+function admitUrl(value, where) {
   const raw = requireString(value, where);
 
-  if (raw.includes('\\')) {
-    throw new Error(
-      `${where} must not contain a backslash, got ${JSON.stringify(raw)}. The URL parser reads ` +
-        `it as a path separator, so "/\\host/x" is another origin wearing the shape of a path.`,
-    );
-  }
   if (!raw.startsWith('/') || raw.startsWith('//')) {
     throw new Error(
       `${where} must be same-origin: a root-relative path beginning with "/", got ` +
@@ -270,25 +258,7 @@ function admitPath(value, where, policy) {
         `\`connect-src 'self'\`, so another origin is not something this file may introduce.`,
     );
   }
-  if (raw.includes('#')) {
-    throw new Error(
-      `${where} must not contain a fragment, got ${JSON.stringify(raw)}. Nothing here is fetched ` +
-        `with one, so it is either a typo or an attempt to hide the rest of the value.`,
-    );
-  }
-
-  const target = new URL(raw, policy.origin);
-  if (target.origin !== policy.origin) {
-    throw new Error(`${where} must be same-origin, got ${JSON.stringify(raw)}.`);
-  }
-  const normal = target.pathname + target.search;
-  if (normal !== raw) {
-    throw new Error(
-      `${where} must be written in its normal form, ${JSON.stringify(normal)}, got ` +
-        `${JSON.stringify(raw)}. Every reader of this path has to see the same string.`,
-    );
-  }
-  return normal;
+  return admitPath(raw, where, { query: true });
 }
 
 /**
@@ -303,19 +273,19 @@ function admitRemote(value, index, policy, supportedLocales) {
   const name = requireString(entry.name, `${policy.url}: remotes[${String(index)}].name`);
   const where = `${policy.url}: remote "${name}"`;
 
-  const url = admitPath(entry.url, `${where} url`, policy);
+  const url = admitUrl(entry.url, `${where} url`);
   const integrity = requireString(entry.integrity, `${where} integrity`);
   assertPinned(url, integrity, where, policy);
   const assets = admitRemoteAssets(entry.assets, where, policy);
   const templates =
     entry.templates === undefined
       ? undefined
-      : admitPath(entry.templates, `${where} templates`, policy);
-  const templateFiles = admitTemplateFiles(entry.templateFiles, `${where} templateFiles`, policy);
+      : admitUrl(entry.templates, `${where} templates`);
+  const templateFiles = admitTemplateFiles(entry.templateFiles, `${where} templateFiles`);
   for (const [index, file] of templateFiles.entries()) {
     requirePin(file, `${where} templateFiles[${String(index)}]`, policy);
   }
-  const locales = admitBundlePatterns(entry.locales, `${where} locales`, supportedLocales, policy);
+  const locales = admitBundlePatterns(entry.locales, `${where} locales`, supportedLocales);
   if (
     assets.length > 0 &&
     !assets.some((asset) => asset.type === 'module' && asset.url === url && asset.integrity === integrity)
@@ -334,7 +304,7 @@ function admitRemote(value, index, policy, supportedLocales) {
     locales,
     templates,
     templateFiles,
-    mount: admitMount(entry.mount, where, policy),
+    mount: admitMount(entry.mount, where),
     requires: admitRequirements(entry.requires, where),
     grants: admitGrants(entry.grants, where),
   });
@@ -359,7 +329,7 @@ function admitRemoteAssets(value, where, policy) {
     if (!ASSET_TYPES.includes(type)) {
       throw new Error(`${assetWhere}.type must be one of ${ASSET_TYPES.join(', ')}.`);
     }
-    const url = admitPath(asset.url, `${assetWhere}.url`, policy);
+    const url = admitUrl(asset.url, `${assetWhere}.url`);
     if (seen.has(url)) throw new Error(`${where} assets names ${url} more than once.`);
     seen.add(url);
     const integrity = requireString(asset.integrity, `${assetWhere}.integrity`);
@@ -486,14 +456,14 @@ function assertLocaleAssets(assets, patterns, supportedLocales, where) {
  *
  * `*`, `:` and `?` are refused, because they would change what the route matches. A
  * trailing slash is removed, so `/billing` and `/billing/` can't be declared as two
- * remotes.
+ * remotes. An empty segment is refused, because the router reads `/a//b` as `/a/b` and
+ * two spellings of one mount would let declaration order pick the guard.
  *
  * @param {unknown} value
  * @param {string} where
- * @param {Policy} policy
  * @returns {string}
  */
-function admitMount(value, where, policy) {
+function admitMount(value, where) {
   const raw = requireString(value, `${where} mount`);
 
   for (const character of ['*', ':', '?']) {
@@ -506,7 +476,7 @@ function admitMount(value, where, policy) {
     }
   }
 
-  const path = admitPath(raw, `${where} mount`, policy);
+  const path = admitUrl(raw, `${where} mount`);
   const mount = path.endsWith('/') ? path.slice(0, -1) : path;
   if (mount === '') {
     throw new Error(
@@ -550,9 +520,9 @@ function assertDistinct(remotes, policy) {
             `and its grants.`,
         );
       }
-      const outer = covers(remote.mount, other.mount) ? remote : other;
+      const outer = within(remote.mount, other.mount) ? remote : other;
       const inner = outer === remote ? other : remote;
-      if (covers(outer.mount, inner.mount)) {
+      if (within(outer.mount, inner.mount)) {
         throw new Error(
           `${policy.url}: remote "${outer.name}" mounts at "${outer.mount}" and owns everything ` +
             `beneath it, which contains remote "${inner.name}" at "${inner.mount}". A mount is a ` +
@@ -561,15 +531,6 @@ function assertDistinct(remotes, policy) {
       }
     }
   }
-}
-
-/**
- * @param {string} outer
- * @param {string} inner
- * @returns {boolean}
- */
-function covers(outer, inner) {
-  return inner.startsWith(`${outer}/`);
 }
 
 /**
@@ -615,8 +576,8 @@ function admitGrants(value, where) {
   }
   const grants = asRecord(value, `${where} grants`, MANIFEST_KEYS.grants);
 
-  const api = requireStringArray(grants.api, `${where}: grants.api`).map((prefix) => {
-    if (!prefix.startsWith('/')) {
+  const api = requireStringArray(grants.api, `${where}: grants.api`).map((prefix, index) => {
+    if (!prefix.startsWith('/') || prefix.startsWith('//')) {
       throw new Error(
         `${where}: grants.api entry "${prefix}" must be a root-relative path prefix. ` +
           `Cross-origin grants are not expressible here: another origin needs CORS and a ` +
@@ -631,8 +592,9 @@ function admitGrants(value, where) {
           `matches sibling paths that merely start with the same characters.`,
       );
     }
-    // Normalize, because a grant is compared to a request's resolved pathname.
-    return new URL(prefix, 'https://grants.invalid').pathname;
+    // Refused rather than normalized, because a grant is compared as a string to the
+    // canonical path a request carries. ADR-0133.
+    return admitPath(prefix, `${where}: grants.api[${String(index)}]`);
   });
 
   const permissions = requireStringArray(grants.permissions, `${where}: grants.permissions`);
@@ -651,7 +613,7 @@ function admitAuth(value, policy) {
   // One key, and it's a location. Which store an application uses and what its
   // endpoints are called is application configuration. ADR-0021.
   return Object.freeze({
-    apiBaseUrl: admitPath(auth.apiBaseUrl, `${policy.url}: auth.apiBaseUrl`, policy),
+    apiBaseUrl: admitUrl(auth.apiBaseUrl, `${policy.url}: auth.apiBaseUrl`),
   });
 }
 
@@ -685,12 +647,7 @@ function admitI18n(value, policy) {
     );
   }
 
-  const patterns = admitBundlePatterns(
-    i18n.bundles,
-    `${url}: i18n.bundles`,
-    supportedLocales,
-    policy,
-  );
+  const patterns = admitBundlePatterns(i18n.bundles, `${url}: i18n.bundles`, supportedLocales);
 
   return Object.freeze({
     defaultLocale,
@@ -745,7 +702,7 @@ function admitBundleFiles(value, where, patterns, supportedLocales, policy) {
     }
     // A build emits this map and pins every file in it, so a manifest can't remap a
     // locale to bytes the document doesn't vouch for. ADR-0129.
-    files[url] = requirePin(admitPath(emitted, entryWhere, policy), entryWhere, policy);
+    files[url] = requirePin(admitUrl(emitted, entryWhere), entryWhere, policy);
   }
   return Object.freeze(files);
 }
@@ -754,9 +711,8 @@ function admitBundleFiles(value, where, patterns, supportedLocales, policy) {
  * @param {unknown} value
  * @param {string} where
  * @param {readonly string[]} supportedLocales
- * @param {Policy} policy
  */
-function admitBundlePatterns(value, where, supportedLocales, policy) {
+function admitBundlePatterns(value, where, supportedLocales) {
   if (value === undefined) return Object.freeze([]);
   if (!Array.isArray(value)) throw new Error(`${where} must be an array of URL patterns.`);
   const patterns = /** @type {unknown[]} */ (value).map((entry, index) => {
@@ -771,7 +727,7 @@ function admitBundlePatterns(value, where, supportedLocales, policy) {
     // Admit each locale's substituted URL, because that URL is what gets fetched.
     for (const locale of supportedLocales) {
       const resolved = pattern.split(LOCALE_PLACEHOLDER).join(locale);
-      admitPath(resolved, `${entryWhere} for locale "${locale}"`, policy);
+      admitUrl(resolved, `${entryWhere} for locale "${locale}"`);
     }
     return pattern;
   });

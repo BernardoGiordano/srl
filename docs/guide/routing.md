@@ -30,6 +30,9 @@ Routes follow these rules.
   Attaching a new router stops the previous attachment.
 - `AppRouter` and the matcher stay internal. Applications use
   `attachRouter()` and `navigate()`.
+- `navigate()` leaves the origin with `location.assign` for an http or https
+  URL on another origin, and throws for any other scheme, such as
+  `javascript:`. A guard or a route redirect must stay on the origin.
 
 ## Child layout routes
 

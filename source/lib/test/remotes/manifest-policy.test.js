@@ -433,6 +433,15 @@ describe('manifest admission', () => {
       }
       assert.throws(() => admit({ remotes: [remote({ mount: '/' })] }), 'must not be "/"');
     });
+
+    it('refuses a mount with an empty segment', () => {
+      // The router reads `/a//b` as `/a/b`, so beside a remote on `/a/b` declaration
+      // order would pick the guard. ADR-0133.
+      assert.throws(
+        () => admit({ remotes: [remote({ mount: '/one//two' })] }),
+        'mount must not contain an empty segment',
+      );
+    });
   });
 
   describe('absent sections', () => {
@@ -614,10 +623,24 @@ describe('manifest admission', () => {
       });
     });
 
-    it('normalizes a grant prefix to the path it confers', () => {
-      const admitted = admit({
-        remotes: [remote({ grants: { api: ['/api/reports/../analytics/'] } })],
-      });
+    it('refuses a grant prefix that is not written as the path it confers', () => {
+      // A grant is compared as text to the canonical path a request carries, so a
+      // prefix that normalizes to something else would grant a path nobody wrote.
+      // ADR-0133.
+      for (const [api, reason] of [
+        ['/api/reports/../analytics/', 'normal form'],
+        ['/api/../', 'normal form'],
+        ['//evil.example/', 'root-relative path prefix'],
+        ['/api/x?/', 'must not contain a query'],
+        ['/api//analytics/', 'must not contain an empty segment'],
+        ['/api/..%2f/', 'must not escape a separator or a dot'],
+      ]) {
+        assert.throws(
+          () => admit({ remotes: [remote({ grants: { api: [api] } })] }),
+          reason,
+        );
+      }
+      const admitted = admit({ remotes: [remote({ grants: { api: ['/api/analytics/'] } })] });
       assert.sameArray([...present(admitted.remotes[0]).grants.api], ['/api/analytics/']);
     });
   });

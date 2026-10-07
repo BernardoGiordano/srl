@@ -108,7 +108,9 @@ a function that records each call.
 | `delete(path)` | A DELETE with no body. |
 | `streamUrl(path, query)` | The URL alone, for an `EventSource`. |
 
-The query drops `undefined` values and repeats array values.
+The query drops `undefined` values and repeats array values. A path that
+resolves outside the base URL, such as `/../admin` or `//host/x`, rejects
+before anything is sent.
 
 A failed response throws `ApiError`. It carries `status`, `path`, the parsed
 `body` and a `code`, read from `{ "error": "code" }` by default. `forbidden` is

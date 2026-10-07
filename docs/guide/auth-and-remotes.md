@@ -126,16 +126,18 @@ A remote's `requires` block guards the route before its code loads. Its
 }
 ```
 
-The host checks API grants against normalized URL paths. A grant prefix ends
-with `/`, so `/api/analytics/` cannot also grant
-`/api/analytics-admin/`. `host.auth.permissions()` shows the intersection
-of granted permissions and the user's scopes. The server still enforces its
-own authorization.
+The host checks API grants against the path the request carries. A grant
+prefix ends with `/`, so `/api/analytics/` cannot also grant
+`/api/analytics-admin/`. The host refuses a path with an escaped separator or
+dot such as `%2F`, a `..;` segment or an empty segment, because a server may
+route those past the prefix. A granted call fails when the server redirects it.
+`host.auth.permissions()` shows the intersection of granted permissions and the
+user's scopes. The server still enforces its own authorization.
 
 `manifest-policy.js` admits the whole manifest before routes or requests
-use it. It requires same-origin, root-relative URLs; checks locale patterns
-against allowed locales; rejects duplicate or nested remote mounts; refuses
-keys it does not know; and freezes the admitted result. An application without
+use it. It requires same-origin, root-relative URLs in their canonical form;
+checks locale patterns against allowed locales; rejects duplicate or nested
+remote mounts; refuses keys it does not know; and freezes the admitted result. An application without
 remotes or an API leaves `remotes` and `auth` out, as
 [startup](startup.md#the-manifest) shows. The browser and this repository's
 `npm run verify` run the same policy.
