@@ -1,4 +1,9 @@
-<h1 align="center">srl</h1>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/srl-wordmark-dark.svg">
+    <img alt="srl" src="assets/logo/srl-wordmark-light.svg" width="256">
+  </picture>
+</h1>
 
 <p align="center">
   <strong>s</strong>ource <strong>r</strong>uns <strong>l</strong>ive — reactive web components with a buildless development workflow.
