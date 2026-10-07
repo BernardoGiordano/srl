@@ -442,6 +442,41 @@ void test('a symlink out of a mount is refused, and a dotfile is never served', 
   });
 });
 
+void test('the history fallback meets the symlink rule the file a URL names meets', async () => {
+  await withFixture(async ({ root, appDir, mounts }) => {
+    const entry = join(appDir, 'index.html');
+    await rm(entry);
+    await symlink(join(root, 'secret.txt'), entry);
+
+    // The direct request, the directory index and a navigation to a missing route
+    // all select the same linked document, and none of them reads past the mount.
+    await withOrigin({ mounts, fallback: entry }, async (url) => {
+      for (const path of ['/index.html', '/', '/settings/profile']) {
+        const response = await fetch(`${url}${path}`, NAVIGATION);
+        assert.equal(response.status, 403, path);
+        assert.doesNotMatch(await response.text(), /not yours/u, path);
+      }
+    });
+
+    // A fallback linked inside its mount is an ordinary document.
+    await rm(entry);
+    await writeFile(join(appDir, 'shell.html'), '<!doctype html><body>shell</body>\n');
+    await symlink(join(appDir, 'shell.html'), entry);
+    await withOrigin({ mounts, fallback: entry }, async (url) => {
+      const response = await fetch(`${url}/settings/profile`, NAVIGATION);
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), '<!doctype html><body>shell</body>\n');
+    });
+
+    // A fallback no mount holds has no mount to stay inside.
+    await withOrigin({ mounts, fallback: join(root, 'secret.txt') }, async (url) => {
+      const response = await fetch(`${url}/settings/profile`, NAVIGATION);
+      assert.equal(response.status, 403);
+      assert.doesNotMatch(await response.text(), /not yours/u);
+    });
+  });
+});
+
 void test('sameOrigin trusts the browser\'s own marks, and a request with none', () => {
   /** @param {Record<string, string>} headers */
   const from = (headers) => sameOrigin(/** @type {import('node:http').IncomingMessage} */ (/** @type {unknown} */ ({ headers: { host: 'localhost:8000', ...headers } })));

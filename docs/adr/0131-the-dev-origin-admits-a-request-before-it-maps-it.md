@@ -58,7 +58,10 @@ stays inside its mount.
 - Host must name `localhost`, a `*.localhost` name, an IP literal, or a hostname in
   `allowedHosts`. Any other Host, or one that isn't a plain host and port, is 403.
 - A path with a dot segment is 403, except `/.well-known/`.
-- A file that exists must stay inside its mount once symlinks are resolved.
+- A file that exists must stay inside its mount once symlinks are resolved. The
+  check runs on the file finally served, after the directory index and the history
+  fallback are chosen. The fallback's mount is the deepest one whose directory holds
+  it, and a fallback no mount holds is 403.
 
 `cli/origin/` also exports `sameOrigin(request)`. It trusts `Sec-Fetch-Site`, then
 `Origin`, and passes a request carrying neither, since a tool that sends one can

@@ -72,6 +72,9 @@ export interface OriginOptions {
    * The document a navigation to a path with no file gets, which is an
    * application's `index.html`, absolute. Null serves 404 instead, which is what a
    * mount table with no application under it wants.
+   *
+   * The deepest mount whose directory holds it is its mount, and it must stay inside
+   * that mount once symlinks are resolved. A fallback no mount holds is 403.
    */
   fallback?: string | null;
   /**

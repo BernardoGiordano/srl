@@ -232,6 +232,26 @@ function locate(pathname, mounts) {
 }
 
 /**
+ * The deepest mount directory that holds a file by its path, or null when none does.
+ * The history fallback is a file rather than a URL, so this is how it finds the
+ * mount it must stay inside.
+ *
+ * @param {string} file Absolute.
+ * @param {ReadonlyArray<Mount>} mounts
+ * @returns {string | null}
+ */
+function owningRoot(file, mounts) {
+  const path = resolve(file);
+  let owner = null;
+  for (const [, target] of mounts) {
+    const root = resolve(target);
+    if (path !== root && !path.startsWith(root + sep)) continue;
+    if (owner === null || root.length > owner.length) owner = root;
+  }
+  return owner;
+}
+
+/**
  * The file a URL path resolves to inside one of the mounts, or null when there is
  * no honest answer. The same string rules as the server applies, before it reads
  * the disk.
@@ -309,6 +329,7 @@ export function createOrigin(options) {
   const transform = options.transform ?? null;
   const route = options.route ?? null;
   const allowedHosts = options.allowedHosts ?? [];
+  const fallbackRoot = fallback === null ? null : owningRoot(fallback, mounts);
 
   /**
    * Each mount's directory with its symlinks resolved, kept once found, because a
@@ -370,16 +391,12 @@ export function createOrigin(options) {
     }
 
     let file = located.file;
+    let root = /** @type {string | null} */ (located.root);
     let stats = await statOrNull(file);
 
     if (stats?.isDirectory() === true) {
       file = join(file, 'index.html');
       stats = await statOrNull(file);
-    }
-
-    if (stats !== null && !(await contained(file, located.root))) {
-      response.writeHead(403, { 'Content-Type': 'text/plain' }).end('Forbidden');
-      return;
     }
 
     if (stats === null) {
@@ -388,11 +405,19 @@ export function createOrigin(options) {
         return;
       }
       file = fallback;
+      root = fallbackRoot;
       stats = await statOrNull(file);
       if (stats === null) {
         response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
         return;
       }
+    }
+
+    // After every selection, so the directory index and the history fallback meet
+    // the rule the file a URL names meets.
+    if (root === null || !(await contained(file, root))) {
+      response.writeHead(403, { 'Content-Type': 'text/plain' }).end('Forbidden');
+      return;
     }
 
     const representation =
