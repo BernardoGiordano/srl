@@ -294,6 +294,7 @@ export class AuthSession {
    * Every API call goes through here so that authorization is not something each
    * service remembers to do, and so that a burst of expired-token 401s costs one
    * refresh rather than one per call.
+   * Requests admitted to the audience refuse redirects, including on a retry.
    *
    * @param {string | URL} input
    * @param {RequestInit} [init]
@@ -314,8 +315,11 @@ export class AuthSession {
     const send = async (request) => {
       const authorized = await this.authorize(request);
       this.#assertCurrent(generation);
-      // Keep cancellation even if a store rebuilt the request without its signal.
-      return globalThis.fetch(new Request(authorized, { signal }));
+      // Enforce cancellation and redirect refusal after the store rebuilds the request.
+      return globalThis.fetch(new Request(authorized, {
+        signal,
+        redirect: this.#admits(request.url) ? 'error' : authorized.redirect,
+      }));
     };
     const first = build();
     const response = await send(first);

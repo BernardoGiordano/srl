@@ -24,6 +24,7 @@ export interface AuthSessionOptions {
   /**
    * Origins a request may carry credentials to, such as `https://api.example.com`.
    * A request to any other origin goes out unauthorized and its 401 renews nothing.
+   * Requests admitted to the audience refuse redirects when sent through the session.
    * Defaults to the page's own origin.
    */
   readonly audience?: readonly string[];

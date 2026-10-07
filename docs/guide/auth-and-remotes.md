@@ -40,6 +40,14 @@ to the page's own. A request to any other origin goes out unauthorized, and its
 401 doesn't trigger a refresh. `name` names the cross-tab channel and defaults
 to `default`. Applications that share an origin each pass their own name.
 
+`AuthSession.fetch()` and `.json()` refuse every HTTP redirect for a request
+admitted to the audience, including same-origin redirects and the retry after a
+401. The session applies `redirect: 'error'` after the store authorizes the final
+request, so neither caller options nor a store that rebuilds the request can
+enable redirects. A redirect rejects with a Fetch `TypeError` before the
+destination receives a request. Call the API's final URL directly. Requests
+outside the audience keep the caller's redirect behavior.
+
 A 401 refreshes only a live session. After logout, a 401 comes back as is,
 even when a failed revocation left the server's cookie behind. The refresh
 timer runs a minute before expiry, or halfway through a lifetime shorter than

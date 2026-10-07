@@ -12,6 +12,11 @@ operations as one.
 `fetch()` passed every request to `store.authorize()`, whatever its URL. Each sample
 store attached its Bearer token or CSRF header to any origin it was handed.
 
+Admitting only the initial origin also left Fetch free to follow redirects.
+A 307 could forward custom credential headers and the request body to an origin
+outside the audience. A store can rebuild the request, so setting redirect refusal
+before authorization does not constrain the request that reaches Fetch.
+
 A 401 called `refresh()` whether or not a session was live. After a logout whose
 revocation call failed, the refresh cookie survived, so the next 401 spent it, signed
 the user back in and retried the request. Renewing a live session and restoring an
@@ -55,6 +60,12 @@ application. Routes change the URL, and `<base>` is optional.
   from its own document, because another session in the same page shares no state with
   it.
 
+`AuthSession.fetch()` sends a request admitted to the audience with
+`redirect: 'error'`, applied to the final request after store authorization on
+both the first send and the retry. All redirects are refused, including those
+within the audience. A request outside the audience keeps its redirect behavior
+because the session attached no credentials to it.
+
 `refresh()` renews only a live session. With none, it resolves null without asking the
 store. Restoring a session is `init()`'s job.
 
@@ -73,6 +84,8 @@ its requests and body reads.
 
 - An API on another origin needs its origin in `audience`. Until then, its requests go
   out without credentials and come back 401.
+- An admitted API endpoint that redirects causes a Fetch `TypeError`. Callers must
+  use its final URL directly so that audience admission precedes authorization.
 - `logout()` rejects when revocation fails. The session is still cleared locally, and
   the application decides what to tell the user.
 - A session whose clock disagrees with the server's refreshes once a minute rather
