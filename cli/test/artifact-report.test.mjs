@@ -274,6 +274,22 @@ void test('a CSP that does not admit its own import map is refused', () => {
   );
 });
 
+void test('an import map that could end its script element is refused', () => {
+  // The source is the element's text in index.html, so `</script>` in it would be
+  // markup the report doesn't describe. ADR-0132.
+  const report = shellReport();
+  for (const source of ['{"imports":{"x":"/a</script>"}}', '{"a":"&amp;"}', '{"a":"\u2028"}']) {
+    const unsafe = {
+      ...report,
+      security: { ...report.security, importMap: { ...report.security.importMap, source } },
+    };
+    assert.throws(
+      () => parseReport(JSON.stringify(unsafe), 'shell'),
+      /import map source is not HTML-safe JSON/u,
+    );
+  }
+});
+
 void test("a Remote whose descriptor names another Remote is refused", () => {
   const report = remoteReport();
   const mismatched = { ...report, remote: { ...report.remote, name: 'analytics' } };

@@ -179,6 +179,20 @@ export async function readProject(app, options = {}) {
         slots: null,
       };
 
+      if (definition.kind === 'defineComponent' && !COMPONENT_TAG.test(definition.tag)) {
+        // The build names the template's file after the tag, so a tag that isn't a
+        // name would be a path. ADR-0132.
+        findings.push({
+          code: 'project/invalid-tag',
+          severity: isTestSource(parsed.path, roots) ? 'warning' : 'error',
+          file: parsed.path,
+          message:
+            `${JSON.stringify(definition.tag)} in ${show(parsed.path)} is not a valid custom ` +
+            'element name. It must start with a lowercase letter, contain a hyphen and hold ' +
+            'only lowercase letters, digits and hyphens, and defineComponent throws otherwise.',
+        });
+      }
+
       const existing = elements.get(definition.tag);
       if (existing !== undefined) {
         // The runtime refuses this outright, because a tag is one component's
@@ -293,6 +307,9 @@ function asDiagnostic(app, finding) {
 }
 
 /** Platform/framework roots add no application-declared reactive inputs of their own. */
+/** The custom element name rule `defineComponent` enforces. */
+const COMPONENT_TAG = /^[a-z][a-z0-9]*(?:-[a-z0-9]*)+$/u;
+
 const ELEMENT_ROOTS = new Set([
   'Element',
   'EventTarget',

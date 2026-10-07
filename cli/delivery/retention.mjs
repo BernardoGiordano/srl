@@ -1,8 +1,10 @@
 /** Plan and explicitly apply versioned artifact release retention. */
 
 import { readFile, readdir, readlink, rm, stat, unlink } from 'node:fs/promises';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { listFiles, within } from './output-tree.mjs';
 
 const DEFAULT_KEEP = 3;
 const DEFAULT_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -94,9 +96,8 @@ export async function planRetention(options) {
       });
     }
   }
-  for (const path of await walkFiles(assetsRoot)) {
-    const name = relative(assetsRoot, path).split(sep).join('/');
-    const info = await stat(path);
+  for (const name of await listFiles(assetsRoot)) {
+    const info = await stat(within(assetsRoot, name));
     if (!referencedAssets.has(name) && info.mtimeMs < cutoff) {
       deletions.push({
         kind: 'asset',
@@ -131,7 +132,7 @@ export async function applyRetention(plan) {
     throw new Error('retention: current release changed after the plan was created.');
   }
   for (const deletion of plan.deletions) {
-    const target = inside(root, deletion.path);
+    const target = within(root, deletion.path);
     if (deletion.kind === 'release') {
       if (basename(target) === current || dirname(target) !== join(root, 'releases')) {
         throw new Error(`retention: refusing release deletion ${deletion.path}`);
@@ -145,31 +146,6 @@ export async function applyRetention(plan) {
     }
   }
   return { deleted: plan.deletions.length };
-}
-
-/** @param {string} root @param {string} path */
-function inside(root, path) {
-  if (path === '' || path.startsWith('/') || path.split('/').includes('..') || path.includes('\\')) {
-    throw new Error(`retention: unsafe path ${path}`);
-  }
-  const target = resolve(root, path);
-  if (target !== root && !target.startsWith(`${root}${sep}`)) {
-    throw new Error(`retention: path escapes root ${path}`);
-  }
-  return target;
-}
-
-/** @param {string} root @returns {Promise<string[]>} */
-async function walkFiles(root) {
-  /** @type {string[]} */
-  const files = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) files.push(...(await walkFiles(path)));
-    else if (entry.isFile()) files.push(path);
-    else throw new Error(`retention: symbolic or special asset found: ${path}`);
-  }
-  return files;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

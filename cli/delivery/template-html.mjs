@@ -49,6 +49,12 @@
  * normalisations, such as an implied `<tbody>`, lowercased attribute names and
  * `selected` becoming `selected=""`, are the ones a browser's own parser performs on
  * the same bytes, which makes a re-serialised tree safe to ship.
+ *
+ * A dropped start tag is the exception. parse5 6 parses `<select>` content by the
+ * rules from before customizable select, and drops a `<button>` or a `<div>` there
+ * that a current browser keeps. Source and output lose the same element, so the proof
+ * can't see it. A template where parsing dropped a start tag ships as authored, which
+ * is the bytes development serves. ADR-0132.
  */
 
 import { parseFragment, serialize } from 'parse5';
@@ -89,6 +95,9 @@ const VERBATIM_STYLE = /white-space\s*:\s*(?:pre|pre-wrap|pre-line|break-spaces)
 /** The placeholder an interpolation is parked in. Matches `template.js`. */
 const PLACEHOLDER = /⟦(\d+)⟧/gu;
 
+/** A start tag's name, as the tokenizer reads it. */
+const START_TAG = /<([a-z][^\t\n\f\r />]*)/giu;
+
 /**
  * Minify a template, or throw naming the first thing that changed.
  *
@@ -101,6 +110,7 @@ const PLACEHOLDER = /⟦(\d+)⟧/gu;
 export function minifyTemplate(source) {
   const { prepared, expressions } = liftInterpolations(source);
   const fragment = parseFragment(prepared);
+  if (dropsStartTag(prepared, fragment)) return source.trim();
   squeeze(fragment, false);
   const minified = restoreInterpolations(serialize(fragment), expressions).trim();
 
@@ -211,6 +221,37 @@ function firstDifference(before, after) {
 /** @param {string | undefined} token */
 function describeToken(token) {
   return token === undefined ? 'nothing' : JSON.stringify(token);
+}
+
+/**
+ * Whether parsing built fewer elements of some name than the source writes start tags
+ * for. Text that only looks like a tag, in a comment, an attribute or `<style>`,
+ * counts too, which costs that template its minification and nothing else.
+ *
+ * @param {string} source
+ * @param {HtmlNode} fragment
+ * @returns {boolean}
+ */
+function dropsStartTag(source, fragment) {
+  /** @type {Map<string, number>} */
+  const written = new Map();
+  for (const [, name = ''] of source.matchAll(START_TAG)) {
+    const tag = name.toLowerCase();
+    written.set(tag, (written.get(tag) ?? 0) + 1);
+  }
+  /** @type {Map<string, number>} */
+  const built = new Map();
+  /** @param {HtmlNode} node */
+  const count = (node) => {
+    for (const child of contentOf(node).childNodes ?? []) {
+      if (child.tagName === undefined) continue;
+      const tag = child.tagName.toLowerCase();
+      built.set(tag, (built.get(tag) ?? 0) + 1);
+      count(child);
+    }
+  };
+  count(fragment);
+  return [...written].some(([tag, times]) => (built.get(tag) ?? 0) < times);
 }
 
 /**

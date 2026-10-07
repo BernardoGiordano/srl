@@ -1,9 +1,11 @@
 /** Verify one staged or remote release against its immutable release report. */
 
 import { createHash } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
-import { join, relative, resolve, sep } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { listFiles, within } from './output-tree.mjs';
 
 /**
  * Shared asset directories may contain retained hashes from older releases. Versioned
@@ -43,7 +45,7 @@ export async function verifyPublishedRelease(options) {
     }
     expectedFiles.add(key);
     const root = file.target === 'asset' ? assetsDir : releaseDir;
-    const path = inside(root, file.path);
+    const path = within(root, file.path);
     const content = await readFile(path);
     const actual = createHash('sha256').update(content).digest('hex');
     if (content.byteLength !== file.bytes || actual !== file.sha256) {
@@ -53,9 +55,7 @@ export async function verifyPublishedRelease(options) {
     bytes += content.byteLength;
   }
 
-  const actualRelease = new Set(
-    (await walk(releaseDir)).map((path) => relative(releaseDir, path).split(sep).join('/')),
-  );
+  const actualRelease = new Set(await listFiles(releaseDir));
   if (
     expectedRelease.size !== actualRelease.size ||
     [...expectedRelease].some((path) => !actualRelease.has(path))
@@ -69,31 +69,6 @@ export async function verifyPublishedRelease(options) {
     files: report.files.length,
     bytes,
   };
-}
-
-/** @param {string} root @param {string} path */
-function inside(root, path) {
-  if (path === '' || path.startsWith('/') || path.split('/').includes('..') || path.includes('\\')) {
-    throw new Error(`release-verify: unsafe path ${path}`);
-  }
-  const target = resolve(root, path);
-  if (target !== root && !target.startsWith(`${root}${sep}`)) {
-    throw new Error(`release-verify: path escapes root: ${path}`);
-  }
-  return target;
-}
-
-/** @param {string} root @returns {Promise<string[]>} */
-async function walk(root) {
-  /** @type {string[]} */
-  const files = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) files.push(...(await walk(path)));
-    else if (entry.isFile()) files.push(path);
-    else throw new Error(`release-verify: symbolic or special file found: ${path}`);
-  }
-  return files;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

@@ -241,11 +241,13 @@ function admitTemplateFiles(value, where, policy) {
 }
 
 /**
- * Apply the trust rule to one URL field and return its normalized path.
+ * Apply the trust rule to one URL field and return its path.
  *
- * Normalizing matters, because `/api/../auth` and `/auth` are the same destination. A
- * backslash is refused before parsing, because the URL parser treats it as a
- * separator and `/\evil.example/x` would become another origin.
+ * A value must already be in the form the URL parser gives back. `/api/../auth` is
+ * `/auth` to a browser and something else to a string comparison, and `<` comes back
+ * as `%3C`, so a value with anything left to normalize is refused rather than
+ * repaired. ADR-0132. A backslash is refused before parsing, because the URL parser
+ * treats it as a separator and `/\evil.example/x` would become another origin.
  *
  * @param {unknown} value
  * @param {string} where
@@ -279,7 +281,14 @@ function admitPath(value, where, policy) {
   if (target.origin !== policy.origin) {
     throw new Error(`${where} must be same-origin, got ${JSON.stringify(raw)}.`);
   }
-  return target.pathname + target.search;
+  const normal = target.pathname + target.search;
+  if (normal !== raw) {
+    throw new Error(
+      `${where} must be written in its normal form, ${JSON.stringify(normal)}, got ` +
+        `${JSON.stringify(raw)}. Every reader of this path has to see the same string.`,
+    );
+  }
+  return normal;
 }
 
 /**

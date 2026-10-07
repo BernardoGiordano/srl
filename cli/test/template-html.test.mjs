@@ -119,3 +119,22 @@ void test('an equivalence failure is a thrown error, not silent bytes', () => {
   assert.notDeepEqual(templateShape('<p class="x">a</p>'), templateShape('<p>a</p>'));
   assert.notDeepEqual(templateShape('<pre>a  b</pre>'), templateShape('<pre>a b</pre>'));
 });
+
+void test('a template whose start tag parse5 drops ships as authored', () => {
+  // parse5 6 parses <select> by the rules from before customizable select and drops
+  // the <button>, so source and output would lose it together. ADR-0132.
+  const source = [
+    '<select>',
+    '  <button><selectedcontent></selectedcontent></button>',
+    '  <option>A</option>',
+    '</select>',
+    '',
+  ].join('\n');
+  assert.equal(minifyTemplate(source), source.trim());
+
+  // A <select> that only holds options parses the same either way, and is minified.
+  assert.equal(
+    minifyTemplate('<select>\n  <option>A</option>\n</select>'),
+    '<select> <option>A</option> </select>',
+  );
+});

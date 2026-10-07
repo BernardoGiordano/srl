@@ -7,6 +7,7 @@ publish dates. A decision record explains each larger change.
 
 ### Added
 
+- `srl build --force` replaces an output directory no build wrote. ADR-0132.
 - `@srljs/core` is one import name in both delivery shapes. The import map maps it to
   `lib/srl-core.js`, which re-exports the bundle's names from the modules the deep paths
   load. ADR-0124.
@@ -25,6 +26,15 @@ publish dates. A decision record explains each larger change.
 
 ### Changed
 
+- `srl build` replaces an output directory only when it is empty or holds the
+  `artifact.json` a build wrote. It refuses a directory that holds the project or the
+  home directory, `--force` or not. ADR-0132.
+- Manifest admission refuses a URL that differs from its normal form, such as
+  `/api/v2/../v1/`, instead of normalizing it.
+- The project model reports `project/invalid-tag` for a `defineComponent` tag that is
+  not a valid custom element name, so the build refuses it.
+- Path errors from `srl release`, `srl remote-release`, `srl verify-release` and
+  `srl retention` start with `output:`.
 - Manifest admission refuses a key it does not know, except `$` annotations. ADR-0123.
 - Template expression refusals have three codes, `templates/expression-syntax`,
   `templates/expression-assignment` and `templates/expression-member`.
@@ -37,6 +47,16 @@ publish dates. A decision record explains each larger change.
 
 - `ApiClient` called its transport with the client as `this`, so passing
   `globalThis.fetch` threw "Illegal invocation" in browsers.
+- `srl build --out ..` or `--out ~/Documents` deleted the named directory and
+  everything in it, the project included. ADR-0132.
+- A component tag or locale bundle URL holding `..` could make the build write outside
+  its output directory.
+- Composition wrote a Remote's asset URLs into the import map unescaped, so a changed
+  release report could add a script to the shell's `index.html`. The import map is
+  HTML-safe JSON, and composition checks each Remote's descriptor against its bytes.
+- A template whose `<select>` held a `<button>` or another element lost it in
+  production, because the minifier's parser dropped it from both sides of its proof.
+  Such a template ships as authored.
 
 ## 0.9.0 (2026-09-22)
 

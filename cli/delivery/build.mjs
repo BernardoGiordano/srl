@@ -12,17 +12,8 @@
 
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import {
-  access,
-  cp,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rename,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { access, readFile, rm } from 'node:fs/promises';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { brotliCompressSync, gzipSync } from 'node:zlib';
 
@@ -50,6 +41,16 @@ import {
   writeReport,
 } from './artifact-report.mjs';
 import { withEntryHints } from './entry-hints.mjs';
+import {
+  admitOutput,
+  copyWithin,
+  embedJson,
+  listFiles,
+  replaceOutput,
+  stageBeside,
+  within,
+  writeWithin,
+} from './output-tree.mjs';
 import { WORKER, retiringWorkerSource, serviceWorkerSource } from './service-worker.mjs';
 import { minifyTemplate } from './template-html.mjs';
 import { verifyPublishedRelease } from './verify-release.mjs';
@@ -119,7 +120,9 @@ const TEMPLATE_DELIVERY = new Set(['split', 'split-lazy', 'bundle']);
  * installed worker at the next navigation. ADR-0129.
  * @typedef {'cache' | 'retire'} WorkerMode
  *
- * @typedef {{ app: BuildApplication, outDir?: string, release?: ReleaseInput, remotes?: ReadonlyArray<RemoteInput>, templates?: TemplateDelivery, worker?: WorkerMode }} BuildOptions
+ * `force` replaces an output directory no build wrote. It never replaces one that holds
+ * the project or the home directory. ADR-0132.
+ * @typedef {{ app: BuildApplication, outDir?: string, force?: boolean, release?: ReleaseInput, remotes?: ReadonlyArray<RemoteInput>, templates?: TemplateDelivery, worker?: WorkerMode }} BuildOptions
  * @typedef {{ tag: string, module: string, template: string, url: string, path: string, source: string }} TemplateAsset
  */
 
@@ -132,6 +135,7 @@ const TEMPLATE_DELIVERY = new Set(['split', 'split-lazy', 'bundle']);
 export async function buildArtifact({
   app,
   outDir = join(DIST, app.name),
+  force = false,
   release = {},
   remotes = [],
   templates: delivery = 'split',
@@ -142,7 +146,7 @@ export async function buildArtifact({
   if (worker !== 'cache' && worker !== 'retire') {
     throw artifactError(app, 'worker', `--worker must be cache or retire, got ${String(worker)}.`);
   }
-  const root = validateOutput(outDir, app);
+  const root = await validateOutput(outDir, app, force);
   const normalizedRelease = normalizeRelease(release, app);
   const model = await readProject(app);
 
@@ -152,10 +156,9 @@ export async function buildArtifact({
   await refuseFindings(app, model);
   const source = await sourceManifest(app);
   const composition = composeRemotes(app, source.admitted, remotes);
+  for (const remote of remotes) await verifyDescriptor(app, remote);
 
-  const parent = dirname(root);
-  await mkdir(parent, { recursive: true });
-  const stage = await mkdtemp(join(parent, `.${app.name}-artifact-`));
+  const stage = await stageBeside(root, `${app.name}-artifact`);
   const publicDir = join(stage, PUBLIC);
 
   try {
@@ -261,18 +264,21 @@ export async function buildArtifact({
     // before it is inventoried, and after the import map, which a modulepreload has
     // to be preceded by. ADR-0080.
     const htmlPath = join(publicDir, 'index.html');
-    await writeFile(
-      htmlPath,
+    await writeWithin(
+      publicDir,
+      'index.html',
       withEntryHints(await readFile(htmlPath, 'utf8'), { entry, chunks, security }),
     );
+    await verifyImportMap(app, publicDir, security.importMap.source);
     const stylesheet = await verifyBrowserRoot(app, publicDir, templates.stylesheets());
     // Last write into the artifact, and before the inventory. The worker names the
     // document's stylesheet, which the check above proves the document loads, and
     // the worker is itself one more file the build hashes, cache-classes and
     // verifies. A generated file that skipped that would be the one byte in the
     // artifact nothing proved. ADR-0088.
-    await writeFile(
-      join(publicDir, WORKER),
+    await writeWithin(
+      publicDir,
+      WORKER,
       worker === 'retire'
         ? retiringWorkerSource({ app: app.name })
         : serviceWorkerSource({
@@ -307,7 +313,7 @@ export async function buildArtifact({
     });
 
     await writeReport(stage, report);
-    await publish(stage, root, app);
+    await publish(stage, root, app, force);
 
     return freezeReport({ ...report, root });
   } catch (error) {
@@ -324,13 +330,13 @@ export async function buildArtifact({
  * Shell implementation chunks stay byte-identical; only the manifest, integrity import
  * map, CSP metadata, inventory, and artifact report change.
  *
- * @param {{ app: BuildApplication, artifactRoot: string, outDir: string, remotes: ReadonlyArray<RemoteInput> }} options
+ * @param {{ app: BuildApplication, artifactRoot: string, outDir: string, force?: boolean, remotes: ReadonlyArray<RemoteInput> }} options
  * @returns {Promise<ShellArtifactReport>}
  */
-export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
+export async function composeArtifact({ app, artifactRoot, outDir, force = false, remotes }) {
   validateApp(app);
   const sourceRoot = resolve(artifactRoot);
-  const root = validateOutput(outDir, app);
+  const root = await validateOutput(outDir, app, force);
   if (sourceRoot === root) {
     throw artifactError(app, 'compose', 'composition output must differ from its source artifact.');
   }
@@ -344,12 +350,12 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
   await verifyStoredArtifact(app, sourceRoot, report);
   const releases = await verifyCompositionReleases(app, remotes);
 
-  const parent = dirname(root);
-  await mkdir(parent, { recursive: true });
-  const stage = await mkdtemp(join(parent, `.${app.name}-composition-`));
+  const stage = await stageBeside(root, `${app.name}-composition`);
   try {
-    await cp(sourceRoot, stage, { recursive: true });
-    await rm(join(stage, REPORT));
+    // The files the inventory just proved, and nothing else in the directory.
+    for (const file of report.files) {
+      await copyWithin(stage, file.path, within(sourceRoot, file.path));
+    }
     const publicDir = join(stage, PUBLIC);
     const htmlPath = join(publicDir, 'index.html');
     const manifestPath = join(publicDir, 'app.manifest.json');
@@ -388,17 +394,17 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
       }
       integrity[remote.url] = remote.integrity;
     }
-    const importMap = JSON.stringify({ imports: currentMap.imports, integrity });
-    const inlineHash = importMapHash(importMap);
-    await writeFile(htmlPath, replaceImportMap(app, html, importMap));
-
     const nextManifest = { ...JSON.parse(manifestSource), remotes: composition.remotes };
     const nextAdmitted = admitManifest(nextManifest, {
       url: `${app.name}/app.manifest.json`,
       base: 'https://artifact.invalid/',
       pins: () => integrity,
     });
-    await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`);
+    const importMap = embedJson({ imports: currentMap.imports, integrity });
+    const inlineHash = importMapHash(importMap);
+    await writeWithin(publicDir, 'index.html', replaceImportMap(app, html, importMap));
+    await verifyImportMap(app, publicDir, importMap);
+    await writeWithin(publicDir, 'app.manifest.json', `${JSON.stringify(nextManifest, null, 2)}\n`);
 
     const security = {
       importMap: { source: importMap, sha256: inlineHash },
@@ -424,7 +430,7 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
       totals: totalsOf(files),
     };
     await writeReport(stage, composed);
-    await publish(stage, root, app);
+    await publish(stage, root, app, force);
     return freezeReport({ ...composed, root });
   } catch (error) {
     await rm(stage, { recursive: true, force: true });
@@ -440,13 +446,14 @@ export async function composeArtifact({ app, artifactRoot, outDir, remotes }) {
  * Shell policy stays outside this interface; returned transport descriptor is composed
  * into a shell artifact later.
  *
- * @param {{ app: BuildApplication, name: string, outDir?: string, base?: string, release?: ReleaseInput, templates?: TemplateDelivery }} options
+ * @param {{ app: BuildApplication, name: string, outDir?: string, force?: boolean, base?: string, release?: ReleaseInput, templates?: TemplateDelivery }} options
  * @returns {Promise<RemoteArtifactReport>}
  */
 export async function buildRemoteArtifact({
   app,
   name,
   outDir,
+  force = false,
   base,
   release = {},
   templates: delivery = 'split',
@@ -456,7 +463,7 @@ export async function buildRemoteArtifact({
   const normalizedRelease = normalizeRelease(release, app);
   const version = normalizedRelease.commit ?? 'development';
   const publicationBase = validateRemoteBase(app, name, base ?? `/remotes/${name}/${version}/`);
-  const root = validateOutput(outDir ?? join(DIST, 'remotes', name, version), app);
+  const root = await validateOutput(outDir ?? join(DIST, 'remotes', name, version), app, force);
   const source = await sourceManifest(app);
   const policy = source.admitted.remotes.find((remote) => remote.name === name);
   if (policy === undefined) throw artifactError(app, 'remote', `manifest declares no remote ${name}.`);
@@ -470,9 +477,7 @@ export async function buildRemoteArtifact({
   const model = await readProject(app);
   await refuseFindings(app, model);
 
-  const parent = dirname(root);
-  await mkdir(parent, { recursive: true });
-  const stage = await mkdtemp(join(parent, `.${name}-remote-artifact-`));
+  const stage = await stageBeside(root, `${name}-remote-artifact`);
   const publicDir = join(stage, PUBLIC);
 
   try {
@@ -531,8 +536,9 @@ export async function buildRemoteArtifact({
       source.admitted.i18n,
       policy.locales,
     );
-    await writeFile(
-      join(publicDir, 'build.json'),
+    await writeWithin(
+      publicDir,
+      'build.json',
       `${JSON.stringify(
         { version: 1, app: app.name, remote: name, release: normalizedRelease, target: TARGET },
         null,
@@ -544,7 +550,7 @@ export async function buildRemoteArtifact({
     const remoteCss = await Promise.all(
       payload
         .filter((file) => file.path.endsWith('.css'))
-        .map((file) => readFile(join(publicDir, file.path.replace(/^public\//u, '')), 'utf8')),
+        .map((file) => readFile(within(stage, file.path), 'utf8')),
     );
     verifyScopedRules(app, remoteCss.join('\n'), templates.stylesheets());
     const entryModule = relative(REPO, entry).split(sep).join('/');
@@ -608,7 +614,7 @@ export async function buildRemoteArtifact({
       totals: totalsOf(files),
     });
     await writeReport(stage, report);
-    await publish(stage, root, app);
+    await publish(stage, root, app, force);
     return freezeReport({ ...report, root });
   } catch (error) {
     await rm(stage, { recursive: true, force: true });
@@ -756,9 +762,61 @@ async function verifyCompositionReleases(app, reports) {
     }
     const root = report.root;
     await verifyPublishedRelease({ releaseDir: root, assetsDir: join(root, '.unused-assets') });
+    await verifyDescriptor(app, report);
     verified.push(report);
   }
   return verified;
+}
+
+/**
+ * Recompute a Remote's transport descriptor from the bytes it names.
+ *
+ * Composition copies the descriptor into the shell's manifest and import map, and the
+ * report that carries it is the one file a release doesn't hash. So every URL it names
+ * must sit below the Remote's base, every asset must be a file it published, and every
+ * integrity must be that file's. ADR-0132.
+ *
+ * @param {BuildApplication} app
+ * @param {RemoteInput} input
+ */
+async function verifyDescriptor(app, input) {
+  const retained = isRetainedRelease(input);
+  const base = retained ? input.public.base : input.base;
+  const directory = retained ? input.public.directory : input.public;
+  const published = new Set(
+    (retained ? input.files.filter((file) => file.target === 'release') : input.files).map(
+      (file) => file.path,
+    ),
+  );
+  const remote = input.remote;
+  /** @param {string} detail */
+  const refuse = (detail) => artifactError(app, 'remotes', `Remote ${input.name} ${detail}`);
+  if (remote.name !== input.name) throw refuse('carries a descriptor for another Remote.');
+  /** @param {string} url */
+  const pathOf = (url) => {
+    if (!url.startsWith(base) || url === base) {
+      throw refuse(`names ${JSON.stringify(url)}, which is not below its base ${base}.`);
+    }
+    return `${directory}/${url.slice(base.length)}`;
+  };
+  for (const asset of remote.assets) {
+    const path = pathOf(asset.url);
+    if (!published.has(path)) throw refuse(`names ${asset.url}, which it didn't publish.`);
+    if ((await sri384(within(input.root, path))) !== asset.integrity) {
+      throw refuse(`pins ${asset.url} to bytes the file doesn't hold.`);
+    }
+  }
+  if (
+    !remote.assets.some(
+      (asset) =>
+        asset.type === 'module' && asset.url === remote.url && asset.integrity === remote.integrity,
+    )
+  ) {
+    throw refuse('names an entry module its assets don\'t pin.');
+  }
+  const named = [...remote.templateFiles, ...remote.locales];
+  if (remote.templates !== undefined) named.push(remote.templates);
+  for (const url of named) pathOf(url);
 }
 
 /**
@@ -1002,7 +1060,7 @@ async function emitApplicationManifest(
     base: 'https://artifact.invalid/',
     pins: () => pins,
   });
-  await writeFile(join(publicDir, 'app.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeWithin(publicDir, 'app.manifest.json', `${JSON.stringify(manifest, null, 2)}\n`);
   return admitted;
 }
 
@@ -1080,12 +1138,11 @@ async function emitRemoteLocales(app, remoteDir, publicDir, base, i18n, patterns
     for (const locale of i18n.supportedLocales) {
       const source = urlToFile(app.dir, pattern.replaceAll('{locale}', locale));
       if (!(await exists(source))) continue;
-      const destination = relative(remoteDir, source);
-      await mkdir(dirname(join(publicDir, destination)), { recursive: true });
+      const destination = relative(remoteDir, source).split(sep).join('/');
       const bytes = await readFile(source, 'utf8');
       JSON.parse(bytes);
-      await writeFile(join(publicDir, destination), bytes);
-      files.push(destination.split(sep).join('/'));
+      await writeWithin(publicDir, destination, bytes);
+      files.push(destination);
       copied += 1;
     }
     if (copied === 0) throw artifactError(app, 'remote', `locale pattern has no files: ${pattern}`);
@@ -1112,18 +1169,18 @@ async function remoteAssetRecords(publicDir, base, chunks, payload, templates, l
     records.push({
       type: 'module',
       url: `${base}${chunk.path}`,
-      integrity: await sri384(join(publicDir, chunk.path)),
+      integrity: await sri384(within(publicDir, chunk.path)),
     });
   }
   for (const file of payload.filter((candidate) => candidate.path.endsWith('.css'))) {
     const path = file.path.replace(/^public\//u, '');
-    records.push({ type: 'style', url: `${base}${path}`, integrity: await sri384(join(publicDir, path)) });
+    records.push({ type: 'style', url: `${base}${path}`, integrity: await sri384(within(publicDir, path)) });
   }
   if (templates !== null && templates.bundle !== null && templates.url !== null) {
     records.push({
       type: 'template',
       url: templates.url,
-      integrity: await sri384(join(publicDir, templates.bundle)),
+      integrity: await sri384(within(publicDir, templates.bundle)),
     });
   } else if (templates !== null) {
     // Split templates are fetched one by one, so each needs its own pin. ADR-0129.
@@ -1131,7 +1188,7 @@ async function remoteAssetRecords(publicDir, base, chunks, payload, templates, l
       records.push({
         type: 'template',
         url: `${base}${path}`,
-        integrity: await sri384(join(publicDir, path)),
+        integrity: await sri384(within(publicDir, path)),
       });
     }
   }
@@ -1139,7 +1196,7 @@ async function remoteAssetRecords(publicDir, base, chunks, payload, templates, l
     records.push({
       type: 'locale',
       url: `${base}${path}`,
-      integrity: await sri384(join(publicDir, path)),
+      integrity: await sri384(within(publicDir, path)),
     });
   }
   return records;
@@ -1163,7 +1220,7 @@ async function payloadPins(publicDir, templates, localeFiles) {
     ...(templates.bundle === null ? [] : [templates.bundle]),
     ...Object.values(localeFiles).map((url) => url.slice(1)),
   ];
-  for (const path of paths) pins[`/${path}`] = await sri384(join(publicDir, path));
+  for (const path of paths) pins[`/${path}`] = await sri384(within(publicDir, path));
   return pins;
 }
 
@@ -1490,7 +1547,7 @@ async function productionRemoteCss(app, remoteDir, stage, entry) {
   );
   const remoteSource = remoteDir.split(sep).join('/');
   source += `\n@source '${remoteSource}';\n`;
-  await writeFile(input, source);
+  await writeWithin(stage, basename(input), source);
   // Not the shell's classes, because this stylesheet is compiled from one remote's
   // sources alone and the body the shell renders is not among them. What every
   // remote in the collection does draw is muted text.
@@ -1522,7 +1579,7 @@ async function emitLicenses(stage, publicDir) {
   const source =
     `${javascript}\n\n## tailwindcss - ${String(tailwindPackage.version)} ` +
     `(${String(tailwindPackage.license)})\n\n${tailwind}\n`;
-  await writeFile(join(stage, 'THIRD_PARTY_LICENSES.md'), source);
+  await writeWithin(stage, 'THIRD_PARTY_LICENSES.md', source);
   await rm(generated);
 }
 
@@ -1689,6 +1746,13 @@ async function emitLocaleFiles(app, publicDir, i18n) {
     for (const pattern of i18n.bundles) {
       const url = pattern.replaceAll('{locale}', locale);
       if (files[url] !== undefined) continue;
+      if (url.includes('?')) {
+        throw artifactError(
+          app,
+          'runtime',
+          `locale bundle URL carries a query, and the build maps each URL to one file: ${url}`,
+        );
+      }
       if (url.startsWith('/assets/')) {
         throw artifactError(
           app,
@@ -1699,9 +1763,7 @@ async function emitLocaleFiles(app, publicDir, i18n) {
       const source = await readFile(urlToFile(app.dir, url), 'utf8');
       JSON.parse(source);
       const path = `assets${hashedName(url, contentHash(source))}`;
-      const destination = join(publicDir, path);
-      await mkdir(dirname(destination), { recursive: true });
-      await writeFile(destination, source);
+      await writeWithin(publicDir, path, source);
       files[url] = `/${path}`;
     }
   }
@@ -1720,7 +1782,7 @@ async function emitLocaleFiles(app, publicDir, i18n) {
  */
 async function emitReleaseIdentity(publicDir, release, app) {
   const build = { version: 1, app: app.name, release, target: TARGET };
-  await writeFile(join(publicDir, 'build.json'), `${JSON.stringify(build, null, 2)}\n`);
+  await writeWithin(publicDir, 'build.json', `${JSON.stringify(build, null, 2)}\n`);
 }
 
 /**
@@ -1746,7 +1808,7 @@ async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) 
   /** @type {Record<string, string>} */
   const integrity = {};
   for (const chunk of chunks) {
-    integrity[`/${chunk.path}`] = await sri384(join(publicDir, chunk.path));
+    integrity[`/${chunk.path}`] = await sri384(within(publicDir, chunk.path));
   }
   if (Object.keys(integrity).length === 0) {
     throw artifactError(app, 'security', 'generated module graph is empty.');
@@ -1760,7 +1822,7 @@ async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) 
 
   const probe = await readFile(PROBE_SOURCE);
   const probePath = `assets/pin-probe-${contentHash(probe.toString('utf8'))}.js`;
-  await writeFile(join(publicDir, probePath), probe);
+  await writeWithin(publicDir, probePath, probe);
   integrity[`/${probePath}`] = PROBE_PIN;
   const imports = { ...shared, [PROBE_SPECIFIER]: `/${probePath}` };
 
@@ -1784,7 +1846,7 @@ async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) 
         `production HTML links a stylesheet outside /assets/, ${String(href)}, which it can't pin.`,
       );
     }
-    const digest = await sri384(join(publicDir, href.slice(1)));
+    const digest = await sri384(within(publicDir, href.slice(1)));
     integrity[href] = digest;
     link.attrs = [
       ...(link.attrs ?? []).filter((attribute) => attribute.name !== 'integrity'),
@@ -1798,7 +1860,7 @@ async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) 
     integrity[asset.url] = asset.integrity;
   }
 
-  const importMap = JSON.stringify({ imports, integrity });
+  const importMap = embedJson({ imports, integrity });
   const inlineHash = importMapHash(importMap);
   /** @type {HtmlNode[]} */
   const heads = [];
@@ -1823,8 +1885,8 @@ async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) 
     throw artifactError(app, 'security', 'could not construct integrity import map.');
   }
   head.childNodes.splice(entryIndex, 0, script);
-  const html = serialize(/** @type {never} */ (document));
-  await writeFile(htmlPath, html);
+  await writeWithin(publicDir, 'index.html', serialize(/** @type {never} */ (document)));
+  await verifyImportMap(app, publicDir, importMap);
 
   return {
     security: {
@@ -1877,6 +1939,32 @@ function replaceImportMap(app, source, importMap) {
   }
   text.value = importMap;
   return serialize(/** @type {never} */ (document));
+}
+
+/**
+ * Re-read the written document and prove its import map is `source`, whole.
+ *
+ * A value that ended the script element early would leave the parsed text shorter
+ * than `source` and turn the rest into markup. `embedJson` makes that impossible, and
+ * this proves it on the bytes that ship. ADR-0132.
+ *
+ * @param {BuildApplication} app
+ * @param {string} publicDir
+ * @param {string} source
+ */
+async function verifyImportMap(app, publicDir, source) {
+  const document = /** @type {HtmlNode} */ (
+    /** @type {unknown} */ (parse(await readFile(within(publicDir, 'index.html'), 'utf8')))
+  );
+  /** @type {HtmlNode[]} */
+  const maps = [];
+  visitHtml(document, (node) => {
+    if (node.tagName === 'script' && htmlAttribute(node, 'type') === 'importmap') maps.push(node);
+  });
+  const text = maps[0]?.childNodes?.[0];
+  if (maps.length !== 1 || maps[0]?.childNodes?.length !== 1 || text?.value !== source) {
+    throw artifactError(app, 'security', 'index.html does not carry the import map it was written with.');
+  }
 }
 
 /**
@@ -2193,12 +2281,9 @@ async function emitTemplateFiles(app, stage, assets, base, delivery) {
     throw artifactError(app, 'templates', 'bundled graph contains no component templates.');
   }
 
+  for (const asset of assets) await writeWithin(stage, asset.path, asset.source);
   for (const asset of assets) {
-    await mkdir(dirname(join(stage, asset.path)), { recursive: true });
-    await writeFile(join(stage, asset.path), asset.source);
-  }
-  for (const asset of assets) {
-    if ((await readFile(join(stage, asset.path), 'utf8')) !== asset.source) {
+    if ((await readFile(within(stage, asset.path), 'utf8')) !== asset.source) {
       throw artifactError(app, 'templates', `template bytes drifted for <${asset.tag}>.`);
     }
   }
@@ -2219,9 +2304,9 @@ async function emitTemplateFiles(app, stage, assets, base, delivery) {
   const bundleSource = `${JSON.stringify(bundle)}\n`;
   const bundleHash = contentHash(bundleSource);
   const bundlePath = `assets/templates-${bundleHash}.json`;
-  await writeFile(join(stage, bundlePath), bundleSource);
+  await writeWithin(stage, bundlePath, bundleSource);
 
-  const emitted = JSON.parse(await readFile(join(stage, bundlePath), 'utf8'));
+  const emitted = JSON.parse(await readFile(within(stage, bundlePath), 'utf8'));
   for (const asset of assets) {
     if (emitted[asset.url] !== asset.source) {
       throw artifactError(app, 'templates', `template bundle bytes drifted for <${asset.tag}>.`);
@@ -2391,13 +2476,14 @@ function validateApp(app) {
 }
 
 /**
- * Repository output is allowed only below dist/. Explicit temporary output outside the
- * repository is also safe. This keeps cleanup away from source even with a bad caller.
+ * Repository output is allowed only below dist/. Output outside the repository is
+ * admitted by `admitOutput`, which replaces only a directory a build wrote. ADR-0132.
  *
  * @param {string} outDir
  * @param {BuildApplication} app
+ * @param {boolean} force
  */
-function validateOutput(outDir, app) {
+async function validateOutput(outDir, app, force) {
   const output = resolve(outDir);
   const insideRepo = relative(REPO, output);
   const insideDist = relative(DIST, output);
@@ -2411,7 +2497,11 @@ function validateOutput(outDir, app) {
       `${output} is inside repository source; use dist/<app> or an external temporary directory.`,
     );
   }
-  return output;
+  try {
+    return await admitOutput(output, { force });
+  } catch (cause) {
+    throw artifactError(app, 'output', outputDetail(cause), { cause });
+  }
 }
 
 /**
@@ -2487,13 +2577,12 @@ function portableModule(app, module) {
  * @param {string} directory
  */
 async function inventory(directory) {
-  const paths = (await walk(directory, /./u)).sort((left, right) => left.localeCompare(right));
   return Promise.all(
-    paths.map(async (path) => {
-      const bytes = await readFile(path);
+    (await listFiles(directory)).map(async (path) => {
+      const bytes = await readFile(within(directory, path));
       return {
-        path: relative(directory, path).split(sep).join('/'),
-        cache: cacheClass(relative(directory, path).split(sep).join('/')),
+        path,
+        cache: cacheClass(path),
         bytes: bytes.byteLength,
         gzip: gzipSync(bytes, { level: 9 }).byteLength,
         brotli: brotliCompressSync(bytes).byteLength,
@@ -2720,25 +2809,19 @@ function verifyHexHash(app, files, path, pattern) {
  * @param {string} stage
  * @param {string} output
  * @param {BuildApplication} app
+ * @param {boolean} force
  */
-async function publish(stage, output, app) {
-  const backup = `${output}.previous`;
-  const abandonedBackup = await exists(backup);
-  let hadOutput = await exists(output);
-  if (abandonedBackup && !hadOutput) {
-    await rename(backup, output);
-    hadOutput = true;
-  } else if (abandonedBackup) {
-    await rm(backup, { recursive: true, force: true });
-  }
-  if (hadOutput) await rename(output, backup);
+async function publish(stage, output, app, force) {
   try {
-    await rename(stage, output);
-  } catch (error) {
-    if (hadOutput) await rename(backup, output);
-    throw artifactError(app, 'publish', `could not atomically replace ${output}`, { cause: error });
+    await replaceOutput(stage, output, { force });
+  } catch (cause) {
+    throw artifactError(app, 'publish', outputDetail(cause), { cause });
   }
-  await rm(backup, { recursive: true, force: true });
+}
+
+/** @param {unknown} cause */
+function outputDetail(cause) {
+  return (cause instanceof Error ? cause.message : String(cause)).replace(/^output: /u, '');
 }
 
 /** @param {string} path */
@@ -2841,6 +2924,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     if (baseIndex !== -1 && base === undefined) {
       throw new Error('usage: --base /remotes/<name>/<version>/');
     }
+    const force = process.argv.includes('--force');
     const remoteReports = [];
     for (const [index, argument] of process.argv.entries()) {
       if (argument !== '--remote-report') continue;
@@ -2869,12 +2953,14 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
             app,
             artifactRoot: composeFrom,
             outDir: String(output),
+            force,
             remotes: remoteReports,
           })
         : remoteName === undefined
         ? await buildArtifact({
             app,
             outDir: output,
+            force,
             release,
             remotes: remoteReports,
             templates: /** @type {TemplateDelivery | undefined} */ (delivery),
@@ -2884,6 +2970,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
             app,
             name: remoteName,
             outDir: output,
+            force,
             base,
             release,
             templates: /** @type {TemplateDelivery | undefined} */ (delivery),

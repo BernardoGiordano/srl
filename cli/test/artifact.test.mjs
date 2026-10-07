@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -309,6 +309,48 @@ void test('example composes independently verified Remote artifacts', async () =
       'Remote-only rollback did not restore original shell payload bytes',
     );
 
+    // The descriptor is the one part of a release that release.json doesn't hash, so
+    // composition recomputes it from the published bytes. ADR-0132.
+    const descriptor = newerBillingRelease.remote;
+    const [firstAsset] = descriptor.assets;
+    const [otherAsset] = analyticsRelease.remote.assets;
+    assert.ok(firstAsset !== undefined && otherAsset !== undefined);
+    const injected = {
+      ...newerBillingRelease,
+      remote: {
+        ...descriptor,
+        assets: [
+          ...descriptor.assets,
+          {
+            type: /** @type {const} */ ('module'),
+            url: `${newerBillingRelease.public.base}x</script><script>alert(1)</script>.js`,
+            integrity: firstAsset.integrity,
+          },
+        ],
+      },
+    };
+    const repinned = {
+      ...newerBillingRelease,
+      remote: {
+        ...descriptor,
+        assets: [{ ...firstAsset, integrity: otherAsset.integrity }, ...descriptor.assets.slice(1)],
+      },
+    };
+    for (const [remote, refusal] of /** @type {const} */ ([
+      [injected, /Remote billing names .*<\/script>.*, which it didn't publish/u],
+      [repinned, /Remote billing pins .* to bytes the file doesn't hold/u],
+    ])) {
+      await assert.rejects(
+        composeArtifact({
+          app,
+          artifactRoot: shell.root,
+          outDir: join(temporary, 'shell-descriptor'),
+          remotes: [remote, analyticsRelease],
+        }),
+        refusal,
+      );
+    }
+
     const tamperedRelease = /** @type {{ files: Array<{ target: string, path: string }> }} */ (
       /** @type {unknown} */ (newerBillingRelease)
     );
@@ -378,6 +420,29 @@ void test('output cleanup cannot target repository source', async () => {
     buildArtifact({ app: await example(), outDir: join(REPO, 'example'), release: RELEASE }),
     /inside repository source/u,
   );
+});
+
+void test('a build replaces only a directory a build wrote', async () => {
+  // `--out ..` once replaced the project's parent, and `--out ~/Documents` the folder.
+  // ADR-0132.
+  const app = await example();
+  for (const outDir of [join(REPO, '..'), homedir()]) {
+    await assert.rejects(
+      buildArtifact({ app, outDir, force: true, release: RELEASE }),
+      /artifact:example:output: .* holds the (?:project|home directory)/u,
+    );
+  }
+  const temporary = await mkdtemp(join(tmpdir(), 'artifact-owned-'));
+  try {
+    await writeFile(join(temporary, 'notes.txt'), 'mine');
+    await assert.rejects(
+      buildArtifact({ app, outDir: temporary, release: RELEASE }),
+      /artifact:example:output: .* holds no artifact\.json/u,
+    );
+    assert.equal(await readFile(join(temporary, 'notes.txt'), 'utf8'), 'mine');
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 });
 
 void test('dynamic component definition fails before an incomplete template artifact exists', async () => {

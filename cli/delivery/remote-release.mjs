@@ -8,22 +8,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import {
-  copyFile,
-  lstat,
-  mkdir,
-  readFile,
-  readlink,
-  readdir,
-  symlink,
-  unlink,
-  writeFile,
-} from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { lstat, mkdir, readFile, readlink, symlink, unlink } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { activateReleasePointer } from './activate-release.mjs';
 import { REPORT, isRemoteReport, readReport } from './artifact-report.mjs';
+import { copyWithin, listFiles, within, writeWithin } from './output-tree.mjs';
 import { applyRetention, planRetention } from './retention.mjs';
 import { verifyPublishedRelease } from './verify-release.mjs';
 
@@ -69,7 +60,7 @@ export async function prepareRemoteRelease(options) {
   /** @type {Array<{ target: 'release', path: string, bytes: number, sha256: string, kind: string }>} */
   const files = [];
   for (const file of artifact.files) {
-    await copy(inside(artifactRoot, file.path), inside(releaseOutput, file.path));
+    await copyWithin(releaseOutput, file.path, within(artifactRoot, file.path));
     files.push({
       target: 'release',
       path: file.path,
@@ -78,7 +69,7 @@ export async function prepareRemoteRelease(options) {
       kind: file.cache === 'metadata' ? 'metadata' : 'browser',
     });
   }
-  await copy(artifactPath, join(releaseOutput, REPORT));
+  await copyWithin(releaseOutput, REPORT, artifactPath);
   files.push({
     target: 'release',
     path: REPORT,
@@ -109,7 +100,7 @@ export async function prepareRemoteRelease(options) {
   };
   const releaseReport = `${JSON.stringify(release, null, 2)}\n`;
   const releaseReportSha256 = digest(releaseReport);
-  await writeFile(join(releaseOutput, 'release.json'), releaseReport);
+  await writeWithin(releaseOutput, 'release.json', releaseReport);
 
   const publication = {
     version: 1,
@@ -131,7 +122,7 @@ export async function prepareRemoteRelease(options) {
       browserBytes,
     },
   };
-  await writeFile(join(output, 'publication.json'), `${JSON.stringify(publication, null, 2)}\n`);
+  await writeWithin(output, 'publication.json', `${JSON.stringify(publication, null, 2)}\n`);
   return deepFreeze(publication);
 }
 
@@ -151,7 +142,7 @@ export async function activateRemoteRelease(options) {
     releaseDir: join(root, 'releases', release.id),
     assetsDir: join(root, 'assets'),
   });
-  const alias = inside(publicRoot, release.public.version);
+  const alias = within(publicRoot, release.public.version);
   const target = join(root, 'releases', release.id, release.public.directory);
   await mkdir(publicRoot, { recursive: true });
 
@@ -219,7 +210,7 @@ export async function planRemoteRetention(options) {
   for (const id of removedIds) {
     const report = await readRemoteRelease(root, id, 'remote-retention');
     if (retainedVersions.has(report.public.version)) continue;
-    const path = inside(publicRoot, report.public.version);
+    const path = within(publicRoot, report.public.version);
     let target;
     try {
       target = resolve(dirname(path), await readlink(path));
@@ -241,7 +232,7 @@ export async function planRemoteRetention(options) {
 export async function applyRemoteRetention(plan) {
   const result = await applyRetention(plan);
   for (const alias of plan.aliases) {
-    const path = inside(plan.publicRoot, alias.version);
+    const path = within(plan.publicRoot, alias.version);
     const target = resolve(dirname(path), await readlink(path));
     if (target !== alias.target) {
       throw new Error(`remote-retention: version alias ${alias.version} changed after planning.`);
@@ -285,18 +276,15 @@ async function verifyRemoteArtifact(artifactRoot, artifact) {
   /** @type {Map<string, ArtifactFile & { content: Buffer }>} */
   const byPath = new Map();
   for (const file of artifact.files) {
-    validateRelative(file.path);
     expected.add(file.path);
-    const bytes = await readFile(inside(artifactRoot, file.path));
+    const bytes = await readFile(within(artifactRoot, file.path));
     if (bytes.byteLength !== file.bytes || digest(bytes) !== file.sha256) {
       throw new Error(`remote-release: hash mismatch for ${file.path}`);
     }
     byPath.set(file.path, { ...file, content: bytes });
   }
 
-  const actual = new Set(
-    (await walk(artifactRoot)).map((path) => relative(artifactRoot, path).split(sep).join('/')),
-  );
+  const actual = new Set(await listFiles(artifactRoot));
   if (expected.size !== actual.size || [...expected].some((path) => !actual.has(path))) {
     throw new Error('remote-release: artifact inventory differs from disk.');
   }
@@ -407,45 +395,9 @@ async function requireMissing(path) {
   throw new Error(`remote-release: output already exists: ${path}`);
 }
 
-/** @param {string} source @param {string} target */
-async function copy(source, target) {
-  await mkdir(dirname(target), { recursive: true });
-  await copyFile(source, target);
-}
-
-/** @param {string} root @param {string} path */
-function inside(root, path) {
-  validateRelative(path);
-  const target = resolve(root, path);
-  if (target !== root && !target.startsWith(`${root}${sep}`)) {
-    throw new Error(`remote-release: path escapes root: ${path}`);
-  }
-  return target;
-}
-
-/** @param {string} path */
-function validateRelative(path) {
-  if (path === '' || path.startsWith('/') || path.split('/').includes('..') || path.includes('\\')) {
-    throw new Error(`remote-release: unsafe relative path ${path}`);
-  }
-}
-
 /** @param {Buffer | string} bytes */
 function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
-}
-
-/** @param {string} root @returns {Promise<string[]>} */
-async function walk(root) {
-  /** @type {string[]} */
-  const files = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) files.push(...(await walk(path)));
-    else if (entry.isFile()) files.push(path);
-    else throw new Error(`remote-release: symbolic or special file is not admitted: ${path}`);
-  }
-  return files.sort((left, right) => left.localeCompare(right));
 }
 
 /** @template T @param {T} value @returns {Readonly<T>} */
