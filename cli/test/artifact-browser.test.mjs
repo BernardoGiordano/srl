@@ -69,7 +69,7 @@ void test('built example mounts independent Billing and Analytics artifacts', as
       if (message.type() !== 'error') return;
       // The engine refuses the pin probe on purpose. That refusal is how the runtime
       // proves it enforces import-map integrity before a remote loads. ADR-0129.
-      if (/\/assets\/pin-probe-[0-9a-f]{16}\.js/u.test(message.text())) {
+      if (message.text().includes('#srl-pin-probe')) {
         probeRefusals.push(message.text());
       } else {
         errors.push(message.text());

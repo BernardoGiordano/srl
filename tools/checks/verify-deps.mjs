@@ -111,6 +111,7 @@ import {
   LIB,
   MANIFEST,
   PACKAGE,
+  PROBE_CSP,
   PROBE_URL,
   SPECIFIER_DIRS,
   SPECIFIERS,
@@ -982,7 +983,7 @@ export async function verifyDependencies() {
      */
     const expected = `sha256-${createHash('sha256').update(mapBody, 'utf8').digest('base64')}`;
     importMapHashes.set(app.name, expected);
-    pass('deps/csp-hash', `import map needs script-src '${expected}'`, { group });
+    pass('deps/csp-hash', `import map and local probes need script-src '${expected}' ${PROBE_CSP}`, { group });
 
     /* ── 7. Templates, and the declarations the model could not read ──────── */
 
@@ -1335,7 +1336,7 @@ export async function verifyDependencies() {
   pass(
     'deps/csp-hashes',
     `script-src must allow ${String(importMapHashes.size)} import map hash(es):\n` +
-      [...importMapHashes].map(([name, hash]) => `         ${name}  '${hash}'`).join('\n'),
+      [...importMapHashes].map(([name, hash]) => `         ${name}  '${hash}' ${PROBE_CSP}`).join('\n'),
     { group: 'deployment' },
   );
 

@@ -3,6 +3,8 @@ import { relative, sep } from 'node:path';
 
 import { parse, serialize } from 'parse5';
 
+import { PROBE_CSP } from '../package/interface.mjs';
+
 const TEST_FILE = 'wtr-test-file';
 const SESSION_ID = 'wtr-session-id';
 const MANUAL_SESSION = 'wtr-manual-session';
@@ -115,7 +117,7 @@ export function runnerAdmission(policies) {
       visit(document);
       return {
         html: serialize(document),
-        policy: `script-src 'self' ${[...hashes].join(' ')}; script-src-attr 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; trusted-types ${policies.join(' ')}; require-trusted-types-for 'script'`,
+        policy: `script-src 'self' ${[...hashes].join(' ')} ${PROBE_CSP}; script-src-attr 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; trusted-types ${policies.join(' ')}; require-trusted-types-for 'script'`,
       };
     },
   };

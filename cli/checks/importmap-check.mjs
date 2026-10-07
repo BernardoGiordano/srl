@@ -20,12 +20,12 @@
  *
  * The probe at `PROBE_URL` is the one entry pinned to bytes it doesn't have. The
  * runtime imports it before the first remote and refuses remotes on an engine that
- * loads it, so its pin is compared to `PROBE_PIN` rather than to its file. ADR-0129.
+ * loads it. Two matching local controls must succeed first. ADR-0129.
  *
- * The fourth thing it does is not a failure. It prints the `script-src` hash the map
+ * The fourth thing it does is not a failure. It prints the `script-src` hashes the map
  * needs. An import map is an inline script, so a CSP of `script-src 'self'` blocks
- * it, and the symptom is failure 1 with no visible violation in the console. Nobody
- * should have to derive that value by hand.
+ * it, and the symptom is failure 1 with no visible violation in the console. The
+ * local controls also need their exact hashes, which this check reports.
  *
  * It deliberately does not check the application's own entries, meaning its remotes,
  * its `/src/` and the specifiers of its own vendored dependencies. Those are the
@@ -48,6 +48,9 @@ import {
   ENTRY_SPECIFIERS,
   IMPORT_MAP_FILE,
   PACKAGE,
+  PROBE_CONTROL_URL,
+  PROBE_CSP,
+  PROBE_EMPTY_URL,
   PROBE_PIN,
   PROBE_URL,
   SPECIFIER_DIRS,
@@ -158,8 +161,8 @@ async function checkApplication(app, fragment) {
       refuse(
         'importmap/probe-pin',
         `${url} is pinned to ${integrity[url] ?? 'nothing'}, and it must be pinned to ${hash}. ` +
-          `The runtime imports it under that wrong pin before the first remote, and refuses ` +
-          `remotes unless the engine refuses the probe. Paste ${show(IMPORT_MAP_FILE)}.`,
+          `The runtime admits matching local controls before checking that the engine ` +
+          `refuses this mismatch. Paste ${show(IMPORT_MAP_FILE)}.`,
       );
     } else if (integrity[url] !== hash) {
       verbatim = false;
@@ -210,6 +213,8 @@ async function checkApplication(app, fragment) {
 
   let checked = 0;
   for (const [url, declared] of Object.entries(integrity)) {
+    // Section 1 compares the fixed local controls and deliberate mismatch verbatim.
+    if ([PROBE_URL, PROBE_CONTROL_URL, PROBE_EMPTY_URL].includes(url)) continue;
     const file = urlToFile(app.dir, url);
     if (!(await exists(file))) {
       refuse(
@@ -219,12 +224,10 @@ async function checkApplication(app, fragment) {
       );
       continue;
     }
-    // The probe's pin is wrong on purpose, and section 1 has already compared it.
-    if (url === PROBE_URL) continue;
     if (declared === PROBE_PIN) {
       refuse(
         'importmap/sentinel-pin',
-        `${url} is pinned to ${declared}, the digest only ${PROBE_URL} may carry. Pin it to ` +
+        `${url} is pinned to ${declared}, the digest reserved for the local probes. Pin it to ` +
           `its own bytes.`,
       );
       continue;
@@ -298,7 +301,7 @@ async function checkApplication(app, fragment) {
   found.push(
     info(
       'importmap/csp-hash',
-      `script-src must allow 'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`,
+      `script-src must allow 'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}' ${PROBE_CSP}`,
       { group: app.name },
     ),
   );

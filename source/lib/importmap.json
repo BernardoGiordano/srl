@@ -8,11 +8,14 @@
     "@core/": "/lib/core/",
     "@auth/": "/lib/auth/",
     "@host/": "/lib/host/",
-    "@components/": "/components/"
+    "@components/": "/components/",
+    "@core/foundation/pin-probe.js": "data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-probe"
   },
   "integrity": {
     "/lib/vendor/lit-all.min.js": "sha384-qSoE0anPDAzsBuoT95C270Wd5oKtOOlLdEvSXEk9bRYTg+5ygjyt20ZuhzH0oNbt",
     "/lib/vendor/signals-core.mjs": "sha384-keryyWsAJJ2UD+2G3I6cCzzXkFvp97AwDUCMKAOYrVGK2iwcrnTYMpWMrq9xkPSm",
-    "/lib/core/foundation/pin-probe.js": "sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"
+    "data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-control": "sha384-THhiqtbWX5OeF4HVBm/Zv1KwP1F/7VKSRBsO2utL7lYi95x/jfLVpbG0o0up8PT5",
+    "data:text/javascript,#srl-pin-empty": "sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
+    "data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-probe": "sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"
   }
 }

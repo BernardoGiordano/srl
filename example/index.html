@@ -20,8 +20,8 @@
       library entries; this application adds its remote hashes. Application modules
       use relative paths because `@app/` cannot name more than one application.
       The browser checks each listed module against its integrity hash, and the
-      runtime checks each remote template and locale bundle the same way. The probe
-      is pinned wrong on purpose, so a browser that loads it ignores the pins.
+      runtime checks each remote template and locale bundle the same way. Two local
+      controls must load before a deliberately mismatched local probe can prove pins.
     -->
     <script type="importmap">
       {
@@ -36,12 +36,15 @@
           "@core/": "/lib/core/",
           "@auth/": "/lib/auth/",
           "@host/": "/lib/host/",
-          "@components/": "/components/"
+          "@components/": "/components/",
+          "@core/foundation/pin-probe.js": "data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-probe"
         },
         "integrity": {
           "/lib/vendor/lit-all.min.js": "sha384-qSoE0anPDAzsBuoT95C270Wd5oKtOOlLdEvSXEk9bRYTg+5ygjyt20ZuhzH0oNbt",
           "/lib/vendor/signals-core.mjs": "sha384-keryyWsAJJ2UD+2G3I6cCzzXkFvp97AwDUCMKAOYrVGK2iwcrnTYMpWMrq9xkPSm",
-          "/lib/core/foundation/pin-probe.js": "sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
+          "data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-control": "sha384-THhiqtbWX5OeF4HVBm/Zv1KwP1F/7VKSRBsO2utL7lYi95x/jfLVpbG0o0up8PT5",
+          "data:text/javascript,#srl-pin-empty": "sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
+          "data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-probe": "sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
           "/remotes/billing/remote-entry.js": "sha384-XLq/ucrJO4xd00F/oUEHSak2OJTqag8j2aX7+fgs3Ez73mPayACfLGLiHXqFW6yC",
           "/remotes/billing/billing-root.js": "sha384-cQDXGlibrC8pkgbuyRE7n2k4BSB+nUQMC5RExs5/e2eADBqH4zBJhzZomssao4vZ",
           "/remotes/billing/billing-root.html": "sha384-6XiPL1r20+vJ0X7u66tXJ7vWVqA/TcMk0aVshBm+V3LCOzmTEoA8LEUw2u6eQYND",

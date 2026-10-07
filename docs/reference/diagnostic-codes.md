@@ -76,7 +76,7 @@ problem, and the finding's message says where it is and how to fix it. `srl chec
 | `importmap/unhashed` | Some mapped files carry no integrity hash. |
 | `importmap/script-pinned` | A vendored classic script carries an integrity attribute. |
 | `importmap/script-unpinned` | A vendored classic script has no integrity attribute. |
-| `importmap/csp-hash` | The run states the `script-src` hash a Content Security Policy must allow for the inline import map. |
+| `importmap/csp-hash` | The run states the `script-src` hashes a Content Security Policy must allow for the inline import map and local integrity controls. |
 | `messages/no-application` | The repository root holds no directory with an index.html. |
 | `messages/written` | `--write` added unanswered keys to a bundle, each holding its key as its message. |
 | `messages/occupied-key` | `--write` cannot add a key because a message already stands where its parent group goes. |

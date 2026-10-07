@@ -196,9 +196,12 @@ notices for the third-party bytes it serves.
 
 ## Deployment checks
 
-A strict CSP needs the hash of the inline import map in `script-src`.
+A strict CSP needs the hash of the inline import map and both local integrity-control
+hashes in `script-src`. The controls use fixed data URLs to prove module integrity
+without a network failure passing for enforcement. Their exact hashes admit only
+the control bytes, so the policy needs no `data:` or `blob:` script source.
 The build's CSP also sets `form-action 'self'` and `object-src 'none'`.
-`srl check importmap` reports that hash under `importmap/csp-hash`. When configuring nginx, set security
+`srl check importmap` reports those hashes under `importmap/csp-hash`. When configuring nginx, set security
 headers where all relevant responses inherit them; a `location` with its
 own `add_header` directives can replace headers set at server level.
 

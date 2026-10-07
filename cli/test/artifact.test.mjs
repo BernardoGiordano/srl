@@ -4,7 +4,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { PROBE_PIN, PROBE_SPECIFIER } from '@srljs/core/lib/core/foundation/pins.js';
+import { PROBE_CONTROL_PIN, PROBE_CONTROL_URL, PROBE_EMPTY_URL, PROBE_PIN, PROBE_SPECIFIER, PROBE_URL } from '@srljs/core/lib/core/foundation/pins.js';
 
 import { buildArtifact, buildRemoteArtifact, composeArtifact } from '../delivery/build.mjs';
 import { entryHints } from '../delivery/entry-hints.mjs';
@@ -190,7 +190,9 @@ void test('example composes independently verified Remote artifacts', async () =
     // The import map is the page's one pin table. Every template, locale file and
     // remote asset the manifest names carries a pin there, the stylesheet's link
     // repeats its own, and the probe is pinned to bytes it never has. ADR-0129.
-    assert.match(String(probe), /^\/assets\/pin-probe-[0-9a-f]{16}\.js$/u);
+    assert.equal(probe, PROBE_URL);
+    assert.equal(importMap.integrity[PROBE_CONTROL_URL], PROBE_CONTROL_PIN);
+    assert.equal(importMap.integrity[PROBE_EMPTY_URL], PROBE_PIN);
     assert.equal(importMap.integrity[String(probe)], PROBE_PIN);
     for (const url of [
       ...Object.values(groups).flat(),

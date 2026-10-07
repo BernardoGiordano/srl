@@ -29,7 +29,7 @@ import { parse, serialize } from 'parse5';
 import puppeteer from 'puppeteer-core';
 
 import { send, serveOrigin } from '../../origin/index.mjs';
-import { MOUNTS } from '../../package/interface.mjs';
+import { MOUNTS, PROBE_CSP } from '../../package/interface.mjs';
 
 /** @param {string} path */
 function artifactCache(path) {
@@ -230,7 +230,7 @@ export async function startSourceOrigin(options) {
     (source) => `'sha256-${createHash('sha256').update(source, 'utf8').digest('base64')}'`,
   );
   const csp =
-    `default-src 'self'; script-src 'self' ${hashes.join(' ')}; ` +
+    `default-src 'self'; script-src 'self' ${hashes.join(' ')} ${PROBE_CSP}; ` +
     "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; " +
     "object-src 'none'; base-uri 'none'; trusted-types lit-html ui-test ui-test-template; " +
     "require-trusted-types-for 'script'";

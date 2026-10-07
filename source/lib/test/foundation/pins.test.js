@@ -1,16 +1,15 @@
-import { PROBE_PIN, pinFor, pinned, pinsEnforced } from '@core/foundation/pins.js';
+import { PROBE_CONTROL_PIN, PROBE_PIN, PROBE_URL, pageIntegrity, pinFor, pinned, pinsEnforced } from '@core/foundation/pins.js';
 import { assert } from '../harness.js';
 import { pinOf, withPagePins } from '../page-pins.js';
 
 /**
  * The page's pin table, read from the test page's own import map. ADR-0129.
  *
- * The harness copies the application's map, which pins the probe to `PROBE_PIN`, so
- * Chrome refuses to import it and `pinsEnforced` resolves.
+ * The harness copies the application's map. Chrome admits both matching local
+ * controls and refuses the mismatch, so `pinsEnforced` resolves.
  */
 
 const FIXTURE = '/lib/test/fixtures/styled-card.html';
-const PROBE = '/lib/core/foundation/pin-probe.js';
 
 describe('pin table', () => {
   it('answers with the pin the page holds for a same-origin path', async () => {
@@ -45,7 +44,7 @@ describe('pin table', () => {
   });
 
   it('cannot prove enforcement when the probe is not pinned to the sentinel', async () => {
-    await withPagePins({ [PROBE]: await pinOf(PROBE) }, () =>
+    await withPagePins({ [PROBE_URL]: PROBE_CONTROL_PIN }, () =>
       assert.rejects(() => pinsEnforced(), `pin its URL to ${PROBE_PIN}`),
     );
   });
@@ -53,7 +52,7 @@ describe('pin table', () => {
   it('proves this engine enforces import-map pins', async () => {
     // The probe that couldn't be checked above is checked again here, because only a
     // verdict is kept.
-    assert.equal(pinFor(PROBE), PROBE_PIN);
+    assert.equal(pageIntegrity()[PROBE_URL], PROBE_PIN);
     await pinsEnforced();
   });
 });

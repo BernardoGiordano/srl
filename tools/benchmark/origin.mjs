@@ -36,7 +36,7 @@ import { gzipSync } from 'node:zlib';
 
 import { readText } from '../../cli/layout.mjs';
 import { send, serveOrigin } from '../../cli/origin/index.mjs';
-import { MOUNTS, contentType, extractImportMap } from '../../cli/package/interface.mjs';
+import { MOUNTS, PROBE_CSP, contentType, extractImportMap } from '../../cli/package/interface.mjs';
 import { artifactDeclaration } from './declaration.mjs';
 
 /** Browser-side workload modules, served at /__benchmark/. */
@@ -76,7 +76,7 @@ const GZIP_TYPES = new Set([
 function contentSecurityPolicy(importMap) {
   const hash = createHash('sha256').update(importMap, 'utf8').digest('base64');
   return (
-    `default-src 'self'; script-src 'self' 'sha256-${hash}'; style-src 'self' 'unsafe-inline'; ` +
+    `default-src 'self'; script-src 'self' 'sha256-${hash}' ${PROBE_CSP}; style-src 'self' 'unsafe-inline'; ` +
     "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; " +
     'trusted-types lit-html ui-test ui-test-template; require-trusted-types-for \'script\''
   );

@@ -15,18 +15,27 @@
  */
 
 /**
- * The specifier of the probe module, which every import map pins wrong on purpose.
+ * The specifier of the deterministic module pinned wrong on purpose.
  *
  * @internal
  */
 export const PROBE_SPECIFIER = '@core/foundation/pin-probe.js';
 
 /**
- * The digest of zero bytes. The probe is never empty, so this pin never matches it.
+ * The digest of zero bytes, shared by the empty control and the nonempty mismatch.
  *
  * @internal
  */
 export const PROBE_PIN = 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb';
+
+/** The probe URLs carry fixed JavaScript bytes without a network request. @internal */
+export const PROBE_URL = 'data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-probe';
+/** @internal */
+export const PROBE_CONTROL_URL = 'data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-control';
+/** @internal */
+export const PROBE_EMPTY_URL = 'data:text/javascript,#srl-pin-empty';
+/** The matching digest for the nonempty control. @internal */
+export const PROBE_CONTROL_PIN = 'sha384-THhiqtbWX5OeF4HVBm/Zv1KwP1F/7VKSRBsO2utL7lYi95x/jfLVpbG0o0up8PT5';
 
 /**
  * @typedef {{
@@ -108,12 +117,12 @@ let enforcement;
 /**
  * Resolve when this engine enforces import-map integrity, and reject when it doesn't.
  *
- * The probe module is pinned to the digest of zero bytes, so an engine that enforces
- * pins refuses to import it. Its bytes are fetched first, because a missing probe
- * also fails the import and would pass for enforcement.
+ * Two matching data-URL controls prove that both probe digests pass CSP and that the
+ * fixed bytes evaluate. Only then can refusal of the same nonempty bytes under the
+ * empty digest prove enforcement. None of these imports has a transport to fail.
  *
- * The verdict is kept for the page's lifetime. A probe that couldn't be fetched is
- * tried again by the next caller.
+ * The verdict is kept for the page's lifetime. Inconclusive checks are retried by
+ * the next caller.
  *
  * @returns {Promise<void>}
  * @internal
@@ -132,25 +141,46 @@ class PinsIgnored extends Error {}
 async function probe() {
   const map = pageImportMap();
   const url = map === null ? undefined : resolveSpecifier(map.imports, PROBE_SPECIFIER);
-  if (url === undefined || pinFor(url) !== PROBE_PIN) {
+  if (url !== PROBE_URL || map?.integrity[PROBE_URL] !== PROBE_PIN) {
     throw new Error(
       `Remotes cannot load: the page's import map must resolve ${PROBE_SPECIFIER} and pin its ` +
-        `URL to ${PROBE_PIN}. Startup imports it to prove this browser enforces import-map ` +
+        `URL to ${PROBE_PIN}. Startup checks it to prove this browser enforces import-map ` +
         'integrity. Paste the import-map fragment `srl importmap` prints.',
     );
   }
-
-  const response = await fetch(url);
-  if (!response.ok || (await response.text()) === '') {
+  if (map.integrity[PROBE_CONTROL_URL] !== PROBE_CONTROL_PIN ||
+    map.integrity[PROBE_EMPTY_URL] !== PROBE_PIN) {
     throw new Error(
-      `Remotes cannot load: the pin probe ${url} answered ${String(response.status)}, so ` +
-        'this browser could not be checked for import-map integrity.',
+      'Remotes cannot load: the import map must pin both matching integrity controls. ' +
+        'Paste the import-map fragment `srl importmap` prints.',
+    );
+  }
+
+  for (const target of [PROBE_CONTROL_URL, PROBE_EMPTY_URL, PROBE_URL]) {
+    if (import.meta.resolve(target) !== target) {
+      throw new Error('Remotes cannot load: an integrity probe URL is remapped, so its bytes are not known.');
+    }
+  }
+  try {
+    const control = await importProbe(PROBE_CONTROL_URL);
+    const empty = await importProbe(PROBE_EMPTY_URL);
+    if (control.probe !== true || Object.keys(empty).length !== 0) {
+      throw new Error('An integrity control returned unexpected exports.');
+    }
+  } catch (cause) {
+    throw new Error(
+      'Remotes cannot load: matching integrity controls failed, so enforcement is inconclusive. ' +
+        `script-src must allow '${PROBE_CONTROL_PIN}' and '${PROBE_PIN}'.`,
+      { cause },
     );
   }
 
   try {
-    await import(url);
-  } catch {
+    await importProbe(PROBE_URL);
+  } catch (cause) {
+    if (!(cause instanceof TypeError)) {
+      throw new Error('Remotes cannot load: the integrity mismatch failed unexpectedly.', { cause });
+    }
     return;
   }
   throw new PinsIgnored(
@@ -158,6 +188,14 @@ async function probe() {
       `${url} against a pin that cannot match, so it would also run a remote's changed code. ` +
       `Engine: ${navigator.userAgent}`,
   );
+}
+
+/**
+ * @param {string} url
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function importProbe(url) {
+  return asRecord(await import(url), 'an integrity probe');
 }
 
 /**

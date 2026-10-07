@@ -454,18 +454,24 @@ export const IMPORT_MAP_URL = `${mountedUrl(MANIFEST.srl.mounts['/lib/'])}import
 export const MANIFEST_SCHEMA_FILE = join(LIB, 'core', 'remotes', 'app.manifest.schema.json');
 
 /**
- * The module the runtime imports under a deliberately wrong pin before the first
- * remote. An engine that loads it ignores import-map integrity, and remotes are
- * refused there. ADR-0129.
+ * Fixed local probe bytes distinguish integrity refusal from transport failures.
+ * These constants agree with the runtime's pins.js without importing a dependency.
+ * ADR-0129.
  */
-export const PROBE_URL = `${mountedUrl(MANIFEST.srl.mounts['/lib/'])}core/foundation/pin-probe.js`;
+export const PROBE_URL = 'data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-probe';
+export const PROBE_CONTROL_URL = 'data:text/javascript,export%20const%20probe%20%3D%20true%3B#srl-pin-control';
+export const PROBE_EMPTY_URL = 'data:text/javascript,#srl-pin-empty';
+export const PROBE_CONTROL_PIN = 'sha384-THhiqtbWX5OeF4HVBm/Zv1KwP1F/7VKSRBsO2utL7lYi95x/jfLVpbG0o0up8PT5';
 
 /**
- * The probe's pin, the digest of zero bytes, which only `PROBE_URL` may carry. It
+ * The digest of zero bytes, used by the empty control and the mismatching probe. It
  * repeats `PROBE_PIN` in `@core/foundation/pins.js`, because this module imports
  * nothing.
  */
 export const PROBE_PIN = 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb';
+
+/** The hashes CSP admits for the three local integrity probes. */
+export const PROBE_CSP = `'${PROBE_CONTROL_PIN}' '${PROBE_PIN}'`;
 
 /**
  * The import-map fragment every application on this library carries. It holds the
@@ -491,9 +497,14 @@ export async function importMapFragment() {
     }
     integrity[url] = await subresourceIntegrity(file);
   }
+  integrity[PROBE_CONTROL_URL] = PROBE_CONTROL_PIN;
+  integrity[PROBE_EMPTY_URL] = PROBE_PIN;
   integrity[PROBE_URL] = PROBE_PIN;
 
-  return { imports: { ...vendor, ...ENTRY_SPECIFIERS, ...SPECIFIERS }, integrity };
+  return {
+    imports: { ...vendor, ...ENTRY_SPECIFIERS, ...SPECIFIERS, '@core/foundation/pin-probe.js': PROBE_URL },
+    integrity,
+  };
 }
 
 /**

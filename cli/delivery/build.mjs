@@ -22,12 +22,12 @@ import ts from 'typescript';
 import { build as viteBuild } from 'vite';
 
 import { scopeStylesheet } from '@srljs/core/lib/core/elements/style-scope.js';
-import { PROBE_PIN, PROBE_SPECIFIER } from '@srljs/core/lib/core/foundation/pins.js';
+import { PROBE_CONTROL_PIN, PROBE_CONTROL_URL, PROBE_EMPTY_URL, PROBE_PIN, PROBE_SPECIFIER, PROBE_URL } from '@srljs/core/lib/core/foundation/pins.js';
 import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
 import { checkProject } from '../checks/index.mjs';
 import { errors, formatText } from '../diagnostics/index.mjs';
 import { REPO, readText, selectedApp, walk } from '../layout.mjs';
-import { ENTRY_SPECIFIERS, extractImportMap, PACKAGE, urlToFile } from '../package/interface.mjs';
+import { ENTRY_SPECIFIERS, extractImportMap, PACKAGE, PROBE_CSP, urlToFile } from '../package/interface.mjs';
 import { readProject } from '../project-model/index.mjs';
 import {
   PUBLIC,
@@ -64,13 +64,6 @@ const CACHE = {
   metadata: null,
 };
 const HASHED_JAVASCRIPT = /-[A-Za-z0-9_-]{8}\.js$/u;
-
-/**
- * Where the pin probe is emitted. Every import map pins it to `PROBE_PIN`, which its
- * bytes never match, so the runtime can prove the engine enforces pins. ADR-0129.
- */
-const PROBE_PATH = /^assets\/pin-probe-[0-9a-f]{16}\.js$/u;
-const PROBE_SOURCE = join(PACKAGE, 'lib', 'core', 'foundation', 'pin-probe.js');
 
 /**
  * How a built application's templates reach the browser. All three emit one
@@ -1789,7 +1782,7 @@ async function emitReleaseIdentity(publicDir, release, app) {
  * Write the page's pin table and return the exact CSP header that admits it.
  *
  * The import map's integrity block binds every emitted chunk, every payload pin, the
- * probe, the stylesheet and every remote asset to their bytes. The stylesheet's
+ * local controls, the stylesheet and every remote asset to their bytes. The stylesheet's
  * `<link>` carries its pin too, because browsers read a stylesheet's integrity only
  * from the element. The probe is pinned to `PROBE_PIN`, which its bytes never match.
  * ADR-0129.
@@ -1820,11 +1813,10 @@ async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) 
     integrity[url] = digest;
   }
 
-  const probe = await readFile(PROBE_SOURCE);
-  const probePath = `assets/pin-probe-${contentHash(probe.toString('utf8'))}.js`;
-  await writeWithin(publicDir, probePath, probe);
-  integrity[`/${probePath}`] = PROBE_PIN;
-  const imports = { ...shared, [PROBE_SPECIFIER]: `/${probePath}` };
+  integrity[PROBE_CONTROL_URL] = PROBE_CONTROL_PIN;
+  integrity[PROBE_EMPTY_URL] = PROBE_PIN;
+  integrity[PROBE_URL] = PROBE_PIN;
+  const imports = { ...shared, [PROBE_SPECIFIER]: PROBE_URL };
 
   const htmlPath = join(publicDir, 'index.html');
   const document = /** @type {HtmlNode} */ (
@@ -1906,7 +1898,7 @@ function importMapHash(source) {
 /** @param {string} inlineHash */
 function cspForImportMap(inlineHash) {
   return (
-    `default-src 'self'; script-src 'self' '${inlineHash}'; ` +
+    `default-src 'self'; script-src 'self' '${inlineHash}' ${PROBE_CSP}; ` +
     `style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; ` +
     `object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; ` +
     `trusted-types lit-html ui-test ui-test-template srl-worker; require-trusted-types-for 'script'`
@@ -2642,15 +2634,9 @@ function verifyPayload(app, files, templates, chunks, localeFiles) {
   // classic script at a fixed URL, in no import map and in no module graph, so the
   // hash-naming and one-file-per-chunk rules below are not true of it and must not
   // be asked of it. It is checked instead by being required output. ADR-0088.
-  // The pin probe is the other. It is emitted beside the chunks and imported by no
-  // module, and its pin is wrong on purpose. ADR-0129.
-  const probes = files.filter((file) => PROBE_PATH.test(file.path.replace(/^public\//u, '')));
-  if (probes.length !== 1) {
-    throw artifactError(app, 'verify', `expected one pin probe; saw ${String(probes.length)}.`);
-  }
   const javascript = files.filter(
     (file) =>
-      file.path.endsWith('.js') && file.path !== `${PUBLIC}/${WORKER}` && !probes.includes(file),
+      file.path.endsWith('.js') && file.path !== `${PUBLIC}/${WORKER}`,
   );
   if (javascript.length < 2) {
     throw artifactError(app, 'verify', 'expected entry and lazy JavaScript chunks.');

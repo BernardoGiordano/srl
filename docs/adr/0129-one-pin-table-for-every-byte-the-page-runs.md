@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-06
-- Affects: `source/lib/core/foundation/pins.js`, `source/lib/core/foundation/pin-probe.js`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/remotes/mfe.js`, `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `source/lib/core/localization/i18n.js`, `source/lib/host/remote-host.js`, `cli/delivery/build.mjs`, `cli/delivery/service-worker.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/activate-release.mjs`, `cli/package/interface.mjs`, `cli/checks/importmap-check.mjs`, `tools/checks/verify-deps.mjs`
+- Affects: `source/lib/core/foundation/pins.js`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/remotes/mfe.js`, `source/lib/core/template/template.js`, `source/lib/core/application/runtime.js`, `source/lib/core/localization/i18n.js`, `source/lib/host/remote-host.js`, `cli/delivery/build.mjs`, `cli/delivery/service-worker.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/activate-release.mjs`, `cli/package/interface.mjs`, `cli/checks/importmap-check.mjs`, `tools/checks/verify-deps.mjs`
 
 ## Context
 
@@ -61,12 +61,34 @@ changed bytes fail their request.
 - A shell bundle that fails its pin seeds nothing, and each template then loads under its
   own pin. A remote bundle that fails its pin fails the remote.
 
-Every import map resolves `@core/foundation/pin-probe.js` and pins its URL to the digest
-of zero bytes, which the probe never has. Before the first remote loads, `pinsEnforced()`
-fetches the probe and then imports it. An engine that enforces pins refuses the import.
-An engine that loads it ignores pins, so remotes are refused there and the error names
-the engine. A probe that is missing, or pinned to anything else, refuses remotes too,
-because enforcement can't be proved.
+Every import map carries three fixed `data:text/javascript` URLs. The two nonempty
+URLs contain `export const probe = true;` and differ only in their fragments. One has
+the matching digest, and `@core/foundation/pin-probe.js` resolves to the other, pinned
+to the digest of zero bytes. The third URL contains no bytes and carries that empty
+digest as a matching control.
+
+Before the first remote loads, `pinsEnforced()` requires all three pins and checks
+`import.meta.resolve()` for every URL. Exact and scoped remapping cannot substitute
+network resources. Both matching controls must import successfully and return their
+expected exports before a `TypeError` from the mismatch proves enforcement. The
+controls prove that CSP permits both digests. The fixed URLs have no transport,
+variable MIME type, syntax error, or evaluation error that could imitate enforcement.
+An import rejection alone is never proof.
+
+The production CSP admits the controls by their exact hashes. It does not add a
+`data:` or `blob:` script source. `srl check importmap` reports both probe hashes
+alongside the inline map's hash for source deployments. A missing or edited pin,
+remapped URL, failed control, or unexpected rejection refuses remotes. Inconclusive
+checks can be retried; definitive enforcement or ignored-integrity verdicts remain
+cached for the page. An engine that imports the mismatch refuses remotes and the
+error names the engine.
+
+The Chromium and WebKit regression exercises the runtime module under strict CSP,
+checks refusal of a changed network module, and simulates ignored integrity by
+omitting browser-parsed pins while leaving the runtime's table intact. It also
+checks missing pins, incomplete CSP, retry, shared verdicts, and exact and scoped
+remapping. Legacy network probes with syntax, evaluation, MIME, and second-request
+failures are refused before any request.
 
 The generated service worker precaches every file except the document against its pin,
 and the build refuses a precached file without one. Cache-first stores a response only

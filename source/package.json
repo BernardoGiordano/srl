@@ -110,8 +110,7 @@
       "srl-core": {
         "subpath": ".",
         "entry": "lib/srl-core.js",
-        "imports": ["@core/", "@auth/", "@host/"],
-        "exclude": ["lib/core/foundation/pin-probe.js"]
+        "imports": ["@core/", "@auth/", "@host/"]
       },
       "srl-components": {
         "subpath": "./components",

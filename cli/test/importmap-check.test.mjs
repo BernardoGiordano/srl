@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
 import { checkImportMaps } from '../checks/importmap-check.mjs';
 import { errors } from '../diagnostics/index.mjs';
-import { PROBE_PIN, PROBE_URL, importMapFragment, mountedFile } from '../package/interface.mjs';
-import { PROBE_PIN as RUNTIME_PROBE_PIN } from '@srljs/core/lib/core/foundation/pins.js';
+import { PROBE_CONTROL_PIN, PROBE_CONTROL_URL, PROBE_EMPTY_URL, PROBE_PIN, PROBE_URL, importMapFragment } from '../package/interface.mjs';
+import * as runtime from '@srljs/core/lib/core/foundation/pins.js';
 
 /**
  * The probe is the one entry pinned to bytes it doesn't have, so the check compares
@@ -50,9 +50,7 @@ void test('the fragment pins the probe to the sentinel, and the check accepts it
 });
 
 void test('a probe pinned to its own bytes is refused', async () => {
-  const probe = mountedFile(PROBE_URL);
-  assert.ok(probe !== null);
-  const actual = `sha384-${createHash('sha384').update(await readFile(probe)).digest('base64')}`;
+  const actual = PROBE_CONTROL_PIN;
   const found = await codes(
     await application((map) => {
       map.integrity[PROBE_URL] = actual;
@@ -70,6 +68,19 @@ void test('the sentinel on any other URL is refused', async () => {
   assert.deepEqual(found, ['importmap/sentinel-pin']);
 });
 
-void test('the CLI and the runtime agree on the probe pin', () => {
-  assert.equal(PROBE_PIN, RUNTIME_PROBE_PIN);
+void test('the CLI and runtime agree on fixed probe bytes and pins', () => {
+  for (const [name, value] of Object.entries({ PROBE_URL, PROBE_CONTROL_URL, PROBE_EMPTY_URL, PROBE_PIN, PROBE_CONTROL_PIN })) {
+    assert.equal(runtime[/** @type {keyof typeof runtime} */ (name)], value);
+  }
+  for (const [url, pin] of [[PROBE_CONTROL_URL, PROBE_CONTROL_PIN], [PROBE_EMPTY_URL, PROBE_PIN]]) {
+    const bytes = decodeURIComponent(new URL(/** @type {string} */ (url)).pathname.split(',')[1] ?? '');
+    assert.equal(`sha384-${createHash('sha384').update(bytes).digest('base64')}`, pin);
+  }
+});
+
+void test('missing or edited matching controls are refused', async () => {
+  for (const url of [PROBE_CONTROL_URL, PROBE_EMPTY_URL]) {
+    assert.deepEqual(await codes(await application((map) => { delete map.integrity[url]; })), ['importmap/edited-hash']);
+    assert.deepEqual(await codes(await application((map) => { map.integrity[url] = 'sha384-invalid'; })), ['importmap/edited-hash']);
+  }
 });
