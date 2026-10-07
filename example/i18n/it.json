@@ -98,7 +98,6 @@
 
   "login": {
     "title": "Accedi",
-    "lead": "srl è la libreria; Meridian è il CRM di esempio costruito con essa. La sessione vive in un cookie HttpOnly impostato dal server locale.",
     "username": "Nome utente",
     "password": "Password",
     "passwordHint": "admin, operator oppure viewer",

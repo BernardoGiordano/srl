@@ -106,7 +106,6 @@
 
   "login": {
     "title": "تسجيل الدخول",
-    "lead": "srl هي المكتبة، وميريديان تطبيق CRM تجريبي مبني بها. تُحفظ الجلسة في ملف تعريف HttpOnly يضبطه الخادم المحلي.",
     "username": "اسم المستخدم",
     "password": "كلمة المرور",
     "passwordHint": "admin أو operator أو viewer",
