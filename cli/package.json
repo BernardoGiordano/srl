@@ -1,6 +1,6 @@
 {
   "name": "@srljs/cli",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "type": "module",
   "license": "MIT",
   "description": "The srl toolchain: application scaffold, dev server, project model, template checker, language server, and production delivery",
@@ -68,7 +68,7 @@
     "it runs browser tests."
   ],
   "peerDependencies": {
-    "@srljs/core": "0.9.0",
+    "@srljs/core": "1.0.0",
     "@web/test-runner": "^1.0.0"
   },
   "peerDependenciesMeta": {

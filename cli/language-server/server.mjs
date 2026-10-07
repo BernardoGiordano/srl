@@ -148,7 +148,7 @@ async function dispatch(method, params, answerable) {
           workspaceSymbolProvider: true,
           codeActionProvider: { codeActionKinds: ['quickfix'] },
         },
-        serverInfo: { name: 'srl', version: '0.9.0' },
+        serverInfo: { name: 'srl', version: '1.0.0' },
       };
     }
     case 'initialized': {

@@ -41,7 +41,7 @@ Its source is in [`example/`](example/).
 Create a project with Node.js 22 or later.
 
 ```bash
-npx @srljs/cli@0.9.0 new my-app
+npx @srljs/cli@1.0.0 new my-app
 cd my-app
 npm install
 npm run dev
