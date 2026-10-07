@@ -22,6 +22,11 @@ import {
  * the `TokenStore` seam, the two error types and `sessionFrom()`, and asserts
  * nothing about the wire.
  *
+ * `login()` uses the `password` grant (ROPC) to keep the sample short. The OAuth 2.0
+ * Security Best Current Practice, RFC 9700, says it must not be used. A real
+ * deployment signs in with the authorization code flow and PKCE, and passes the code
+ * from the redirect to `login()`.
+ *
  * The token lives in a private field and nowhere else. Not localStorage, not
  * sessionStorage, not IndexedDB. Those all persist across reloads, which sounds
  * like a feature until you notice it means the token is readable by any script
@@ -81,12 +86,10 @@ export class MemoryTokenStore {
 
   async logout() {
     this.#accessToken = null;
-    // Ask the server to clear the refresh cookie and revoke the grant. Local
-    // state is already gone regardless of whether this succeeds.
-    await fetch(this.#tokenEndpoint, {
-      method: 'DELETE',
-      credentials: 'same-origin',
-    }).catch(() => undefined);
+    // Ask the server to clear the refresh cookie and revoke the grant. Local state is
+    // already gone. A failure rejects, because the cookie may still restore the
+    // session on the next load, and the user should hear that.
+    await revoke(this.#tokenEndpoint, `The token endpoint ${this.#tokenEndpoint}`);
   }
 
   /** @returns {Promise<Session | null>} */
@@ -158,6 +161,23 @@ export class MemoryTokenStore {
     this.#accessToken = session.accessToken;
     return session.session;
   }
+}
+
+/**
+ * Ask the server to end the session, and reject unless it confirms.
+ *
+ * @param {string} url
+ * @param {string} where
+ * @returns {Promise<void>}
+ */
+export async function revoke(url, where) {
+  let response;
+  try {
+    response = await fetch(url, { method: 'DELETE', credentials: 'same-origin' });
+  } catch (cause) {
+    throw unreachable(where, cause);
+  }
+  if (!response.ok) throw await failureFor(response, where);
 }
 
 /**

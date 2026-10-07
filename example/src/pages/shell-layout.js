@@ -183,9 +183,11 @@ export class ShellLayout extends SignalElement {
   }
 
   signOut() {
+    // Local state is gone either way. A failed revocation still rejects, so the
+    // page's error reporting names it.
     void inject(AUTH_SESSION)
       .logout()
-      .then(() => navigate('/login'));
+      .finally(() => navigate('/login'));
   }
 
   onMount() {

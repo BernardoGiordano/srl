@@ -89,6 +89,9 @@ function remoteBundleRules(remote) {
 function connect(remote) {
   let revoked = false;
 
+  /** Cancels the remote's requests and body reads when the context is revoked. */
+  const requests = new AbortController();
+
   /** @type {Unsubscribe[]} */
   const subscriptions = [];
 
@@ -173,6 +176,17 @@ function connect(remote) {
     return url;
   }
 
+  /**
+   * @param {RequestInit | undefined} init
+   * @returns {RequestInit}
+   */
+  function cancellable(init) {
+    const signal = init?.signal === null || init?.signal === undefined
+      ? requests.signal
+      : AbortSignal.any([requests.signal, init.signal]);
+    return { ...init, signal };
+  }
+
   /** @returns {readonly string[]} */
   function permissions() {
     const held = inject(AUTH_SESSION).scopes.value;
@@ -219,15 +233,15 @@ function connect(remote) {
       // try/catch and a .catch to cover one failure.
       async fetch(path, init) {
         alive();
-        return inject(AUTH_SESSION).fetch(resolveGranted(path), init);
+        return inject(AUTH_SESSION).fetch(resolveGranted(path), cancellable(init));
       },
 
       async json(path, init) {
         alive();
-        const response = await inject(AUTH_SESSION).fetch(resolveGranted(path), {
-          ...init,
-          headers: { Accept: 'application/json', ...init?.headers },
-        });
+        const response = await inject(AUTH_SESSION).fetch(
+          resolveGranted(path),
+          cancellable({ ...init, headers: { Accept: 'application/json', ...init?.headers } }),
+        );
         if (!response.ok) {
           throw new Error(`${String(response.status)} ${response.statusText} for ${path}`);
         }
@@ -295,6 +309,9 @@ function connect(remote) {
 
     revoke() {
       revoked = true;
+      requests.abort(
+        new DOMException(`The host context for remote "${remote.name}" has been revoked.`, 'AbortError'),
+      );
       for (const dispose of subscriptions.splice(0)) dispose();
     },
   };

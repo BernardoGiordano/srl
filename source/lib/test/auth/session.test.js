@@ -16,14 +16,17 @@ import { assert, present } from '../harness.js';
  * BroadcastChannel nothing closes and a timer nothing clears leave a disposed session
  * refreshing.
  *
- * Timings here are deliberate rather than arbitrary. `AuthSession` refreshes a minute
- * before expiry, so a session expiring inside that margin schedules its refresh
- * immediately, which is how these tests reach the scheduled path without waiting a
- * minute for it.
+ * Timings here are deliberate rather than arbitrary. `AuthSession` refreshes halfway
+ * through a lifetime shorter than two minutes, so a session restored 40 ms from expiry
+ * refreshes 20 ms later, which is how these tests reach the scheduled path without
+ * waiting a minute for it.
  */
 
 /** Far enough out that no scheduled refresh fires during a test. */
 const LONG = 3_600_000;
+
+/** The channel an unnamed session and its other tabs share. */
+const CHANNEL = 'srl-auth:default';
 
 /**
  * @param {Partial<Session>} [overrides]
@@ -125,8 +128,7 @@ describe('auth session lifecycle', () => {
   });
 
   afterEach(() => {
-    // Every session opens a BroadcastChannel on the one 'auth' name. An undisposed
-    // one from a finished test would apply the next test's logout to itself.
+    // An undisposed session keeps its timer and its channel open into the next test.
     for (const auth of live) auth.dispose();
     globalThis.fetch = nativeFetch;
   });
@@ -278,6 +280,67 @@ describe('auth session lifecycle', () => {
     assert.equal(auth.session.value, current);
   });
 
+  it('does not sign the user back in when a 401 arrives after logout', async () => {
+    // A failed revocation leaves the refresh cookie behind, and the store's refresh
+    // would spend it.
+    let sent = 0;
+    globalThis.fetch = () => {
+      sent += 1;
+      return Promise.resolve(new Response(null, { status: 401 }));
+    };
+    const { auth, store } = start({ logout: () => Promise.reject(new AuthUnavailable('offline')) });
+    await auth.login({});
+    await assert.rejects(() => auth.logout(), 'offline');
+
+    const response = await auth.fetch('/api/orders');
+
+    assert.equal(response.status, 401);
+    assert.equal(sent, 1, 'no retry');
+    assert.equal(refreshes(store.calls), 0, store.calls.join(' '));
+    assert.equal(auth.session.value, null);
+  });
+
+  it('keeps credentials and renewal to the audience', async () => {
+    /** @type {Request[]} */
+    const sent = [];
+    globalThis.fetch = (input, init) => {
+      sent.push(new Request(input, init));
+      return Promise.resolve(new Response(null, { status: 401 }));
+    };
+    const { auth, store } = start();
+    auth.session.value = session();
+
+    const response = await auth.fetch('https://elsewhere.example/api/orders');
+
+    assert.equal(response.status, 401);
+    assert.equal(present(sent[0]).headers.get('Authorization'), null, 'no credential off the page origin');
+    assert.equal(refreshes(store.calls), 0, 'a 401 from outside the audience renews nothing');
+  });
+
+  it('carries credentials to the origins it is given, and only those', async () => {
+    /** @type {Request[]} */
+    const sent = [];
+    globalThis.fetch = (input, init) => {
+      sent.push(new Request(input, init));
+      return Promise.resolve(new Response('ok'));
+    };
+    const auth = new AuthSession(fakeStore(), { audience: ['https://api.example.com'] });
+    live.push(auth);
+    auth.session.value = session();
+
+    await auth.fetch('https://api.example.com/orders');
+    await auth.fetch('/api/orders');
+
+    assert.equal(present(sent[0]).headers.get('Authorization'), 'Bearer at-1');
+    assert.equal(present(sent[1]).headers.get('Authorization'), null);
+  });
+
+  it('refuses an audience entry that is not an origin', () => {
+    // Widening a path to its origin would hand the credential to every service on it.
+    assert.throws(() => new AuthSession(fakeStore(), { audience: ['https://api.example.com/v1'] }), 'origins');
+    assert.throws(() => new AuthSession(fakeStore(), { audience: ['api.example.com'] }), 'origins');
+  });
+
   it('throws the server error from json() rather than returning a body', async () => {
     globalThis.fetch = () => Promise.resolve(new Response('{}', { status: 500 }));
     const { auth } = start();
@@ -289,19 +352,46 @@ describe('auth session lifecycle', () => {
   /* ── Scheduled refresh ─────────────────────────────────────────────────── */
 
   it('refreshes before expiry without being asked', async () => {
-    // Restored inside the 60s refresh margin, so the timer is scheduled for now.
-    const { auth, store } = await startRestored(1_000);
-    await after(20);
+    const { auth, store } = await startRestored(40);
+    await after(80);
 
     assert.equal(refreshes(store.calls), 1, store.calls.join(' '));
     assert.ok(present(auth.session.value).expiresAt > Date.now() + 60_000, 'renewed');
   });
 
+  it('refreshes a short lifetime halfway through rather than at once', async () => {
+    // A lifetime under the 60s margin used to put every refresh at zero delay.
+    const { auth, store } = start({ login: () => Promise.resolve(session({ expiresAt: Date.now() + 30_000 })) });
+    await auth.login({});
+    await after(50);
+
+    assert.equal(refreshes(store.calls), 0, store.calls.join(' '));
+  });
+
+  it('backs off when each refresh comes back already due', async () => {
+    // A client clock ahead of the server's reads every fresh expiry as past.
+    const { store } = await startRestored(-60_000, {
+      refresh: () => Promise.resolve(session({ expiresAt: Date.now() - 60_000 })),
+    });
+    await after(200);
+
+    assert.equal(refreshes(store.calls), 1, store.calls.join(' '));
+  });
+
+  it('waits out an expiry past the timer range instead of firing at once', async () => {
+    // setTimeout fires a delay above 2^31-1 ms, about 24.8 days, immediately.
+    const thirtyDays = 30 * 24 * 3_600_000;
+    const { store } = await startRestored(thirtyDays);
+    await after(50);
+
+    assert.equal(refreshes(store.calls), 0, store.calls.join(' '));
+  });
+
   it('ends the session when a scheduled refresh is refused', async () => {
-    const { auth } = await startRestored(1_000, {
+    const { auth } = await startRestored(40, {
       refresh: () => Promise.reject(new AuthRejected('invalid_grant')),
     });
-    await after(20);
+    await after(80);
 
     // Terminal. Keeping the session would leave isAuthenticated true against a
     // token the server has already stopped honouring.
@@ -312,21 +402,21 @@ describe('auth session lifecycle', () => {
   it('ends the session when an unadmissible payload comes back', async () => {
     // Admission failure is terminal on purpose, because a token endpoint answering
     // 200 with a body the client cannot read does not get better on the third try.
-    const { auth } = await startRestored(1_000, {
+    const { auth } = await startRestored(40, {
       refresh: () => Promise.reject(new AuthRejected('access_token must be a non-empty string')),
     });
-    await after(20);
+    await after(80);
 
     assert.equal(auth.session.value, null);
   });
 
   it('retries a scheduled refresh that could not reach an answer', async () => {
-    // Expiry 200ms out bounds the backoff to 200ms, so a retry is observable
-    // without the suite waiting on the first backoff step.
-    const { auth, store } = await startRestored(200, {
+    // The first attempt runs at 200ms, and expiry at 400ms bounds the backoff, so
+    // the check at 260ms sees the attempt and a session still standing.
+    const { auth, store } = await startRestored(400, {
       refresh: () => Promise.reject(new AuthUnavailable('offline')),
     });
-    await after(30);
+    await after(260);
 
     assert.ok(refreshes(store.calls) >= 1, 'the first attempt ran');
     // Not knowing is not a reason to sign the user out.
@@ -442,7 +532,7 @@ describe('auth session lifecycle', () => {
     const restoring = auth.init();
     await entered.promise;
 
-    const channel = new BroadcastChannel('auth');
+    const channel = new BroadcastChannel(CHANNEL);
     channel.postMessage({ kind: 'changed' });
     await after(20);
     channel.close();
@@ -562,9 +652,9 @@ describe('auth session lifecycle', () => {
   /* ── Disposal ──────────────────────────────────────────────────────────── */
 
   it('stops refreshing once disposed', async () => {
-    const { auth, store } = await startRestored(1_000);
+    const { auth, store } = await startRestored(40);
     auth.dispose();
-    await after(30);
+    await after(80);
 
     assert.equal(refreshes(store.calls), 0, store.calls.join(' '));
   });
@@ -590,7 +680,7 @@ describe('auth session lifecycle', () => {
     auth.session.value = session();
 
     auth.dispose();
-    const channel = new BroadcastChannel('auth');
+    const channel = new BroadcastChannel(CHANNEL);
     channel.postMessage({ kind: 'logout' });
     await after(20);
     channel.close();
@@ -605,12 +695,41 @@ describe('auth session lifecycle', () => {
     await auth.init();
     auth.session.value = session();
 
-    const channel = new BroadcastChannel('auth');
+    const channel = new BroadcastChannel(CHANNEL);
     channel.postMessage({ kind: 'logout' });
     await after(20);
     channel.close();
 
     assert.equal(auth.session.value, null);
+  });
+
+  it('keeps two sessions in one page apart', async () => {
+    // A shell and a remote with its own session share a document, and the shared
+    // name is the default one.
+    const shell = start();
+    const remote = start();
+    await Promise.all([shell.auth.init(), remote.auth.init()]);
+    shell.auth.session.value = session();
+    remote.auth.session.value = session({ subject: 'service-account' });
+
+    await shell.auth.logout();
+    await after(20);
+
+    assert.equal(present(remote.auth.session.value).subject, 'service-account');
+  });
+
+  it('ignores a session with another name', async () => {
+    const auth = new AuthSession(fakeStore(), { name: 'billing' });
+    live.push(auth);
+    await auth.init();
+    auth.session.value = session();
+
+    const channel = new BroadcastChannel(CHANNEL);
+    channel.postMessage({ kind: 'logout' });
+    await after(20);
+    channel.close();
+
+    assert.notOk(auth.session.value === null, 'another application on the origin logged out');
   });
 
   it('re-reads its own store rather than trusting a broadcast payload', async () => {
@@ -620,7 +739,7 @@ describe('auth session lifecycle', () => {
     const { auth, store } = start();
     await auth.init();
 
-    const channel = new BroadcastChannel('auth');
+    const channel = new BroadcastChannel(CHANNEL);
     channel.postMessage({ kind: 'changed', session: session() });
     await after(20);
     channel.close();

@@ -1,6 +1,6 @@
 import { AuthRejected, asRecord, failureFor, readPayload, requireString, unreachable } from '@auth/session-policy.js';
 
-import { readTokenResponse } from './memory-store.js';
+import { readTokenResponse, revoke } from './memory-store.js';
 
 /** @import { Session, TokenStore } from '@auth/types.js' */
 
@@ -13,6 +13,14 @@ import { readTokenResponse } from './memory-store.js';
  * contract with *this* application's authorization server. The library supplies
  * the `TokenStore` seam, the two error types and `sessionFrom()`, and asserts
  * nothing about the wire.
+ *
+ * Two shortcuts keep the sample short, and a real deployment replaces both.
+ *
+ * - `login()` uses the `password` grant (ROPC), which RFC 9700 says must not be used.
+ *   Sign in with the authorization code flow and PKCE instead.
+ * - Proofs carry no `nonce` claim. A server that requires one (RFC 9449, sections 8
+ *   and 9) answers with `use_dpop_nonce` and a `DPoP-Nonce` header, which this store
+ *   reports as a refused grant. Keep the latest header value and send it as `nonce`.
  *
  * Read this before choosing this strategy. The private key is `extractable: false` and
  * lives as a live `CryptoKey` in IndexedDB, so an attacker with script execution on
@@ -75,14 +83,16 @@ export class DpopTokenStore {
 
   async logout() {
     this.#accessToken = null;
-    await fetch(this.#tokenEndpoint, { method: 'DELETE', credentials: 'same-origin' }).catch(
-      () => undefined,
-    );
-    // Rotate the key so the next session is not bound to a key that any script
-    // running during the previous one may have had a handle to.
-    await deleteKeyPair();
-    this.#keyPair = null;
-    this.#publicJwk = null;
+    try {
+      await revoke(this.#tokenEndpoint, `The token endpoint ${this.#tokenEndpoint}`);
+    } finally {
+      // Rotate the key so the next session is not bound to a key that any script
+      // running during the previous one may have had a handle to. Rotation runs
+      // even when revocation fails.
+      await deleteKeyPair();
+      this.#keyPair = null;
+      this.#publicJwk = null;
+    }
   }
 
   /** @returns {Promise<Session | null>} */

@@ -26,13 +26,37 @@ concurrent requests in that session, cross-tab coordination, and disposal.
 `AuthSession.fetch()` and `.json()` send authorized requests. Route guards
 use `requireSession` and `requireScope(scope)`.
 
+A second argument sets where credentials go and which tabs coordinate.
+
+```js
+new AuthSession(store, {
+  name: 'orders',
+  audience: [location.origin, 'https://api.example.com'],
+});
+```
+
+`audience` lists the origins a request may carry credentials to, and defaults
+to the page's own. A request to any other origin goes out unauthorized, and its
+401 doesn't trigger a refresh. `name` names the cross-tab channel and defaults
+to `default`. Applications that share an origin each pass their own name.
+
+A 401 refreshes only a live session. After logout, a 401 comes back as is,
+even when a failed revocation left the server's cookie behind. The refresh
+timer runs a minute before expiry, or halfway through a lifetime shorter than
+two minutes. A refresh whose answer is already due again backs off instead of
+looping, and an expiry weeks away waits in steps the browser's timer can hold.
+[ADR-0130](../adr/0130-the-session-decides-audience-renewal-and-cadence.md)
+explains each rule.
+
 Signing in, signing out, cross-tab changes, and disposal cancel pending requests
 and response body reads with `AbortError`. A request is never retried under a
 later sign-in. Callers sharing an in-flight GET receive the cancellation too;
 a later GET starts a new request. Store exchanges run in order so a late login
 or refresh cannot restore credentials after logout. Requests wait for a pending
 login, logout, or restore before authorizing, but not for a refresh. Local logout state clears
-immediately, while its promise waits for earlier exchanges and store cleanup.
+immediately, while its promise waits for earlier exchanges and store cleanup. The
+promise rejects when the store's revocation call fails, so the application can
+tell the user the server may still hold the session.
 When one of these changes lands during `init()`, the restore resolves with the
 session that change produced instead of failing startup.
 
@@ -49,6 +73,15 @@ that reject malformed values without printing credentials.
 An expired session ends even if the network remains unavailable. DPoP can limit
 the use of a stolen token, but code running on the page can still make requests
 as the user. See [ADR-0025](../adr/0025-dpop-defeats-token-theft-not-xss.md).
+
+The example stores take two shortcuts that a copy must replace.
+
+- The memory and DPoP stores sign in with the `password` grant (ROPC), which
+  RFC 9700 says must not be used. Use the authorization code flow with PKCE,
+  and pass the code from the redirect to `login()`.
+- The DPoP store sends no `nonce` claim. A server that requires one answers
+  with `use_dpop_nonce` and a `DPoP-Nonce` header (RFC 9449, sections 8 and 9),
+  which the store reports as a refused grant.
 
 ## Remote host context
 
@@ -70,8 +103,9 @@ collection. Analytics uses relative imports and a plain custom element.
 Neither imports the shell's route state. Each entry declares the host contract
 version it supports.
 
-A context belongs to one mount. Leaving the route revokes it, releases its
-subscriptions, and runs remote cleanup. A later visit receives a new context.
+A context belongs to one mount. Leaving the route revokes it, aborts its
+pending requests and body reads, releases its subscriptions, and runs remote
+cleanup. A later visit receives a new context.
 
 ## Manifest policy
 

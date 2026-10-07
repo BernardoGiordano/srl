@@ -94,6 +94,10 @@ describe('auth payload admission', () => {
       assert.ok(session.expiresAt < Date.now(), 'past expiry admitted');
     });
 
+    it('refuses an expiry no Date can hold', () => {
+      assert.throws(() => sessionFrom({ ...GOOD_FIELDS, expiresAt: 1e300 }, 'x'), 'expiresAt');
+    });
+
     it('has no field a credential could travel on', () => {
       // A Session is read by guards, screens and the remote host contract, and is
       // the object most likely to be copied into a diagnostic. A store keeps its

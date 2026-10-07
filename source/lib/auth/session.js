@@ -3,7 +3,7 @@ import { token } from '@core/foundation/inject.js';
 import { readJson } from '@core/foundation/json.js';
 import { AuthUnavailable } from '@auth/session-policy.js';
 
-/** @import { Session, TokenStore } from '@auth/types.js' */
+/** @import { AuthSessionOptions, Session, TokenStore } from '@auth/types.js' */
 
 /**
  * The authenticated request lifecycle, whole.
@@ -30,18 +30,40 @@ import { AuthUnavailable } from '@auth/session-policy.js';
  * hand out a credential, and neither does this class. They stay adapters behind that
  * seam, performing an exchange and admitting its payload, and deciding nothing about
  * session state, retries or scheduling.
+ *
+ * This class makes three decisions a store never sees. Audience says which origins a
+ * request may carry credentials to. Renewal extends only a live session, so a 401 after
+ * logout cannot restore one. Cadence keeps the refresh timer from looping on a short
+ * lifetime, a skewed clock or an expiry past the timer's range. ADR-0130.
  */
 
 /** @type {import('@core/foundation/types.js').InjectionToken<AuthSession>} */
 export const AUTH_SESSION = token('AuthSession');
 
-/** Refresh this long before the access token expires. */
+/** Refresh this long before the access token expires, or halfway through a shorter lifetime. */
 const REFRESH_MARGIN_MS = 60_000;
+
+/**
+ * A refresh whose answer is due again sooner than this bought no time. A lifetime under
+ * it, or a clock ahead of the server's, causes that, and the second such answer in a
+ * row waits on the backoff.
+ */
+const REFRESH_FLOOR_MS = 5_000;
+
+/** The longest delay `setTimeout` honours. Engines fire a longer one at once. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/**
+ * Marks this document's broadcasts. Another session in the same page shares no state
+ * with this one, so it ignores them. `getRandomValues` works outside a secure context.
+ */
+const DOCUMENT_ID = Array.from(crypto.getRandomValues(new Uint32Array(2)), (part) => part.toString(36)).join('');
 
 /**
  * Backoff for a refresh that could not reach an answer, in order, and the last delay
  * repeats. Bounded by the token's own expiry in every case, so the token decides how
- * long a dead session survives rather than the sequence.
+ * long a dead session survives rather than the sequence. The timer also waits on it
+ * when refreshes keep arriving already due.
  */
 const RETRY_DELAYS_MS = [1_000, 5_000, 15_000, 60_000];
 
@@ -55,6 +77,16 @@ export class AuthSession {
   scopes = computed(() => this.session.value?.scopes ?? []);
 
   #store;
+
+  /** The cross-tab channel's name. */
+  #channelName;
+
+  /** Origins a request may carry credentials to. */
+  /** @type {ReadonlySet<string>} */
+  #audience;
+
+  /** Consecutive sessions applied with their refresh already due within the floor. */
+  #dueStreak = 0;
 
   /** Scheduled refresh, or the backoff retry after one could not reach an answer. */
   /** @type {ReturnType<typeof setTimeout> | undefined} */
@@ -97,9 +129,14 @@ export class AuthSession {
    */
   #identityWork = Promise.resolve();
 
-  /** @param {TokenStore} store */
-  constructor(store) {
+  /**
+   * @param {TokenStore} store
+   * @param {AuthSessionOptions} [options]
+   */
+  constructor(store, options = {}) {
     this.#store = store;
+    this.#channelName = `srl-auth:${requireName(options.name ?? 'default')}`;
+    this.#audience = new Set((options.audience ?? [location.origin]).map(requireOrigin));
   }
 
   get strategy() {
@@ -126,12 +163,15 @@ export class AuthSession {
   async init() {
     this.#assertCurrent(this.#generation);
     // Tabs coordinate so that a logout in one is a logout in all, and so a
-    // refresh in one does not race N-1 duplicate refreshes in the others.
-    this.#channel = new BroadcastChannel('auth');
+    // refresh in one does not race N-1 duplicate refreshes in the others. The
+    // channel is named per application, because every tab on the origin can hear it.
+    this.#channel = new BroadcastChannel(this.#channelName);
     this.#channel.onmessage = (event) => {
       // Anything on the origin can post here, so the payload is narrowed rather
       // than asserted.
-      switch (readKind(event.data)) {
+      const message = readMessage(event.data);
+      if (message.from === DOCUMENT_ID) return;
+      switch (message.kind) {
         case 'logout':
           this.#changeGeneration();
           this.#apply(null);
@@ -206,6 +246,9 @@ export class AuthSession {
    * Authorize an outbound request. Delegates to the active strategy, which may
    * add an Authorization header, a DPoP proof, or nothing at all.
    *
+   * A request outside the audience comes back unchanged, because the store would
+   * attach its credential to any URL it is handed.
+   *
    * @param {Request} request
    * @returns {Promise<Request>}
    */
@@ -213,6 +256,7 @@ export class AuthSession {
     const generation = this.#generation;
     await this.#identityWork;
     this.#assertCurrent(generation);
+    if (!this.#admits(request.url)) return request;
     const authorized = await this.#store.authorize(request);
     this.#assertCurrent(generation);
     return authorized;
@@ -225,15 +269,20 @@ export class AuthSession {
    * Three outcomes, and the caller can act on each:
    *
    *   a `Session`         renewed, and already applied.
-   *   `null`              the session is over. Applied, and broadcast to the
-   *                       other tabs.
+   *   `null`              no session was live, or the session is over. An ended
+   *                       session is applied and broadcast to the other tabs.
    *   rejects `AuthUnavailable`
    *                       not known. Nothing was applied; the session stands
    *                       until its own expiry passes.
    *
+   * Renewal extends a live session and never restores one. A store's refresh can
+   * still find a cookie a failed revocation left behind, so asking it with no session
+   * would sign the user back in. Restoring is `init()`'s job.
+   *
    * @returns {Promise<Session | null>}
    */
   refresh() {
+    if (this.session.value === null) return Promise.resolve(null);
     this.#refreshInFlight ??= this.#exchangeRefresh();
     return this.#refreshInFlight;
   }
@@ -261,15 +310,19 @@ export class AuthSession {
     // the original inputs rather than a clone of a spent object.
     const build = () => new Request(input, { ...init, signal });
 
-    const send = async () => {
-      const authorized = await this.authorize(build());
+    /** @param {Request} request */
+    const send = async (request) => {
+      const authorized = await this.authorize(request);
       this.#assertCurrent(generation);
       // Keep cancellation even if a store rebuilt the request without its signal.
       return globalThis.fetch(new Request(authorized, { signal }));
     };
-    const response = await send();
+    const first = build();
+    const response = await send(first);
     this.#assertCurrent(generation);
-    if (response.status !== 401) return response;
+    // A request outside the audience carried no credential, so its 401 says nothing
+    // about this session.
+    if (response.status !== 401 || !this.#admits(first.url)) return response;
 
     // The access token may simply have aged out between the scheduled refresh and
     // this call. Refresh once, then retry exactly once, and never loop, because a
@@ -289,7 +342,7 @@ export class AuthSession {
     this.#assertCurrent(generation);
     if (renewed === null) return response;
 
-    const retried = await send();
+    const retried = await send(build());
     this.#assertCurrent(generation);
     return retried;
   }
@@ -466,14 +519,60 @@ export class AuthSession {
     if (this.#disposed) return;
 
     this.session.value = next;
-    if (next === null) return;
+    if (next === null) {
+      this.#dueStreak = 0;
+      return;
+    }
+    this.#armAt(Date.now() + this.#cadence(next));
+  }
 
-    // Clamp to zero, because a session restored from storage may already be inside
-    // the margin and a negative delay would silently never fire in some engines.
-    const delay = Math.max(0, next.expiresAt - Date.now() - REFRESH_MARGIN_MS);
+  /**
+   * How long to wait before renewing `next`.
+   *
+   * The refresh runs a margin before expiry, or halfway through a lifetime shorter
+   * than twice the margin. A session restored inside the margin is due at once. When
+   * answers keep arriving due, the refresh is buying no time, so each one after the
+   * first waits on the backoff instead of looping.
+   *
+   * @param {Session} next
+   * @returns {number} milliseconds
+   */
+  #cadence(next) {
+    const lead = next.expiresAt - Date.now();
+    const delay = Math.max(0, lead - REFRESH_MARGIN_MS, lead / 2);
+    if (delay >= REFRESH_FLOOR_MS) {
+      this.#dueStreak = 0;
+      return delay;
+    }
+
+    this.#dueStreak += 1;
+    if (this.#dueStreak === 1) return delay;
+    const step = Math.min(this.#dueStreak - 2, RETRY_DELAYS_MS.length - 1);
+    return Math.max(delay, RETRY_DELAYS_MS[step] ?? 0);
+  }
+
+  /**
+   * Run the scheduled refresh at `instant`. A wait past the timer's range re-arms at
+   * the limit until the instant is in range.
+   *
+   * @param {number} instant epoch milliseconds
+   */
+  #armAt(instant) {
+    const delay = Math.max(0, instant - Date.now());
+    if (delay > MAX_TIMER_MS) {
+      this.#timer = setTimeout(() => {
+        this.#armAt(instant);
+      }, MAX_TIMER_MS);
+      return;
+    }
     this.#timer = setTimeout(() => {
       this.#refreshOnSchedule(0);
     }, delay);
+  }
+
+  /** @param {string} url */
+  #admits(url) {
+    return this.#audience.has(new URL(url).origin);
   }
 
   #clearTimer() {
@@ -483,16 +582,47 @@ export class AuthSession {
 
   /** @param {'changed' | 'logout'} kind */
   #broadcast(kind) {
-    this.#channel?.postMessage({ kind });
+    this.#channel?.postMessage({ kind, from: DOCUMENT_ID });
   }
 }
 
 /**
  * @param {unknown} data
- * @returns {string | undefined}
+ * @returns {{ kind?: string, from?: string }}
  */
-function readKind(data) {
-  if (typeof data !== 'object' || data === null) return undefined;
-  const kind = /** @type {{ kind?: unknown }} */ (data).kind;
-  return typeof kind === 'string' ? kind : undefined;
+function readMessage(data) {
+  if (typeof data !== 'object' || data === null) return {};
+  const { kind, from } = /** @type {{ kind?: unknown, from?: unknown }} */ (data);
+  return {
+    ...(typeof kind === 'string' ? { kind } : {}),
+    ...(typeof from === 'string' ? { from } : {}),
+  };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function requireName(value) {
+  if (typeof value !== 'string' || value === '') {
+    throw new TypeError('AuthSession name must be a non-empty string.');
+  }
+  return value;
+}
+
+/**
+ * An audience entry is an origin, such as `https://api.example.com`. A path or a
+ * trailing slash is refused rather than widened to its origin.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function requireOrigin(value) {
+  const origin = typeof value === 'string' && URL.canParse(value) ? new URL(value).origin : 'null';
+  if (origin === 'null' || origin !== value) {
+    throw new TypeError(
+      `AuthSession audience entries must be origins such as "https://api.example.com", got ${JSON.stringify(value)}.`,
+    );
+  }
+  return origin;
 }

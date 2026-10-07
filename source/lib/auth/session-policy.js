@@ -42,6 +42,9 @@ import { readJson } from '@core/foundation/json.js';
 /** Scope lists are space-delimited per RFC 6749; any run of whitespace is one separator. */
 const SCOPE_SEPARATOR = /\s+/u;
 
+/** The furthest instant from the epoch a `Date` can hold, in milliseconds. */
+const MAX_DATE_MS = 8.64e15;
+
 /**
  * The session cannot continue, and no retry will change that.
  *
@@ -260,16 +263,16 @@ export function requireDuration(value, where) {
 }
 
 /**
- * An absolute instant in epoch milliseconds. Not required to be in the future:
- * a `/session` probe answering with an expiry that has just passed is a race the
- * refresh path handles, not a malformed document.
+ * An absolute instant in epoch milliseconds, within the range a `Date` holds. Not
+ * required to be in the future: a `/session` probe answering with an expiry that has
+ * just passed is a race the refresh path handles, not a malformed document.
  *
  * @param {unknown} value
  * @param {string} where
  * @returns {number}
  */
 export function requireInstant(value, where) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > MAX_DATE_MS) {
     throw new AuthRejected(`${where} must be epoch milliseconds, got ${describe(value)}.`);
   }
   return value;

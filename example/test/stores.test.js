@@ -104,6 +104,19 @@ async function authorizedHeader(store, header) {
   return authorized.headers.get(header);
 }
 
+/**
+ * The public key a DPoP proof names, as its `x` coordinate.
+ *
+ * @param {string | null} proof
+ * @returns {unknown}
+ */
+function publicKeyOf(proof) {
+  const header = present(proof).split('.')[0] ?? '';
+  /** @type {unknown} */
+  const decoded = JSON.parse(atob(header.replace(/-/gu, '+').replace(/_/gu, '/')));
+  return /** @type {{ jwk: { x: unknown } }} */ (decoded).jwk.x;
+}
+
 describe('token stores', () => {
   beforeEach(() => {
     sent = [];
@@ -188,6 +201,19 @@ describe('token stores', () => {
       assert.equal(new URL(request.url).pathname, '/auth/token');
       assert.equal(new URL(request.url).origin, location.origin);
     });
+
+    it('rejects a logout the server did not confirm, holding no token', async () => {
+      // The refresh cookie may survive, so the application has to hear it.
+      respondWith(() => json(TOKEN_PAYLOAD));
+      const store = new MemoryTokenStore('/auth/token');
+      await store.login(CREDENTIALS);
+
+      respondWith(() => json({}, 503));
+      const failed = await rejection(() => store.logout());
+
+      assert.ok(failed instanceof AuthUnavailable, `503 gave ${String(failed)}`);
+      assert.equal(await authorizedHeader(store, 'Authorization'), null);
+    });
   });
 
   describe('bff cookie', () => {
@@ -237,6 +263,16 @@ describe('token stores', () => {
       assert.ok(unavailable instanceof AuthUnavailable, `502 gave ${String(unavailable)}`);
     });
 
+    it('rejects a logout the backend refused, holding no CSRF token', async () => {
+      respondWith(() => json(BFF_PAYLOAD));
+      const store = new BffCookieTokenStore('/auth');
+      await store.login(CREDENTIALS);
+
+      respondWith(() => json({ error: 'csrf_failed' }, 403));
+      await assert.rejects(() => store.logout(), 'csrf_failed');
+      assert.equal(await authorizedHeader(store, 'X-CSRF-Token'), null);
+    });
+
     it('strips a trailing slash so the endpoints are not doubled', async () => {
       respondWith(() => json(BFF_PAYLOAD));
       await new BffCookieTokenStore('/auth/').init();
@@ -268,6 +304,22 @@ describe('token stores', () => {
       const authorized = await store.authorize(new Request('/api/orders'));
       assert.equal(authorized.headers.get('Authorization'), 'DPoP at-1');
       assert.ok(authorized.headers.has('DPoP'), 'the API request carries a proof');
+    });
+
+    it('rotates the key even when revocation fails', async () => {
+      respondWith(() => json(TOKEN_PAYLOAD));
+      const store = new DpopTokenStore('/auth/token');
+      await store.login(CREDENTIALS);
+      const before = present(sent[0]).headers.get('DPoP');
+
+      respondWith(() => Promise.reject(new TypeError('offline')));
+      const failed = await rejection(() => store.logout());
+      assert.ok(failed instanceof AuthUnavailable, `offline gave ${String(failed)}`);
+
+      respondWith(() => json(TOKEN_PAYLOAD));
+      await store.login(CREDENTIALS);
+      const after = present(sent.at(-1)).headers.get('DPoP');
+      assert.ok(publicKeyOf(after) !== publicKeyOf(before), 'the next session binds a new key');
     });
 
     it('rejects a malformed token response and keeps no token', async () => {

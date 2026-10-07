@@ -299,6 +299,30 @@ describe('remote host contract', () => {
     assert.equal(changes, 0, 'revoke must drop subscriptions');
   });
 
+  it('cancels the remote\'s requests when revoked', async () => {
+    auth.session.value = session(['analytics:read']);
+    /** @type {() => void} */
+    let reached = () => undefined;
+    const sending = new Promise((resolve) => { reached = () => resolve(undefined); });
+    globalThis.fetch = (input) => {
+      const { signal } = /** @type {Request} */ (input);
+      reached();
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason)));
+        });
+      });
+    };
+    const host = createRemoteHostProvider().connect(descriptor());
+
+    const pending = assert.rejects(() => host.context.auth.json('/api/analytics/summary'), 'has been revoked');
+    await sending;
+    host.revoke();
+
+    // A torn-down remote must not keep reading the user's data into detached DOM.
+    await pending;
+  });
+
   it('is frozen, so a remote cannot replace its own grant check', async () => {
     const { context } = createRemoteHostProvider().connect(descriptor());
 

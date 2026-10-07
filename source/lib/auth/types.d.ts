@@ -14,6 +14,21 @@ export interface Session {
   readonly expiresAt: number;
 }
 
+/** What an application tells `AuthSession` beyond its store. ADR-0130. */
+export interface AuthSessionOptions {
+  /**
+   * Names the cross-tab channel. Tabs of one application share it, so applications
+   * that share an origin pass distinct names. Defaults to `'default'`.
+   */
+  readonly name?: string;
+  /**
+   * Origins a request may carry credentials to, such as `https://api.example.com`.
+   * A request to any other origin goes out unauthorized and its 401 renews nothing.
+   * Defaults to the page's own origin.
+   */
+  readonly audience?: readonly string[];
+}
+
 /**
  * The seam that lets the token storage decision stay open.
  *
@@ -44,9 +59,15 @@ export interface TokenStore {
    * belongs and is a check rather than an assumption.
    */
   login(credentials: unknown): Promise<Session>;
-  /** Discard local session state and revoke server-side if possible. */
+  /**
+   * Discard local session state, then revoke server-side. Rejects when revocation
+   * fails, so the application can tell the user the server may still hold the session.
+   */
   logout(): Promise<void>;
-  /** Refresh before expiry. Resolves null when the session cannot continue. */
+  /**
+   * Renew a live session. Resolves null when the session cannot continue.
+   * `AuthSession` calls it only while a session is live.
+   */
   refresh(): Promise<Session | null>;
   /**
    * Attach whatever this strategy needs to authorize the request, whether an

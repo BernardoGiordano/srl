@@ -107,12 +107,19 @@ export class BffCookieTokenStore {
     return this.#read(response, where);
   }
 
+  /**
+   * Rejects unless the backend confirms, because a cookie it never cleared restores
+   * the session on the next load, and the user should hear that.
+   */
   async logout() {
     this.#csrfToken = null;
-    await fetch(`${this.#baseUrl}/login`, {
-      method: 'DELETE',
-      credentials: 'same-origin',
-    }).catch(() => undefined);
+    const where = `The logout endpoint ${this.#baseUrl}/login`;
+    const response = await this.#send(
+      `${this.#baseUrl}/login`,
+      { method: 'DELETE', credentials: 'same-origin' },
+      where,
+    );
+    if (!response.ok) throw await failureFor(response, where);
   }
 
   /**
