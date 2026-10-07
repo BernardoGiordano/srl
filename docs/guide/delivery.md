@@ -13,6 +13,11 @@ origin, supports history fallback, and sends updates to open pages. In this
 repository, `npm start` serves the example and `npm run build -- --app example`
 builds it. The example's Node server also serves its API and sign-in routes.
 
+The dev server binds 127.0.0.1 and answers only requests addressed to
+`localhost`, `*.localhost` or an IP address. `--host 0.0.0.0` opens it to the
+network, and `--allowed-host <hostname>` adds a name such as one from
+`/etc/hosts`. Both are for a network you trust.
+
 ## Templates in a built artifact
 
 The build emits minified, hash-named template files. A component loads its

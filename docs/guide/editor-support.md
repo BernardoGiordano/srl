@@ -56,8 +56,11 @@ code --install-extension srl-0.9.0.vsix
 ```
 
 The extension starts one server per workspace folder and watches each folder
-separately. Set `srl.nodePath` if Node is absent from the extension host's
-`PATH`. Changing it restarts affected sessions. The **srl: Restart Language
+separately. Set `srl.nodePath` in user settings if Node is absent from the
+extension host's `PATH`. A workspace's own settings can't set it, because a
+cloned repository must not choose the executable the editor runs. Changing it
+restarts affected sessions. The extension stays off in Restricted Mode, since
+it starts the language server from the workspace's `node_modules`. The **srl: Restart Language
 Server** command checks folders again after installing dependencies.
 `srl.trace.server` writes protocol traces to the folder's output channel.
 
@@ -136,6 +139,11 @@ project root.
 ```json
 { "mcpServers": { "srl": { "command": "npx", "args": ["--no-install", "srl", "mcp"] } } }
 ```
+
+Tool answers carry the project's own text, such as file names, element names,
+template source and message strings. An agent reads them as data about the
+project. In a repository you don't trust, that text can be written to look like
+instructions, so keep the agent's approvals on when it works there.
 
 Two more adapters read the same model.
 

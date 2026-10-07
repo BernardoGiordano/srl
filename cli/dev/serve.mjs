@@ -10,6 +10,7 @@
  * still gets a server, one round trip per template slower.
  *
  *   node cli/dev/serve.mjs [--app <name>] [--port 8000] [--no-watch] [--open]
+ *                          [--host <address>] [--allowed-host <hostname>]...
  *                          [--proxy <prefix>=<origin>]...
  *
  * `--app` names a directory in the repository root, the application to serve at /.
@@ -44,6 +45,9 @@
  *                 304s. `cli/origin/` sends the `ETag` and answers the
  *                 `If-None-Match`, and what is stated here is only that the
  *                 browser is allowed to ask. ADR-0081.
+ *   reach         127.0.0.1 unless `--host` names another address, and the
+ *                 origin's Host admission ahead of every route, the proxy
+ *                 included. `--allowed-host` adds a hostname. ADR-0131.
  *
  * `serveApplication` is the seam. It takes an application and its proxies and
  * returns a bound origin, so the behaviour below is assertable in-process rather
@@ -57,6 +61,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { templateAnnouncer } from '../delivery/source-manifest.mjs';
+import { printable } from '../diagnostics/index.mjs';
 import { startUpdateSession } from './updates.mjs';
 import { REPO, selectedApp } from '../layout.mjs';
 import { serveOrigin } from '../origin/index.mjs';
@@ -98,7 +103,8 @@ function proxyFor(pathname, proxies) {
  * SameSite and HttpOnly the backend chose, a 401 stays a 401, and a redirect is
  * followed by the browser rather than by this server, so the application sees what
  * it will see through nginx. The one header rewritten is Host, which has to name the
- * upstream for a backend that routes on it.
+ * upstream for a backend that routes on it. That rewrite hides the browser's Host
+ * from the backend, so the origin admits the Host before this runs.
  *
  * The request body is piped rather than buffered, so an upload is not held in this
  * process's memory. The method is passed through, because the static branch answers
@@ -131,7 +137,7 @@ function forward(request, response, origin, log) {
   // process a developer starts separately. It reads as one line naming the origin
   // nothing answered on, rather than a stack trace.
   upstream.on('error', (cause) => {
-    log('  502  %s  %s', request.url ?? '/', String(cause));
+    log('  502  %s  %s', printable(request.url ?? '/'), printable(String(cause)));
     if (!response.headersSent) {
       response.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     }
@@ -154,7 +160,9 @@ function forward(request, response, origin, log) {
  * @param {object} options
  * @param {{ name: string, dir: string }} options.app
  * @param {number} [options.port] 0 for an ephemeral one, which is what a test wants.
- * @param {string | null} [options.host] Null, the default here, binds every interface.
+ * @param {string | null} [options.host] `127.0.0.1` by default. Null binds every interface.
+ * @param {ReadonlyArray<string>} [options.allowedHosts] Hostnames beyond the loopback
+ *   names and IP literals that the origin answers for.
  * @param {boolean} [options.watch] Watch the mounts and reload the page.
  * @param {ReadonlyArray<Proxy>} [options.proxies]
  * @param {(format: string, ...values: string[]) => void} [options.log]
@@ -191,6 +199,7 @@ export async function serveApplication(options) {
     {
       mounts,
       fallback: entryDocument,
+      allowedHosts: options.allowedHosts ?? [],
 
       /**
        * Revalidation rather than the origin's `no-store`.
@@ -237,9 +246,9 @@ export async function serveApplication(options) {
     },
     {
       port: options.port ?? 8000,
-      host: options.host ?? null,
+      host: options.host === undefined ? '127.0.0.1' : options.host,
       failed: (cause, request) => {
-        log('  500  %s  %s', request.url ?? '/', String(cause));
+        log('  500  %s  %s', printable(request.url ?? '/'), printable(String(cause)));
       },
     },
   );
@@ -282,10 +291,10 @@ function flag(name, fallback) {
 }
 
 /**
- * Every value given for a repeatable flag, in the order given. `--proxy` is the only
- * one, because an application can have more than one backend and the alternative, one
- * flag holding a comma-separated list, puts a second parser in a string whose
- * contents are already URLs.
+ * Every value given for a repeatable flag, in the order given. `--proxy` and
+ * `--allowed-host` repeat, because an application can have more than one backend
+ * and the alternative, one flag holding a comma-separated list, puts a second parser
+ * in a string whose contents are already URLs.
  *
  * @param {string} name
  * @returns {string[]}
@@ -363,6 +372,8 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
   const port = Number(flag('port', '8000'));
   const watching = !process.argv.includes('--no-watch');
   const proxies = proxiesFromArgv();
+  const host = flag('host', '127.0.0.1') ?? '127.0.0.1';
+  const allowedHosts = flags('allowed-host');
 
   try {
     await stat(join(app.dir, 'index.html'));
@@ -375,6 +386,8 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
   const server = await serveApplication({
     app,
     port,
+    host,
+    allowedHosts,
     watch: watching,
     proxies,
     log: (format, ...values) => {
@@ -382,7 +395,17 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
     },
   });
 
-  console.log('\n  %s', `http://localhost:${String(server.port)}`);
+  // Any address but a loopback one reaches the network, and the banner says so. A
+  // wildcard bind still answers on localhost, and a single address answers only on
+  // itself.
+  const loopback = host === 'localhost' || host === '::1' || host.startsWith('127.');
+  const wildcard = host === '0.0.0.0' || host === '::';
+  const named = loopback || wildcard ? 'localhost' : host.includes(':') ? `[${host}]` : host;
+  const address = `http://${named}:${String(server.port)}`;
+  console.log('\n  %s', address);
+  if (!loopback) {
+    console.log('  listening on %s, so other machines on this network can reach it', host);
+  }
   for (const [prefix, dir] of server.mounts) {
     console.log('  %s -> %s', prefix.padEnd(13), dir.slice(REPO.length + 1) || '.');
   }
@@ -395,7 +418,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
     const opener =
       process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
     void import('node:child_process').then(({ spawn }) => {
-      spawn(opener, [`http://localhost:${String(server.port)}`], {
+      spawn(opener, [address], {
         stdio: 'ignore',
         detached: true,
       }).unref();

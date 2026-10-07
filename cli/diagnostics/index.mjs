@@ -35,6 +35,34 @@ const LABELS = /** @type {Record<Severity, string>} */ ({
 const LABEL_WIDTH = 5;
 
 /**
+ * Characters a terminal acts on instead of printing. C0 and DEL start escape
+ * sequences and move the cursor, C1 holds the 8-bit forms of the same, and the bidi
+ * controls and line separators change what a reader sees.
+ */
+// eslint-disable-next-line no-control-regex
+const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]/gu;
+
+/** The same set less newline and tab, for a message that may span lines. */
+// eslint-disable-next-line no-control-regex
+const CONTROLS_BUT_LINES = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]/gu;
+
+/**
+ * Text with every terminal control written as a visible escape, such as `\x1b` or
+ * `\u202e`. Diagnostics carry project text and, in development, text a page posted,
+ * so nothing reaches a terminal without passing through here. ADR-0131.
+ *
+ * @param {string} text
+ * @param {{ lines?: boolean }} [options] `lines` keeps newline and tab.
+ * @returns {string}
+ */
+export function printable(text, options = {}) {
+  return text.replace(options.lines === true ? CONTROLS_BUT_LINES : CONTROLS, (control) => {
+    const code = /** @type {number} */ (control.codePointAt(0));
+    return code < 0x100 ? `\\x${code.toString(16).padStart(2, '0')}` : `\\u${code.toString(16).padStart(4, '0')}`;
+  });
+}
+
+/**
  * A path as a diagnostic states it, repository-relative and `/`-separated, or absolute
  * when the file is outside the repository.
  *
@@ -133,9 +161,10 @@ export function errors(diagnostics) {
  */
 function position(diagnostic) {
   if (diagnostic.file === null) return '';
-  if (diagnostic.line === null) return diagnostic.file;
-  if (diagnostic.column === null) return `${diagnostic.file}:${String(diagnostic.line)}`;
-  return `${diagnostic.file}:${String(diagnostic.line)}:${String(diagnostic.column)}`;
+  const file = printable(diagnostic.file);
+  if (diagnostic.line === null) return file;
+  if (diagnostic.column === null) return `${file}:${String(diagnostic.line)}`;
+  return `${file}:${String(diagnostic.line)}:${String(diagnostic.column)}`;
 }
 
 /**
@@ -147,7 +176,7 @@ function position(diagnostic) {
  */
 function where(diagnostic) {
   const place = position(diagnostic);
-  return place === '' ? (diagnostic.group ?? '') : place;
+  return place === '' ? printable(diagnostic.group ?? '') : place;
 }
 
 /**
@@ -160,12 +189,15 @@ function where(diagnostic) {
 function line(diagnostic) {
   const place = position(diagnostic);
   const label = LABELS[diagnostic.severity].padEnd(LABEL_WIDTH);
-  return `  ${label}${place === '' ? '' : `${place}: `}${diagnostic.message}`;
+  return `  ${label}${place === '' ? '' : `${place}: `}${printable(diagnostic.message, { lines: true })}`;
 }
 
 /**
  * One finding as one terminal line, code included, for a stream that reports each
  * finding as it arrives rather than a run that reports at the end.
+ *
+ * One line is a guarantee. A newline in the message is written as `\x0a`, so a
+ * message cannot print a second line that reads as another finding.
  *
  * @param {Diagnostic} diagnostic
  * @returns {string}
@@ -173,7 +205,7 @@ function line(diagnostic) {
 export function formatLine(diagnostic) {
   const place = position(diagnostic);
   const label = LABELS[diagnostic.severity].padEnd(LABEL_WIDTH);
-  return `  ${label}${diagnostic.code}  ${place === '' ? '' : `${place}: `}${diagnostic.message}`;
+  return `  ${label}${printable(diagnostic.code)}  ${place === '' ? '' : `${place}: `}${printable(diagnostic.message)}`;
 }
 
 /**
@@ -202,7 +234,7 @@ export function formatText(diagnostics, options = {}) {
     if (diagnostic.severity === 'error') continue;
     if (diagnostic.group !== group) {
       group = diagnostic.group;
-      if (group !== null) out.push('', group);
+      if (group !== null) out.push('', printable(group));
     }
     out.push(line(diagnostic));
   }
@@ -216,7 +248,7 @@ export function formatText(diagnostics, options = {}) {
     err.push('', `${String(refusals.length)} problem(s):`, '');
     for (const diagnostic of refusals) {
       const place = where(diagnostic);
-      err.push(`  - ${place === '' ? '' : `${place}: `}${diagnostic.message}`, '');
+      err.push(`  - ${place === '' ? '' : `${place}: `}${printable(diagnostic.message, { lines: true })}`, '');
     }
   }
 

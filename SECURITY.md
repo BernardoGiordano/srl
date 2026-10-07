@@ -23,11 +23,14 @@ In scope:
 - manifest admission, including the same-origin and integrity rules
 - the authentication session and the remote host grants
 - the CLI's build, release and check tools
+- `srl serve` and the test-runner preset against a page in the developer's own
+  browser, such as one that rebinds its hostname to 127.0.0.1, posts across
+  sites, or sends text a terminal would act on
 
 Out of scope:
 
-- `srl serve`, which is a development server and binds every interface by
-  default. Do not expose it to a network you do not trust.
+- `srl serve` bound with `--host` to a network you don't trust. Any machine on
+  that network can read what it serves.
 - the example application's demo backend
 - a remote that runs on the shell's origin, which can act as the page by design.
   The [auth guide](docs/guide/auth-and-remotes.md#trust-boundary) explains why.

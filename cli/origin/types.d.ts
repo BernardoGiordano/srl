@@ -63,6 +63,12 @@ export interface Representation {
 export interface OriginOptions {
   mounts: ReadonlyArray<Mount>;
   /**
+   * Hostnames this origin answers for beyond `localhost`, `*.localhost` and IP
+   * literals. A request whose Host names anything else is refused 403 before any
+   * route or mount sees it, which is what defeats DNS rebinding. ADR-0131.
+   */
+  allowedHosts?: ReadonlyArray<string>;
+  /**
    * The document a navigation to a path with no file gets, which is an
    * application's `index.html`, absolute. Null serves 404 instead, which is what a
    * mount table with no application under it wants.
@@ -109,7 +115,7 @@ export interface Origin {
 export interface ListenOptions {
   /** 0, the default, is an ephemeral port: what every test and the benchmark want. */
   port?: number;
-  /** Null binds every interface, which is what a development server wants. */
+  /** `127.0.0.1` by default. Null binds every interface and reaches the network. */
   host?: string | null;
   /**
    * Called when a request handler throws. Return a body to send with the 500, or

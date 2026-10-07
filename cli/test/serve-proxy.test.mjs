@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:http';
+import { createServer, request } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -171,6 +171,51 @@ void test('the static mounts and the history fallback are untouched by a proxy',
     assert.equal((await fetch(`${server.base}/`, { headers: { Accept: 'text/html' } })).status, 200);
     assert.equal((await fetch(`${server.base}/some/spa/route`, { headers: { Accept: 'text/html' } })).status, 200);
     assert.equal((await fetch(`${server.base}/does-not-exist.js`)).status, 404);
+  } finally {
+    await server.close();
+    api.close();
+  }
+});
+
+void test('a rebound hostname never reaches the backend, and the server binds loopback by default', async () => {
+  /** @type {string[]} */
+  const seen = [];
+  const api = createServer((incoming, response) => {
+    seen.push(incoming.headers.host ?? '');
+    response.end('{}');
+  });
+  await new Promise((resolve) => {
+    api.listen(0, '127.0.0.1', () => { resolve(undefined); });
+  });
+  const { port: apiPort } = /** @type {import('node:net').AddressInfo} */ (api.address());
+
+  const app = (await apps()).find((candidate) => candidate.name === 'example');
+  assert.ok(app !== undefined, 'the example application is missing');
+  const server = await serveApplication({
+    app,
+    port: 0,
+    watch: false,
+    proxies: [{ prefix: '/api', origin: new URL(`http://127.0.0.1:${String(apiPort)}`) }],
+  });
+
+  try {
+    assert.match(server.url, /^http:\/\/127\.0\.0\.1:/u);
+
+    // The proxy rewrites Host to the upstream's, so a backend that checks Host
+    // itself would see 127.0.0.1 here. The origin refuses first.
+    const status = await new Promise((done, failed) => {
+      request(`${server.url}/api/me`, { headers: { host: `rebound.example:${String(server.port)}` } }, (response) => {
+        response.resume();
+        done(response.statusCode);
+      })
+        .on('error', failed)
+        .end();
+    });
+    assert.equal(status, 403);
+    assert.deepEqual(seen, []);
+
+    assert.equal((await fetch(`${server.url}/api/me`)).status, 200);
+    assert.equal(seen.length, 1);
   } finally {
     await server.close();
     api.close();

@@ -89,6 +89,12 @@ The prefix stays in the forwarded request path. Status and headers pass
 through. This setup lets a cookie session use the same origin in development
 and deployment.
 
+The development server binds 127.0.0.1. `--host 0.0.0.0` makes it reachable
+from other machines on the network, such as a phone. It answers requests
+addressed to `localhost`, `*.localhost` and IP addresses, and refuses any other
+Host, proxied paths included. Add a hostname with `--allowed-host`, which
+repeats.
+
 ## Application layout and types
 
 An application is a directory at the repository root with an `index.html`.

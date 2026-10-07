@@ -127,6 +127,10 @@ such as `templates/expression-syntax` for a binding that does not parse. Each
 line names the file the failing URL is served from. Errors also appear in a
 panel at the bottom of the page.
 
+The server prints a report only when a page on its own origin posts it as
+JSON. Each report prints as one line, with control characters written as
+escapes such as `\x1b`, so a page can't drive the terminal.
+
 ```text
   FAIL runtime/startup  node_modules/@srljs/core/lib/core/application/runtime.js:156:11: Application startup failed at step "manifest": /app.manifest.json has a key admission does not know, "remots". …
 ```

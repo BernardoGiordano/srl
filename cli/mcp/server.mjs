@@ -16,6 +16,10 @@
  *
  * The transport is the protocol's stdio framing, one JSON-RPC message per line. Stdout
  * carries messages and nothing else, so console output from any module goes to stderr.
+ *
+ * Every answer carries project text, such as file names, element names and template
+ * source. An untrusted repository can word that text as instructions to the agent.
+ * The editor guide says so, and nothing here filters it. ADR-0131.
  */
 
 import { readFile } from 'node:fs/promises';

@@ -7,10 +7,12 @@ import {
   error,
   errors,
   formatJson,
+  formatLine,
   formatText,
   hasErrors,
   info,
   outputFormat,
+  printable,
   report,
   warning,
 } from '../diagnostics/index.mjs';
@@ -164,4 +166,30 @@ void test('--json selects the other adapter, and the exit code is the same eithe
   assert.match(err.join(''), /1 problem\(s\)/u);
 
   assert.equal(report([info('a', 'ran')], { format: 'text', out: push(out), err: push(err) }), 0);
+});
+
+void test('no terminal control in project text reaches the terminal', () => {
+  const ESC = '\x1b';
+  const found = error('templates/example', `bad ${ESC}]52;c;eA==\x07\nsecond line\u202e`, {
+    group: `web${ESC}[2J`,
+    file: `src/x${ESC}[8m.html`,
+    line: 3,
+  });
+
+  // A stream line stays one line, so a newline is an escape like the rest.
+  assert.equal(
+    formatLine(found),
+    '  FAIL templates/example  src/x\\x1b[8m.html:3: bad \\x1b]52;c;eA==\\x07\\x0asecond line\\u202e',
+  );
+
+  // A report keeps a message's own lines and encodes everything else.
+  const { err } = formatText([found, warning('templates/example', `w${ESC}[1m`, { group: `web${ESC}[2J` })]);
+  const { out } = formatText([warning('templates/example', `w${ESC}[1m`, { group: `web${ESC}[2J` })]);
+  assert.match(err, /bad \\x1b\]52;c;eA==\\x07\nsecond line\\u202e/u);
+  assert.match(out, /^web\\x1b\[2J$/mu);
+  // eslint-disable-next-line no-control-regex
+  assert.doesNotMatch(err + out, /[\u001b\u0007\u202e]/u);
+
+  assert.equal(printable('\u0085\u009b\u061c\u2066\u2028'), '\\x85\\x9b\\u061c\\u2066\\u2028');
+  assert.equal(printable('C:\\path\\to\tfile', { lines: true }), 'C:\\path\\to\tfile');
 });

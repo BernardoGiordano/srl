@@ -398,6 +398,79 @@ void test('a failure the page posts is printed with the file its URL names', asy
   }
 });
 
+void test('only a same-origin JSON post is printed, and it prints as one line of text', async () => {
+  const app = (await apps()).find((candidate) => candidate.name === 'example');
+  assert.ok(app !== undefined, 'the example application is missing');
+
+  /** @type {string[]} */
+  const lines = [];
+  const server = await serveApplication({
+    app,
+    port: 0,
+    watch: true,
+    log: (format, ...values) => lines.push(values.length === 0 ? format : String(values[0])),
+  });
+  const ESC = '\x1b';
+  const BEL = '\x07';
+  const payload = JSON.stringify({
+    severity: 'error',
+    code: 'runtime/startup',
+    message: `${ESC}]52;c;Y3VybCB4fHNo${BEL}${ESC}[2J\u202eboom\n  FAIL runtime/startup  forged`,
+    url: `/src/main.js${ESC}[8m`,
+    line: 1,
+    column: 1,
+  });
+  const post = (/** @type {Record<string, string>} */ headers) =>
+    fetch(`${server.url}/__updates/diagnostics`, { method: 'POST', headers, body: payload });
+
+  try {
+    // What any page can send without a preflight, and what a page on another origin
+    // sends with one.
+    assert.equal((await post({ 'Content-Type': 'text/plain', Origin: 'https://attacker.example' })).status, 403);
+    assert.equal((await post({ 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'cross-site' })).status, 403);
+    assert.equal((await post({ 'Content-Type': 'text/plain', 'Sec-Fetch-Site': 'same-origin' })).status, 415);
+    assert.deepEqual(lines, []);
+
+    assert.equal((await post({ 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin' })).status, 204);
+    assert.equal(lines.length, 1);
+    const printed = lines[0] ?? '';
+    // eslint-disable-next-line no-control-regex
+    assert.doesNotMatch(printed, /[\u0000-\u001f\u007f-\u009f\u202e]/u);
+    assert.equal(
+      printed,
+      '  FAIL runtime/startup  example/src/main.js\\x1b[8m:1:1: \\x1b]52;c;Y3VybCB4fHNo\\x07\\x1b[2J\\u202eboom\\x0a  FAIL runtime/startup  forged',
+    );
+  } finally {
+    await server.close();
+  }
+});
+
+void test('a changed file name prints with its controls encoded', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'srl-updates-'));
+  /** @type {string[]} */
+  const lines = [];
+  const session = startUpdateSession({
+    mounts: [['/', root]],
+    batchMs: BATCH_MS,
+    log: (format, ...values) => lines.push(values.length === 0 ? format : String(values[0])),
+  });
+  /** @param {number} ms */
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref());
+
+  try {
+    await pause(BATCH_MS * 3);
+    await writeFile(join(root, 'x\x1b]0;pwned\x07.html'), 'x');
+    const deadline = Date.now() + ARRIVAL_MS;
+    while (!lines.some((line) => line.includes('pwned')) && Date.now() < deadline) await pause(20);
+
+    const update = lines.find((line) => line.includes('pwned')) ?? '';
+    assert.equal(update, '/x\\x1b]0;pwned\\x07.html');
+  } finally {
+    await session.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 void test('the client names a failure by its innermost code and its place', () => {
   // The startup error says where the problem surfaced, and its cause says what it is.
   const cause = Object.assign(new Error('Unexpected "+" in /src/page.html'), { code: 'templates/expression-syntax' });

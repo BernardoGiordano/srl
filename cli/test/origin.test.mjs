@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { resolveMount, serveOrigin, toFile } from '../origin/index.mjs';
+import { admitsHost, resolveMount, sameOrigin, serveOrigin, toFile } from '../origin/index.mjs';
 
 /**
  * The rules every server over `cli/origin/` shares, asserted once.
@@ -58,6 +59,25 @@ async function withOrigin(options, run) {
   } finally {
     await origin.close();
   }
+}
+
+/**
+ * A GET carrying the Host a rebinding page's browser would send. `fetch` derives Host
+ * from the URL, so this goes through `node:http`.
+ *
+ * @param {string} url
+ * @param {string} host
+ * @returns {Promise<number>}
+ */
+function statusFor(url, host) {
+  return new Promise((done, failed) => {
+    request(url, { headers: { host } }, (response) => {
+      response.resume();
+      done(response.statusCode ?? 0);
+    })
+      .on('error', failed)
+      .end();
+  });
 }
 
 /** A navigation, which is the only request the history fallback may answer. */
@@ -354,4 +374,83 @@ void test('a transform is not validated by the file, unless it says it is', asyn
       },
     );
   });
+});
+
+void test('a request addressed to another hostname is refused before any route sees it', async () => {
+  await withFixture(async ({ mounts }) => {
+    /** @type {string[]} */
+    const routed = [];
+    await withOrigin(
+      {
+        mounts,
+        allowedHosts: ['dev.test'],
+        route: (incoming) => {
+          routed.push(incoming.headers.host ?? '');
+          return false;
+        },
+      },
+      async (url) => {
+        const { port } = new URL(url);
+        for (const host of [`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`, `app.localhost:${port}`, `192.168.1.20:${port}`, `dev.test:${port}`]) {
+          assert.equal(await statusFor(`${url}/main.js`, host), 200, host);
+        }
+
+        // A rebound hostname reaches neither the route nor the mounts. Neither does a
+        // Host that isn't a plain host and port.
+        routed.length = 0;
+        for (const host of [`rebound.example:${port}`, `127.0.0.1.rebound.example`, 'evil@127.0.0.1']) {
+          assert.equal(await statusFor(`${url}/main.js`, host), 403, host);
+        }
+        assert.deepEqual(routed, []);
+      },
+    );
+  });
+
+  // Node's client fills in an empty Host, so a missing one is asserted here.
+  assert.equal(admitsHost(undefined), false);
+  assert.equal(admitsHost(''), false);
+  assert.equal(admitsHost('DEV.test', ['dev.test']), true);
+  assert.equal(admitsHost('localhost.rebound.example'), false);
+});
+
+void test('a symlink out of a mount is refused, and a dotfile is never served', async () => {
+  await withFixture(async ({ root, appDir, mounts }) => {
+    await writeFile(join(appDir, '.env'), 'TOKEN=secret\n');
+    await mkdir(join(appDir, '.git'));
+    await writeFile(join(appDir, '.git', 'config'), '[remote]\n');
+    await mkdir(join(appDir, '.well-known'));
+    await writeFile(join(appDir, '.well-known', 'security.txt'), 'Contact: x\n');
+    await symlink(join(root, 'secret.txt'), join(appDir, 'leak.txt'));
+    await symlink(root, join(appDir, 'up'));
+    await symlink(join(appDir, 'main.js'), join(appDir, 'alias.js'));
+
+    await withOrigin({ mounts, fallback: join(appDir, 'index.html') }, async (url) => {
+      assert.equal((await fetch(`${url}/leak.txt`)).status, 403);
+      assert.equal((await fetch(`${url}/up/secret.txt`)).status, 403);
+      assert.equal((await fetch(`${url}/up/lib/core/reactive.js`)).status, 403);
+
+      // A link that stays inside the mount is an ordinary file.
+      const alias = await fetch(`${url}/alias.js`);
+      assert.equal(alias.status, 200);
+      assert.equal(await alias.text(), 'export const main = 1;\n');
+
+      for (const path of ['/.env', '/%2eenv', '/.git/config', '/nested/../.env', '/.env', '/lib/.hidden']) {
+        assert.equal((await fetch(`${url}${path}`, NAVIGATION)).status, 403, path);
+      }
+      assert.equal((await fetch(`${url}/.well-known/security.txt`)).status, 200);
+    });
+  });
+});
+
+void test('sameOrigin trusts the browser\'s own marks, and a request with none', () => {
+  /** @param {Record<string, string>} headers */
+  const from = (headers) => sameOrigin(/** @type {import('node:http').IncomingMessage} */ (/** @type {unknown} */ ({ headers: { host: 'localhost:8000', ...headers } })));
+
+  assert.equal(from({ 'sec-fetch-site': 'same-origin' }), true);
+  assert.equal(from({ 'sec-fetch-site': 'cross-site', origin: 'http://localhost:8000' }), false);
+  assert.equal(from({ 'sec-fetch-site': 'same-site' }), false);
+  assert.equal(from({ origin: 'http://localhost:8000' }), true);
+  assert.equal(from({ origin: 'https://attacker.example' }), false);
+  assert.equal(from({ origin: 'null' }), false);
+  assert.equal(from({}), true);
 });
