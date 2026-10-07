@@ -192,7 +192,12 @@ await defineComponent({ tag: '${tag}', element: ${name}, module: import.meta.url
 
   await t.test('matching pins cover remote CSS while local shell CSS stays unpinned', async () => {
     const found = await verify(integrity);
-    const refused = found.filter((finding) => finding.severity === 'error');
+
+    // `source/` is the checkout's own, so whether its `dist/` exists depends on whether
+    // `npm run package` ran first. `npm run check` runs this suite before it does.
+
+    const refused = found.filter((finding) =>
+      finding.severity === 'error' && finding.code !== 'deps/exports-unbuilt');
     assert.deepEqual(refused.map((finding) => `${finding.code} ${finding.message}`), []);
     assert.match(found.find((finding) => finding.code === 'deps/remote-pinned')?.message ?? '', /3 stylesheet\(s\)/u);
   });
