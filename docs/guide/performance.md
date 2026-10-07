@@ -27,23 +27,23 @@ They describe one machine and carry their own standing
 
 | Fact | Value |
 |---|---|
-| Recorded | 2026-08-31T09:42:58.466Z, `--ci`, app `example` |
-| Machine | Apple M3, 8 cores, 16 GiB, Darwin 25.6.0 arm64 |
-| Runtime | Node v22.14.0, Chrome/151.0.7922.175 |
-| Environment profile | `033631fd807f991b` |
+| Recorded | 2026-10-07T14:37:18.631Z, `--ci`, app `example` |
+| Machine | Apple M3, 8 cores, 16 GiB, Darwin 27.0.0 arm64 |
+| Runtime | Node v22.14.0, Chrome/154.0.8037.98 |
+| Environment profile | `df2668c958cf8bb5` |
 | Runtime dependencies | `lit@3.3.3`, `@preact/signals-core@1.14.4`, `@tailwindcss/browser@4.3.3` |
-| Reference readings | 8 readings, arithmetic 23.7 ms and layout 21.0 ms, moved 1.05x / 1.02x during the run |
+| Reference readings | 9 readings, arithmetic 22.3 ms and layout 20.9 ms, moved 1.03x / 1.06x during the run |
 
 **Artifact origin — the verified production build.** `benchmark/artifact-baseline.json`
 
 | Fact | Value |
 |---|---|
-| Recorded | 2026-08-31T09:28:51.523Z, `--ci`, app `example:dist` |
-| Machine | Apple M3, 8 cores, 16 GiB, Darwin 25.6.0 arm64 |
-| Runtime | Node v22.14.0, Chrome/151.0.7922.175 |
-| Environment profile | `0219cbfa4fa0fe40` |
+| Recorded | 2026-10-07T14:38:44.760Z, `--ci`, app `example:dist` |
+| Machine | Apple M3, 8 cores, 16 GiB, Darwin 27.0.0 arm64 |
+| Runtime | Node v22.14.0, Chrome/154.0.8037.98 |
+| Environment profile | `b1133caaeb5e1fa1` |
 | Runtime dependencies | `lit@3.3.3`, `@preact/signals-core@1.14.4` |
-| Reference readings | 8 readings, arithmetic 23.7 ms and layout 20.7 ms, moved 1.00x / 1.02x during the run |
+| Reference readings | 8 readings, arithmetic 22.2 ms and layout 20.8 ms, moved 1.00x / 1.02x during the run |
 
 <!-- /generated:performance-provenance -->
 
@@ -55,63 +55,71 @@ They describe one machine and carry their own standing
 
 | Workload | Id | Median | p95 | n | Standing |
 |---|---|---|---|---|---|
-| Cold application start, empty cache, to first routed view | `startup/cold` | 84.6 ms | 85.6 ms | 3 | gated |
-| Warm application start, primed cache, to first routed view | `startup/warm` | 67.2 ms | 72.0 ms | 3 | gated |
-| Native module requests and encoded bytes for the entry route | `delivery/entry-route` | 84.8 ms | 84.8 ms | 3 | gated |
-| Register 100 components, then build 100 instances | `startup/definitions-100` | 2.20 ms | 2.30 ms | 8 | gated |
-| Register 1,000 components, then build 100 instances | `startup/definitions-1000` | 7.00 ms | 7.10 ms | 8 | gated |
-| Register 5,000 components, then build 100 instances | `startup/definitions-5000` | 23.6 ms | 24.0 ms | 4 | gated |
-| Compile a small template (10 bindings) | `template/compile-small` | 0.60 ms | 0.80 ms | 40 | gated |
-| Render a small template for the first time | `template/first-render-small` | 0.30 ms | 0.60 ms | 40 | gated |
-| Compile a medium template (50 bindings) | `template/compile-medium` | 0.60 ms | 1.80 ms | 40 | gated |
-| Render a medium template for the first time | `template/first-render-medium` | 0.90 ms | 1.50 ms | 40 | gated |
-| Compile a large template (200 bindings) | `template/compile-large` | 1.70 ms | 2.90 ms | 40 | gated |
-| Render a large template for the first time | `template/first-render-large` | 1.30 ms | 2.00 ms | 40 | gated |
+| Cold application start, empty cache, to first routed view | `startup/cold` | 67.2 ms | 77.6 ms | 3 | gated |
+| Warm application start, primed cache, to first routed view | `startup/warm` | 35.9 ms | 40.2 ms | 3 | gated |
+| Native module requests and encoded bytes for the entry route | `delivery/entry-route` | 68.2 ms | 74.9 ms | 3 | gated |
+| Register 100 components, then build 100 instances | `startup/definitions-100` | 2.70 ms | 2.80 ms | 8 | gated |
+| Register 1,000 components, then build 100 instances | `startup/definitions-1000` | 8.20 ms | 8.50 ms | 8 | gated |
+| Register 5,000 components, then build 100 instances | `startup/definitions-5000` | 26.9 ms | 27.9 ms | 4 | gated |
+| Compile a small template (10 bindings) | `template/compile-small` | 0.50 ms | 1.00 ms | 40 | gated |
+| Render a small template for the first time | `template/first-render-small` | 0.40 ms | 0.60 ms | 40 | gated |
+| Compile a medium template (50 bindings) | `template/compile-medium` | 1.80 ms | 2.70 ms | 40 | gated |
+| Render a medium template for the first time | `template/first-render-medium` | 0.90 ms | 2.50 ms | 40 | gated |
+| Compile a large template (200 bindings) | `template/compile-large` | 2.70 ms | 3.80 ms | 40 | gated |
+| Render a large template for the first time | `template/first-render-large` | 1.20 ms | 1.70 ms | 40 | gated |
 | Update one binding among 50 unrelated ones | `template/update-one-of-50` | 0.00 ms | 0.10 ms | 40 | gated |
 | Update one binding among 200 unrelated ones | `template/update-one-of-200` | 0.00 ms | 0.00 ms | 40 | gated |
-| Keyed *for list: create at 1,000 rows | `template/keyed-create-1000` | 3.50 ms | 4.00 ms | 20 | gated |
-| Keyed *for list: update at 1,000 rows | `template/keyed-update-1000` | 0.70 ms | 1.40 ms | 20 | gated |
+| Keyed *for list: create at 1,000 rows | `template/keyed-create-1000` | 3.90 ms | 4.50 ms | 20 | gated |
+| Keyed *for list: update at 1,000 rows | `template/keyed-update-1000` | 0.70 ms | 1.60 ms | 20 | gated |
 | Keyed *for list: reverse at 1,000 rows | `template/keyed-reverse-1000` | 1.10 ms | 2.00 ms | 20 | gated |
 | Keyed *for list: shrink at 1,000 rows | `template/keyed-shrink-1000` | 0.50 ms | 0.60 ms | 20 | gated |
-| Keyed *for list: regrow at 1,000 rows | `template/keyed-regrow-1000` | 2.30 ms | 2.80 ms | 20 | gated |
-| Keyed *for list: reverse 10,000 rows | `template/keyed-reverse-10000` | 11.6 ms | 12.9 ms | 4 | gated |
-| Configure 10 routes and settle the entry URL | `router/attach-10` | 0.10 ms | 0.20 ms | 20 | gated |
-| Configure 100 routes and settle the entry URL | `router/attach-100` | 0.10 ms | 0.20 ms | 20 | gated |
-| Configure 1,000 routes and settle the entry URL | `router/attach-1000` | 0.60 ms | 1.10 ms | 8 | gated |
-| Navigate to the first route of 100 | `router/navigate-first-100` | 0.00 ms | 0.10 ms | 20 | gated |
+| Keyed *for list: regrow at 1,000 rows | `template/keyed-regrow-1000` | 2.60 ms | 3.10 ms | 20 | gated |
+| Keyed *for list: reverse 10,000 rows | `template/keyed-reverse-10000` | 12.1 ms | 13.2 ms | 4 | gated |
+| Configure 10 routes and settle the entry URL | `router/attach-10` | 0.20 ms | 0.40 ms | 20 | gated |
+| Configure 100 routes and settle the entry URL | `router/attach-100` | 0.30 ms | 0.40 ms | 20 | gated |
+| Configure 1,000 routes and settle the entry URL | `router/attach-1000` | 0.70 ms | 1.20 ms | 8 | gated |
+| Navigate to the first route of 100 | `router/navigate-first-100` | 0.10 ms | 0.10 ms | 20 | gated |
 | Navigate to the middle route of 100 | `router/navigate-middle-100` | 0.10 ms | 0.20 ms | 20 | gated |
-| Navigate to the last route of 100 | `router/navigate-last-100` | 0.10 ms | 0.20 ms | 20 | gated |
-| Navigate to the param route of 100 | `router/navigate-param-100` | 0.10 ms | 0.20 ms | 20 | gated |
+| Navigate to the last route of 100 | `router/navigate-last-100` | 0.20 ms | 0.30 ms | 20 | gated |
+| Navigate to the param route of 100 | `router/navigate-param-100` | 0.20 ms | 0.20 ms | 20 | gated |
 | Navigate to the wildcard route of 100 | `router/navigate-wildcard-100` | 0.10 ms | 0.20 ms | 20 | gated |
-| Navigate to the catch-all route of 100 | `router/navigate-catch-all-100` | 0.10 ms | 0.20 ms | 20 | gated |
-| Navigate to the last route of 1,000 | `router/navigate-last-1000` | 0.30 ms | 0.40 ms | 20 | gated |
-| Ten navigations between sibling child routes under one layout | `router/sibling-cycle-10` | 1.30 ms | 1.70 ms | 20 | gated |
-| Mount a client table of 10,000 rows with 50 visible | `collection/table-mount-10000-50` | 2.80 ms | 3.40 ms | 20 | gated |
+| Navigate to the catch-all route of 100 | `router/navigate-catch-all-100` | 0.20 ms | 0.30 ms | 20 | gated |
+| Navigate to the last route of 1,000 | `router/navigate-last-1000` | 0.40 ms | 0.50 ms | 20 | gated |
+| Ten navigations between sibling child routes under one layout | `router/sibling-cycle-10` | 1.30 ms | 1.50 ms | 20 | gated |
+| Mount a client table of 10,000 rows with 50 visible | `collection/table-mount-10000-50` | 2.80 ms | 3.20 ms | 20 | gated |
 | Filter 100 client rows | `collection/table-filter-100` | 0.70 ms | 0.90 ms | 40 | gated |
-| Sort 100 client rows | `collection/table-sort-100` | 2.80 ms | 3.90 ms | 40 | gated |
-| Filter 1,000 client rows | `collection/table-filter-1000` | 2.40 ms | 3.10 ms | 40 | gated |
-| Sort 1,000 client rows | `collection/table-sort-1000` | 4.00 ms | 5.50 ms | 40 | gated |
-| Filter 10,000 client rows | `collection/table-filter-10000` | 3.30 ms | 4.90 ms | 20 | gated |
-| Sort 10,000 client rows | `collection/table-sort-10000` | 17.5 ms | 21.7 ms | 20 | gated |
-| Render 10,000 rows and 40,000 cells at once | `collection/table-full-render-10000` | 468.9 ms | 506.3 ms | 4 | gated |
-| Keyed reverse of a fully rendered 10,000-row table | `collection/table-reorder-10000` | 318.9 ms | 344.1 ms | 4 | gated |
-| Eight columns, four sticky, 1,000 rows | `collection/table-sticky-realistic` | 6.00 ms | 7.60 ms | 20 | gated |
-| Twenty-four columns, twelve sticky, 1,000 rows | `collection/table-sticky-worst-case` | 17.6 ms | 21.6 ms | 20 | gated |
-| Type into a combobox holding 100 local options | `collection/combobox-filter-100` | 0.90 ms | 2.60 ms | 20 | gated |
-| Type into a combobox holding 1,000 local options | `collection/combobox-filter-1000` | 2.60 ms | 3.40 ms | 20 | gated |
-| Fifty route mount and release cycles | `memory/route-cycles` | 2.36 s | 2.37 s | 2 | gated |
-| Fifty outlet swaps whose first target loses the race | `memory/outlet-swaps` | 910.0 ms | 934.0 ms | 2 | gated |
-| Heap while 10,000 rows are mounted, and after release | `memory/table-10000` | 1.10 s | 1.13 s | 2 | gated |
-| Whole-project typecheck | `tooling/typecheck` | 292.8 ms | 305.3 ms | 3 | gated |
-| Static template checking for every application | `tooling/template-check` | 2.74 s | 2.75 s | 3 | gated |
-| Architecture, integrity and dependency verification | `tooling/verify` | 415.4 ms | 416.7 ms | 3 | gated |
-| Type-aware lint | `tooling/lint` | 5.37 s | 5.57 s | 2 | gated |
+| Sort 100 client rows | `collection/table-sort-100` | 2.90 ms | 3.30 ms | 40 | gated |
+| Filter 1,000 client rows | `collection/table-filter-1000` | 2.50 ms | 2.90 ms | 40 | gated |
+| Sort 1,000 client rows | `collection/table-sort-1000` | 4.40 ms | 4.70 ms | 40 | gated |
+| Filter 10,000 client rows | `collection/table-filter-10000` | 3.50 ms | 4.80 ms | 20 | gated |
+| Sort 10,000 client rows | `collection/table-sort-10000` | 20.6 ms | 22.5 ms | 20 | gated |
+| Render 10,000 rows and 40,000 cells at once | `collection/table-full-render-10000` | 490.0 ms | 571.9 ms | 4 | gated |
+| Render 10,000 rows into a scrolling window | `collection/table-window-10000` | 2.40 ms | 2.70 ms | 20 | gated |
+| Scroll a windowed 10,000-row table by one screenful | `collection/table-window-scroll-10000` | 1.60 ms | 2.80 ms | 20 | limited to 16.0 ms |
+| Keyed reverse of a fully rendered 10,000-row table | `collection/table-reorder-10000` | 324.3 ms | 370.1 ms | 4 | gated |
+| Eight columns, four sticky, 1,000 rows | `collection/table-sticky-realistic` | 6.50 ms | 10.3 ms | 20 | gated |
+| Twenty-four columns, twelve sticky, 1,000 rows | `collection/table-sticky-worst-case` | 18.7 ms | 23.5 ms | 20 | gated |
+| Type into a combobox holding 100 local options | `collection/combobox-filter-100` | 0.90 ms | 2.00 ms | 20 | gated |
+| Type into a combobox holding 1,000 local options | `collection/combobox-filter-1000` | 2.30 ms | 4.40 ms | 20 | gated |
+| Fifty route mount and release cycles | `memory/route-cycles` | 142.0 ms | 145.0 ms | 2 | gated |
+| Fifty outlet swaps whose first target loses the race | `memory/outlet-swaps` | 916.0 ms | 937.0 ms | 2 | gated |
+| Heap while 10,000 rows are mounted, and after release | `memory/table-10000` | 1.18 s | 1.19 s | 2 | gated |
+| Whole-project typecheck | `tooling/typecheck` | 409.5 ms | 419.6 ms | 3 | gated |
+| Static template checking for every application | `tooling/template-check` | 2.01 s | 2.10 s | 3 | gated |
+| Architecture, integrity and dependency verification | `tooling/verify` | 587.4 ms | 589.5 ms | 3 | gated |
+| Type-aware lint | `tooling/lint` | 7.67 s | 7.91 s | 2 | gated |
+| Open a template in a fresh server over one application | `editor/cold-start-1x` | 1.51 s | 1.51 s | 3 | gated |
+| Open a template in a fresh server over 10 applications | `editor/cold-start-10x` | 2.93 s | 2.93 s | 3 | gated |
+| Completion and hover with validation outstanding, over one application | `editor/interactive-1x` | 0.54 ms | 2.05 ms | 100 | gated |
+| Completion and hover with validation outstanding, over 10 applications | `editor/interactive-10x` | 0.47 ms | 1.23 ms | 100 | gated |
+| 10 edits in one debounce window, to one answer | `editor/edit-burst` | 173.4 ms | 189.3 ms | 12 | gated |
+| Withdraw a request in the write that sent it | `editor/cancellation` | 0.32 ms | 0.52 ms | 40 | gated |
 
 **Artifact origin — the verified production build.**
 
 | Workload | Id | Median | p95 | n | Standing |
 |---|---|---|---|---|---|
-| Verified production artifact size | `delivery/artifact-size` | 129 | 129 | 1 | gated |
+| Verified production artifact size | `delivery/artifact-size` | 134 | 134 | 1 | gated |
 
 <!-- /generated:performance-envelope -->
 
@@ -123,73 +131,82 @@ Requests, bytes, chain depth, startup steps and heap, from the same loads.
 
 | Id | Metric | Median | Standing |
 |---|---|---|---|
-| `startup/cold` | `firstView` | 84.6 ms | gated |
-| `startup/cold` | `rootDefined` | 82.5 ms | gated |
-| `startup/cold` | `load` | 68.0 ms | gated |
-| `startup/cold` | `requests` | 57 | gated |
+| `startup/cold` | `firstView` | 67.2 ms | gated |
+| `startup/cold` | `rootDefined` | 65.1 ms | gated |
+| `startup/cold` | `load` | 50.1 ms | gated |
+| `startup/cold` | `requests` | 64 | gated |
 | `startup/cold` | `chainDepth` | 7 deep | gated |
 | `startup/cold` | `fromCache` | 0 | gated |
 | `startup/cold` | `stepConfigure` | 0.60 ms | gated |
-| `startup/cold` | `stepManifest` | 3.80 ms | gated |
-| `startup/cold` | `stepLocale` | 2.20 ms | gated |
-| `startup/cold` | `stepProviders` | 0.10 ms | gated |
+| `startup/cold` | `stepManifest` | 2.80 ms | gated |
+| `startup/cold` | `stepLocale` | 2.70 ms | gated |
+| `startup/cold` | `stepProviders` | 0.00 ms | gated |
 | `startup/cold` | `stepReady` | 0.90 ms | gated |
-| `startup/cold` | `stepRoot` | 10.1 ms | gated |
-| `startup/warm` | `firstView` | 67.2 ms | gated |
-| `startup/warm` | `rootDefined` | 66.2 ms | gated |
-| `startup/warm` | `load` | 55.9 ms | gated |
-| `startup/warm` | `requests` | 57 | gated |
+| `startup/cold` | `stepRoot` | 12.9 ms | gated |
+| `startup/warm` | `firstView` | 35.9 ms | gated |
+| `startup/warm` | `rootDefined` | 35.0 ms | gated |
+| `startup/warm` | `load` | 23.7 ms | gated |
+| `startup/warm` | `requests` | 64 | gated |
 | `startup/warm` | `chainDepth` | 7 deep | gated |
 | `startup/warm` | `fromCache` | 3 | gated |
 | `startup/warm` | `stepConfigure` | 0.20 ms | gated |
-| `startup/warm` | `stepManifest` | 1.00 ms | gated |
-| `startup/warm` | `stepLocale` | 3.30 ms | gated |
+| `startup/warm` | `stepManifest` | 2.60 ms | gated |
+| `startup/warm` | `stepLocale` | 2.50 ms | gated |
 | `startup/warm` | `stepProviders` | 0.00 ms | gated |
-| `startup/warm` | `stepReady` | 0.60 ms | gated |
-| `startup/warm` | `stepRoot` | 6.70 ms | gated |
-| `delivery/entry-route` | `requests` | 57 | gated |
+| `startup/warm` | `stepReady` | 0.50 ms | gated |
+| `startup/warm` | `stepRoot` | 6.80 ms | gated |
+| `delivery/entry-route` | `requests` | 64 | gated |
 | `delivery/entry-route` | `chainDepth` | 7 deep | gated |
-| `delivery/entry-route` | `moduleRequests` | 46 | gated |
+| `delivery/entry-route` | `moduleRequests` | 52 | gated |
 | `delivery/entry-route` | `templateRequests` | 3 | gated |
-| `delivery/entry-route` | `encodedBytes` | 771.7 KB | gated |
-| `delivery/entry-route` | `moduleBytes` | 697.3 KB | gated |
-| `delivery/entry-route` | `templateBytes` | 5.4 KB | gated |
+| `delivery/entry-route` | `encodedBytes` | 846.2 KB | gated |
+| `delivery/entry-route` | `moduleBytes` | 761.7 KB | gated |
+| `delivery/entry-route` | `templateBytes` | 8.3 KB | gated |
 | `delivery/entry-route` | `tailwindBytes` | 275.9 KB | gated |
-| `delivery/entry-route` | `appCssBytes` | 16.6 KB | gated |
-| `startup/definitions-100` | `define` | 0.70 ms | gated |
-| `startup/definitions-100` | `instantiate` | 1.50 ms | gated |
-| `startup/definitions-1000` | `define` | 5.20 ms | gated |
-| `startup/definitions-1000` | `instantiate` | 1.70 ms | gated |
-| `startup/definitions-5000` | `define` | 21.7 ms | gated |
-| `startup/definitions-5000` | `instantiate` | 1.70 ms | gated |
-| `collection/table-full-render-10000` | `render` | 466.1 ms | gated |
+| `delivery/entry-route` | `appCssBytes` | 23.7 KB | gated |
+| `startup/definitions-100` | `define` | 0.90 ms | gated |
+| `startup/definitions-100` | `instantiate` | 1.70 ms | gated |
+| `startup/definitions-1000` | `define` | 6.20 ms | gated |
+| `startup/definitions-1000` | `instantiate` | 1.90 ms | gated |
+| `startup/definitions-5000` | `define` | 24.3 ms | gated |
+| `startup/definitions-5000` | `instantiate` | 2.40 ms | gated |
+| `collection/table-full-render-10000` | `render` | 487.2 ms | gated |
 | `collection/table-full-render-10000` | `cells` | 40000 | gated |
-| `memory/route-cycles` | `heapGrowthBytes` | 530.4 KB | gated |
+| `collection/table-window-10000` | `render` | 2.40 ms | limited to 16.0 ms |
+| `collection/table-window-10000` | `rows` | 38 | gated |
+| `memory/route-cycles` | `heapGrowthBytes` | 589.0 KB | gated |
 | `memory/route-cycles` | `nodeGrowth` | 11 | gated |
 | `memory/route-cycles` | `listenerGrowth` | 0 | gated |
 | `memory/route-cycles` | `cycles` | 50 | gated |
-| `memory/outlet-swaps` | `heapGrowthBytes` | 447.1 KB | gated |
+| `memory/outlet-swaps` | `heapGrowthBytes` | 504.2 KB | gated |
 | `memory/outlet-swaps` | `nodeGrowth` | 7 | gated |
 | `memory/outlet-swaps` | `listenerGrowth` | 0 | gated |
 | `memory/outlet-swaps` | `cycles` | 50 | gated |
-| `memory/table-10000` | `mountedHeapBytes` | 131.7 MB | gated |
-| `memory/table-10000` | `recoveredHeapBytes` | 1.2 MB | gated |
+| `memory/table-10000` | `mountedHeapBytes` | 146.7 MB | gated |
+| `memory/table-10000` | `recoveredHeapBytes` | 1.4 MB | gated |
 | `memory/table-10000` | `cells` | 40000 | gated |
+| `editor/cold-start-1x` | `initialize` | 473.1 ms | gated |
+| `editor/cold-start-1x` | `firstCompletion` | 3.74 ms | gated |
+| `editor/cold-start-1x` | `firstDiagnostics` | 1.03 s | gated |
+| `editor/cold-start-10x` | `initialize` | 1.07 s | gated |
+| `editor/cold-start-10x` | `firstCompletion` | 3.43 ms | gated |
+| `editor/cold-start-10x` | `firstDiagnostics` | 1.86 s | gated |
+| `editor/edit-burst` | `validations` | 1 | limited to 1 |
 | `delivery/artifact-size` | `chainDepth` | 3 deep | limited to 3 deep |
-| `delivery/artifact-size` | `rawBytes` | 416.9 KB | gated |
-| `delivery/artifact-size` | `gzipBytes` | 150.7 KB | gated |
-| `delivery/artifact-size` | `brotliBytes` | 131.2 KB | gated |
-| `delivery/artifact-size` | `javascriptRawBytes` | 224.9 KB | gated |
-| `delivery/artifact-size` | `javascriptGzipBytes` | 90.5 KB | gated |
-| `delivery/artifact-size` | `cssRawBytes` | 46.7 KB | gated |
-| `delivery/artifact-size` | `cssGzipBytes` | 9.2 KB | gated |
-| `delivery/artifact-size` | `templateRawBytes` | 74.8 KB | gated |
-| `delivery/artifact-size` | `templateGzipBytes` | 26.7 KB | gated |
+| `delivery/artifact-size` | `rawBytes` | 532.4 KB | gated |
+| `delivery/artifact-size` | `gzipBytes` | 184.3 KB | gated |
+| `delivery/artifact-size` | `brotliBytes` | 161.0 KB | gated |
+| `delivery/artifact-size` | `javascriptRawBytes` | 279.7 KB | gated |
+| `delivery/artifact-size` | `javascriptGzipBytes` | 110.3 KB | gated |
+| `delivery/artifact-size` | `cssRawBytes` | 79.2 KB | gated |
+| `delivery/artifact-size` | `cssGzipBytes` | 12.8 KB | gated |
+| `delivery/artifact-size` | `templateRawBytes` | 88.6 KB | gated |
+| `delivery/artifact-size` | `templateGzipBytes` | 31.1 KB | gated |
 
 <!-- /generated:performance-facts -->
 
 The route scan meets the measured budget at this scale. Rendering 10,000 rows
-whole took 468.9 ms, so a screen can ask `<ui-table>` to render a window
+whole took 490.0 ms, so a screen can ask `<ui-table>` to render a window
 ([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)). Sticky
 columns remain the table's steepest measured cost.
 
@@ -212,7 +229,6 @@ The runner lists workloads it has not measured and explains each gap.
 | pending | `memory/remote-cycles` | Fifty remote mount/revoke/unmount cycles need a manifest, a remote host provider and an auth session in the harness page. Worth doing against the real example page rather than a synthetic one, which is a page-driven workload this harness can host but does not yet. |
 | pending | `collection/typeahead` | The typeahead path is defined by not loading options locally, so its workload is a request-timing measurement against a stubbed source rather than a render measurement. Needs a decision on what the stub is before a number means anything. |
 | pending | `delivery/edit-to-reload` | One-file edit to what the developer sees needs cli/dev/serve.mjs running with its update session and a page listening on /__updates. That is a second origin shape, and mixing it into the measured origin would change the cache policy every other workload depends on. There are now two numbers behind the one name: a template edit is a revision rendered into the hosts already showing it, and every other edit is still a reload. |
-| unmeasured | `collection/table-window-10000`, `collection/table-window-scroll-10000`, `editor/cold-start-1x`, `editor/cold-start-10x`, `editor/interactive-1x`, `editor/interactive-10x`, `editor/edit-burst`, `editor/cancellation` | declared and absent from tools/benchmark/baseline.json: nothing here proves it |
 
 **Artifact origin — the verified production build.**
 
@@ -233,15 +249,15 @@ No workflow in `.github/workflows` runs the benchmark gate: every limit below fa
 
 | Origin | Gated | Absolutely limited | Reported only | Comparable |
 |---|---|---|---|---|
-| `source` | 103 | 0 | 0 | yes |
+| `source` | 117 | 3 | 0 | yes |
 | `dist` | 10 | 1 | 0 | yes |
 
 | Absolute limit | Value | Recorded |
 |---|---|---|
 | `delivery/artifact-size.chainDepth` | 3 deep | 3 deep |
-| `editor/edit-burst.validations` | 1 | nothing has measured it |
-| `collection/table-window-10000.render` | 16 | nothing has measured it |
-| `collection/table-window-scroll-10000.duration` | 16 | nothing has measured it |
+| `editor/edit-burst.validations` | 1 | 1 |
+| `collection/table-window-10000.render` | 16.0 ms | 2.40 ms |
+| `collection/table-window-scroll-10000.duration` | 16.0 ms | 1.60 ms |
 
 <!-- /generated:performance-gating -->
 
@@ -280,11 +296,9 @@ so a passing gate can be read with its actual coverage.
 | Relative regression | A median may exceed a machine-scaled baseline by at most 10%, subject to a minimum meaningful change. |
 | Absolute product limit | A requirement that applies without scaling or noise slack. |
 
-The table window's 16 ms render limit represents one frame. A local run
-rendered the window in 2.60 ms and scrolled it in 1.70 ms, with 38 of 10,000
-rows in the DOM. Rendering all rows took 468.9 ms. The window workloads are
-still absent from `baseline.json`, so those local figures are reported
-evidence rather than an active gate
+The table window's 16 ms render limit represents one frame. The baseline
+records the window rendering in 2.40 ms and scrolling in 1.60 ms, with 38 of
+10,000 rows in the DOM. Rendering all rows took 490.0 ms
 ([ADR-0107](../adr/0107-a-window-bounds-what-a-table-renders.md)).
 
 `delivery/artifact-size.chainDepth` limits the built entry graph to three

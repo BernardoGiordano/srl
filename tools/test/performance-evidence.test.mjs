@@ -278,7 +278,9 @@ void test('a hand-edited performance number is reported as drift', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'performance-check-'));
   const file = join(dir, 'performance.md');
   const text = await readFile(join(REPO, TARGET), 'utf8');
-  await writeFile(file, text.replace(/\| 84\.6 ms \|/u, '| 42.0 ms |'), 'utf8');
+  const edited = text.replace(/(\| `startup\/cold` \| )[\d.]+ ms/u, '$1999.9 ms');
+  assert.notEqual(edited, text, 'the guide has no startup/cold median to edit');
+  await writeFile(file, edited, 'utf8');
 
   const { diagnostics, drifted } = await checkPerformanceGuide({ file });
 

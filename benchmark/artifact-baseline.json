@@ -1,18 +1,18 @@
 {
   "version": 2,
-  "recorded": "2026-08-31T09:28:51.523Z",
+  "recorded": "2026-10-07T14:38:44.760Z",
   "mode": "ci",
   "app": "example:dist",
   "environment": {
-    "profile": "0219cbfa4fa0fe40",
+    "profile": "b1133caaeb5e1fa1",
     "platform": "Darwin",
-    "release": "25.6.0",
+    "release": "27.0.0",
     "arch": "arm64",
     "cpu": "Apple M3",
     "cores": 8,
     "memoryGiB": 16,
     "node": "v22.14.0",
-    "chrome": "Chrome/151.0.7922.175",
+    "chrome": "Chrome/154.0.8037.98",
     "dependencies": {
       "lit": "3.3.3",
       "@preact/signals-core": "1.14.4"
@@ -21,42 +21,42 @@
   "calibration": {
     "readings": 8,
     "overall": {
-      "arithmetic": 23.699999999254942,
-      "layout": 20.700000001117587
+      "arithmetic": 22.19999999552965,
+      "layout": 20.799999997019768
     },
     "bySuite": {
       "startup": {
-        "arithmetic": 23.699999999254942,
-        "layout": 20.700000001117587
-      },
-      "delivery": {
-        "arithmetic": 23.699999999254942,
-        "layout": 20.699999999254942
-      },
-      "template": {
-        "arithmetic": 23.700000001117587,
-        "layout": 20.59999999962747
-      },
-      "router": {
-        "arithmetic": 23.699999999254942,
-        "layout": 20.700000001117587
-      },
-      "collection": {
-        "arithmetic": 23.699999999254942,
+        "arithmetic": 22.19999999552965,
         "layout": 21
       },
+      "delivery": {
+        "arithmetic": 22.19999999552965,
+        "layout": 21
+      },
+      "template": {
+        "arithmetic": 22.200000002980232,
+        "layout": 20.799999997019768
+      },
+      "router": {
+        "arithmetic": 22.19999999552965,
+        "layout": 20.799999997019768
+      },
+      "collection": {
+        "arithmetic": 22.100000001490116,
+        "layout": 20.600000001490116
+      },
       "memory": {
-        "arithmetic": 23.700000001117587,
-        "layout": 20.800000000745058
+        "arithmetic": 22.200000002980232,
+        "layout": 20.700000002980232
       },
       "tooling": {
-        "arithmetic": 23.700000001117587,
-        "layout": 20.90000000037253
+        "arithmetic": 22.19999999552965,
+        "layout": 20.899999998509884
       }
     },
     "spread": {
-      "arithmetic": 1.0000000000785927,
-      "layout": 1.0194174757465904
+      "arithmetic": 1.004524886944949,
+      "layout": 1.019417475654415
     }
   },
   "results": [
@@ -81,11 +81,11 @@
       "warmup": 0,
       "metrics": {
         "files": {
-          "median": 129,
-          "p95": 129,
-          "mean": 129,
-          "min": 129,
-          "max": 129
+          "median": 134,
+          "p95": 134,
+          "mean": 134,
+          "min": 134,
+          "max": 134
         },
         "chainDepth": {
           "median": 3,
@@ -95,67 +95,67 @@
           "max": 3
         },
         "rawBytes": {
-          "median": 426916,
-          "p95": 426916,
-          "mean": 426916,
-          "min": 426916,
-          "max": 426916
+          "median": 545148,
+          "p95": 545148,
+          "mean": 545148,
+          "min": 545148,
+          "max": 545148
         },
         "gzipBytes": {
-          "median": 154273,
-          "p95": 154273,
-          "mean": 154273,
-          "min": 154273,
-          "max": 154273
+          "median": 188727,
+          "p95": 188727,
+          "mean": 188727,
+          "min": 188727,
+          "max": 188727
         },
         "brotliBytes": {
-          "median": 134386,
-          "p95": 134386,
-          "mean": 134386,
-          "min": 134386,
-          "max": 134386
+          "median": 164870,
+          "p95": 164870,
+          "mean": 164870,
+          "min": 164870,
+          "max": 164870
         },
         "javascriptRawBytes": {
-          "median": 230338,
-          "p95": 230338,
-          "mean": 230338,
-          "min": 230338,
-          "max": 230338
+          "median": 286377,
+          "p95": 286377,
+          "mean": 286377,
+          "min": 286377,
+          "max": 286377
         },
         "javascriptGzipBytes": {
-          "median": 92654,
-          "p95": 92654,
-          "mean": 92654,
-          "min": 92654,
-          "max": 92654
+          "median": 112957,
+          "p95": 112957,
+          "mean": 112957,
+          "min": 112957,
+          "max": 112957
         },
         "cssRawBytes": {
-          "median": 47821,
-          "p95": 47821,
-          "mean": 47821,
-          "min": 47821,
-          "max": 47821
+          "median": 81098,
+          "p95": 81098,
+          "mean": 81098,
+          "min": 81098,
+          "max": 81098
         },
         "cssGzipBytes": {
-          "median": 9441,
-          "p95": 9441,
-          "mean": 9441,
-          "min": 9441,
-          "max": 9441
+          "median": 13129,
+          "p95": 13129,
+          "mean": 13129,
+          "min": 13129,
+          "max": 13129
         },
         "templateRawBytes": {
-          "median": 76586,
-          "p95": 76586,
-          "mean": 76586,
-          "min": 76586,
-          "max": 76586
+          "median": 90715,
+          "p95": 90715,
+          "mean": 90715,
+          "min": 90715,
+          "max": 90715
         },
         "templateGzipBytes": {
-          "median": 27323,
-          "p95": 27323,
-          "mean": 27323,
-          "min": 27323,
-          "max": 27323
+          "median": 31801,
+          "p95": 31801,
+          "mean": 31801,
+          "min": 31801,
+          "max": 31801
         }
       }
     }
