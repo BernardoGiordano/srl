@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { REPO } from '../layout.mjs';
 import {
@@ -13,6 +16,9 @@ import {
   within,
   writeWithin,
 } from '../delivery/output-tree.mjs';
+
+const run = promisify(execFile);
+const BACKUP_FIXTURE = fileURLToPath(new URL('./support/output-backup.mjs', import.meta.url));
 
 /**
  * The confined writer every build, composition and release goes through. ADR-0132.
@@ -116,6 +122,54 @@ void test('only a directory a build wrote is replaced without --force', async ()
     await assert.rejects(admitOutput(join(directory, 'next')), /next\.previous exists and holds no/u);
   });
 });
+
+for (const protectedName of ['project', 'home directory']) {
+  for (const { layout, relation } of [
+    { layout: 'equal', relation: 'equal to' },
+    { layout: 'enclosing', relation: 'enclosing' },
+    { layout: 'backup link', relation: 'linked to' },
+    { layout: 'parent link', relation: 'resolving through a parent link to' },
+  ]) {
+    for (const authorization of ['force', 'marker']) {
+      void test(`a backup ${relation} the ${protectedName} is refused with ${authorization}`, async () => {
+        await inTemporary(async (directory) => {
+          await run(process.execPath, [
+            BACKUP_FIXTURE, directory, protectedName, layout, authorization, 'admit',
+          ]);
+        });
+      });
+    }
+  }
+  for (const authorization of ['force', 'marker']) {
+    for (const outputState of ['absent', 'existing']) {
+      void test(`publication refuses a new backup link to the ${protectedName} with ${authorization} and ${outputState} output`, async () => {
+        await inTemporary(async (directory) => {
+          await run(process.execPath, [
+            BACKUP_FIXTURE, directory, protectedName, 'backup link', authorization, outputState,
+          ]);
+        });
+      });
+    }
+  }
+}
+
+for (const authorization of ['force', 'marker']) {
+  for (const outputState of ['absent', 'existing']) {
+    void test(`an admitted abandoned backup is cleaned with ${authorization} and ${outputState} output`, async () => {
+      await inTemporary(async (directory) => {
+        const output = join(directory, 'out');
+        const stage = join(directory, '.stage');
+        await writeWithin(stage, 'artifact.json', '{"next":true}');
+        await writeWithin(`${output}.previous`, authorization === 'marker' ? 'artifact.json' : 'notes.txt', 'old backup');
+        if (outputState === 'existing') await writeWithin(output, 'artifact.json', '{"next":false}');
+
+        await replaceOutput(stage, output, { force: authorization === 'force' });
+        assert.equal(await readFile(join(output, 'artifact.json'), 'utf8'), '{"next":true}');
+        assert.deepEqual(await listFiles(directory), ['out/artifact.json']);
+      });
+    });
+  }
+}
 
 void test('replacing an output re-admits it and keeps what a build did not write', async () => {
   await inTemporary(async (directory) => {

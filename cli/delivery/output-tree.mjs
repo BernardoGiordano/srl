@@ -111,8 +111,8 @@ export async function listFiles(root) {
 /**
  * Admit `outDir` as a directory a build may replace, and return its absolute path.
  *
- * `force` admits a directory a build didn't write. It never admits one that holds
- * the project or the home directory, because replacing that deletes both.
+ * `force` admits a directory a build didn't write. Neither the output nor its
+ * `.previous` backup may hold the project or the home directory.
  *
  * @param {string} outDir
  * @param {{ force?: boolean }} [options]
@@ -120,19 +120,20 @@ export async function listFiles(root) {
  */
 export async function admitOutput(outDir, { force = false } = {}) {
   const output = resolve(outDir);
-  const physical = await physicalPath(output);
-  for (const { name, path } of [
-    { name: 'the project', path: REPO },
-    { name: 'the home directory', path: homedir() },
-  ]) {
-    if (contains(physical, await physicalPath(path))) {
-      throw new Error(
-        `output: ${output} holds ${name}, ${path}, and replacing it would delete ${name}.`,
-      );
+  for (const target of [output, `${output}.previous`]) {
+    const physical = await physicalPath(target);
+    for (const { name, path } of [
+      { name: 'the project', path: REPO },
+      { name: 'the home directory', path: homedir() },
+    ]) {
+      if (contains(physical, await physicalPath(path))) {
+        throw new Error(
+          `output: ${target} holds ${name}, ${path}, and replacing it would delete ${name}.`,
+        );
+      }
     }
+    await requireReplaceable(target, force);
   }
-  await requireReplaceable(output, force);
-  await requireReplaceable(`${output}.previous`, force);
   return output;
 }
 
