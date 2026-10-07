@@ -5,23 +5,33 @@ on:
     tags: ['v*']
 
 # A release is a tag. The workflow publishes the tagged commit rather than a working
-# tree, so the tag names exactly what npm serves. It refuses a tag that disagrees with
-# either package version, proves the packed pair installs, scaffolds, checks, builds and
-# tests, and only then publishes, core first because the CLI pins it exactly. The editor
-# extensions publish from editors.yml on the same tag.
+# tree, so the tag names exactly what npm serves. It runs the repository's whole check
+# on that commit, refuses a tag that disagrees with either package version, proves the
+# packed pair installs, scaffolds, checks, builds and tests, and only then publishes,
+# core first because the CLI pins it exactly. The editor extensions publish from
+# editors.yml on the same tag.
 permissions:
   contents: read
   # npm provenance signs each tarball with this run's identity.
   id-token: write
 
 jobs:
+  # A tag can name a commit that no push to main or pull request checked. Packing
+  # proves the pair installs, and only `npm run check` runs the runtime and security
+  # regressions, so the tagged commit passes it here before anything publishes.
+  check:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   npm:
+    needs: check
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm

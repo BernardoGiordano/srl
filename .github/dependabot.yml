@@ -1,0 +1,9 @@
+version: 2
+
+# Workflows pin each action to a full commit SHA, with its release tag in a comment.
+# Dependabot proposes the next reviewed commit and updates both.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

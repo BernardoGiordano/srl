@@ -10,7 +10,9 @@ import { promisify } from 'node:util';
 import { REPO } from '../layout.mjs';
 import {
   admitOutput,
+  createWithin,
   embedJson,
+  entryWithin,
   listFiles,
   replaceOutput,
   within,
@@ -74,6 +76,41 @@ void test('a write cannot leave its root through a symbolic link', async () => {
     await assert.rejects(writeWithin(root, 'file.txt', 'escaped'), /not a regular file/u);
     assert.equal(await readFile(join(outside, 'target.txt'), 'utf8'), 'kept');
     assert.deepEqual(await listFiles(outside), ['target.txt']);
+  });
+});
+
+void test('a dangling link is followed to where a write through it would land', async () => {
+  await inTemporary(async (directory) => {
+    const root = join(directory, 'stage');
+    const outside = join(directory, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+
+    await symlink(join(outside, 'later'), join(root, 'later'));
+    await assert.rejects(writeWithin(root, 'later/a.js', 'escaped'), /through a symbolic link/u);
+    await assert.rejects(entryWithin(root, 'later/a.js'), /through a symbolic link/u);
+    await assert.rejects(createWithin(root, 'later/deeper/a.js', 'escaped'), /through a symbolic link/u);
+    assert.deepEqual(await listFiles(outside), []);
+  });
+});
+
+void test('creating a file refuses anything already at its path', async () => {
+  await inTemporary(async (directory) => {
+    const root = join(directory, 'stage');
+    const outside = join(directory, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+
+    assert.equal(await entryWithin(root, 'src/a.js'), null);
+    await createWithin(root, 'src/a.js', 'first');
+    assert.equal((await entryWithin(root, 'src/a.js'))?.isFile(), true);
+    await assert.rejects(createWithin(root, 'src/a.js', 'second'), { code: 'EEXIST' });
+    assert.equal(await readFile(join(root, 'src/a.js'), 'utf8'), 'first');
+
+    await symlink(join(outside, 'b.js'), join(root, 'b.js'));
+    assert.equal((await entryWithin(root, 'b.js'))?.isSymbolicLink(), true);
+    await assert.rejects(createWithin(root, 'b.js', 'escaped'), { code: 'EEXIST' });
+    assert.deepEqual(await listFiles(outside), []);
   });
 });
 

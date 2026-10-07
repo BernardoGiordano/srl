@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -9,6 +9,7 @@ import { admitManifest } from '@srljs/core/lib/core/remotes/manifest-policy.js';
 import { errors, hasErrors } from '../diagnostics/index.mjs';
 import { applicationFiles, emitApplication } from '../scaffold/application.mjs';
 import { componentClassName, componentFiles, emitComponent } from '../scaffold/component.mjs';
+import { writeFiles } from '../scaffold/files.mjs';
 import { emitProject, projectFiles } from '../scaffold/project.mjs';
 
 /**
@@ -368,5 +369,77 @@ void test('a component lands in its application, and never over a tag or file th
       'user-card.html',
       'user-card.js',
     ]);
+  });
+});
+
+/* ── The writer ──────────────────────────────────────────────────────────── */
+
+void test('a scaffold never writes through a symbolic link that leaves the project', async () => {
+  await inTemporary(async (directory) => {
+    const root = join(directory, 'project');
+    const outside = join(directory, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+    const group = { group: 'probe' };
+
+    // A linked directory refuses the whole set, so the file beside it is not written either.
+    await symlink(outside, join(root, 'linked'));
+    const linked = await writeFiles(root, new Map([['linked/a.js', 'a'], ['b.js', 'b']]), group);
+    assert.deepEqual(codes(linked), ['scaffold/unsafe-path']);
+    assert.match(errors(linked)[0]?.message ?? '', /through a symbolic link/u);
+
+    // A dangling link reads as existing, whether it names the file or a directory above it.
+    await symlink(join(outside, 'c.js'), join(root, 'c.js'));
+    assert.deepEqual(codes(await writeFiles(root, new Map([['c.js', 'c']]), group)), ['scaffold/exists']);
+    await symlink(join(outside, 'later'), join(root, 'later'));
+    assert.deepEqual(
+      codes(await writeFiles(root, new Map([['later/d.js', 'd']]), group)),
+      ['scaffold/unsafe-path'],
+    );
+
+    assert.deepEqual(await readdir(outside), []);
+    assert.deepEqual((await readdir(root)).sort(), ['c.js', 'later', 'linked']);
+  });
+});
+
+void test('a new application or project refuses a dangling link in its place', async () => {
+  await inTemporary(async (directory) => {
+    const root = join(directory, 'project');
+    const outside = join(directory, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+
+    await symlink(join(outside, 'admin'), join(root, 'admin'));
+    assert.deepEqual(codes(await emitApplication(root, { name: 'admin' })), ['scaffold/exists']);
+
+    await symlink(join(outside, 'my-app'), join(directory, 'my-app'));
+    assert.deepEqual(codes(await emitProject(directory, { name: 'my-app' })), ['scaffold/exists']);
+
+    assert.deepEqual(await readdir(outside), []);
+    assert.deepEqual(await readdir(root), ['admin']);
+  });
+});
+
+void test('a component lands only inside the project, though its directory may be linked within it', async () => {
+  await inTemporary(async (directory) => {
+    const root = join(directory, 'project');
+    const outside = join(directory, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+    assert.equal(hasErrors(await emitApplication(root, { name: 'web' })), false);
+    const app = { name: 'web', dir: join(root, 'web') };
+
+    await symlink(outside, join(root, 'web', 'src', 'components'));
+    const escaped = await emitComponent(root, { app, path: 'user-card' });
+    assert.deepEqual(codes(escaped), ['scaffold/unsafe-path', 'scaffold/unsafe-path']);
+    assert.deepEqual(await readdir(outside), []);
+
+    await rm(join(root, 'web', 'src', 'components'));
+    await mkdir(join(root, 'web', 'src', 'widgets'));
+    await symlink(join(root, 'web', 'src', 'widgets'), join(root, 'web', 'src', 'components'));
+    const linkedInside = await emitComponent(root, { app, path: 'user-card' });
+    assert.equal(hasErrors(linkedInside), false);
+    assert.deepEqual((await readdir(join(root, 'web', 'src', 'widgets'))).sort(), ['user-card.html', 'user-card.js']);
+    assert.equal((await lstat(join(root, 'web', 'src', 'components'))).isSymbolicLink(), true);
   });
 });

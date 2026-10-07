@@ -32,7 +32,7 @@
 import { join, relative, sep } from 'node:path';
 
 import { error, warning } from '../diagnostics/index.mjs';
-import { exists, readText } from '../layout.mjs';
+import { readText } from '../layout.mjs';
 import {
   COMPONENTS,
   IMPORT_MAP_FILE,
@@ -42,7 +42,7 @@ import {
   fileToUrl,
   subresourceIntegrity,
 } from '../package/interface.mjs';
-import { applicationNameProblem, writeFiles } from './files.mjs';
+import { applicationNameProblem, occupied, writeFiles } from './files.mjs';
 
 /** @import { Diagnostic } from '../diagnostics/types.js' */
 
@@ -292,7 +292,7 @@ export async function emitApplication(root, options = {}) {
   const name = /** @type {string} */ (options.name);
 
   const dir = join(root, name);
-  if (await exists(dir)) {
+  if (await occupied(root, name)) {
     return [
       error(
         'scaffold/exists',

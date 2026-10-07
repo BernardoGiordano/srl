@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-07
-- Affects: `cli/delivery/output-tree.mjs`, `cli/delivery/build.mjs`, `cli/delivery/release.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/verify-release.mjs`, `cli/delivery/retention.mjs`, `cli/delivery/artifact-report.mjs`, `cli/delivery/template-html.mjs`, `cli/project-model/index.mjs`, `source/lib/core/remotes/manifest-policy.js`
+- Affects: `cli/delivery/output-tree.mjs`, `cli/delivery/build.mjs`, `cli/delivery/release.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/verify-release.mjs`, `cli/delivery/retention.mjs`, `cli/delivery/artifact-report.mjs`, `cli/delivery/template-html.mjs`, `cli/project-model/index.mjs`, `cli/scaffold/files.mjs`, `cli/scaffold/application.mjs`, `cli/scaffold/project.mjs`, `source/lib/core/remotes/manifest-policy.js`
 
 ## Context
 
@@ -14,6 +14,10 @@ wrote outside the stage.
 Publishing moved whatever `--out` named aside and deleted it. Output outside the
 repository was admitted without a check, so `srl build --out ..` deleted the project and
 its siblings, and `--out ~/Documents` deleted the folder.
+
+The scaffolds joined each path to the project root and checked for an existing file
+with `stat`, which follows links. A dangling link read as absent, and a linked directory
+in the project carried `srl generate` output outside it.
 
 The release modules already confined their writes and never cleaned a caller's path.
 They did it with four copies of one `inside()` function. The build and composition
@@ -51,12 +55,20 @@ hold a `<select>` with options alone, which parses the same under both rules.
 
 ## Decision
 
-`cli/delivery/output-tree.mjs` is the one module that writes build and release output.
+`cli/delivery/output-tree.mjs` is the one module that writes build, release and
+scaffold output.
 
 - `within(root, path)` returns the path inside `root`, or refuses a path with an empty,
   `.` or `..` segment, a leading `/`, a backslash or a NUL.
 - `writeWithin` and `copyWithin` refuse a write whose parent resolves outside the root
   through a symbolic link, or whose target is anything but a regular file.
+- A symbolic link that points at nothing resolves to its target, so a directory created
+  through it is checked where it would land.
+- `createWithin` writes as `writeWithin` does, and refuses anything already at the
+  path, a dangling link included. `entryWithin` reads what is there without following
+  a link. The scaffolds admit every path through `entryWithin` before writing any, and
+  create each file with `createWithin`. A new application or project directory is
+  refused when any entry, a dangling link included, already has its name.
 - `listFiles` lists every regular file, dot files included, and refuses a link or a
   special file. The build's inventory, release verification and retention read it.
 - `admitOutput` refuses an output that holds the project or the home directory, with or
@@ -92,6 +104,8 @@ development serves.
   `/api/v1/`, and is now refused by the build and by the runtime.
 - Composition reads every Remote asset once more to recompute its digest.
 - Release errors about paths start with `output:` instead of each module's name.
+- A scaffold reports `scaffold/unsafe-path` for a path that leaves the project through a
+  symbolic link. A directory linked to somewhere else inside the project still works.
 - A template whose start tag parse5 drops ships unminified.
 - Upgrading parse5 past customizable select would retire the minifier's fallback.
   Shared path admission across the router, the remote host and the HTTP client would

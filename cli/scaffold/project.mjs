@@ -20,10 +20,9 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { error, outputFormat, report } from '../diagnostics/index.mjs';
-import { exists } from '../layout.mjs';
 import { MANIFEST } from '../package/interface.mjs';
 import { applicationFacts, applicationFiles } from './application.mjs';
-import { NAME, applicationNameProblem, writeFiles } from './files.mjs';
+import { NAME, applicationNameProblem, occupied, writeFiles } from './files.mjs';
 
 /** @import { Diagnostic } from '../diagnostics/types.js' */
 /** @import { ApplicationFacts } from './application.mjs' */
@@ -227,7 +226,7 @@ export async function emitProject(parent, options = {}) {
   if (refused !== null) return [refused];
 
   const dir = join(parent, name);
-  if (await exists(dir)) {
+  if (await occupied(parent, name)) {
     return [
       error('scaffold/exists', 'already exists. Pick another name or remove it first.', {
         file: dir,

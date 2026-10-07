@@ -253,6 +253,42 @@ describe('token stores', () => {
       assert.equal(await authorizedHeader(store, 'X-CSRF-Token'), 'csrf-1');
     });
 
+    it('drops the CSRF token when a refresh answers with a payload it cannot admit', async () => {
+      // `AuthSession` ends the session on this answer. A token installed or kept here
+      // would go on marking writes after the session signal reads null.
+      respondWith(() => json(BFF_PAYLOAD));
+      const store = new BffCookieTokenStore('/auth');
+      await store.login(CREDENTIALS);
+
+      respondWith(() => json({ ...BFF_PAYLOAD, csrfToken: 'csrf-2', expiresAt: 'soon' }));
+      const reissued = await rejection(() => store.refresh());
+      assert.ok(reissued instanceof AuthRejected, `malformed refresh gave ${String(reissued)}`);
+      assert.equal(await authorizedHeader(store, 'X-CSRF-Token'), null);
+
+      respondWith(() => json(BFF_PAYLOAD));
+      await store.login(CREDENTIALS);
+      const { csrfToken: _dropped, ...withoutCsrf } = BFF_PAYLOAD;
+      respondWith(() => json({ ...withoutCsrf, scopes: 'sales:read' }));
+      await assert.rejects(() => store.refresh(), 'scopes');
+      assert.equal(await authorizedHeader(store, 'X-CSRF-Token'), null);
+    });
+
+    it('drops the CSRF token when the backend refuses the session, and keeps it while unavailable', async () => {
+      respondWith(() => json(BFF_PAYLOAD));
+      const store = new BffCookieTokenStore('/auth');
+      await store.login(CREDENTIALS);
+
+      respondWith(() => json({ error: 'maintenance' }, 503));
+      const unavailable = await rejection(() => store.refresh());
+      assert.ok(unavailable instanceof AuthUnavailable, `503 gave ${String(unavailable)}`);
+      assert.equal(await authorizedHeader(store, 'X-CSRF-Token'), 'csrf-1');
+
+      respondWith(() => json({ error: 'session_revoked' }, 403));
+      const refused = await rejection(() => store.refresh());
+      assert.ok(refused instanceof AuthRejected, `403 gave ${String(refused)}`);
+      assert.equal(await authorizedHeader(store, 'X-CSRF-Token'), null);
+    });
+
     it('reads 401 as no session and 5xx as unavailable', async () => {
       respondWith(() => json({}, 401));
       const store = new BffCookieTokenStore('/auth');

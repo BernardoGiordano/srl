@@ -114,6 +114,16 @@ await startApplication({ /* … */ });
 await registerServiceWorker();
 ```
 
+Registering the worker extends the page's trust to `sw.js`. Import-map pins
+cover module and fetch requests, but the browser loads a worker script outside
+the import map, and registration has no integrity option. Hashing `sw.js`
+before registering would not help, because the browser fetches it again to
+install it. A registered worker can answer every request on its scope, so
+deploy and protect `sw.js` exactly as you protect `index.html`. Leave
+registration off where an attacker could change a static response. Nothing
+in `app.manifest.json` registers a worker or changes its URL. Only the
+application's own call does.
+
 The worker does not call `skipWaiting()`, so an older tab keeps a worker
 matched to its modules. `watchRelease()` reads `build.json` at navigation
 commit boundaries and sets `releaseChanged` when the origin serves a new
@@ -146,11 +156,14 @@ outside its entry directory. Update those pins when changing remote CSS. Unpinne
 shell Element stylesheets keep their development behavior.
 
 Browsers apply import-map pins only to modules, and some engines ignore them.
-Before the first remote loads, the runtime imports a probe module pinned to the
-digest of zero bytes. An engine that enforces pins refuses it, which Chromium
-logs as one console error. An engine that loads it runs no remotes, and the
-error names the engine. The probe's pin is part of the library's import-map
-fragment, so `srl importmap` prints it.
+Before the first remote loads, the runtime imports two control modules from
+fixed data URLs whose pins match their bytes. It then imports the same bytes
+under the digest of zero bytes, which cannot match. Remotes load only when both
+controls import and the mismatch is refused, which Chromium logs as one console
+error. An engine that runs the mismatch runs no remotes, and the error names the
+engine. Any other failure refuses remotes too, and the next remote retries the
+check. The probe URLs and pins are part of the library's import-map fragment,
+so `srl importmap` prints them.
 
 ## Example deployment
 

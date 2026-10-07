@@ -6,6 +6,8 @@
  *                 inside that root as written, with no `.` or `..` segment to clean.
  *   writeWithin   The write lands inside the root on disk too. A symbolic link in
  *                 the tree can't carry it out.
+ *   createWithin  The same write, which also refuses anything already at the path,
+ *                 a symbolic link included. `entryWithin` reads what is there first.
  *   admitOutput   A directory is replaced only when a previous build wrote it, which
  *                 its `artifact.json` says, unless the caller forces it. A directory
  *                 that holds the project or the home directory is never replaced.
@@ -13,6 +15,7 @@
  *                 holds it.
  *
  * A release never replaces a directory, so it uses the first two and `listFiles`.
+ * A scaffold never replaces a file, so it uses `entryWithin` and `createWithin`.
  */
 
 import {
@@ -21,6 +24,7 @@ import {
   mkdir,
   mkdtemp,
   readdir,
+  readlink,
   realpath,
   rename,
   rm,
@@ -81,6 +85,38 @@ export async function writeWithin(root, path, bytes) {
  */
 export async function copyWithin(root, path, source) {
   await copyFile(source, await prepare(root, path));
+}
+
+/**
+ * What sits at `path` inside `root`, read without following a symbolic link, or null
+ * when nothing does.
+ *
+ * The path is admitted as a write to it would be, so a parent that leaves the root
+ * through a symbolic link is refused before anything is written.
+ *
+ * @param {string} root
+ * @param {string} path
+ * @returns {Promise<import('node:fs').Stats | null>}
+ */
+export async function entryWithin(root, path) {
+  return lstatOrNull(await confined(root, path));
+}
+
+/**
+ * Create the file `path` inside `root` holding `bytes`.
+ *
+ * The file must not exist. A file, directory or symbolic link already at `path`
+ * refuses the write, a dangling link included, so nothing is overwritten and no link
+ * carries the bytes elsewhere.
+ *
+ * @param {string} root
+ * @param {string} path
+ * @param {string | Uint8Array} bytes
+ */
+export async function createWithin(root, path, bytes) {
+  const target = await confined(root, path);
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, bytes, { flag: 'wx' });
 }
 
 /**
@@ -208,14 +244,27 @@ export function embedJson(value) {
  * @param {string} path
  */
 async function prepare(root, path) {
-  const target = within(root, path);
-  if (!contains(await physicalPath(root), await physicalPath(dirname(target)))) {
-    throw new Error(`output: ${JSON.stringify(path)} leaves ${root} through a symbolic link.`);
-  }
+  const target = await confined(root, path);
   await mkdir(dirname(target), { recursive: true });
   const existing = await lstatOrNull(target);
   if (existing !== null && !existing.isFile()) {
     throw new Error(`output: ${JSON.stringify(path)} in ${root} is not a regular file.`);
+  }
+  return target;
+}
+
+/**
+ * The absolute path of `path` inside `root`, whose parent resolves inside the root
+ * after symbolic links.
+ *
+ * @param {string} root
+ * @param {string} path
+ * @returns {Promise<string>}
+ */
+async function confined(root, path) {
+  const target = within(root, path);
+  if (!contains(await physicalPath(root), await physicalPath(dirname(target)))) {
+    throw new Error(`output: ${JSON.stringify(path)} leaves ${root} through a symbolic link.`);
   }
   return target;
 }
@@ -244,6 +293,9 @@ async function requireReplaceable(path, force) {
  * `path` with every symbolic link in its existing part resolved. The part that
  * doesn't exist yet is appended as written.
  *
+ * A dangling link resolves to where it points, because a directory created through it
+ * would land there.
+ *
  * @param {string} path
  * @returns {Promise<string>}
  */
@@ -255,7 +307,10 @@ async function physicalPath(path) {
     if (/** @type {NodeJS.ErrnoException} */ (cause).code !== 'ENOENT') throw cause;
     const parent = dirname(absolute);
     if (parent === absolute) throw cause;
-    return join(await physicalPath(parent), basename(absolute));
+    const physicalParent = await physicalPath(parent);
+    const entry = join(physicalParent, basename(absolute));
+    if ((await lstatOrNull(entry))?.isSymbolicLink() !== true) return entry;
+    return physicalPath(resolve(physicalParent, await readlink(entry)));
   }
 }
 

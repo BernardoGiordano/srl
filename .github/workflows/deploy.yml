@@ -67,7 +67,7 @@ jobs:
       # The commit that passed `check`, not whatever main points at now: a
       # workflow_run job checks out the default branch unless it is told otherwise,
       # which on a busy branch is a different tree from the one that was verified.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
@@ -75,7 +75,7 @@ jobs:
       # tree has no dependencies to install — the browser's three come from
       # source/lib/vendor, which is committed, and the server is zero-dependency
       # Node — so this job never builds anything and never needs node_modules.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 

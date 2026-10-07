@@ -1,5 +1,6 @@
 import {
   AuthRejected,
+  AuthUnavailable,
   asRecord,
   failureFor,
   readPayload,
@@ -75,7 +76,7 @@ export class BffCookieTokenStore {
       this.#csrfToken = null;
       return null;
     }
-    if (!response.ok) throw await failureFor(response, where);
+    if (!response.ok) throw this.#fail(await failureFor(response, where));
     return this.#read(response, where);
   }
 
@@ -101,9 +102,9 @@ export class BffCookieTokenStore {
     );
 
     if (response.status === 401 || response.status === 403) {
-      throw new AuthRejected(`${where} rejected the credentials.`);
+      throw this.#fail(new AuthRejected(`${where} rejected the credentials.`));
     }
-    if (!response.ok) throw await failureFor(response, where);
+    if (!response.ok) throw this.#fail(await failureFor(response, where));
     return this.#read(response, where);
   }
 
@@ -170,30 +171,57 @@ export class BffCookieTokenStore {
   }
 
   /**
+   * The failure to raise, with the CSRF token dropped unless the failure is transient.
+   *
+   * `AuthSession` ends the session on a refused or unadmissible answer. A token kept
+   * past that would go on marking writes for a session that has ended. An unreachable
+   * or 5xx backend decides nothing, so the session and its token stay.
+   *
+   * @param {AuthRejected | AuthUnavailable} failure
+   * @returns {AuthRejected | AuthUnavailable}
+   */
+  #fail(failure) {
+    if (!(failure instanceof AuthUnavailable)) this.#csrfToken = null;
+    return failure;
+  }
+
+  /**
+   * The session a payload describes. The CSRF token changes only after the whole
+   * payload is admitted, and a payload that fails admission drops it.
+   *
    * @param {Response} response
    * @param {string} where
    * @returns {Promise<Session>}
    */
   async #read(response, where) {
-    const payload = asRecord(await readPayload(response, where), where);
+    try {
+      const payload = asRecord(await readPayload(response, where), where);
 
-    // A `/session` probe need not reissue the CSRF token. Keeping the one we hold
-    // when the field is absent is what makes a probe a probe rather than
-    // something that can silently disarm every later write.
-    if (payload.csrfToken !== undefined) {
-      this.#csrfToken = requireString(payload.csrfToken, `${where}: csrfToken`);
+      // A `/session` probe need not reissue the CSRF token. Keeping the one we hold
+      // when the field is absent is what makes a probe a probe rather than
+      // something that can silently disarm every later write.
+      const csrfToken =
+        payload.csrfToken === undefined
+          ? this.#csrfToken
+          : requireString(payload.csrfToken, `${where}: csrfToken`);
+
+      // The expiry arrives as an absolute instant rather than a lifetime, because
+      // the backend owns the token and the browser holds none to time.
+      const session = sessionFrom(
+        {
+          subject: payload.sub,
+          name: payload.name,
+          scopes: payload.scopes === undefined ? [] : requireStrings(payload.scopes, `${where}: scopes`),
+          expiresAt: requireInstant(payload.expiresAt, `${where}: expiresAt`),
+        },
+        where,
+      );
+
+      this.#csrfToken = csrfToken;
+      return session;
+    } catch (cause) {
+      if (!(cause instanceof AuthUnavailable)) this.#csrfToken = null;
+      throw cause;
     }
-
-    // The expiry arrives as an absolute instant rather than a lifetime, because
-    // the backend owns the token and the browser holds none to time.
-    return sessionFrom(
-      {
-        subject: payload.sub,
-        name: payload.name,
-        scopes: payload.scopes === undefined ? [] : requireStrings(payload.scopes, `${where}: scopes`),
-        expiresAt: requireInstant(payload.expiresAt, `${where}: expiresAt`),
-      },
-      where,
-    );
   }
 }

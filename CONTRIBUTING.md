@@ -78,10 +78,11 @@ version, and a release is a pushed tag.
    version.
 3. Commit, then tag and push the tag, such as `git tag v0.10.0 && git push origin v0.10.0`.
 
-The `release` workflow refuses a tag that disagrees with either package version,
-runs the packaged-install probe and publishes the core, then the CLI, with npm
-provenance. The `editors` workflow publishes each extension to every marketplace
-whose token the repository holds.
+The `release` workflow runs `npm run check` on the tagged commit, refuses a tag that
+disagrees with either package version, runs the packaged-install probe and publishes
+the core, then the CLI, with npm provenance. The `editors` workflow publishes each
+extension to every marketplace whose token the repository holds. Each token reaches
+only the step that publishes with it.
 
 | Secret | Publishes |
 |---|---|
