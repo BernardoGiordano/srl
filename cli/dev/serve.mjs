@@ -33,7 +33,8 @@
  *   --proxy       forwards a URL prefix to a backend instead of serving it from
  *                 disk, which lets an application with an API develop on one
  *                 origin, the arrangement it is deployed into, rather than on two.
- *                 ADR-0075.
+ *                 Upgrades under the prefix are forwarded too, so a WebSocket
+ *                 opens on the page's own origin. ADR-0075, ADR-0134.
  *   templates     `app.manifest.json` is announced with `templateFiles`, computed
  *                 from `cli/project-model/` the way the build computes it from
  *                 what it emitted. Same manifest key, same runtime step, same
@@ -55,7 +56,7 @@
  */
 
 import { readFile, stat } from 'node:fs/promises';
-import { request as httpRequest } from 'node:http';
+import { STATUS_CODES, request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,10 +65,11 @@ import { templateAnnouncer } from '../delivery/source-manifest.mjs';
 import { printable } from '../diagnostics/index.mjs';
 import { startUpdateSession } from './updates.mjs';
 import { REPO, selectedApp } from '../layout.mjs';
-import { serveOrigin } from '../origin/index.mjs';
+import { admitsHost, serveOrigin } from '../origin/index.mjs';
 import { MOUNTS as PACKAGE_MOUNTS } from '../package/interface.mjs';
 
 /** @import { IncomingMessage, ServerResponse } from 'node:http' */
+/** @import { Duplex } from 'node:stream' */
 
 /**
  * One backend this server forwards to instead of serving from disk.
@@ -150,6 +152,108 @@ function forward(request, response, origin, log) {
   });
 
   request.pipe(upstream);
+}
+
+/**
+ * A status line and nothing else, for a socket no `ServerResponse` owns.
+ *
+ * @param {Duplex} socket
+ * @param {number} status
+ */
+function refuseUpgrade(socket, status) {
+  socket.end(
+    `HTTP/1.1 ${String(status)} ${STATUS_CODES[status] ?? ''}\r\n` +
+      'Connection: close\r\nContent-Length: 0\r\n\r\n',
+  );
+}
+
+/**
+ * The head of an upstream response, as bytes for the browser's socket. Raw headers
+ * keep the backend's casing and every repeated header, Set-Cookie included.
+ *
+ * @param {IncomingMessage} message
+ * @param {ReadonlyArray<string>} [dropped] lowercase names to leave out
+ * @param {string} [extra] header lines to append, each ending in CRLF
+ */
+function responseHead(message, dropped = [], extra = '') {
+  let head = `HTTP/1.1 ${String(message.statusCode)} ${message.statusMessage ?? ''}\r\n`;
+  for (let index = 0; index < message.rawHeaders.length; index += 2) {
+    const name = message.rawHeaders[index] ?? '';
+    if (dropped.includes(name.toLowerCase())) continue;
+    head += `${name}: ${message.rawHeaders[index + 1] ?? ''}\r\n`;
+  }
+  return `${head}${extra}\r\n`;
+}
+
+/**
+ * Forward one upgrade upstream and, once the backend switches protocols, join the
+ * two sockets byte for byte.
+ *
+ * A WebSocket is the case that needs it. Without this, a page developed behind
+ * `--proxy` has to open its socket on the backend's own origin, which is an address
+ * it never has once nginx serves both on one.
+ *
+ * The rules are `forward`'s. Host is the one header rewritten, after the origin's Host
+ * admission. Origin reaches the backend untouched, so the backend's own check decides
+ * whether a page may connect, as it does behind nginx. A backend that declines answers
+ * an ordinary response, which reaches the browser as written.
+ *
+ * @param {IncomingMessage} request
+ * @param {Duplex} socket
+ * @param {Buffer} head bytes the browser sent after its request head
+ * @param {URL} origin
+ * @param {(format: string, ...values: string[]) => void} log
+ * @param {Set<Duplex>} open the joined sockets, so closing the server can end them
+ */
+function forwardUpgrade(request, socket, head, origin, log, open) {
+  const send = origin.protocol === 'https:' ? httpsRequest : httpRequest;
+
+  const upstream = send({
+    protocol: origin.protocol,
+    hostname: origin.hostname,
+    port: origin.port,
+    path: request.url,
+    method: request.method,
+    headers: { ...request.headers, host: origin.host },
+  });
+
+  socket.on('error', () => {
+    upstream.destroy();
+  });
+
+  upstream.on('upgrade', (response, tunnel, tunnelHead) => {
+    open.add(socket);
+    open.add(tunnel);
+    const drop = () => {
+      open.delete(socket);
+      open.delete(tunnel);
+      socket.destroy();
+      tunnel.destroy();
+    };
+    tunnel.on('error', drop);
+    tunnel.on('close', drop);
+    socket.on('close', drop);
+
+    socket.write(responseHead(response));
+    if (tunnelHead.length > 0) socket.write(tunnelHead);
+    if (head.length > 0) tunnel.write(head);
+    tunnel.pipe(socket);
+    socket.pipe(tunnel);
+  });
+
+  // The body arrives decoded, so the chunked framing goes and the connection's close
+  // ends the body instead.
+  upstream.on('response', (response) => {
+    socket.write(responseHead(response, ['transfer-encoding', 'connection'], 'Connection: close\r\n'));
+    response.pipe(socket);
+  });
+
+  upstream.on('error', (cause) => {
+    log('  502  %s  %s', printable(request.url ?? '/'), printable(String(cause)));
+    if (socket.writable) refuseUpgrade(socket, 502);
+  });
+
+  upstream.end();
 }
 
 /* ── The server ────────────────────────────────────────────────────────── */
@@ -259,14 +363,35 @@ export async function serveApplication(options) {
   // for a server rather than for a warm cache.
   if (updates !== null) manifest.warm();
 
+  // An upgrade skips the request handler, so it meets the origin's Host admission
+  // here. Only a proxied prefix upgrades, since nothing on disk speaks a socket.
+  /** @type {Set<Duplex>} */
+  const tunnels = new Set();
+  running.server.on('upgrade', (request, socket, head) => {
+    socket.on('error', () => undefined);
+    if (!admitsHost(request.headers.host, options.allowedHosts ?? [])) {
+      refuseUpgrade(socket, 403);
+      return;
+    }
+    const url = new URL(request.url ?? '/', 'http://origin.invalid');
+    const proxy = proxyFor(url.pathname, proxies);
+    if (proxy === null) {
+      refuseUpgrade(socket, 404);
+      return;
+    }
+    forwardUpgrade(request, socket, head, proxy.origin, log, tunnels);
+  });
+
   return {
     url: running.url,
     port: running.port,
     mounts,
     // The server must not outlive its watchers. Closing the origin first refuses
     // new connections, and closing the session ends the open event streams, which
-    // are the connections that would otherwise never close on their own.
+    // are the connections that would otherwise never close on their own. A joined
+    // socket has left the server's books, so it is ended here.
     close: async () => {
+      for (const socket of tunnels) socket.destroy();
       await running.close();
       await updates?.close();
     },

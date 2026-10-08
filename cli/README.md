@@ -87,7 +87,8 @@ npx --no-install srl serve --app web \
 
 The prefix stays in the forwarded request path. Status and headers pass
 through. This setup lets a cookie session use the same origin in development
-and deployment.
+and deployment. A WebSocket under a proxied prefix is forwarded as well, so
+the page opens it on its own origin, as it does behind a reverse proxy.
 
 The development server binds 127.0.0.1. `--host 0.0.0.0` makes it reachable
 from other machines on the network, such as a phone. It answers requests

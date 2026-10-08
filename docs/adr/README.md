@@ -104,6 +104,7 @@ Numbers are permanent and never reused, so the index has gaps.
 | [ADR-0131](0131-the-dev-origin-admits-a-request-before-it-maps-it.md) | The dev origin admits a request before it maps it | accepted | `cli/origin/index.mjs`, `cli/origin/types.d.ts`, `cli/dev/serve.mjs`, `cli/dev/updates.mjs`, `cli/diagnostics/index.mjs`, `cli/testing/web-test-runner.mjs`, `cli/testing/runner-sockets.mjs`, `editors/vscode/package.json`, `SECURITY.md` |
 | [ADR-0132](0132-build-output-goes-through-one-confined-writer.md) | Build output goes through one confined writer | accepted | `cli/delivery/output-tree.mjs`, `cli/delivery/build.mjs`, `cli/delivery/release.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/verify-release.mjs`, `cli/delivery/retention.mjs`, `cli/delivery/artifact-report.mjs`, `cli/delivery/template-html.mjs`, `cli/project-model/index.mjs`, `cli/scaffold/files.mjs`, `cli/scaffold/application.mjs`, `cli/scaffold/project.mjs`, `source/lib/core/remotes/manifest-policy.js` |
 | [ADR-0133](0133-one-canonical-form-for-every-path-a-module-compares.md) | One canonical form for every path a module compares | accepted | `source/lib/core/foundation/paths.js`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/navigation/router.js`, `source/lib/host/remote-host.js`, `source/lib/core/http/client.js`, `cli/delivery/release-target.mjs` |
+| [ADR-0134](0134-the-dev-proxy-forwards-upgrades.md) | The dev proxy forwards upgrades | accepted | `cli/dev/serve.mjs`, `cli/README.md` |
 
 <!-- /generated:adr-index -->
 

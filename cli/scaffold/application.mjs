@@ -76,7 +76,8 @@ export function applicationFiles(facts) {
   /*
    * The production HTML transform requires exactly one of each of these: the two
    * collection stylesheets, the import map, the browser Tailwind and its inline input,
-   * the entry module, the root element and the noscript. ADR-0041.
+   * the entry module, the root element and the noscript. The palette alone may be
+   * absent, for an application that replaces it. ADR-0041.
    *
    * The map is the library's own, pasted, so no specifier or hash here can drift from
    * it. The Tailwind build is a classic script, so its hash is an attribute, and
