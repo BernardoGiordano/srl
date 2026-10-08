@@ -191,6 +191,9 @@ export async function buildArtifact({
           input: buildInputs(app, sharedEntries),
           preserveEntrySignatures: 'strict',
           output: {
+            // Minifying drops legal comments unless asked. THIRD_PARTY_LICENSES.md covers
+            // installed packages only, so a notice in vendored source would ship nowhere.
+            comments: { legal: true },
             assetFileNames: 'assets/[name]-[hash][extname]',
             chunkFileNames: 'assets/[name]-[hash].js',
             entryFileNames: (chunk) =>
@@ -504,6 +507,7 @@ export async function buildRemoteArtifact({
           input: entry,
           preserveEntrySignatures: 'strict',
           output: {
+            comments: { legal: true },
             assetFileNames: 'assets/[name]-[hash][extname]',
             chunkFileNames: 'assets/[name]-[hash].js',
             entryFileNames: 'assets/remote-entry-[hash].js',
@@ -1579,17 +1583,21 @@ async function emitLicenses(stage, publicDir) {
 /**
  * Let Vite consume the real application HTML after removing source-delivery-only nodes.
  * parse5 owns HTML syntax; this code owns only which application facts survive production.
- * Shared source-delivery facts are counted exactly. Application-specific duplicated nodes
- * opt out with `data-artifact="source-only"`, so this module never learns their contents.
+ * Shared source-delivery facts are counted exactly, except the default palette, which an
+ * application may replace. Application-specific duplicated nodes opt out with
+ * `data-artifact="source-only"`, so this module never learns their contents.
  *
  * Subtractive, and only subtractive. `order: 'pre'` runs this before a chunk has been
  * emitted, so nothing here can name one; what the document says about the module graph
  * is written later, from the graph itself, by `entry-hints.mjs`. ADR-0080.
  *
+ * Exported for tests.
+ *
+ * @internal
  * @param {BuildApplication} app
  * @returns {import('vite').Plugin}
  */
-function productionHtml(app) {
+export function productionHtml(app) {
   return {
     name: 'production-html',
     transformIndexHtml: {
@@ -1624,7 +1632,8 @@ function productionHtml(app) {
           // The palette is a second link and a second fact. The compiled
           // stylesheet carries both sheets, so an artifact that still asks the
           // origin for one of them makes a request that 404s in the deployed
-          // shape.
+          // shape. The default palette is optional. An application with its own
+          // deletes this link and marks its replacement source-only.
           if (
             node.tagName === 'link' &&
             htmlAttribute(node, 'href') === '/components/theme-default.css'
@@ -1651,7 +1660,9 @@ function productionHtml(app) {
         });
 
         const facts = { ...removed, entry, root, noscript };
-        const drift = Object.entries(facts).filter(([, count]) => count !== 1);
+        const drift = Object.entries(facts).filter(
+          ([name, count]) => count !== 1 && !(name === 'themePalette' && count === 0),
+        );
         if (drift.length > 0) {
           throw artifactError(
             app,

@@ -84,6 +84,15 @@ palette.
 
 An application can replace the second link with its own palette or register a
 theme through the module above. Keep the first link for component defaults.
+A replacement palette is application source, so mark its link
+`data-artifact="source-only"` and import the file from `src/app.css`. The
+production build removes the link and serves the compiled stylesheet, which
+already carries the palette.
+
+```html
+<link rel="stylesheet" href="/components/style.css" />
+<link rel="stylesheet" href="/src/palette.css" data-artifact="source-only" />
+```
 
 Rules in `style.css` use Tailwind's `components` layer and `:where()`
 selectors. Application classes and utilities can override them without

@@ -210,8 +210,11 @@ mode refuses a download whose hash differs from the recorded value.
 The repository ships `source/lib/vendor/LICENSES.md` with its vendored code.
 `npm run vendor` checks those notices against the pinned package licenses.
 A production build writes `THIRD_PARTY_LICENSES.md` for code in its artifact,
-including Tailwind CSS produced by the CLI. Each distribution therefore carries
-notices for the third-party bytes it serves.
+including Tailwind CSS produced by the CLI. That file covers installed packages.
+Code vendored into source keeps its notice in a legal comment, one that starts
+with `/*!` or contains `@license` or `@preserve`, and the minified chunks keep
+those comments. Each distribution therefore carries notices for the third-party
+bytes it serves.
 
 ## Deployment checks
 
