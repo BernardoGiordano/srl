@@ -31,7 +31,7 @@ test('a declared srl dependency with nothing installed is reported', (t) => {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(
     path.join(root, 'package.json'),
-    JSON.stringify({ devDependencies: { '@srljs/cli': '1.0.0' } }),
+    JSON.stringify({ devDependencies: { '@srljs/cli': '1.0.1' } }),
   );
   assert.deepEqual(locate(root), { server: null, declared: true });
 });

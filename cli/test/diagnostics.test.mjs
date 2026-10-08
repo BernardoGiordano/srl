@@ -87,7 +87,7 @@ void test('progress goes to stdout under its group, refusals to stderr', () => {
       info('b', 'the map is verbatim', { group: 'web' }),
       warning('c', 'ar.json is 40% translated', { group: 'web' }),
       error('d', 'imports "lit"', { group: 'web', file: 'source/lib/core/x.js', line: 4 }),
-      info('e', 'both packages are 1.0.0', { group: 'toolchain' }),
+      info('e', 'both packages are 1.0.1', { group: 'toolchain' }),
     ],
     { title: 'Verify', summary: 'never printed when something failed' },
   );
@@ -103,7 +103,7 @@ void test('progress goes to stdout under its group, refusals to stderr', () => {
       '  note ar.json is 40% translated',
       '',
       'toolchain',
-      '  ok   both packages are 1.0.0',
+      '  ok   both packages are 1.0.1',
       '',
     ].join('\n'),
   );
