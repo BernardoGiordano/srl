@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { PROBE_CONTROL_PIN, PROBE_CONTROL_URL, PROBE_EMPTY_URL, PROBE_PIN, PROBE_SPECIFIER, PROBE_URL } from '@srljs/core/lib/core/foundation/pins.js';
 
-import { buildArtifact, buildRemoteArtifact, composeArtifact } from '../delivery/build.mjs';
+import { buildArtifact, buildRemoteArtifact, composeArtifact, productionHtml } from '../delivery/build.mjs';
 import { entryHints } from '../delivery/entry-hints.mjs';
 import { minifyTemplate } from '../delivery/template-html.mjs';
 import { prepareRemoteRelease } from '../delivery/remote-release.mjs';
@@ -122,6 +122,16 @@ void test('example composes independently verified Remote artifacts', async () =
     const publicRoot = join(String(shell.root), 'public');
     const manifest = JSON.parse(await readFile(join(publicRoot, 'app.manifest.json'), 'utf8'));
     assert.deepEqual(manifest.remotes, composed);
+
+    // Lit is vendored inside the library, so THIRD_PARTY_LICENSES.md attributes it to
+    // the library's package. Its own notices ship only as legal comments in the chunks.
+    const shellCode = await Promise.all(
+      (await walk(publicRoot, /\.js$/u)).map((path) => readFile(path, 'utf8')),
+    );
+    assert.ok(
+      shellCode.some((source) => source.includes('SPDX-License-Identifier: BSD-3-Clause')),
+      'minification dropped the vendored Lit notices',
+    );
 
     // Under split delivery the manifest names every template and no bundle, which
     // lets startup put them in flight instead of the browser learning each URL from
@@ -465,6 +475,64 @@ void test('dynamic component definition fails before an incomplete template arti
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+});
+
+/**
+ * The source document a production build starts from, with the facts it counts.
+ *
+ * @param {string} palette the palette links, as the application writes them
+ */
+function sourceDocument(palette) {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="stylesheet" href="/components/style.css" />
+${palette}
+    <script type="importmap">{ "imports": {} }</script>
+    <script src="/lib/vendor/tailwind-browser.js"></script>
+    <style type="text/tailwindcss"></style>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <app-root></app-root>
+    <noscript>This application needs JavaScript.</noscript>
+  </body>
+</html>`;
+}
+
+/** @param {string} source @returns {string} */
+function productionDocument(source) {
+  const transform = /** @type {{ handler: (source: string) => { html: string } }} */ (
+    /** @type {unknown} */ (productionHtml({ name: 'palette', dir: REPO }).transformIndexHtml)
+  );
+  return transform.handler(source).html;
+}
+
+void test('the default palette is optional, and an application palette is source-only', () => {
+  const linked = productionDocument(
+    sourceDocument('    <link rel="stylesheet" href="/components/theme-default.css" />'),
+  );
+  assert.doesNotMatch(linked, /theme-default\.css/u);
+
+  // An application that supplies its own palette deletes the default link and marks
+  // its replacement source-only, because src/app.css already compiles it in.
+  const replaced = productionDocument(
+    sourceDocument('    <link rel="stylesheet" href="/src/palette.css" data-artifact="source-only" />'),
+  );
+  assert.doesNotMatch(replaced, /palette\.css/u);
+
+  assert.throws(
+    () =>
+      productionDocument(
+        sourceDocument(
+          [
+            '    <link rel="stylesheet" href="/components/theme-default.css" />',
+            '    <link rel="stylesheet" href="/components/theme-default.css" />',
+          ].join('\n'),
+        ),
+      ),
+    /artifact:palette:html: .*themePalette=2/u,
+  );
 });
 
 void test('the manifest announces templates the way the delivery says to', async () => {
