@@ -84,8 +84,8 @@ result belongs in a named slot.
 
 Structural directives work in the default slot. Projection moves their
 anchor nodes with their rendered content, so later updates land in the same
-place. Inside SVG, a compiled `*for` or `*if` body is parsed as HTML.
-Build path data outside the directive, as `example/src/icons.js` does.
+place. Inside `<svg>`, a `*for` or `*if` body renders as SVG, and inside
+`<foreignObject>` as HTML again.
 
 Lit reactive properties use prototype accessors. A class field of the same
 name creates an own property and can shadow that accessor.

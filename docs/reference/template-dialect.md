@@ -21,6 +21,11 @@ property binding is written in kebab-case and maps to camelCase.
 | `[?open]` | Adds or removes attribute `open`. |
 | `[hidden]` | Adds or removes attribute `hidden`. |
 | `[.max-rows]` | Sets property `maxRows`. |
+| `[class.active]` | Adds class `active` while the value is truthy. |
+| `[style.width.%]` | Sets CSS property `width`, with the value in `%`. |
+| `[style.background-image]` | Sets CSS property `background-image`. |
+| `[attr.aria-label]` | Refused. [attr.aria-label] is Angular's spelling. Write [aria-label], which sets the attribute and removes it for null or undefined. |
+| `[style.width.%.px]` | Refused. [style.width.%.px] names no CSS property. Write [style.property] or [style.property.unit], such as [style.width.%]. |
 | `(click)` | Listens for `click`. `$event` is in scope. |
 | `(value-change)` | Listens for `value-change`. `$event` is in scope. |
 | `onclick` | Refused. Bind the event in parentheses. |
@@ -49,6 +54,7 @@ A bracketed binding to one of these attributes adds or removes it, with or witho
 - `*if="expr"` renders the element when `expr` is truthy.
 - `*else` goes on the element directly after an `*if` element. Only whitespace may sit
   between them. An `*else` anywhere else is refused.
+- `*else *if="expr"` on one element continues the chain, and a later `*else` ends it.
 - `*for="item of items"` renders the element once per item. Two optional clauses
   follow, separated by `;`, in any order.
   - `key: expr` gives each row an identity, so a reorder moves rows instead of
@@ -171,7 +177,7 @@ binding table shows.
 |---|---|---|
 | `resourceUrl` | `base href`, `embed src`, `frame src`, `iframe src`, `link href`, `object data`, `script src` | Refused unless the value comes from `bypassSecurityTrustResourceUrl`. |
 | `html` | `innerhtml`, `srcdoc`, on any element | Active markup is removed. `bypassSecurityTrustHtml` skips that. |
-| `style` | `csstext`, `style`, on any element | A value with `url(`, `@import`, `expression(` or a backslash is dropped. `bypassSecurityTrustStyle` skips that. |
+| `style` | `csstext`, `style`, on any element | A `url()` whose URL an `<img>` could load passes. Any other `url(`, `@import`, `expression(` or a backslash drops the value. `bypassSecurityTrustStyle` skips that. |
 | `urlSet` | `srcset`, on any element | Every URL in the list is checked as a URL. `bypassSecurityTrustUrl` skips that. |
 | `url` | `action`, `background`, `cite`, `data`, `formaction`, `href`, `manifest`, `poster`, `src`, `xlink:href`, on any element | An active scheme such as `javascript:` gets an `unsafe:` prefix. `bypassSecurityTrustUrl` skips that. |
 

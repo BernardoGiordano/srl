@@ -87,7 +87,7 @@ void test('an application is eleven files, and the eight document facts are in t
     '<link rel="stylesheet" href="/components/style.css" />',
     '<link rel="stylesheet" href="/components/theme-default.css" />',
     '<script type="importmap">',
-    '<style type="text/tailwindcss">',
+    '<style type="text/tailwindcss" data-source="src/app.css"></style>',
     '<script type="module" src="/src/main.js"></script>',
     '<app-root></app-root>',
     '<noscript>',

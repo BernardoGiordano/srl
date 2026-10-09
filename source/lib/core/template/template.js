@@ -14,7 +14,7 @@
  * its chunk. ADR-0081.
  */
 
-import { html, nothing } from 'lit';
+import { html, nothing, svg } from 'lit';
 // `Directive` and `AsyncDirective` both come from lit's async-directive module.
 import { AsyncDirective, Directive, directive } from 'lit/async-directive.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -448,6 +448,12 @@ class Chunks {
   #current = '';
   /** @type {Evaluator[]} */
   #values = [];
+  #svg;
+
+  /** @param {boolean} svg The markup sits inside `<svg>`. */
+  constructor(svg) {
+    this.#svg = svg;
+  }
 
   /** @param {string} text */
   text(text) {
@@ -478,6 +484,7 @@ class Chunks {
     return {
       strings: /** @type {TemplateStringsArray} */ (/** @type {unknown} */ (strings)),
       values: this.#values,
+      svg: this.#svg,
     };
   }
 }
@@ -606,7 +613,9 @@ const reactiveBinding = directive(ReactiveBindingDirective);
  */
 function renderChunks(chunks, scope) {
   const values = chunks.values.map((value) => reactiveBinding(value, scope));
-  return html(chunks.strings, ...values);
+  // A structural body inside `<svg>` is its own lit template, and lit parses an `html`
+  // one in the HTML namespace, where `<circle>` is an unknown element.
+  return (chunks.svg ? svg : html)(chunks.strings, ...values);
 }
 
 /**
@@ -676,8 +685,8 @@ export function compileTemplate(source, where, owner) {
   setTemplateSource(holder, prepared);
 
   /** @type {CompileContext} */
-  const context = { where, expressions, owner };
-  const chunks = new Chunks();
+  const context = { where, expressions, owner, svg: false };
+  const chunks = new Chunks(false);
   compileNodes([...holder.content.childNodes], context, chunks);
   const compiled = chunks.finish();
 
@@ -738,6 +747,7 @@ function childLocals(parent) {
  * @property {string} where
  * @property {string[]} expressions
  * @property {string | undefined} owner
+ * @property {boolean} svg The element being compiled sits inside `<svg>`.
  */
 
 /**
@@ -864,9 +874,23 @@ function compileElement(element, context, chunks, consumed) {
     if (content !== undefined && PLACEHOLDER.test(element.textContent ?? '')) {
       throw new Error(`<${tag}> in ${context.where} holds a {{ }} binding. ${content}`);
     }
-    compileNodes([...element.childNodes], context, chunks);
+    compileNodes([...element.childNodes], childContext(tag, context), chunks);
     chunks.text(`</${tag}>`);
   }
+}
+
+/**
+ * The context an element's children compile in. `<svg>` switches its children to
+ * SVG, and `<foreignObject>` switches them back to HTML.
+ *
+ * @param {string} tag
+ * @param {CompileContext} context
+ * @returns {CompileContext}
+ */
+function childContext(tag, context) {
+  if (tag === 'svg' && !context.svg) return { ...context, svg: true };
+  if (tag === 'foreignObject' && context.svg) return { ...context, svg: false };
+  return context;
 }
 
 /**
@@ -947,7 +971,7 @@ function takeFragments(element, context) {
  * @returns {Evaluator}
  */
 function compileFragment(element, property, params, context) {
-  const chunks = new Chunks();
+  const chunks = new Chunks(context.svg);
   // The HTML parser puts a template's children in `content`.
   compileNodes([...element.content.childNodes], { ...context, where: `${context.where} *fragment ${property}` }, chunks);
   const body = chunks.finish();
@@ -971,6 +995,11 @@ function compileFragment(element, property, params, context) {
  * @param {Chunks} chunks
  */
 function compileAttributes(element, context, chunks) {
+  /** @type {MergedAttribute} */
+  const classes = { name: 'class', statics: [], pieces: [] };
+  /** @type {MergedAttribute} */
+  const styles = { name: 'style', statics: [], pieces: [] };
+
   for (const attribute of [...element.attributes]) {
     const { name, value } = attribute;
 
@@ -1023,6 +1052,31 @@ function compileAttributes(element, context, chunks) {
     }
 
     if (syntax.kind === 'binding') {
+      const classified = classifyBindingTarget(syntax.target);
+      const where = `${context.where} [${syntax.target}]`;
+      if (classified.kind === 'class-toggle') {
+        const test = compileExpression(value, where);
+        const token = classified.name;
+        classes.pieces.push((scope) => (test(scope) ? token : null));
+        continue;
+      }
+      if (classified.kind === 'style-property') {
+        styles.pieces.push(
+          styleProperty(element, classified.name, classified.unit, compileExpression(value, where), where),
+        );
+        continue;
+      }
+      if (classified.kind === 'attribute' && classified.name === 'class') {
+        const evaluate = compileExpression(value, where);
+        classes.pieces.push((scope) => classTokens(evaluate(scope)));
+        continue;
+      }
+      if (classified.kind === 'attribute' && classified.name === 'style') {
+        styles.pieces.push(
+          throughStyle(compileExpression(value, where), attributeSinkFor(element.localName, 'style', where)),
+        );
+        continue;
+      }
       compileBinding(element, syntax.target, value, context, chunks);
       continue;
     }
@@ -1030,19 +1084,156 @@ function compileAttributes(element, context, chunks) {
     // A plain attribute may still interpolate, for example
     //   class="rounded border {{ active ? 'bg-sky-50' : 'bg-white' }}"
     const pieces = splitPlaceholders(value);
+    const merged = name === 'class' ? classes : name === 'style' ? styles : undefined;
     if (pieces.length === 1 && typeof pieces[0] === 'string') {
       const refused = refusedStaticAttribute(element.localName, name);
       if (refused !== undefined) throw new Error(`<${element.localName}> in ${context.where}: ${refused}`);
+      if (merged !== undefined) {
+        merged.statics.push(value);
+        continue;
+      }
       chunks.text(value === '' ? ` ${name}` : ` ${name}="${escapeAttribute(value)}"`);
       continue;
     }
 
     const evaluate = compileInterpolatedAttribute(pieces, context);
     const where = `${context.where} ${name} interpolation`;
+    if (merged === classes) {
+      classes.pieces.push((scope) => classTokens(evaluate(scope)));
+      continue;
+    }
+    if (merged === styles) {
+      styles.pieces.push(throughStyle(evaluate, attributeSinkFor(element.localName, name, where)));
+      continue;
+    }
     chunks.text(` ${name}="`);
     chunks.hole(throughSink(evaluate, attributeSinkFor(element.localName, name, where)), where);
     chunks.text('"');
   }
+
+  compileMerged(classes, ' ', context, chunks);
+  compileMerged(styles, '; ', context, chunks);
+}
+
+/**
+ * Every source of one `class` or `style` attribute on an element. ADR-0135.
+ *
+ * `statics` are the authored values, which need no sanitizing. Each piece evaluates to
+ * a part of the value, or null when it contributes nothing.
+ *
+ * @typedef {{ name: 'class' | 'style', statics: string[], pieces: Evaluator[] }} MergedAttribute
+ */
+
+/**
+ * Write one `class` or `style` attribute from all its sources.
+ *
+ * Angular merges `class="base"` with `[class]` and `[class.on]`, and an application
+ * coming from it writes them together. lit allows one binding per attribute name, so
+ * the sources are joined into one value and the binding owns the whole attribute. An
+ * attribute with no dynamic source stays static markup.
+ *
+ * @param {MergedAttribute} merged
+ * @param {string} separator
+ * @param {CompileContext} context
+ * @param {Chunks} chunks
+ */
+function compileMerged(merged, separator, context, chunks) {
+  const statics = merged.statics.map((value) => trimPart(value, merged.name)).filter((value) => value !== '');
+  if (merged.pieces.length === 0) {
+    if (merged.statics.length > 0) chunks.text(` ${merged.name}="${escapeAttribute(statics.join(separator))}"`);
+    return;
+  }
+
+  const where = `${context.where} ${merged.name}`;
+  const { pieces } = merged;
+  chunks.text(` ${merged.name}="`);
+  chunks.hole((scope) => {
+    const parts = [...statics];
+    for (const piece of pieces) {
+      const part = piece(scope);
+      if (typeof part !== 'string') continue;
+      const trimmed = trimPart(part, merged.name);
+      if (trimmed !== '') parts.push(trimmed);
+    }
+    return parts.length === 0 ? nothing : parts.join(separator);
+  }, where);
+  chunks.text('"');
+}
+
+/**
+ * @param {string} value
+ * @param {'class' | 'style'} name
+ * @returns {string}
+ */
+function trimPart(value, name) {
+  const trimmed = value.trim();
+  return name === 'style' ? trimmed.replace(/;+$/u, '').trim() : trimmed;
+}
+
+/**
+ * The tokens a `[class]` value adds: a string as written, the truthy strings of an
+ * array, or the keys of an object whose values are truthy, as Angular reads them.
+ *
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+function classTokens(value) {
+  if (value === null || value === undefined || value === false) return null;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value.filter((token) => typeof token === 'string' && token !== '').join(' ');
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .filter(([, on]) => Boolean(on))
+      .map(([token]) => token)
+      .join(' ');
+  }
+  return typeof value === 'number' ? String(value) : null;
+}
+
+/**
+ * A `[style]` value through the style sink. A refused value contributes nothing, so
+ * the declarations beside it survive.
+ *
+ * @param {Evaluator} evaluate
+ * @param {((value: unknown) => unknown | null) | null} sink
+ * @returns {Evaluator}
+ */
+function throughStyle(evaluate, sink) {
+  return (scope) => {
+    const value = sink === null ? evaluate(scope) : sink(evaluate(scope));
+    return typeof value === 'string' ? value : null;
+  };
+}
+
+/** A declaration value that could end its declaration and start another. */
+const STYLE_VALUE_BREAK = /[;{}]/u;
+
+/**
+ * One `[style.property.unit]` declaration. Null, undefined, false and the empty string
+ * leave the property unset, as `style.setProperty` does for them.
+ *
+ * @param {Element} element
+ * @param {string} property
+ * @param {string | undefined} unit
+ * @param {Evaluator} evaluate
+ * @param {string} where
+ * @returns {Evaluator}
+ */
+function styleProperty(element, property, unit, evaluate, where) {
+  const sink = attributeSinkFor(element.localName, 'style', where);
+  return (scope) => {
+    const value = evaluate(scope);
+    if (value === null || value === undefined || value === false || value === '') return null;
+    // A trusted value is a whole style, not a property value, and has no place here.
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    const text = String(value);
+    if (STYLE_VALUE_BREAK.test(text)) return null;
+    const declaration = `${property}: ${text}${unit ?? ''}`;
+    const safe = sink === null ? declaration : sink(declaration);
+    return typeof safe === 'string' ? safe : null;
+  };
 }
 
 /**
@@ -1068,6 +1259,7 @@ function compileBinding(element, target, source, context, chunks) {
     case 'empty-attribute':
       throw new Error(`<${element.localName}> in ${context.where} has an empty [] binding.`);
     case 'reserved-name':
+    case 'refused':
       throw new Error(`<${element.localName}> in ${context.where}: ${classified.reason ?? ''}`);
     default:
       break;
@@ -1104,7 +1296,7 @@ function compileIf(element, source, context, consumed) {
   const test = compileExpression(source, `${context.where} *if`);
   const branch = compileSubtree(element, context);
 
-  /** @type {TemplateChunks | undefined} */
+  /** @type {Evaluator | undefined} */
   let alternate;
   const next = nextElement(element);
   if (next?.hasAttribute('*else') === true) {
@@ -1113,12 +1305,28 @@ function compileIf(element, source, context, consumed) {
     // Whitespace between the pair goes with the `*else` branch, or it would render as
     // a stray text node.
     for (const between of nodesBetween(element, next)) consumed.add(between);
-    alternate = compileSubtree(next, context);
+
+    // `*else *if` continues the chain. Compiling it here, with the caller's
+    // `consumed`, keeps the walk from rendering the chain's own `*else` again.
+    const chained = next.getAttribute('*if');
+    if (chained === null) {
+      const chunks = compileSubtree(next, context);
+      alternate = (scope) => renderChunks(chunks, scope);
+    } else {
+      if (next.hasAttribute('*for')) {
+        throw new Error(
+          `<${next.localName}> in ${context.where} carries both *for and *if. Wrap one in an ` +
+            `element of its own, so which applies first is written down rather than guessed.`,
+        );
+      }
+      next.removeAttribute('*if');
+      alternate = compileIf(next, chained, context, consumed);
+    }
   }
 
   return (scope) => {
     if (test(scope)) return renderChunks(branch, scope);
-    return alternate === undefined ? nothing : renderChunks(alternate, scope);
+    return alternate === undefined ? nothing : alternate(scope);
   };
 }
 
@@ -1240,7 +1448,7 @@ function compileFor(element, source, context) {
  * @returns {TemplateChunks}
  */
 function compileSubtree(element, context) {
-  const chunks = new Chunks();
+  const chunks = new Chunks(context.svg);
   compileElement(element, context, chunks, new Set());
   return chunks.finish();
 }

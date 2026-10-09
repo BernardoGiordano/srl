@@ -81,7 +81,8 @@ export function applicationFiles(facts) {
    *
    * The map is the library's own, pasted, so no specifier or hash here can drift from
    * it. The Tailwind build is a classic script, so its hash is an attribute, and
-   * `srl check importmap` requires one.
+   * `srl check importmap` requires one. Its input block stays empty, because
+   * `srl serve` fills it from src/app.css, the file the build compiles. ADR-0137.
    */
   const index = `<!doctype html>
 <html lang="en">
@@ -94,9 +95,7 @@ ${facts.stylesheetUrls.map((url) => `    <link rel="stylesheet" href="${url}" />
 ${facts.importMap.trimEnd()}
     </script>
     <script src="${facts.tailwindUrl}" integrity="${facts.tailwindIntegrity}"></script>
-    <style type="text/tailwindcss">
-      @custom-variant dark ([data-theme='dark'] &);
-    </style>
+    <style type="text/tailwindcss" data-source="src/app.css"></style>
     <script type="module" src="/src/main.js"></script>
   </head>
   <body>
@@ -181,9 +180,10 @@ await defineComponent({
   };
 
   /*
-   * The build compiles this with the project's Tailwind CLI. It reaches into the
-   * installed package by node_modules path, and a wrong path is a Tailwind resolve
-   * error rather than anything the build reports.
+   * The build compiles this with the project's Tailwind CLI, and `srl serve` hands it
+   * to the browser compiler. It reaches into the installed package by node_modules
+   * path, and a wrong path is a Tailwind resolve error rather than anything the build
+   * reports.
    */
   const css = `${facts.stylesheetPaths.map((path) => `@import '${path}';`).join('\n')}
 @import 'tailwindcss' source(none);
@@ -191,6 +191,8 @@ await defineComponent({
 @source '../src/**/*.js';
 @source '../src/**/*.html';
 @source '../index.html';
+
+@custom-variant dark ([data-theme='dark'] &);
 `;
 
   /*

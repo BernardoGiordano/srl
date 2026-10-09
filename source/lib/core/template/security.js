@@ -412,11 +412,38 @@ function withoutAsciiControls(value) {
 
 const ACTIVE_STYLE = /(?:(?:url|src|image|(?:-webkit-)?image-set)\s*\(|@import\b|expression\s*\(|(?:-moz-)?binding\s*:|behavior\s*:|\\|\/\*)/iu;
 
+/**
+ * A `url()` whose argument the style sanitizer can read: quoted, or bare, with no
+ * escape, nesting or line break that could make the browser read it differently.
+ */
+const STYLE_URL = /\burl\(\s*(?:"([^"\\\n]*)"|'([^'\\\n]*)'|([^\s"'()\\]*))\s*\)/giu;
+
+/** Schemes a stylesheet may fetch an image from. A relative URL has none. */
+const SAFE_STYLE_URL_SCHEMES = new Set(['blob', 'http', 'https']);
+
 /** @param {string} value @returns {string | null} */
 function sanitizeStyle(value) {
   // CSS escapes and comments make block lists hard to get right, so dynamic styles
-  // stay narrow. URLs, imports and escapes need a reviewed TrustedStyle.
-  return ACTIVE_STYLE.test(value) ? null : value;
+  // stay narrow. A `url()` passes when its argument is a URL an `<img>` could load,
+  // and every other fetch, import and escape needs a reviewed TrustedStyle. ADR-0136.
+  let unsafeUrl = false;
+  const rest = value.replace(STYLE_URL, (_match, double, single, bare) => {
+    const url = String(double ?? single ?? bare ?? '').trim();
+    if (!isSafeStyleUrl(url)) unsafeUrl = true;
+    return '';
+  });
+  if (unsafeUrl) return null;
+  return ACTIVE_STYLE.test(rest) ? null : value;
+}
+
+/** @param {string} url @returns {boolean} */
+function isSafeStyleUrl(url) {
+  const comparable = withoutAsciiControls(url);
+  if (comparable === '') return false;
+  const scheme = SCHEME.exec(comparable)?.[1]?.toLowerCase();
+  if (scheme === undefined) return true;
+  if (scheme === 'data') return SAFE_DATA_URL.test(comparable) && comparable.startsWith('data:image/');
+  return SAFE_STYLE_URL_SCHEMES.has(scheme);
 }
 
 const BLOCKED_ELEMENTS = new Set([
