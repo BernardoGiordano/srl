@@ -13,7 +13,7 @@ package to every project it writes.
 You need Node.js 22 or later, npm, and Git.
 
 ```bash
-npx @srljs/cli@1.0.1 new my-app
+npx @srljs/cli@1.1.0 new my-app
 cd my-app
 npm install
 npm run dev

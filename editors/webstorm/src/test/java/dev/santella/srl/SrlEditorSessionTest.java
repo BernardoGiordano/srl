@@ -198,6 +198,6 @@ final class SrlEditorSessionTest {
             + field
             + "\": { \""
             + dependency
-            + "\": \"1.0.1\" }\n}\n");
+            + "\": \"1.1.0\" }\n}\n");
   }
 }
