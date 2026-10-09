@@ -22,6 +22,10 @@
  * about the network rather than about the bytes.
  */
 
+import { mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { chromium, firefox, webkit } from 'playwright';
 
 import { OBSERVER_SOURCE } from './observer.mjs';
@@ -104,7 +108,20 @@ const POLL_MS = 50;
  * @returns {Promise<Driver>}
  */
 export async function openEngine(engine, origin) {
-  const browser = await engine.browser.launch({ headless: true });
+  // Engines run under a home of their own. Playwright's Firefox calls itself Firefox,
+  // so on macOS it reads the profile index of the user's own Firefox. macOS denies
+  // that directory to the terminal, and Firefox then exits with "Could not find
+  // profile folder". CoreFoundation takes the home from CFFIXED_USER_HOME first.
+  //
+  // The home is shared and kept. macOS puts a deny-delete ACL on the Library and
+  // Downloads folders the browsers create in it, so a per-run home cannot be removed.
+  const home = join(tmpdir(), 'srl-journey-home');
+  await mkdir(home, { recursive: true });
+
+  const browser = await engine.browser.launch({
+    headless: true,
+    env: { ...process.env, CFFIXED_USER_HOME: home },
+  });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 
   /** @type {string[]} */
