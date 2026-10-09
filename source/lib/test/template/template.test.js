@@ -167,6 +167,67 @@ describe('template compiler', () => {
     assert.equal(anchor.getAttribute('class'), 'base sky');
   });
 
+  it('toggles classes and merges every class source into one attribute', () => {
+    const on = signal(true);
+    const compiled = compileTemplate(
+      '<p class="base" [class]="tone" [class.py-1.5]="on" [class.rotate-[-90deg]]="!on"></p>',
+      'test',
+    );
+    render(compiled({ tone: 'sky', on }), host);
+    const p = present(host.querySelector('p'));
+    assert.equal(p.getAttribute('class'), 'base sky py-1.5');
+    on.value = false;
+    assert.equal(p.getAttribute('class'), 'base sky rotate-[-90deg]');
+
+    paint('<p [class]="tones"></p>', { tones: ['a', '', 'b'] });
+    assert.equal(present(host.querySelector('p')).getAttribute('class'), 'a b');
+    paint('<p [class]="tones"></p>', { tones: { a: true, b: false, c: 1 } });
+    assert.equal(present(host.querySelector('p')).getAttribute('class'), 'a c');
+    paint('<p [class]="tone"></p>', { tone: null });
+    assert.notOk(present(host.querySelector('p')).hasAttribute('class'));
+  });
+
+  it('writes style properties with units and merges every style source', () => {
+    paint(
+      '<p style="color: red;" [style]="extra" [style.width.%]="width" [style.min-height.px]="none"></p>',
+      { extra: 'opacity: 0.5', width: 40, none: null },
+    );
+    assert.equal(present(host.querySelector('p')).getAttribute('style'), 'color: red; opacity: 0.5; width: 40%');
+
+    paint('<p [style.background-image]="image"></p>', { image: 'url(/api/cover/7?size=600)' });
+    assert.equal(
+      present(host.querySelector('p')).getAttribute('style'),
+      'background-image: url(/api/cover/7?size=600)',
+    );
+
+    // A value that would close its declaration contributes nothing.
+    paint('<p [style.width]="width" [style.color]="color"></p>', {
+      width: '1px; position: fixed',
+      color: 'red',
+    });
+    assert.equal(present(host.querySelector('p')).getAttribute('style'), 'color: red');
+  });
+
+  it("refuses Angular's [attr.name] and a style target that names no property", () => {
+    assert.throws(() => compileTemplate('<p [attr.aria-label]="label"></p>', 'test'), 'Write [aria-label]');
+    assert.throws(() => compileTemplate('<p [style.width.%.px]="w"></p>', 'test'), 'names no CSS property');
+  });
+
+  it('renders *for and *if bodies inside <svg> as SVG', () => {
+    paint(
+      '<svg viewBox="0 0 10 10"><circle *for="x of xs" [cx]="x" cy="5" r="1"></circle>' +
+        '<rect *if="framed" width="10" height="10"></rect>' +
+        '<foreignObject><p *if="framed">note</p></foreignObject></svg>',
+      { xs: [1, 2], framed: true },
+    );
+    const svgNs = 'http://www.w3.org/2000/svg';
+    const circles = [...host.querySelectorAll('circle')];
+    assert.equal(circles.length, 2);
+    for (const circle of circles) assert.equal(circle.namespaceURI, svgNs);
+    assert.equal(present(host.querySelector('rect')).namespaceURI, svgNs);
+    assert.equal(present(host.querySelector('p')).namespaceURI, 'http://www.w3.org/1999/xhtml');
+  });
+
   it('sanitizes URL bindings and attribute interpolation by protocol', () => {
     paint('<a [href]="target">go</a><img src="{{ image }}">', {
       target: 'java\nscript:alert(1)',
@@ -273,12 +334,33 @@ describe('template compiler', () => {
     assert.equal(present(host.querySelector('strong')).getAttribute('data-reviewed'), 'true');
   });
 
-  it('sanitizes style bindings and requires a bypass for dynamic URLs', () => {
+  it('sanitizes style bindings and requires a bypass for unsafe URLs', () => {
     paint('<div [style]="style"></div>', { style: 'color: rebeccapurple' });
     assert.equal(present(host.querySelector('div')).getAttribute('style'), 'color: rebeccapurple');
 
     paint('<div [style]="style"></div>', { style: 'background: url(javascript:steal())' });
     assert.notOk(present(host.querySelector('div')).hasAttribute('style'));
+
+    for (const style of [
+      "background-image: url('javascript:steal()')",
+      'background-image: url("data:image/svg+xml;base64,PHN2Zz4=")',
+      'background-image: url(/ok.png), url(vbscript:steal)',
+      'background-image: url(/ok.png) /* hidden */',
+      'background-image: url("/ok.png" ) , src(/x)',
+    ]) {
+      paint('<div [style]="style"></div>', { style });
+      assert.notOk(present(host.querySelector('div')).hasAttribute('style'), style);
+    }
+
+    for (const style of [
+      'background-image: url(/covers/7?size=600)',
+      'background-image: url("https://example.test/a.png"), linear-gradient(red, blue)',
+      "background: url('blob:https://example.test/1') center / cover",
+      'background-image: url(data:image/png;base64,iVBORw0KGgo=)',
+    ]) {
+      paint('<div [style]="style"></div>', { style });
+      assert.equal(present(host.querySelector('div')).getAttribute('style'), style);
+    }
 
     paint('<div [style]="style"></div>', {
       style: bypassSecurityTrustStyle('background-image: url(/reviewed.png)'),
@@ -472,6 +554,38 @@ describe('template compiler', () => {
 
     paint(source, { ok: false });
     assert.equal(host.textContent?.trim(), 'no');
+  });
+
+  it('renders one branch of an *else *if chain', () => {
+    const source =
+      '<p *if="tone === \'a\'">A</p>\n<p *else *if="tone === \'b\'">B</p>\n' +
+      '<p *else *if="tone === \'c\'">C</p>\n<p *else>D</p>';
+    for (const [tone, shown] of [['a', 'A'], ['b', 'B'], ['c', 'C'], ['z', 'D']]) {
+      paint(source, { tone });
+      assert.equal(host.textContent?.replace(/\s/gu, ''), shown, tone);
+    }
+
+    paint('<p *if="a">A</p><p *else *if="b">B</p>', { a: false, b: false });
+    assert.equal(host.querySelector('p'), null);
+  });
+
+  it('switches an *else *if chain when a signal changes', () => {
+    const tone = signal(0);
+    const compiled = compileTemplate('<p *if="tone === 1">one</p><p *else *if="tone === 2">two</p><p *else>other</p>', 'test');
+    tone.value = 1;
+    render(compiled({ tone }), host);
+    assert.equal(host.textContent?.trim(), 'one');
+    tone.value = 2;
+    assert.equal(host.textContent?.trim(), 'two');
+    tone.value = 3;
+    assert.equal(host.textContent?.trim(), 'other');
+  });
+
+  it('refuses *for on an *else *if', () => {
+    assert.throws(
+      () => compileTemplate('<p *if="a"></p><p *else *if="b" *for="x of xs"></p>', 'test'),
+      'both *for and *if',
+    );
   });
 
   it('omits an *if with no *else', () => {

@@ -2,7 +2,7 @@
   "name": "srl",
   "displayName": "srl",
   "description": "Complete srl template support powered by the project toolchain",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "bernardogiordano",
   "license": "MIT",
   "icon": "images/icon.png",

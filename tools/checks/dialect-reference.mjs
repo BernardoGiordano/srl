@@ -51,6 +51,11 @@ const BINDING_SAMPLES = [
   '[?open]',
   '[hidden]',
   '[.max-rows]',
+  '[class.active]',
+  '[style.width.%]',
+  '[style.background-image]',
+  '[attr.aria-label]',
+  '[style.width.%.px]',
   '(click)',
   '(value-change)',
   'onclick',
@@ -115,7 +120,7 @@ const EXPRESSION_SAMPLES = [
  */
 const CONTEXT_EFFECT = {
   html: 'Active markup is removed. `bypassSecurityTrustHtml` skips that.',
-  style: 'A value with `url(`, `@import`, `expression(` or a backslash is dropped. `bypassSecurityTrustStyle` skips that.',
+  style: 'A `url()` whose URL an `<img>` could load passes. Any other `url(`, `@import`, `expression(` or a backslash drops the value. `bypassSecurityTrustStyle` skips that.',
   url: 'An active scheme such as `javascript:` gets an `unsafe:` prefix. `bypassSecurityTrustUrl` skips that.',
   urlSet: 'Every URL in the list is checked as a URL. `bypassSecurityTrustUrl` skips that.',
   resourceUrl: 'Refused unless the value comes from `bypassSecurityTrustResourceUrl`.',
@@ -192,6 +197,14 @@ function readBinding(written) {
       if (refusal === undefined) return `Sets property ${code(inner.name)}.`;
       return PROPERTY_REFUSAL[refusal];
     }
+    case 'class-toggle':
+      return `Adds class ${code(inner.name)} while the value is truthy.`;
+    case 'style-property':
+      return inner.unit === undefined
+        ? `Sets CSS property ${code(inner.name)}.`
+        : `Sets CSS property ${code(inner.name)}, with the value in ${code(inner.unit)}.`;
+    case 'refused':
+      return `Refused. ${inner.reason ?? ''}`;
     case 'inline-handler':
       return 'Refused. Bind the event in parentheses.';
     case 'reserved-name':

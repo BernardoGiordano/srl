@@ -99,6 +99,39 @@ void test('checks security-sensitive property contexts and forbidden sinks', () 
   assert.match(check('<div [.outer-h-t-m-l]="trustedHtml"></div>').join('\n'), /forbidden/u);
 });
 
+void test('checks an *else *if chain as one conditional', () => {
+  assert.deepEqual(
+    check(`
+      <p *if="busy">busy</p>
+      <p *else *if="rows.length">{{ rows[0]?.name }}</p>
+      <p *else>{{ label }}</p>
+    `),
+    [],
+  );
+  assert.match(check('<p *if="busy"></p><p *else *if="rows.lenght"></p>').join('\n'), /lenght/u);
+  assert.deepEqual(
+    checkTemplateSource({
+      module,
+      className: 'TemplateCheckHost',
+      template: 'fixture.html',
+      source: '<p *if="busy"></p><p *else *if="label" *for="row of rows"></p>',
+      elements: child,
+    }).map((diagnostic) => diagnostic.code),
+    ['templates/for-with-if'],
+  );
+});
+
+void test('checks class toggles and style properties', () => {
+  assert.deepEqual(
+    check(`
+      <p class="base" [class]="label" [class.py-1.5]="busy" [style.width.%]="rows.length"></p>
+      <p [style.background-image]="busy ? label : null"></p>
+    `),
+    [],
+  );
+  assert.match(check('<p [style.width.%]="rows"></p>').join('\n'), /not assignable/u);
+});
+
 void test('types native event targets', () => {
   assert.match(check('<input (change)="choose($event.target.value)">').join('\n'), /string/u);
 });
@@ -265,6 +298,8 @@ void test('each dialect refusal carries a code of its own', () => {
     ['templates/reserved-name', '<p @click="choose(1)"></p>'],
     ['templates/reserved-name', '<p [@click]="choose"></p>'],
     ['templates/reserved-name', '<p title$lit$="{{ label }}"></p>'],
+    ['templates/refused-binding', '<p [attr.aria-label]="label"></p>'],
+    ['templates/refused-binding', '<p [style.width.%.px]="label"></p>'],
     ['templates/refused-element', '<script></script>'],
     ['templates/refused-element', '<meta http-equiv="refresh" content="0; url=/elsewhere">'],
     ['templates/raw-text-binding', '<style>p { color: {{ label }} }</style>'],

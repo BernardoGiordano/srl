@@ -45,6 +45,7 @@ problem, and the finding's message says where it is and how to fix it. `srl chec
 | `templates/duplicate-fragment` | One element receives two fragments for the same property. |
 | `templates/inline-handler` | An `on...` attribute or binding is refused. Bind the event as `(event)="handler()"`. |
 | `templates/animation-binding` | Dynamic SVG animation targets and values can write executable attributes. Use static animation attributes. |
+| `templates/refused-binding` | A binding uses a spelling the dialect refuses, such as Angular's `[attr.name]` or a `[style.name]` that names no CSS property. |
 | `templates/reserved-name` | An attribute or event name is lit binding syntax, such as `.srcdoc`, `@click` or a name with a quote, so lit would bind it to a sink the dialect never classified. |
 | `templates/refused-element` | The template holds `<script>`, `<base>`, `<link>` or `<meta>`, which belong in index.html or the component module, or `<object>` or `<embed>`, which the production CSP refuses. |
 | `templates/raw-text-binding` | A `{{ }}` sits inside an element whose content is raw text, such as `<style>`, where it writes CSS or lands on the wrong binding. |

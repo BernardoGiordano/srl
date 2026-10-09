@@ -85,6 +85,45 @@ A bare `python3 -m http.server` cannot mount the application and library at
 their required paths on one origin. The CLI dev server and the example backend
 both use `cli/origin/` for that mapping.
 
+## Styles in development
+
+Development compiles Tailwind in the page, and the build compiles
+`src/app.css` with the Tailwind CLI. An empty input block that names the
+stylesheet lets one file serve both.
+
+```html
+<style type="text/tailwindcss" data-source="src/app.css"></style>
+```
+
+`srl serve` fills the block with that file when it sends the page. It inlines
+relative imports inside the application and drops the rest: `@import
+'tailwindcss'`, which the browser compiler adds itself, imports from outside the
+application, and `@source` paths, because the browser compiler scans the page.
+Editing the file reloads the page. ADR-0137.
+
+## What the entry document may link
+
+The build hashes and pins every stylesheet it compiles. A stylesheet on another
+`https:` origin, such as a web font service's, stays when it carries the author's own
+pin, and the build refuses it otherwise. ADR-0139.
+
+```html
+<link
+  rel="stylesheet"
+  href="https://api.fontshare.com/v2/css?f[]=satoshi@700,500,400&display=swap"
+  integrity="sha384-…"
+  crossorigin="anonymous"
+/>
+```
+
+An application icon named with `<link rel="icon">` is emitted as a hash-named
+asset. Without one the build adds an empty icon, so no request for `/favicon.ico`
+fails.
+
+The collection's `/components/style.css` and the palette are optional, for an
+application that renders none of the collection, and so is the manifest's `i18n`
+section. ADR-0138.
+
 ## Entry document and worker
 
 The production build adds a manifest preload and modulepreload hints for the

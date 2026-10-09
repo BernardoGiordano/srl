@@ -105,6 +105,11 @@ Numbers are permanent and never reused, so the index has gaps.
 | [ADR-0132](0132-build-output-goes-through-one-confined-writer.md) | Build output goes through one confined writer | accepted | `cli/delivery/output-tree.mjs`, `cli/delivery/build.mjs`, `cli/delivery/release.mjs`, `cli/delivery/remote-release.mjs`, `cli/delivery/verify-release.mjs`, `cli/delivery/retention.mjs`, `cli/delivery/artifact-report.mjs`, `cli/delivery/template-html.mjs`, `cli/project-model/index.mjs`, `cli/scaffold/files.mjs`, `cli/scaffold/application.mjs`, `cli/scaffold/project.mjs`, `source/lib/core/remotes/manifest-policy.js` |
 | [ADR-0133](0133-one-canonical-form-for-every-path-a-module-compares.md) | One canonical form for every path a module compares | accepted | `source/lib/core/foundation/paths.js`, `source/lib/core/remotes/manifest-policy.js`, `source/lib/core/navigation/router.js`, `source/lib/host/remote-host.js`, `source/lib/core/http/client.js`, `cli/delivery/release-target.mjs` |
 | [ADR-0134](0134-the-dev-proxy-forwards-upgrades.md) | The dev proxy forwards upgrades | accepted | `cli/dev/serve.mjs`, `cli/README.md` |
+| [ADR-0135](0135-a-bound-class-or-style-owns-its-attribute.md) | A bound class or style owns its attribute | accepted | `source/lib/core/template/dialect.js`, `source/lib/core/template/template.js`, `cli/checks/template-check.mjs` |
+| [ADR-0136](0136-a-style-url-is-checked-as-a-url.md) | A style `url()` is checked as a URL | accepted | `source/lib/core/template/security.js` |
+| [ADR-0137](0137-the-dev-server-fills-the-tailwind-input-from-app-css.md) | The dev server fills the Tailwind input from `app.css` | accepted | `cli/dev/tailwind-source.mjs`, `cli/dev/serve.mjs`, `cli/scaffold/application.mjs` |
+| [ADR-0138](0138-an-application-may-leave-out-the-collection-and-locales.md) | An application may leave out the collection and locales | accepted | `cli/delivery/build.mjs` |
+| [ADR-0139](0139-an-external-stylesheet-carries-its-authors-pin.md) | An external stylesheet carries its author's pin | accepted | `cli/delivery/build.mjs` |
 
 <!-- /generated:adr-index -->
 

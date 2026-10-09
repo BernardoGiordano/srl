@@ -382,6 +382,7 @@ class ShimBuilder {
     output.write('declare function __boolean(value: boolean): void;\n');
     output.write('declare function __htmlSink(value: string | import("@core/template/types.js").TrustedHtml | null | undefined): void;\n');
     output.write('declare function __styleSink(value: string | import("@core/template/types.js").TrustedStyle | null | undefined): void;\n');
+    output.write('declare function __styleValue(value: string | number | false | null | undefined): void;\n');
     output.write('declare function __urlSink(value: string | URL | import("@core/template/types.js").TrustedUrl | null | undefined): void;\n');
     output.write('declare function __urlSetSink(value: string | import("@core/template/types.js").TrustedUrl | null | undefined): void;\n');
     output.write('declare function __resourceUrlSink(value: import("@core/template/types.js").TrustedResourceUrl | null | undefined): void;\n');
@@ -427,14 +428,6 @@ class ShimBuilder {
         continue;
       }
       const condition = attribute(node, '*if');
-      let alternateIndex = index + 1;
-      let possibleAlternate = nodes[alternateIndex];
-      while (possibleAlternate?.kind === 'text' && possibleAlternate.value.trim() === '') {
-        alternateIndex += 1;
-        possibleAlternate = nodes[alternateIndex];
-      }
-      const next = possibleAlternate;
-      const alternate = next?.kind === 'element' && attribute(next, '*else') !== undefined ? next : undefined;
       if (condition !== undefined && attribute(node, '*for') !== undefined) {
         // The runtime refuses this outright (template.js), rather than picking an
         // order. Silently checking only the *if was the checker's oldest lie.
@@ -452,12 +445,36 @@ class ShimBuilder {
         this.file.write(') {\n');
         this.elementBody(node, scope, indent + 1, new Set(['*if']));
         this.line(indent, '}');
-        if (alternate !== undefined) {
-          this.file.write(' else {\n');
-          this.elementBody(alternate, scope, indent + 1, new Set(['*else']));
-          this.line(indent, '}\n');
-          index = alternateIndex;
-        } else this.file.write('\n');
+
+        // `*else *if` continues the chain as `else if`, and a plain `*else` ends it.
+        let link = alternateAfter(nodes, index);
+        while (link !== undefined) {
+          const { node: alternate } = link;
+          index = link.index;
+          const chained = attribute(alternate, '*if');
+          if (chained === undefined) {
+            this.file.write(' else {\n');
+            this.elementBody(alternate, scope, indent + 1, new Set(['*else']));
+            this.line(indent, '}');
+            break;
+          }
+          if (attribute(alternate, '*for') !== undefined) {
+            this.problem(
+              'templates/for-with-if',
+              alternate.at,
+              `${this.component.template}: <${alternate.tag}> carries both *for and *if. ` +
+                `Wrap one in an element of its own.`,
+            );
+            break;
+          }
+          this.file.write(' else if (');
+          this.expression(chained, scope, false);
+          this.file.write(') {\n');
+          this.elementBody(alternate, scope, indent + 1, new Set(['*else', '*if']));
+          this.line(indent, '}');
+          link = alternateAfter(nodes, index);
+        }
+        this.file.write('\n');
         continue;
       }
       if (attribute(node, '*else') !== undefined) {
@@ -602,6 +619,17 @@ class ShimBuilder {
           );
         } else if (classified.kind === 'reserved-name') {
           this.problem('templates/reserved-name', attr.at, `${this.component.template}: ${classified.reason ?? ''}`);
+        } else if (classified.kind === 'refused') {
+          this.problem('templates/refused-binding', attr.at, `${this.component.template}: ${classified.reason ?? ''}`);
+        } else if (classified.kind === 'class-toggle') {
+          // Any value toggles the class by its truthiness, as in Angular.
+          this.line(indent, 'void (');
+          this.expression({ source: attr.value, at: attr.at }, scope, false);
+          this.file.write(');\n');
+        } else if (classified.kind === 'style-property') {
+          this.line(indent, '__styleValue(');
+          this.expression({ source: attr.value, at: attr.at }, scope, false);
+          this.file.write(');\n');
         } else if (classified.kind === 'empty-attribute' || classified.kind === 'empty-property') {
           this.problem('templates/empty-binding', attr.at, `${this.component.template}: empty ${attr.name} binding`);
         } else if (classified.kind === 'boolean') {
@@ -1052,6 +1080,24 @@ class ShimBuilder {
     this.counter += 1;
     return `__${label.replace(/[^A-Za-z0-9_$]/gu, '_')}_${String(this.counter)}`;
   }
+}
+
+/**
+ * The `*else` element that follows `nodes[index]`, past whitespace, with its index.
+ *
+ * @param {TemplateNode[]} nodes
+ * @param {number} index
+ * @returns {{ node: ElementNode, index: number } | undefined}
+ */
+function alternateAfter(nodes, index) {
+  let at = index + 1;
+  let next = nodes[at];
+  while (next?.kind === 'text' && next.value.trim() === '') {
+    at += 1;
+    next = nodes[at];
+  }
+  if (next?.kind !== 'element' || attribute(next, '*else') === undefined) return undefined;
+  return { node: next, index: at };
 }
 
 /** @param {ElementNode} node @param {string} name */

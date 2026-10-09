@@ -21,8 +21,10 @@ template grammar before the page runs.
 | `[href]="expr"` | Bind an attribute. |
 | `[?disabled]="expr"` | Add or remove a boolean attribute. |
 | `[.limit]="expr"` | Bind a property. Kebab-case names map to camelCase. |
+| `[class.active]="expr"` | Add a class while `expr` is truthy. |
+| `[style.width.%]="expr"` | Set one CSS property, with an optional unit. |
 | `(click)="expr"` | Handle an event with `$event` in scope. |
-| `*if` and `*else` | Render one branch. |
+| `*if`, `*else *if` and `*else` | Render one branch. |
 | `*for="u of users; key: u.id"` | Render keyed items. |
 | `*for="u of users; index as i"` | Name the row index. |
 | `<template *fragment="cell(row of rows)">` | Pass markup to another element. |
@@ -41,6 +43,15 @@ generated from the modules the runtime and the checker read.
 whitespace between them. An `*else` anywhere else is refused. One element
 cannot carry both `*for` and `*if`, so wrap one of them in an element of its
 own.
+
+An element can carry `*else` and `*if` together to continue the chain, which
+covers Angular's `@else if` and `@switch`.
+
+```html
+<p *if="status === 'open'">Open</p>
+<p *else *if="status === 'held'">On hold</p>
+<p *else>Closed</p>
+```
 
 ```html
 <ul>
@@ -88,6 +99,29 @@ strictly. The [reference](../reference/template-dialect.md#expressions) lists
 each construct with the parser's verdict. Templates read public component
 members.
 
+## Classes and styles
+
+`class` and `style` may each have several sources on one element, and the
+compiler joins them into one attribute. ADR-0135.
+
+```html
+<button
+  class="rounded px-3"
+  [class]="tone"
+  [class.opacity-50]="busy"
+  [style.width.%]="progress"
+></button>
+```
+
+`[class]` takes a string, an array of strings, or an object whose truthy keys
+become classes. `[class.name]` adds `name` while its value is truthy, and
+`[style.property.unit]` writes one declaration, left out for null, undefined,
+false or an empty string. The bound attribute is rewritten whole on each
+change, so don't add classes to the same element from script. Write
+Angular's `[attr.aria-label]` as `[aria-label]`.
+
+## Signals in bindings
+
 Signals unwrap during expression evaluation. Use `&` when another element
 needs the signal itself.
 
@@ -127,11 +161,15 @@ attributes reject active schemes. Resource-loading sinks require an explicit
 trusted resource URL. HTML sinks remove active markup. Unsafe event-handler,
 `outerHTML`, prototype, and dynamic style bindings are refused.
 
+A dynamic style may name an image with `url()` when the URL is relative,
+`http:`, `https:`, `blob:` or a base64 image, as an `<img>` binding could load.
+ADR-0136.
+
 SVG animation targets and values must be static. Bindings and interpolation in
 `attributeName`, `attributeType`, `values`, `from`, `to`, and `by` are refused
 because animation can write a different attribute, including an executable URL.
-Dynamic styles containing resources, including `image-set()`, CSS comments, or
-escapes require a reviewed `bypassSecurityTrustStyle` value.
+Dynamic styles containing other resources, including `image-set()`, CSS comments,
+or escapes require a reviewed `bypassSecurityTrustStyle` value.
 
 The same rules apply to interpolated attributes and property bindings. A
 deployment can enforce Trusted Types through its CSP. Review every explicit

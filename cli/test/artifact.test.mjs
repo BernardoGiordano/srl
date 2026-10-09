@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -533,6 +533,54 @@ void test('the default palette is optional, and an application palette is source
       ),
     /artifact:palette:html: .*themePalette=2/u,
   );
+});
+
+void test('the collection stylesheet is optional, and an application icon is kept', () => {
+  const plain = productionDocument(
+    sourceDocument('    <link rel="icon" href="/favicon.ico" />').replace(
+      '    <link rel="stylesheet" href="/components/style.css" />\n',
+      '',
+    ),
+  );
+  assert.match(plain, /<link rel="icon" href="\/favicon\.ico">/u);
+
+  const transform = /** @type {{ handler: (source: string) => { tags: unknown[] } }} */ (
+    /** @type {unknown} */ (productionHtml({ name: 'palette', dir: REPO }).transformIndexHtml)
+  );
+  assert.equal(transform.handler(sourceDocument('    <link rel="icon" href="/favicon.ico" />')).tags.length, 0);
+  // Without an icon of its own the page gets an empty one, so no request 404s.
+  assert.equal(transform.handler(sourceDocument('')).tags.length, 1);
+});
+
+void test('an application without the collection, locales or a local font builds', async () => {
+  // A build refuses modules under a test directory, so the fixture is built from a copy.
+  const dir = await mkdtemp(join(REPO, '.artifact-plain-'));
+  const temporary = await mkdtemp(join(tmpdir(), 'artifact-plain-'));
+  try {
+    await cp(join(REPO, 'cli/test/fixtures/artifact-plain'), dir, { recursive: true });
+    const outDir = join(temporary, 'output');
+    const report = await buildArtifact({ app: { name: 'artifact-plain', dir }, outDir, release: RELEASE });
+
+    const html = await readFile(join(outDir, 'public', 'index.html'), 'utf8');
+    assert.match(html, /<link rel="icon" href="\/assets\/favicon-[A-Za-z0-9_-]{8}\.ico">/u);
+    assert.match(html, /href="https:\/\/fonts\.example\.test\/css\?family=Plain" integrity="sha384-/u);
+    assert.doesNotMatch(html, /rel="icon" href="data:,"/u);
+
+    const manifest = JSON.parse(await readFile(join(outDir, 'public', 'app.manifest.json'), 'utf8'));
+    assert.equal(manifest.i18n, undefined);
+    assert.match(report.security.csp, /style-src 'self' 'unsafe-inline' https:\/\/fonts\.example\.test;/u);
+
+    // The same stylesheet without its pin is bytes nothing checks.
+    const unpinned = (await readFile(join(dir, 'index.html'), 'utf8')).replace(/\s+integrity="[^"]*"/u, '');
+    await writeFile(join(dir, 'index.html'), unpinned);
+    await assert.rejects(
+      buildArtifact({ app: { name: 'artifact-plain', dir }, outDir: join(temporary, 'refused'), release: RELEASE }),
+      /links a stylesheet outside \/assets\/, https:\/\/fonts\.example\.test\/css\?family=Plain, which it can't pin/u,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await rm(temporary, { recursive: true, force: true });
+  }
 });
 
 void test('the manifest announces templates the way the delivery says to', async () => {

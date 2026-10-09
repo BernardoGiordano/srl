@@ -266,7 +266,12 @@ export async function buildArtifact({
       withEntryHints(await readFile(htmlPath, 'utf8'), { entry, chunks, security }),
     );
     await verifyImportMap(app, publicDir, security.importMap.source);
-    const stylesheet = await verifyBrowserRoot(app, publicDir, templates.stylesheets());
+    const stylesheet = await verifyBrowserRoot(
+      app,
+      publicDir,
+      templates.stylesheets(),
+      css.collection,
+    );
     // Last write into the artifact, and before the inventory. The worker names the
     // document's stylesheet, which the check above proves the document loads, and
     // the worker is itself one more file the build hashes, cache-classes and
@@ -405,11 +410,11 @@ export async function composeArtifact({ app, artifactRoot, outDir, force = false
     const security = {
       importMap: { source: importMap, sha256: inlineHash },
       pins: Object.entries(integrity).map(([path, value]) => ({ path, integrity: value })),
-      csp: cspForImportMap(inlineHash),
+      csp: cspForImportMap(inlineHash, externalStyleOrigins(html)),
     };
     // The stylesheet is the bytes the build already proved carry every Element's scoped
     // rules; recomposing Remotes rewrites the import map and the manifest, not the CSS.
-    await verifyBrowserRoot(app, publicDir, []);
+    await verifyBrowserRoot(app, publicDir, [], (await shellFacts(app)).collection);
     const files = verifyPayload(
       app,
       await inventory(stage),
@@ -1040,7 +1045,11 @@ async function emitApplicationManifest(
   const { bundleFiles: _emitted, ...i18n } = /** @type {Record<string, unknown>} */ (
     rest.i18n ?? {}
   );
-  const localized = { ...rest, i18n: { ...i18n, bundleFiles: localeFiles } };
+  // An application without `i18n` keeps none, rather than gaining an empty section.
+  const localized =
+    rest.i18n === undefined && Object.keys(localeFiles).length === 0
+      ? rest
+      : { ...rest, i18n: { ...i18n, bundleFiles: localeFiles } };
   const announced = templateAnnouncement(templates);
   // Three shapes, one per delivery mode, and the artifact says which by the key it
   // carries. `split` says `templateGroups` and nothing else. A flat list is the same
@@ -1312,12 +1321,20 @@ function totalsOf(files) {
  */
 async function productionCss(app, stage, entry) {
   const temporary = join(stage, '.production.css');
-  return compileProductionCss(app, join(app.dir, 'src', 'app.css'), temporary, entry, await shellUtilities(app));
+  const shell = await shellFacts(app);
+  const compiled = await compileProductionCss(app, join(app.dir, 'src', 'app.css'), temporary, entry, {
+    utilities: shell.utilities,
+    collection: shell.collection,
+  });
+  return { ...compiled, collection: shell.collection };
 }
 
 /**
- * The utility classes an application's own shell names, meaning every plain class
- * token on `<html>` and `<body>` in its index.html.
+ * What the compiled stylesheet is checked against, read from the application's
+ * index.html: the utility classes its shell names, and whether it links the
+ * collection's stylesheet.
+ *
+ * The utilities are every plain class token on `<html>` and `<body>`.
  *
  * What the compiled stylesheet is checked against, derived from the application
  * rather than named in this file, because the class one application happens to put
@@ -1333,40 +1350,45 @@ async function productionCss(app, stage, entry) {
  * reproducing Tailwind's escaping here to test something the plain tokens beside
  * them already answer.
  *
+ * An application that renders none of the collection's elements leaves out its
+ * stylesheet, and then the compiled output owes none of the collection's tokens.
+ * ADR-0138.
+ *
  * @param {BuildApplication} app
- * @returns {Promise<string[]>}
+ * @returns {Promise<{ utilities: string[], collection: boolean }>}
  */
-async function shellUtilities(app) {
+async function shellFacts(app) {
   const document = /** @type {HtmlNode} */ (
     /** @type {unknown} */ (parse(await readText(join(app.dir, 'index.html'))))
   );
   /** @type {Set<string>} */
   const names = new Set();
+  let collection = false;
   visitHtml(document, (node) => {
+    if (node.tagName === 'link' && htmlAttribute(node, 'href') === COLLECTION_STYLESHEET) collection = true;
     if (node.tagName !== 'html' && node.tagName !== 'body') return;
     for (const token of (htmlAttribute(node, 'class') ?? '').split(/\s+/u)) {
       if (/^[a-z][a-z0-9-]*$/u.test(token)) names.add(token);
     }
   });
-  return [...names];
+  return { utilities: [...names], collection };
 }
+
+/** The collection's component stylesheet, as index.html links it. */
+const COLLECTION_STYLESHEET = '/components/style.css';
 
 /**
  * @param {BuildApplication} app
  * @param {string} input
  * @param {string} temporary
  * @param {string} entry
- * @param {ReadonlyArray<string>} requiredUtilities
- * @param {string} [sourceBase]
+ * @param {{ utilities: ReadonlyArray<string>, collection: boolean, sourceBase?: string }} expected
+ *   The utilities that prove the scan read the application, whether the collection's
+ *   tokens must be present, and the directory `@source` globs resolve against.
  */
-async function compileProductionCss(
-  app,
-  input,
-  temporary,
-  entry,
-  requiredUtilities,
-  sourceBase = REPO,
-) {
+async function compileProductionCss(app, input, temporary, entry, expected) {
+  const requiredUtilities = expected.utilities;
+  const sourceBase = expected.sourceBase ?? REPO;
   const cli = await requireTailwind(app);
   try {
     await execFileAsync(cli, ['-i', input, '-o', temporary, '--minify', '--cwd', sourceBase], {
@@ -1396,7 +1418,7 @@ async function compileProductionCss(
     requiredUtilities.some((name) => source.includes(`.${name}`));
   const problems = [
     ...(source.length === 0 ? ['empty'] : []),
-    ...(!source.includes('--ui-color-canvas') ? ['shared tokens'] : []),
+    ...(expected.collection && !source.includes('--ui-color-canvas') ? ['shared tokens'] : []),
     ...(scanned ? [] : [`none of the application's own utilities: ${requiredUtilities.join(', ')}`]),
     ...(source.includes('@source') ? ['@source directive'] : []),
     ...(source.includes('tailwind-browser') ? ['browser compiler marker'] : []),
@@ -1548,14 +1570,11 @@ async function productionRemoteCss(app, remoteDir, stage, entry) {
   // Not the shell's classes, because this stylesheet is compiled from one remote's
   // sources alone and the body the shell renders is not among them. What every
   // remote in the collection does draw is muted text.
-  const compiled = await compileProductionCss(
-    app,
-    input,
-    temporary,
-    entry,
-    ['text-muted'],
-    remoteDir,
-  );
+  const compiled = await compileProductionCss(app, input, temporary, entry, {
+    utilities: ['text-muted'],
+    collection: true,
+    sourceBase: remoteDir,
+  });
   return { ...compiled, input };
 }
 
@@ -1614,6 +1633,7 @@ export function productionHtml(app) {
         let entry = 0;
         let root = 0;
         let noscript = 0;
+        let icon = false;
 
         visitHtml(document, (node) => {
           if (node.tagName === 'script' && htmlAttribute(node, 'type') === 'module') {
@@ -1621,11 +1641,14 @@ export function productionHtml(app) {
           }
           if (node.tagName === 'app-root') root += 1;
           if (node.tagName === 'noscript') noscript += 1;
+          if (node.tagName === 'link' && /(?:^|\s)icon(?:\s|$)/u.test(htmlAttribute(node, 'rel') ?? '')) {
+            icon = true;
+          }
         });
         pruneHtml(document, (node) => {
           if (node.nodeName === '#comment') return true;
           if (htmlAttribute(node, 'data-artifact') === 'source-only') return true;
-          if (node.tagName === 'link' && htmlAttribute(node, 'href') === '/components/style.css') {
+          if (node.tagName === 'link' && htmlAttribute(node, 'href') === COLLECTION_STYLESHEET) {
             removed.theme += 1;
             return true;
           }
@@ -1660,8 +1683,10 @@ export function productionHtml(app) {
         });
 
         const facts = { ...removed, entry, root, noscript };
+        // The collection's stylesheet and its palette are optional, for an application
+        // that renders none of the collection. ADR-0138.
         const drift = Object.entries(facts).filter(
-          ([name, count]) => count !== 1 && !(name === 'themePalette' && count === 0),
+          ([name, count]) => count !== 1 && !((name === 'theme' || name === 'themePalette') && count === 0),
         );
         if (drift.length > 0) {
           throw artifactError(
@@ -1672,15 +1697,19 @@ export function productionHtml(app) {
               .join(', ')}.`,
           );
         }
+        // An empty icon spares the browser a `/favicon.ico` request that would 404,
+        // unless the application names its own, which the build emits as an asset.
         return {
           html: serialize(/** @type {never} */ (document)),
-          tags: [
-            {
-              tag: 'link',
-              attrs: { rel: 'icon', href: 'data:,' },
-              injectTo: 'head',
-            },
-          ],
+          tags: icon
+            ? []
+            : [
+                {
+                  tag: 'link',
+                  attrs: { rel: 'icon', href: 'data:,' },
+                  injectTo: 'head',
+                },
+              ],
         };
       },
     },
@@ -1736,7 +1765,7 @@ function htmlAttribute(node, name) {
  * Every declared bundle must exist. The runtime tolerates a missing one, because a
  * half-translated locale is a normal state while translating, but an artifact that
  * shipped without a file its own manifest names would tolerate it silently,
- * forever.
+ * forever. A manifest without `i18n` declares none, and the artifact carries none.
  *
  * @param {BuildApplication} app
  * @param {string} publicDir
@@ -1770,9 +1799,6 @@ async function emitLocaleFiles(app, publicDir, i18n) {
       await writeWithin(publicDir, path, source);
       files[url] = `/${path}`;
     }
-  }
-  if (Object.keys(files).length === 0) {
-    throw artifactError(app, 'runtime', 'admitted manifest names no locale data.');
   }
   return files;
 }
@@ -1840,13 +1866,23 @@ async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) 
       stylesheets.push(node);
     }
   });
+  /** @type {string[]} */
+  const styleOrigins = [];
   for (const link of stylesheets) {
     const href = htmlAttribute(link, 'href');
+    // Another origin's stylesheet, such as a font service's, carries the author's own
+    // pin, which the browser checks. Its bytes never pass through this build. ADR-0139.
+    const external = externalStylesheet(link);
+    if (external !== null) {
+      styleOrigins.push(external);
+      continue;
+    }
     if (href === undefined || !href.startsWith('/assets/')) {
       throw artifactError(
         app,
         'security',
-        `production HTML links a stylesheet outside /assets/, ${String(href)}, which it can't pin.`,
+        `production HTML links a stylesheet outside /assets/, ${String(href)}, which it can't pin. ` +
+          'A stylesheet on another https origin passes with its own integrity and crossorigin attributes.',
       );
     }
     const digest = await sri384(within(publicDir, href.slice(1)));
@@ -1895,10 +1931,48 @@ async function emitSecurity(app, publicDir, chunks, shared, pins, remoteAssets) 
     security: {
       importMap: { source: importMap, sha256: inlineHash },
       pins: Object.entries(integrity).map(([path, value]) => ({ path, integrity: value })),
-      csp: cspForImportMap(inlineHash),
+      csp: cspForImportMap(inlineHash, styleOrigins),
     },
     integrity,
   };
+}
+
+/**
+ * The origin of a stylesheet linked from another https origin with the author's
+ * integrity pin, or null for any other link.
+ *
+ * Both attributes are required. Without `integrity` nothing pins the bytes, and
+ * without `crossorigin` the browser cannot check the pin on a response from another
+ * origin and refuses the stylesheet.
+ *
+ * @param {HtmlNode} link
+ * @returns {string | null}
+ */
+function externalStylesheet(link) {
+  const href = htmlAttribute(link, 'href');
+  if (href === undefined || !/^https:\/\//u.test(href)) return null;
+  const integrity = htmlAttribute(link, 'integrity') ?? '';
+  if (!/^sha(?:256|384|512)-[A-Za-z0-9+/]+=*$/u.test(integrity)) return null;
+  if (htmlAttribute(link, 'crossorigin') === undefined) return null;
+  return new URL(href).origin;
+}
+
+/**
+ * The origins of the document's author-pinned external stylesheets, for its CSP.
+ *
+ * @param {string} html
+ * @returns {string[]}
+ */
+function externalStyleOrigins(html) {
+  const document = /** @type {HtmlNode} */ (/** @type {unknown} */ (parse(html)));
+  /** @type {string[]} */
+  const origins = [];
+  visitHtml(document, (node) => {
+    if (node.tagName !== 'link' || htmlAttribute(node, 'rel') !== 'stylesheet') return;
+    const origin = externalStylesheet(node);
+    if (origin !== null) origins.push(origin);
+  });
+  return origins;
 }
 
 /** @param {string} source */
@@ -1906,11 +1980,17 @@ function importMapHash(source) {
   return `sha256-${createHash('sha256').update(source, 'utf8').digest('base64')}`;
 }
 
-/** @param {string} inlineHash */
-function cspForImportMap(inlineHash) {
+/**
+ * @param {string} inlineHash
+ * @param {readonly string[]} [styleOrigins] origins of author-pinned external
+ *   stylesheets. What such a stylesheet loads in turn, such as fonts, needs its own
+ *   directive, which the build cannot see.
+ */
+function cspForImportMap(inlineHash, styleOrigins = []) {
+  const styles = [...new Set(styleOrigins)].map((origin) => ` ${origin}`).join('');
   return (
     `default-src 'self'; script-src 'self' '${inlineHash}' ${PROBE_CSP}; ` +
-    `style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; ` +
+    `style-src 'self' 'unsafe-inline'${styles}; img-src 'self' data:; connect-src 'self'; ` +
     `object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; ` +
     `trusted-types lit-html ui-test ui-test-template srl-worker; require-trusted-types-for 'script'`
   );
@@ -1982,9 +2062,11 @@ async function verifyImportMap(app, publicDir, source) {
  * @param {BuildApplication} app
  * @param {string} publicDir
  * @param {readonly string[]} styled the Elements whose scoped rules the graph imported
+ * @param {boolean} collection the application links the collection's stylesheet, so
+ *   its tokens must be in the compiled one. ADR-0138.
  * @returns {Promise<string | null>} the stylesheet's URL, or null for a document with none
  */
-async function verifyBrowserRoot(app, publicDir, styled) {
+async function verifyBrowserRoot(app, publicDir, styled, collection) {
   const html = await readFile(join(publicDir, 'index.html'), 'utf8');
   const forbidden = [
     'tailwind-browser',
@@ -2019,7 +2101,7 @@ async function verifyBrowserRoot(app, publicDir, styled) {
     throw artifactError(app, 'verify', `production HTML does not load ${relativeCss}.`);
   }
   const css = await readFile(cssPath, 'utf8');
-  if (!css.includes('--ui-color-canvas') || css.includes('@source') || css.includes('@import')) {
+  if ((collection && !css.includes('--ui-color-canvas')) || css.includes('@source') || css.includes('@import')) {
     throw artifactError(app, 'verify', 'production stylesheet lost tokens or retains build directives.');
   }
   verifyScopedRules(app, css, styled);

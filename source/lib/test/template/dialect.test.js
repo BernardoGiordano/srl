@@ -45,6 +45,22 @@ describe('template dialect', () => {
     assert.equal(shape('.'), 'empty-property:');
   });
 
+  it("classifies Angular's class and style bindings and refuses its attr prefix", () => {
+    /** @param {string} target */
+    const shape = (target) => {
+      const { kind, name, unit } = classifyBindingTarget(target);
+      return `${kind}:${name}${unit === undefined ? '' : `:${unit}`}`;
+    };
+    assert.equal(shape('class.py-1.5'), 'class-toggle:py-1.5');
+    assert.equal(shape('style.width.%'), 'style-property:width:%');
+    assert.equal(shape('style.--accent'), 'style-property:--accent');
+    assert.equal(classifyBindingTarget('class.').kind, 'empty-attribute');
+    assert.equal(classifyBindingTarget('style.width.%.px').kind, 'refused');
+    const attr = classifyBindingTarget('attr.aria-label');
+    assert.equal(attr.kind, 'refused');
+    assert.includes(attr.reason ?? '', 'Write [aria-label]');
+  });
+
   it('reserves every name lit would read as its own binding syntax', () => {
     // Each of these would let lit bind a sink the compiler never classified.
     for (const name of ['.srcdoc', '?hidden', '@click', 'title$lit$', 'a"b', "a'b", '=x']) {

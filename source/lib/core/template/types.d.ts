@@ -15,16 +15,24 @@ export type BindingKind =
   | 'attribute'
   | 'boolean'
   | 'property'
+  | 'class-toggle'
+  | 'style-property'
   | 'empty-attribute'
   | 'empty-property'
   | 'inline-handler'
-  | 'reserved-name';
+  | 'reserved-name'
+  | 'refused';
 
 export interface TargetClassification {
   readonly kind: BindingKind;
-  /** Camel-cased for `property`, stripped of `?` for `boolean`, empty for the errors. */
+  /**
+   * Camel-cased for `property`, stripped of `?` for `boolean`, the class token for
+   * `class-toggle`, the CSS property for `style-property`, empty for the errors.
+   */
   readonly name: string;
-  /** Why the name is refused. Set only for `reserved-name`. */
+  /** The unit a `style-property` value is written with, such as `%` or `px`. */
+  readonly unit?: string;
+  /** Why the name is refused. Set only for `reserved-name` and `refused`. */
   readonly reason?: string;
 }
 
@@ -67,6 +75,8 @@ export type TemplateFragment = (...args: readonly unknown[]) => unknown;
 export interface TemplateChunks {
   readonly strings: TemplateStringsArray;
   readonly values: readonly Evaluator[];
+  /** The markup sits inside `<svg>`, so lit parses it as SVG rather than HTML. */
+  readonly svg: boolean;
 }
 
 /** Result of compiling a `.html` file. Returns a lit `TemplateResult`. */

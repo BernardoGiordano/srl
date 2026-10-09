@@ -7,6 +7,9 @@
 | `templateUrl` | derived: the sibling `.html` of the module in `defineComponent` |
 | `{{ }}` / `[prop]` / `(event)` | same, plus `[?attr]` and `[.prop]` |
 | `*ngIf` / `*ngFor` / `trackBy` | `*if` + `*else` / `*for` / `; key:` |
+| `@else if` / `@switch` + `@case` | `*else *if`, chained |
+| `[class.active]` / `[style.width.%]` | the same, joined with a static `class` or `style` |
+| `[attr.aria-label]` | `[aria-label]` |
 | `imports: [...]` | `uses: [UiCard]` in the component's definition |
 | `inject()` / providers | `@core/foundation/inject.js`, root scope only |
 | `DestroyRef` | `this.lifetime`, a DOM `AbortSignal` |

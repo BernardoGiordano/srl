@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <title>plain</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.example.test/css?family=Plain"
+      integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"
+      crossorigin="anonymous"
+    />
+    <script type="importmap">
+      {
+        "imports": {
+          "lit": "/lib/vendor/lit-all.min.js",
+          "lit/async-directive.js": "/lib/vendor/lit-all.min.js",
+          "lit/directives/repeat.js": "/lib/vendor/lit-all.min.js",
+          "@preact/signals-core": "/lib/vendor/signals-core.mjs",
+          "@core/": "/lib/core/",
+          "@auth/": "/lib/auth/",
+          "@host/": "/lib/host/",
+          "@components/": "/components/"
+        }
+      }
+    </script>
+    <script src="/lib/vendor/tailwind-browser.js"></script>
+    <style type="text/tailwindcss" data-source="src/app.css"></style>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body class="h-full">
+    <app-root></app-root>
+    <noscript>This application needs JavaScript.</noscript>
+  </body>
+</html>

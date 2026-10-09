@@ -41,6 +41,9 @@
  *                 `prefetchTemplates`. The only difference between development and
  *                 production is which module wrote the list.
  *                 `cli/delivery/source-manifest.mjs`.
+ *   styles        an empty `<style type="text/tailwindcss" data-source="src/app.css">`
+ *                 is filled with that stylesheet, so the browser compiler reads the
+ *                 file the build compiles. `cli/dev/tailwind-source.mjs`. ADR-0137.
  *   revalidation  `no-cache` rather than the origin's `no-store` default, which
  *                 turns a reload's forty module bodies and fifty templates into
  *                 304s. `cli/origin/` sends the `ETag` and answers the
@@ -63,6 +66,7 @@ import { fileURLToPath } from 'node:url';
 
 import { templateAnnouncer } from '../delivery/source-manifest.mjs';
 import { printable } from '../diagnostics/index.mjs';
+import { inlineTailwindSource } from './tailwind-source.mjs';
 import { startUpdateSession } from './updates.mjs';
 import { REPO, selectedApp } from '../layout.mjs';
 import { admitsHost, serveOrigin } from '../origin/index.mjs';
@@ -325,14 +329,18 @@ export async function serveApplication(options) {
 
       /**
        * Two documents are not the file on disk. The entry carries the reload
-       * client while watching, and the manifest carries the template list the build
-       * would have written. Every other byte is streamed.
+       * client while watching and its Tailwind input filled from `src/app.css`, and
+       * the manifest carries the template list the build would have written. Every
+       * other byte is streamed.
        */
       transform: async (file) => {
         if (file === manifest.file) return manifest.representation();
-        if (updates === null || file !== entryDocument) return null;
-        const html = await readFile(file, 'utf8');
-        return { body: Buffer.from(updates.inject(html), 'utf8') };
+        if (file !== entryDocument) return null;
+        const source = await readFile(file, 'utf8');
+        const inlined = await inlineTailwindSource(source, app.dir);
+        if (updates === null && inlined === null) return null;
+        const html = inlined ?? source;
+        return { body: Buffer.from(updates === null ? html : updates.inject(html), 'utf8') };
       },
 
       route: async (request, response, url) => {

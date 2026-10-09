@@ -262,11 +262,22 @@ export function classifyAttributeName(name) {
 }
 
 /**
+ * A `[style.…]` target after the prefix: a CSS property, then an optional unit.
+ *
+ *     [style.width.%]          width, written with %
+ *     [style.background-image] background-image, written as is
+ *     [style.--accent]         a custom property
+ */
+const STYLE_TARGET = /^(--[A-Za-z0-9_-]+|-?[a-z][a-z0-9-]*)(?:\.(%|[a-z]+))?$/u;
+
+/**
  * Classify what is inside a binding's brackets, such as `href`, `?disabled` or
  * `.max-rows`.
  *
  * `property` carries the camelCased name. `boolean` carries the name without `?`,
- * because a known boolean attribute is boolean either way.
+ * because a known boolean attribute is boolean either way. `class-toggle` carries the
+ * token `[class.name]` adds, and `style-property` the CSS property `[style.name.unit]`
+ * writes. ADR-0135.
  *
  * @param {string} target
  * @returns {TargetClassification}
@@ -274,6 +285,38 @@ export function classifyAttributeName(name) {
  */
 export function classifyBindingTarget(target) {
   if (target === '') return { kind: 'empty-attribute', name: '' };
+
+  if (target.startsWith('class.')) {
+    const token = target.slice('class.'.length);
+    return token === '' ? { kind: 'empty-attribute', name: '' } : { kind: 'class-toggle', name: token };
+  }
+
+  if (target.startsWith('style.')) {
+    const parsed = STYLE_TARGET.exec(target.slice('style.'.length));
+    if (parsed?.[1] === undefined) {
+      return {
+        kind: 'refused',
+        name: target,
+        reason:
+          `[${target}] names no CSS property. Write [style.property] or ` +
+          '[style.property.unit], such as [style.width.%].',
+      };
+    }
+    return parsed[2] === undefined
+      ? { kind: 'style-property', name: parsed[1] }
+      : { kind: 'style-property', name: parsed[1], unit: parsed[2] };
+  }
+
+  if (target.startsWith('attr.')) {
+    const attribute = target.slice('attr.'.length);
+    return {
+      kind: 'refused',
+      name: target,
+      reason:
+        `[${target}] is Angular's spelling. Write [${attribute}], which sets the ` +
+        'attribute and removes it for null or undefined.',
+    };
+  }
 
   // `.onclick` doesn't match here. It is classified as a property and refused later
   // by name.
