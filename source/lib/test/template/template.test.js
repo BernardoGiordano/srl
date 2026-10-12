@@ -631,6 +631,39 @@ describe('template compiler', () => {
     );
   });
 
+  it('pipes in interpolations, attributes and a *for list', () => {
+    paint(
+      '<p [title]="name | upper">{{ name | upper }}</p>' +
+        '<ul><li *for="user of users | take:2; key: user.id">{{ user.name | upper }}</li></ul>',
+      {
+        name: 'ada',
+        users: [
+          { id: '1', name: 'ada' },
+          { id: '2', name: 'grace' },
+          { id: '3', name: 'hedy' },
+        ],
+        /** @param {string} value */
+        upper: (value) => value.toUpperCase(),
+        /** @param {unknown[]} list @param {number} count */
+        take: (list, count) => list.slice(0, count),
+      },
+    );
+    const paragraph = present(host.querySelector('p'));
+    assert.equal(paragraph.textContent, 'ADA');
+    assert.equal(paragraph.getAttribute('title'), 'ADA');
+    assert.sameArray(
+      [...host.querySelectorAll('li')].map((li) => li.textContent),
+      ['ADA', 'GRACE'],
+    );
+  });
+
+  it('refuses a pipe in an event binding', () => {
+    assert.throws(
+      () => compileTemplate('<button (click)="pick(row | upper)"></button>', 'test'),
+      'An event binding may not pipe',
+    );
+  });
+
   it('nests *for and sees outer loop variables', () => {
     paint(
       '<div *for="group of groups"><span *for="n of group.items">{{ group.name }}{{ n }}</span></div>',

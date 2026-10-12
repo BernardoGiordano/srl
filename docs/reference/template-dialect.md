@@ -111,7 +111,7 @@ A binding holds one expression. An event binding may also assign.
 | 6 | `\|\|` |
 | 7 | `??` |
 
-Level 1 binds tightest. The prefix operators are `!`, `&`, `-`, and they bind tighter than every binary operator. A conditional `a ? b : c` binds loosest. `&` passes a signal without reading it.
+Level 1 binds tightest. The prefix operators are `!`, `&`, `-`, and they bind tighter than every binary operator. A conditional `a ? b : c` binds looser than every binary operator, and a pipe `a | name:arg` binds loosest of all. `&` passes a signal without reading it.
 
 The word literals are `true`, `false`, `null`, `undefined`. Numbers are decimal, and strings take single or double quotes.
 
@@ -134,13 +134,16 @@ The word literals are `true`, `false`, `null`, `undefined`. Numbers are decimal,
 | Array literal | `[first, second]` | yes | yes |
 | Object literal | `{ id: row.id, 'aria-label': label }` | yes | yes |
 | Signal reference | `&panel` | yes | yes |
+| Pipe | `created \| dt` | yes | no, `templates/expression-syntax` |
+| Pipe with arguments | `price \| cur:'EUR'` | yes | no, `templates/expression-syntax` |
 | Assignment | `selected = row` | no, `templates/expression-assignment` | yes |
+| Nested assignment | `log(selected = row)` | no, `templates/expression-assignment` | yes |
 | Compound assignment | `count += 1` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | Increment | `count++` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | Arrow function | `(item) => item.id` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | `new` | `new Date()` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | Template literal | `` `Hello ${name}` `` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
-| Bitwise operator | `flags \| mask` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
+| Bitwise operator | `flags ^ mask` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | `typeof` | `typeof value` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | `in` | `'id' in row` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | Unary plus | `+value` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
@@ -153,6 +156,13 @@ The word literals are `true`, `false`, `null`, `undefined`. Numbers are decimal,
 | Reserved member | `user.constructor` | no, `templates/expression-member` | no, `templates/expression-member` |
 
 <!-- /generated:dialect-expressions -->
+
+A pipe is a call. `value | name:a:b` calls `name(value, a, b)`, and `a | f | g` calls
+`g(f(a))`. The name resolves like any other name, so a template global or a public
+component method can stand there. Each argument after `:` is a conditional, so
+`a ? b : c` needs no parentheses there. A pipe may end the whole binding, or any
+expression inside parentheses, brackets or braces. A pipe inside a branch of a
+conditional needs parentheses. An event binding may not pipe. ADR-0140.
 
 No expression may read, call, write or build a key with these member names. The
 parser refuses them when they are written out, and the evaluator refuses them when a

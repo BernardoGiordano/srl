@@ -110,6 +110,7 @@ Numbers are permanent and never reused, so the index has gaps.
 | [ADR-0137](0137-the-dev-server-fills-the-tailwind-input-from-app-css.md) | The dev server fills the Tailwind input from `app.css` | accepted | `cli/dev/tailwind-source.mjs`, `cli/dev/serve.mjs`, `cli/scaffold/application.mjs` |
 | [ADR-0138](0138-an-application-may-leave-out-the-collection-and-locales.md) | An application may leave out the collection and locales | accepted | `cli/delivery/build.mjs` |
 | [ADR-0139](0139-an-external-stylesheet-carries-its-authors-pin.md) | An external stylesheet carries its author's pin | accepted | `cli/delivery/build.mjs` |
+| [ADR-0140](0140-a-pipe-is-a-call.md) | A pipe is a call | accepted | `source/lib/core/template/expression-parser.js`, `cli/message-catalog/index.mjs`, `tools/checks/dialect-reference.mjs` |
 
 <!-- /generated:adr-index -->
 

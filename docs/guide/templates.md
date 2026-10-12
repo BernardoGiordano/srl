@@ -24,6 +24,7 @@ template grammar before the page runs.
 | `[class.active]="expr"` | Add a class while `expr` is truthy. |
 | `[style.width.%]="expr"` | Set one CSS property, with an optional unit. |
 | `(click)="expr"` | Handle an event with `$event` in scope. |
+| `{{ value \| dt:options }}` | Pipe `value` through `dt`, as `dt(value, options)`. |
 | `*if`, `*else *if` and `*else` | Render one branch. |
 | `*for="u of users; key: u.id"` | Render keyed items. |
 | `*for="u of users; index as i"` | Name the row index. |
@@ -91,13 +92,40 @@ whitespace on the element itself.
 ## Expression language
 
 Bindings use a parser and evaluator instead of `eval`. They support member
-access, optional chaining, calls, arithmetic, comparisons, ternaries, logical
-operators, arrays, and objects. Only an event binding may assign, and only
+access, optional chaining, calls, pipes, arithmetic, comparisons, ternaries,
+logical operators, arrays, and objects. Only an event binding may assign, and only
 with `=`. Arrow functions, `new`, template literals, bitwise operators,
 `typeof`, `in`, `++`, `+=`, and spread are refused. `==` and `!=` compare
 strictly. The [reference](../reference/template-dialect.md#expressions) lists
 each construct with the parser's verdict. Templates read public component
 members.
+
+## Pipes
+
+A pipe is another way to write a call. The value on the left becomes the first
+argument, and each `:` adds one more.
+
+```html
+<td>{{ order.placed | dt }}</td>
+<td>{{ order.total | cur:order.currency }}</td>
+<td>{{ order.note | trim | truncate:40 }}</td>
+<li *for="order of orders | take:10; key: order.id">…</li>
+```
+
+The second line calls `cur(order.total, order.currency)`. The third calls
+`truncate(trim(order.note), 40)`, which reads in the order the text is
+transformed. Here `trim`, `truncate` and `take` are methods on the component.
+
+Any function the template can name works as a pipe. The localization helpers
+`t`, `num`, `cur`, `dt` and `rel` are template globals, and a public method on
+the component works too. There is no pipe class to declare. A binding re-runs
+only when a signal it read changes, so a pipe needs no purity flag to stay
+cheap.
+
+A pipe binds looser than every other operator, so `a + b | upper` pipes the sum
+and `open ? 'Hide' : 'Show' | upper` pipes the conditional's result. Put a pipe
+inside a conditional's branch in parentheses. Event bindings refuse pipes, so
+call the function there. ADR-0140.
 
 ## Classes and styles
 

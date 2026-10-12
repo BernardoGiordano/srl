@@ -254,6 +254,39 @@ void test('a negated numeric literal keeps its literal type', () => {
   assert.deepEqual(check('<span>{{ -rows.length }}</span>'), []);
 });
 
+void test('checks a pipe as the call it stands for', () => {
+  assert.deepEqual(
+    check(`
+      <p>{{ rows.length | choose }}</p>
+      <p *for="row of rows | take:2; key: row.id">{{ row.name }}</p>
+    `),
+    [],
+  );
+  assert.match(check('<p>{{ label | choose }}</p>').join('\n'), /not assignable to parameter of type 'number'/u);
+  assert.match(check("<p>{{ rows | take:'2' }}</p>").join('\n'), /not assignable to parameter of type 'number'/u);
+  assert.match(check('<p *for="row of rows | take:2">{{ row.missing }}</p>').join('\n'), /missing/u);
+});
+
+void test('places a finding about a pipe on its name', () => {
+  const source = '<p>{{ label | nope }}</p>';
+  const found = checkTemplateSource({
+    module,
+    className: 'TemplateCheckHost',
+    template: 'fixture.html',
+    source,
+    elements: child,
+  });
+
+  // An unknown callee is reported where it is written, as `nope(label)` is.
+  const atName = found.find((diagnostic) => diagnostic.column === source.indexOf('nope') + 1);
+  assert.equal(atName?.line, 1);
+  assert.match(atName?.message ?? '', /nope/u);
+});
+
+void test('refuses a pipe in an event binding', () => {
+  assert.match(check('<button (click)="choose(rows.length | take)"></button>').join('\n'), /may not pipe/u);
+});
+
 void test('a finding carries the code, file, line and column an editor needs', () => {
   const source = ['<p>{{ label }}</p>', '<p>{{ rows.lenght }}</p>', ''].join('\n');
   const [found, ...rest] = checkTemplateSource({
@@ -321,6 +354,7 @@ void test('each dialect refusal carries a code of its own', () => {
     ['templates/unknown-attribute', '<test-child labell="x"></test-child>'],
     ['templates/expression-syntax', '<p>{{ rows + }}</p>'],
     ['templates/expression-assignment', '<p>{{ rows = 1 }}</p>'],
+    ['templates/expression-assignment', '<test-child [.items]="(rows = [])"></test-child>'],
     ['templates/expression-member', '<p>{{ rows.constructor }}</p>'],
     ['templates/unknown-element', '<mystery-widget></mystery-widget>'],
   ]);

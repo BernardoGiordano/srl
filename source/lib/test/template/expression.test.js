@@ -217,6 +217,34 @@ describe('expression language', () => {
     );
   });
 
+  it('refuses an assignment nested anywhere outside an event binding', () => {
+    // In an interpolation this would write on every render.
+    const host = { selected: 'kept', row: 'other' };
+    assert.throws(
+      () => compileExpression('(selected = row)', 'test')({ host, locals: {}, version: 0 }),
+      'Only an event binding may assign',
+    );
+    assert.equal(host.selected, 'kept');
+
+    const nested = ['(x = 1)', 'f(x = 1)', 'rows[x = 1]', '[x = 1]', '{ key: x = 1 }', 'a ? x = 1 : b', 'a ? b : x = 1'];
+    for (const source of nested) {
+      /** @type {unknown} */
+      let refused;
+      try {
+        parseExpression(source, 'test', { allowAssignment: false });
+      } catch (error) {
+        refused = error;
+      }
+      assert.equal(refused instanceof ExpressionError && refused.code, 'templates/expression-assignment', source);
+
+      // An event binding may assign in the same position.
+      parseExpression(source, 'test', { allowAssignment: true });
+    }
+
+    // A pipe argument, which an event binding cannot hold.
+    assert.throws(() => parseExpression('rows | f:(x = 1)', 'test'), 'Only an event binding may assign');
+  });
+
   it('names each parse refusal with the code the template checker reports', () => {
     /** @param {string} source @param {boolean} allowAssignment @returns {string | undefined} */
     const refusal = (source, allowAssignment) => {
@@ -330,5 +358,124 @@ describe('expression language', () => {
 
   it('says what was called when a non-function is called', () => {
     assert.throws(() => evaluate('x()', { x: 4 }), '"x" is not a function, it is a number');
+  });
+});
+
+/**
+ * Pipes. The parser turns `value | name:arg` into the call `name(value, arg)`, so these
+ * tests pin the shape of that call and the places a pipe may stand. Evaluation is the
+ * call path the tests above already cover.
+ */
+describe('pipes', () => {
+  /**
+   * @param {string} source
+   * @param {Record<string, unknown>} [host]
+   * @returns {unknown}
+   */
+  function read(source, host = {}) {
+    return compileExpression(source, 'test')({ host, locals: {}, version: 0 });
+  }
+
+  const host = {
+    name: '  ada  ',
+    items: ['a', 'b', 'c', 'd'],
+    /** @param {string} value */
+    trim: (value) => value.trim(),
+    /** @param {string} value */
+    upper: (value) => value.toUpperCase(),
+    /** @param {unknown[]} list @param {number} start @param {number} end */
+    slice: (list, start, end) => list.slice(start, end),
+    /** @param {unknown} value @param {string} before @param {string} after */
+    wrap: (value, before, after) => `${before}${String(value)}${after}`,
+  };
+
+  it('is a call with the piped value first', () => {
+    assert.equal(
+      JSON.stringify(parseExpression('created | dt:options', 'test')),
+      JSON.stringify({
+        kind: 'call',
+        callee: { kind: 'name', name: 'dt', at: 10 },
+        args: [
+          { kind: 'name', name: 'created', at: 0 },
+          { kind: 'name', name: 'options', at: 13 },
+        ],
+      }),
+    );
+  });
+
+  it('chains from left to right', () => {
+    assert.equal(read('name | trim | upper', host), 'ADA');
+  });
+
+  it('passes each argument after a colon', () => {
+    assert.sameArray(/** @type {unknown[]} */ (read('items | slice:1:3', host)), ['b', 'c']);
+    assert.equal(read("name | trim | wrap:'[':']'", host), '[ada]');
+  });
+
+  it('binds looser than every other operator', () => {
+    assert.equal(read("'a' + 'b' | upper", host), 'AB');
+    assert.equal(read("true ? 'yes' : 'no' | upper", host), 'YES');
+    assert.equal(read("false ? 'yes' : 'no' | upper", host), 'NO');
+  });
+
+  it('takes a conditional as an argument without parentheses', () => {
+    assert.equal(read("1 | wrap:true ? '<' : '(':'>'", host), '<1>');
+  });
+
+  it('ends any expression a bracket, brace or parenthesis delimits', () => {
+    assert.equal(read('(items | slice:0:2).length', host), 2);
+    assert.equal(read("wrap(name | trim, '<', '>')", host), '<ada>');
+    assert.sameArray(/** @type {unknown[]} */ (read('[name | trim, 1]', host)), ['ada', 1]);
+    assert.equal(/** @type {{ who: string }} */ (read('{ who: name | trim }', host)).who, 'ada');
+    assert.equal(read("items[0 | wrap:'':'']", { ...host, items: ['zero'] }), 'zero');
+  });
+
+  it('unwraps a piped signal before the call', () => {
+    assert.equal(read('name | upper', { ...host, name: signal('ada') }), 'ADA');
+  });
+
+  it('calls a component method with the component as receiver', () => {
+    const owner = {
+      suffix: '!',
+      /** @param {string} value @this {{ suffix: string }} */
+      shout(value) {
+        return value + this.suffix;
+      },
+    };
+    assert.equal(read("'hi' | shout", owner), 'hi!');
+  });
+
+  it('calls the template globals', () => {
+    assert.equal(read("1234.5 | num:{ maximumFractionDigits: 0 }"), read('num(1234.5, { maximumFractionDigits: 0 })'));
+  });
+
+  it('leaves || as one operator', () => {
+    assert.equal(read("'' || 'b'"), 'b');
+  });
+
+  it('refuses a pipe in an event binding', () => {
+    assert.throws(
+      () => compileExpression('selected = row | trim', 'test', { allowAssignment: true }),
+      'An event binding may not pipe',
+    );
+    assert.throws(
+      () => compileExpression('save((row | trim))', 'test', { allowAssignment: true }),
+      'An event binding may not pipe',
+    );
+  });
+
+  it('refuses a pipe without a name', () => {
+    for (const source of ['a |', 'a | 1', 'a | true', "a | 'upper'", 'a | (upper)']) {
+      assert.throws(() => read(source), 'Expected a pipe name');
+    }
+  });
+
+  it('refuses a pipe inside a ternary branch without parentheses', () => {
+    assert.throws(() => read("true ? name | upper : 'no'", host), 'Expected ":"');
+    assert.equal(read("true ? (name | trim) : 'no'", host), 'ada');
+  });
+
+  it('cannot reach a reserved member through the pipe name', () => {
+    assert.throws(() => read('x | constructor', { x: 1 }));
   });
 });

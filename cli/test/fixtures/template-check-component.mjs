@@ -18,6 +18,19 @@ export class TemplateCheckHost extends HTMLElement {
   }
 
   /**
+   * A pipe over any list. The element type passes through, so a `*for` that pipes its
+   * list still types its rows.
+   *
+   * @template T
+   * @param {T[]} items
+   * @param {number} count
+   * @returns {T[]}
+   */
+  take(items, count) {
+    return items.slice(0, count);
+  }
+
+  /**
    * A move-up/move-down pair, typed the ordinary way. The literal union is the
    * point: `-1` satisfies it only if the checker emits the minus against the
    * literal itself.

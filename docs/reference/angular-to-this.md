@@ -29,6 +29,8 @@
 | `HttpInterceptor` | `AuthSession.fetch()` / `.json()`, `@auth/session.js` |
 | A shared service injected into a remote | `mount(host)`, a frozen capability object |
 | `$localize` (build-time, one bundle per locale) | `t()` (runtime, one deployment) |
+| `{{ value \| pipe:arg }}` | the same syntax, as the call `pipe(value, arg)`. Event bindings refuse it, as Angular's do |
+| `@Pipe` / `PipeTransform` | any template global or public component method; no class, no `pure` flag |
 | `DatePipe` / `CurrencyPipe` | `dt` / `cur`, template globals |
 | `ng new` / `ng g c` / `ng serve` / `ng build` | `srl new` / `srl g c` / `srl serve` / `srl build`, with the same short forms `n`, `g`, `c`, `s` and `b` |
 | Module Federation | import map plus `app.manifest.json` |
