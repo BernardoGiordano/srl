@@ -112,8 +112,10 @@ class Parser {
   /** @returns {ExprNode} */
   parse() {
     if (this.#tokens.length === 0) throw this.#error(0, 'Empty expression');
-    const node = this.#pipes(this.#event ? this.#assignment() : this.#conditional());
+    const node = this.#expression();
     const extra = this.#peek();
+
+    // A pipe argument is a conditional, so `x | f = 1` stops at the `=`.
     if (extra?.type === 'punct' && extra.text === '=') {
       throw this.#error(extra.at, 'Only an event binding may assign', 'templates/expression-assignment');
     }
@@ -121,10 +123,20 @@ class Parser {
     return node;
   }
 
-  /** @returns {ExprNode} */
+  /**
+   * Every position that may hold an assignment parses through here, so outside an
+   * event binding an assignment is refused at any depth.
+   *
+   * @returns {ExprNode}
+   */
   #assignment() {
     const target = this.#conditional();
-    if (!this.#eat('=')) return target;
+    const equals = this.#peek();
+    if (equals?.type !== 'punct' || equals.text !== '=') return target;
+    if (!this.#event) {
+      throw this.#error(equals.at, 'Only an event binding may assign', 'templates/expression-assignment');
+    }
+    this.#index += 1;
     if (target.kind !== 'name' && target.kind !== 'member' && target.kind !== 'index') {
       throw this.#error(0, 'Assignment target must be a name or a member access', 'templates/expression-assignment');
     }

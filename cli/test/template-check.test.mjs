@@ -354,6 +354,7 @@ void test('each dialect refusal carries a code of its own', () => {
     ['templates/unknown-attribute', '<test-child labell="x"></test-child>'],
     ['templates/expression-syntax', '<p>{{ rows + }}</p>'],
     ['templates/expression-assignment', '<p>{{ rows = 1 }}</p>'],
+    ['templates/expression-assignment', '<test-child [.items]="(rows = [])"></test-child>'],
     ['templates/expression-member', '<p>{{ rows.constructor }}</p>'],
     ['templates/unknown-element', '<mystery-widget></mystery-widget>'],
   ]);

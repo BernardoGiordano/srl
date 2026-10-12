@@ -137,6 +137,7 @@ The word literals are `true`, `false`, `null`, `undefined`. Numbers are decimal,
 | Pipe | `created \| dt` | yes | no, `templates/expression-syntax` |
 | Pipe with arguments | `price \| cur:'EUR'` | yes | no, `templates/expression-syntax` |
 | Assignment | `selected = row` | no, `templates/expression-assignment` | yes |
+| Nested assignment | `log(selected = row)` | no, `templates/expression-assignment` | yes |
 | Compound assignment | `count += 1` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | Increment | `count++` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |
 | Arrow function | `(item) => item.id` | no, `templates/expression-syntax` | no, `templates/expression-syntax` |

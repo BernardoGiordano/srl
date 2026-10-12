@@ -217,6 +217,34 @@ describe('expression language', () => {
     );
   });
 
+  it('refuses an assignment nested anywhere outside an event binding', () => {
+    // In an interpolation this would write on every render.
+    const host = { selected: 'kept', row: 'other' };
+    assert.throws(
+      () => compileExpression('(selected = row)', 'test')({ host, locals: {}, version: 0 }),
+      'Only an event binding may assign',
+    );
+    assert.equal(host.selected, 'kept');
+
+    const nested = ['(x = 1)', 'f(x = 1)', 'rows[x = 1]', '[x = 1]', '{ key: x = 1 }', 'a ? x = 1 : b', 'a ? b : x = 1'];
+    for (const source of nested) {
+      /** @type {unknown} */
+      let refused;
+      try {
+        parseExpression(source, 'test', { allowAssignment: false });
+      } catch (error) {
+        refused = error;
+      }
+      assert.equal(refused instanceof ExpressionError && refused.code, 'templates/expression-assignment', source);
+
+      // An event binding may assign in the same position.
+      parseExpression(source, 'test', { allowAssignment: true });
+    }
+
+    // A pipe argument, which an event binding cannot hold.
+    assert.throws(() => parseExpression('rows | f:(x = 1)', 'test'), 'Only an event binding may assign');
+  });
+
   it('names each parse refusal with the code the template checker reports', () => {
     /** @param {string} source @param {boolean} allowAssignment @returns {string | undefined} */
     const refusal = (source, allowAssignment) => {

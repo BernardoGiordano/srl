@@ -97,6 +97,7 @@ const EXPRESSION_SAMPLES = [
   ['Pipe', 'created | dt'],
   ['Pipe with arguments', "price | cur:'EUR'"],
   ['Assignment', 'selected = row'],
+  ['Nested assignment', 'log(selected = row)'],
   ['Compound assignment', 'count += 1'],
   ['Increment', 'count++'],
   ['Arrow function', '(item) => item.id'],
