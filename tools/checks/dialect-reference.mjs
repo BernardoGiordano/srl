@@ -94,13 +94,15 @@ const EXPRESSION_SAMPLES = [
   ['Array literal', '[first, second]'],
   ['Object literal', "{ id: row.id, 'aria-label': label }"],
   ['Signal reference', '&panel'],
+  ['Pipe', 'created | dt'],
+  ['Pipe with arguments', "price | cur:'EUR'"],
   ['Assignment', 'selected = row'],
   ['Compound assignment', 'count += 1'],
   ['Increment', 'count++'],
   ['Arrow function', '(item) => item.id'],
   ['`new`', 'new Date()'],
   ['Template literal', '`Hello ${name}`'],
-  ['Bitwise operator', 'flags | mask'],
+  ['Bitwise operator', 'flags ^ mask'],
   ['`typeof`', 'typeof value'],
   ['`in`', "'id' in row"],
   ['Unary plus', '+value'],
@@ -279,8 +281,9 @@ function operators() {
     table(['Binds', 'Binary operators'], rows),
     '',
     `Level 1 binds tightest. The prefix operators are ${codeList(unary)}, and they bind ` +
-      'tighter than every binary operator. A conditional `a ? b : c` binds loosest. ' +
-      '`&` passes a signal without reading it.',
+      'tighter than every binary operator. A conditional `a ? b : c` binds looser than every ' +
+      'binary operator, and a pipe `a | name:arg` binds loosest of all. `&` passes a signal ' +
+      'without reading it.',
     '',
     `The word literals are ${[...WORD_LITERALS.keys()].map((word) => code(word)).join(', ')}. ` +
       'Numbers are decimal, and strings take single or double quotes.',

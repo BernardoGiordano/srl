@@ -578,6 +578,9 @@ function expressionParams(node) {
  * The offset of the key literal, so a finding underlines the string that is wrong rather
  * than the call around it. Falls back to the callee when the key is computed.
  *
+ * A written call names the key after `t`, and a pipe names it before, as in
+ * `'orders.title' | t`. ADR-0140.
+ *
  * @param {string} source
  * @param {string} expression
  * @param {number} at Offset of the expression inside the file.
@@ -587,9 +590,14 @@ function expressionParams(node) {
  */
 function keyOffset(source, expression, at, callee, key) {
   if (key === null) return at + callee;
-  for (const quote of ["'", '"']) {
-    const literal = expression.indexOf(`${quote}${key}${quote}`, callee);
-    if (literal !== -1) return at + literal + 1;
+  const literals = [`'${key}'`, `"${key}"`];
+  for (const literal of literals) {
+    const after = expression.indexOf(literal, callee);
+    if (after !== -1) return at + after + 1;
+  }
+  for (const literal of literals) {
+    const before = expression.lastIndexOf(literal, callee);
+    if (before !== -1) return at + before + 1;
   }
   return at + callee;
 }

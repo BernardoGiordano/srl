@@ -8,7 +8,8 @@
  *
  * The language supports member access, optional chaining, computed access, calls,
  * arithmetic, comparison, negation, ternaries, `??`, `&&`, `||`, array and object
- * literals, and assignment in event bindings. Functions, `new`, `typeof`, bitwise
+ * literals, pipes, and assignment in event bindings. The parser turns a pipe into a
+ * call, so nothing here handles it. ADR-0140. Functions, `new`, `typeof`, bitwise
  * operators, increments, comma sequences and template literals are left out on
  * purpose, because that logic belongs in the component.
  *
@@ -31,8 +32,8 @@ export { parseExpression } from '@core/template/expression-parser.js';
 const globalsByName = new Map();
 
 /**
- * Publish values every template can reference by bare name, the way Angular exposes
- * pipes. `@core/localization/i18n.js` registers its helpers here.
+ * Publish values every template can reference by bare name, as a call or as a pipe.
+ * `@core/localization/i18n.js` registers its helpers here.
  *
  * Globals live in a `Map`, so `{{ constructor }}` can't reach `Object.prototype`.
  *

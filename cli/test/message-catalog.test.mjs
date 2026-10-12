@@ -185,6 +185,34 @@ void test('an unsaved buffer is checked against the bundles as saved', async () 
   );
 });
 
+void test('a piped key is a reference, and a finding underlines the key', async () => {
+  const messages = await fixtureMessages();
+  const model = await readProject(APP, { roots: [APP.dir] });
+  const file = join(APP.dir, 'src', 'page.html');
+
+  const edited = [
+    '<section>',
+    "  <h1>{{ 'orders.title' | t }}</h1>",
+    "  <p>{{ 'orders.greting' | t:{ name: user.name } }}</p>",
+    '</section>',
+  ].join('\n');
+
+  const references = await sourceReferences(model, file, edited);
+  assert.deepEqual(
+    references.map((reference) => [reference.key, reference.params]),
+    [
+      ['orders.title', []],
+      ['orders.greting', ['name']],
+    ],
+  );
+
+  const unknown = withCode(referenceFindings(messages, references), 'messages/unknown-key');
+  assert.equal(unknown.length, 1);
+  const line = edited.split('\n')[(unknown[0]?.line ?? 1) - 1] ?? '';
+  const column = (unknown[0]?.column ?? 1) - 1;
+  assert.equal(line.slice(column, column + 'orders.greting'.length), 'orders.greting');
+});
+
 void test('extraction adds the missing keys and leaves every existing line alone', async () => {
   const messages = await fixtureMessages();
   const bundle = messages.bundles.find((candidate) => candidate.name === 'application');

@@ -17,8 +17,9 @@ import { refusedMember } from './dialect.js';
 /** @import { ExprNode } from '@core/template/types.js' */
 
 // `=>` is one token, so an arrow function is a syntax error rather than an assignment.
+// `||` is tried before a single `|`, so a pipe never splits it.
 const TOKEN =
-  /\s+|(\d+(?:\.\d+)?)|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|([A-Za-z_$][A-Za-z0-9_$]*)|(\?\.|===|!==|==|=>|!=|<=|>=|&&|\|\||\?\?|[()[\]{}.,:?!+\-*/%<>=&])/gy;
+  /\s+|(\d+(?:\.\d+)?)|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|([A-Za-z_$][A-Za-z0-9_$]*)|(\?\.|===|!==|==|=>|!=|<=|>=|&&|\|\||\?\?|[()[\]{}.,:?!+\-*/%<>=&|])/gy;
 
 /**
  * Names that read as values rather than as members of the component.
@@ -97,19 +98,21 @@ class Parser {
   #tokens;
   #source;
   #where;
+  #event;
   #index = 0;
 
-  /** @param {string} source @param {string} where */
-  constructor(source, where) {
+  /** @param {string} source @param {string} where @param {boolean} event */
+  constructor(source, where, event) {
     this.#source = source;
     this.#where = where;
+    this.#event = event;
     this.#tokens = tokenize(source, where);
   }
 
-  /** @param {boolean} allowAssignment @returns {ExprNode} */
-  parse(allowAssignment) {
+  /** @returns {ExprNode} */
+  parse() {
     if (this.#tokens.length === 0) throw this.#error(0, 'Empty expression');
-    const node = allowAssignment ? this.#assignment() : this.#conditional();
+    const node = this.#pipes(this.#event ? this.#assignment() : this.#conditional());
     const extra = this.#peek();
     if (extra?.type === 'punct' && extra.text === '=') {
       throw this.#error(extra.at, 'Only an event binding may assign', 'templates/expression-assignment');
@@ -126,6 +129,46 @@ class Parser {
       throw this.#error(0, 'Assignment target must be a name or a member access', 'templates/expression-assignment');
     }
     return { kind: 'assign', target, value: this.#assignment() };
+  }
+
+  /**
+   * An expression in a delimited position, which a pipe may end. Parentheses, call
+   * arguments, an index, array items and object values are delimited.
+   *
+   * @returns {ExprNode}
+   */
+  #expression() {
+    return this.#pipes(this.#assignment());
+  }
+
+  /**
+   * Apply each pipe after `head`. `value | name:a:b` is the call `name(value, a, b)`,
+   * so the evaluator, the checker and the message catalog read an ordinary call.
+   * ADR-0140.
+   *
+   * @param {ExprNode} head
+   * @returns {ExprNode}
+   */
+  #pipes(head) {
+    let node = head;
+    for (;;) {
+      const bar = this.#peek();
+      if (bar?.type !== 'punct' || bar.text !== '|') return node;
+      if (this.#event) throw this.#error(bar.at, 'An event binding may not pipe. Call the function instead');
+      this.#index += 1;
+
+      const name = this.#peek();
+      if (name?.type !== 'name' || WORD_LITERALS.has(name.text)) {
+        throw this.#error(name?.at ?? this.#source.length, 'Expected a pipe name after "|"');
+      }
+      this.#index += 1;
+
+      // An argument is a conditional, so `a ? b : c` fits without parentheses.
+      /** @type {ExprNode[]} */
+      const args = [node];
+      while (this.#eat(':')) args.push(this.#conditional());
+      node = { kind: 'call', callee: { kind: 'name', name: name.text, at: name.at }, args };
+    }
   }
 
   /** @returns {ExprNode} */
@@ -173,7 +216,7 @@ class Parser {
         node = { kind: 'member', object: node, name: this.#name(), optional };
       } else if (this.#eat('[')) {
         const at = this.#peek()?.at ?? this.#source.length;
-        const index = this.#assignment();
+        const index = this.#expression();
         this.#expect(']');
         // `row['constructor']` is refused like `row.constructor`. The evaluator
         // refuses computed keys.
@@ -189,7 +232,7 @@ class Parser {
     /** @type {ExprNode[]} */
     const args = [];
     if (this.#eat(')')) return args;
-    do args.push(this.#assignment());
+    do args.push(this.#expression());
     while (this.#eat(','));
     this.#expect(')');
     return args;
@@ -207,7 +250,7 @@ class Parser {
       return { kind: 'name', name: token.text, at: token.at };
     }
     if (token.text === '(') {
-      const inner = this.#assignment();
+      const inner = this.#expression();
       this.#expect(')');
       return inner;
     }
@@ -215,7 +258,7 @@ class Parser {
       /** @type {ExprNode[]} */
       const items = [];
       if (!this.#eat(']')) {
-        do items.push(this.#assignment());
+        do items.push(this.#expression());
         while (this.#eat(','));
         this.#expect(']');
       }
@@ -234,7 +277,7 @@ class Parser {
           // An object literal assigns each key, so a reserved key is a prototype write.
           this.#refuseMember(key.text, key.at);
           this.#expect(':');
-          entries.push({ key: key.text, value: this.#assignment() });
+          entries.push({ key: key.text, value: this.#expression() });
         } while (this.#eat(','));
         this.#expect('}');
       }
@@ -310,5 +353,5 @@ export const BINARY_LEVELS = [
  * @returns {ExprNode}
  */
 export function parseExpression(source, where, options) {
-  return new Parser(source, where).parse(options?.allowAssignment ?? false);
+  return new Parser(source, where, options?.allowAssignment ?? false).parse();
 }
