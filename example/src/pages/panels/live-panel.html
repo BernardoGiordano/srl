@@ -16,7 +16,7 @@
       <span class="min-w-0 flex-1">
         <span class="block truncate text-[13px] font-medium text-ink">{{ movement.name }}</span>
         <span class="block text-[11.5px] text-muted">
-          {{ movement.sku }} · {{ movement.warehouse }} · {{ when(movement) }}
+          {{ movement.sku }} · {{ movement.warehouse }} · {{ movement.at | ago }}
         </span>
       </span>
 

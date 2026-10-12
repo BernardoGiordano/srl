@@ -19,7 +19,8 @@
     </app-field>
     <app-field label="{{ t('people.status') }}">{{ statusLabel }}</app-field>
     <app-field label="{{ t('people.hiredOn') }}">
-      {{ hiredOn }} <span class="text-muted">({{ tenure }})</span>
+      {{ record.hiredOn | dt:{ dateStyle: 'long' } }}
+      <span class="text-muted">({{ record.hiredOn | ago:'year' }})</span>
     </app-field>
     <app-field label="{{ t('people.id') }}">
       <span class="font-mono text-[12.5px]">{{ record.id }}</span>

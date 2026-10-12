@@ -39,6 +39,7 @@ Names a template may use without importing anything, and where each comes from:
 
 | Name | Module |
 |---|---|
+| `ago` | `example/src/format.js` |
 | `availableLocales` | `source/lib/core/localization/i18n.js` |
 | `cur` | `source/lib/core/localization/i18n.js` |
 | `direction` | `source/lib/core/localization/i18n.js` |

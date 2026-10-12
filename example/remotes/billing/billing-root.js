@@ -79,10 +79,6 @@ export class BillingRoot extends SignalElement {
       .reduce((sum, invoice) => sum + invoice.amount, 0);
   }
 
-  get outstandingLabel() {
-    return t('billing.total', { amount: cur(this.outstanding, 'EUR') });
-  }
-
   get userName() {
     return this.#requireHost().auth.user()?.name ?? '';
   }

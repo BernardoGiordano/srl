@@ -21,7 +21,7 @@
       <div class="flex flex-wrap items-center gap-2">
         <app-badge [tone]="tone(contract)">{{ kindLabel(contract) }}</app-badge>
         <span class="font-mono text-[12px] text-muted">{{ contract.id }}</span>
-        <span class="ms-auto text-[12.5px] font-semibold text-ink">{{ hours(contract) }}</span>
+        <span class="ms-auto text-[12.5px] font-semibold text-ink">{{ t('people.hoursPerWeek', { hours: contract.hours | num }) }}</span>
       </div>
       <p class="mt-2 text-[13px] text-muted">
         {{ t('people.contractPeriod', { since: since(contract), until: until(contract) }) }}

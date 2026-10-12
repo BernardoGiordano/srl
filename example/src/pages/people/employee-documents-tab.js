@@ -3,7 +3,7 @@ import { defineComponent } from '@core/elements/component.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
-import { dt, num } from '@core/localization/i18n.js';
+import { num } from '@core/localization/i18n.js';
 
 import { AppNotice } from '../../ui/app-notice.js';
 import { PEOPLE_SERVICE } from '../../services/people-service.js';
@@ -44,11 +44,6 @@ export class EmployeeDocumentsTab extends SignalElement {
   /** @param {EmployeeDocument} document */
   size(document) {
     return num(document.size / 1_000_000, { style: 'unit', unit: 'megabyte', maximumFractionDigits: 1 });
-  }
-
-  /** @param {EmployeeDocument} document */
-  when(document) {
-    return dt(document.at, { dateStyle: 'medium' });
   }
 
   /** @param {EmployeeDocument} document */

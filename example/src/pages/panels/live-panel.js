@@ -4,7 +4,6 @@ import { inject } from '@core/foundation/inject.js';
 import { num, t } from '@core/localization/i18n.js';
 
 import { AppBadge } from '../../ui/app-badge.js';
-import { ago } from '../../format.js';
 import { LIVE_FEED } from '../../services/live-feed.js';
 
 /** @import { StockEvent } from '../../services/live-feed.js' */
@@ -51,15 +50,6 @@ export class LivePanel extends SignalElement {
   quantity(movement) {
     const signed = movement.kind === 'issue' ? -movement.quantity : movement.quantity;
     return num(signed, { signDisplay: 'always' });
-  }
-
-  /**
-   * Format the movement time for the active locale.
-   *
-   * @param {StockEvent} movement
-   */
-  when(movement) {
-    return ago(movement.at);
   }
 
   /** @param {StockEvent} movement */

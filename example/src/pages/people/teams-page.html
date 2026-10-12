@@ -12,7 +12,7 @@
   <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
     <app-card *for="team of teams; key: team.id" eyebrow="{{ team.id }}" heading="{{ team.name }}">
       <span slot="actions" class="rounded-full bg-canvas px-2 py-0.5 text-[12px] font-medium tabular-nums text-muted ring-1 ring-inset ring-ui-border">
-        {{ share(team) }}
+        {{ team | share | num:{ style: 'percent', maximumFractionDigits: 0 } }}
       </span>
 
       <p class="text-[13px] text-muted">{{ headcount(team) }}</p>

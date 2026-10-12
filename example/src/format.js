@@ -1,4 +1,5 @@
 import { rel } from '@core/localization/i18n.js';
+import { registerTemplateGlobals } from '@core/template/expression.js';
 
 /**
  * Format a timestamp as relative time. The application chooses a unit and delegates
@@ -48,3 +49,6 @@ function secondsIn(unit) {
   const singular = unit.endsWith('s') ? unit.slice(0, -1) : unit;
   return UNITS.find(([name]) => name === singular)?.[1] ?? 1;
 }
+
+// Every template can name `ago`, so `{{ entry.at | ago }}` pipes a timestamp through it.
+registerTemplateGlobals({ ago });

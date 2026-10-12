@@ -118,7 +118,11 @@ transformed. Here `trim`, `truncate` and `take` are methods on the component.
 
 Any function the template can name works as a pipe. The localization helpers
 `t`, `num`, `cur`, `dt` and `rel` are template globals, and a public method on
-the component works too. There is no pipe class to declare. A binding re-runs
+the component works too. An application adds its own global by calling
+`registerTemplateGlobals({ ago })` in the module that exports `ago`, which is
+where the template checker looks for its type. That module has to load before
+a template that names `ago` renders, so the application entry imports it.
+There is no pipe class to declare. A binding re-runs
 only when a signal it read changes, so a pipe needs no purity flag to stay
 cheap.
 

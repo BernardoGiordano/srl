@@ -22,7 +22,9 @@
       </div>
 
       <p class="mt-0.5 text-[12px] text-muted">
-        {{ entry.actor }} · <time [datetime]="entry.at">{{ when(entry) }}</time> · {{ since(entry) }}
+        {{ entry.actor }} ·
+        <time [datetime]="entry.at">{{ entry.at | dt:{ dateStyle: 'medium', timeStyle: 'short' } }}</time>
+        · {{ entry.at | ago }}
       </p>
     </li>
   </ol>

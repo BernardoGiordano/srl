@@ -30,8 +30,12 @@
         <span class="text-muted"> · {{ entry.target }} · {{ entry.detail }}</span>
       </span>
 
-      <time class="shrink-0 text-[12px] text-muted" [datetime]="entry.at" [title]="when(entry)">
-        {{ since(entry) }}
+      <time
+        class="shrink-0 text-[12px] text-muted"
+        [datetime]="entry.at"
+        [title]="entry.at | dt:{ dateStyle: 'medium', timeStyle: 'short' }"
+      >
+        {{ entry.at | ago }}
       </time>
     </li>
   </ul>

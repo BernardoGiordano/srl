@@ -3,7 +3,7 @@ import { defineComponent } from '@core/elements/component.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
-import { dt, num, t } from '@core/localization/i18n.js';
+import { dt, t } from '@core/localization/i18n.js';
 
 import { AppBadge } from '../../ui/app-badge.js';
 import { AppNotice } from '../../ui/app-notice.js';
@@ -54,11 +54,6 @@ export class EmployeeContractsTab extends SignalElement {
   /** @param {Contract} contract */
   until(contract) {
     return contract.until === '' ? t('people.openEnded') : dt(contract.until, { dateStyle: 'long' });
-  }
-
-  /** @param {Contract} contract */
-  hours(contract) {
-    return t('people.hoursPerWeek', { hours: num(contract.hours) });
   }
 
   /** @param {Contract} contract */

@@ -2,7 +2,7 @@ import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
-import { num, t } from '@core/localization/i18n.js';
+import { t } from '@core/localization/i18n.js';
 import { UiAvatar } from '@components/shell/ui-avatar.js';
 
 import { AppCard } from '../../ui/app-card.js';
@@ -47,10 +47,14 @@ export class TeamsPage extends SignalElement {
     return t('people.headcount', { count: team.headcount });
   }
 
-  /** @param {Team} team */
+  /**
+   * The team's fraction of all headcount. The template formats it as a percentage.
+   *
+   * @param {Team} team
+   */
   share(team) {
     const total = this.teams.reduce((sum, candidate) => sum + candidate.headcount, 0);
-    return total === 0 ? '' : num(team.headcount / total, { style: 'percent', maximumFractionDigits: 0 });
+    return total === 0 ? 0 : team.headcount / total;
   }
 }
 

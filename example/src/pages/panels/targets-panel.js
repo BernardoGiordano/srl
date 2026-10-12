@@ -2,7 +2,7 @@ import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
-import { cur, num, t } from '@core/localization/i18n.js';
+import { cur, t } from '@core/localization/i18n.js';
 
 import { AppNotice } from '../../ui/app-notice.js';
 import { SALES_SERVICE } from '../../services/sales-service.js';
@@ -21,10 +21,6 @@ export class TargetsPanel extends SignalElement {
 
   get attained() {
     return this.#quarter.value.value.attained;
-  }
-
-  get percent() {
-    return num(this.attained, { style: 'percent', maximumFractionDigits: 1 });
   }
 
   get amount() {

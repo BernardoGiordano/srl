@@ -3,10 +3,9 @@ import { defineComponent } from '@core/elements/component.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
-import { dt, t } from '@core/localization/i18n.js';
+import { t } from '@core/localization/i18n.js';
 
 import { AppField } from '../../ui/app-field.js';
-import { ago } from '../../format.js';
 import { AppNotice } from '../../ui/app-notice.js';
 import { PEOPLE_SERVICE } from '../../services/people-service.js';
 
@@ -24,16 +23,6 @@ export class EmployeeProfileTab extends SignalElement {
 
   pending = this.#employee.pending;
   failed = this.#employee.failed;
-
-  get hiredOn() {
-    const hiredOn = this.record?.hiredOn;
-    return hiredOn === undefined ? '' : dt(hiredOn, { dateStyle: 'long' });
-  }
-
-  get tenure() {
-    const hiredOn = this.record?.hiredOn;
-    return hiredOn === undefined ? '' : ago(hiredOn, 'year');
-  }
 
   get record() {
     return this.#employee.value.value;

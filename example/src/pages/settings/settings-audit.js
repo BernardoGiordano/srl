@@ -2,10 +2,9 @@ import { SignalElement } from '@core/elements/signal-element.js';
 import { defineComponent } from '@core/elements/component.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
-import { dt, t } from '@core/localization/i18n.js';
+import { t } from '@core/localization/i18n.js';
 
 import { AppBadge } from '../../ui/app-badge.js';
-import { ago } from '../../format.js';
 import { AppNotice } from '../../ui/app-notice.js';
 import { ADMIN_SERVICE } from '../../services/admin-service.js';
 
@@ -45,16 +44,6 @@ export class SettingsAudit extends SignalElement {
     const key = `audit.action.${entry.action}`;
     const label = t(key);
     return label === key ? entry.action : label;
-  }
-
-  /** @param {AuditEntry} entry */
-  when(entry) {
-    return dt(entry.at, { dateStyle: 'medium', timeStyle: 'short' });
-  }
-
-  /** @param {AuditEntry} entry */
-  since(entry) {
-    return ago(entry.at);
   }
 
   /** @param {AuditEntry} entry */

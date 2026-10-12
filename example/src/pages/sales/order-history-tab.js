@@ -4,10 +4,9 @@ import { effect } from '@core/foundation/reactive.js';
 import { resource } from '@core/foundation/resource.js';
 import { inject } from '@core/foundation/inject.js';
 import { routeParams } from '@core/navigation/router.js';
-import { dt, t } from '@core/localization/i18n.js';
+import { t } from '@core/localization/i18n.js';
 
 import { AppBadge } from '../../ui/app-badge.js';
-import { ago } from '../../format.js';
 import { AppNotice } from '../../ui/app-notice.js';
 import { SALES_SERVICE } from '../../services/sales-service.js';
 import { LIVE_FEED } from '../../services/live-feed.js';
@@ -69,16 +68,6 @@ export class OrderHistoryTab extends SignalElement {
   /** @param {OrderEvent} entry */
   eventLabel(entry) {
     return t(`orders.event.${entry.event}`);
-  }
-
-  /** @param {OrderEvent} entry */
-  when(entry) {
-    return dt(entry.at, { dateStyle: 'medium', timeStyle: 'short' });
-  }
-
-  /** @param {OrderEvent} entry */
-  since(entry) {
-    return ago(entry.at);
   }
 
   /** @param {OrderEvent} entry */

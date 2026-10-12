@@ -15,6 +15,9 @@ import { ORDER_RECORDS, OrderRecords } from './state/order-records.js';
 import { BffCookieTokenStore } from './auth/bff-cookie-store.js';
 import { THEMES } from './theme.js';
 
+// Registers `ago` as a template global before the first template renders.
+import './format.js';
+
 /**
  * Entry point.
  *

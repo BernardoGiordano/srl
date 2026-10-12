@@ -39,11 +39,6 @@ export class WarehousesPage extends SignalElement {
   }
 
   /** @param {Warehouse} warehouse */
-  utilisationLabel(warehouse) {
-    return num(this.utilisation(warehouse), { style: 'percent', maximumFractionDigits: 0 });
-  }
-
-  /** @param {Warehouse} warehouse */
   capacityLabel(warehouse) {
     return t('warehouses.capacityLabel', {
       units: num(warehouse.units),

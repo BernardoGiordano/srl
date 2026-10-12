@@ -24,7 +24,7 @@
 
       <span class="min-w-0 flex-1">
         <span class="block truncate text-[13px] font-medium text-ink">{{ document.name }}</span>
-        <span class="block text-[11.5px] text-muted">{{ when(document) }}</span>
+        <span class="block text-[11.5px] text-muted">{{ document.at | dt }}</span>
       </span>
 
       <span class="shrink-0 text-[12.5px] tabular-nums text-muted">{{ size(document) }}</span>

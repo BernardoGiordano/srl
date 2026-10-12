@@ -78,7 +78,7 @@
       >
         <template *fragment="cell(product of rows)">
           <span class="flex items-center justify-end gap-2 tabular-nums">
-            <span>{{ num(product.stock) }}</span>
+            <span>{{ product.stock | num }}</span>
             <app-badge *if="product.stock < product.reorderPoint" tone="bad">
               {{ t('products.low') }}
             </app-badge>
