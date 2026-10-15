@@ -47,11 +47,16 @@ if (!customElements.get(MARKER_TAG)) {
  * Non-elements go to the default slot. A comment has no `slot` attribute, so a named
  * slot needs a whole element.
  *
+ * Every host is marked, with or without children. The mark tells an ancestor's
+ * `projectContent` where its markers end. ADR-0141.
+ *
  * @param {Element} host
  * @returns {ContentBuckets}
  * @internal
  */
 export function captureContent(host) {
+  host.setAttribute(HOST_ATTR, '');
+
   const nodes = Array.from(host.childNodes);
 
   // A host with only whitespace doesn't project. Treating it as projecting would
@@ -77,7 +82,6 @@ export function captureContent(host) {
     node.parentNode?.removeChild(node);
   }
 
-  host.setAttribute(HOST_ATTR, '');
   return buckets;
 }
 
@@ -103,7 +107,7 @@ export function projectContent(host, buckets) {
   if (buckets.size === 0) return;
 
   for (const marker of host.querySelectorAll(MARKER_TAG)) {
-    // Skip markers that belong to a nested projecting component.
+    // Skip markers that belong to a nested component.
     if (marker.closest(`[${HOST_ATTR}]`) !== host) continue;
 
     const bucket = buckets.get(marker.getAttribute('name') ?? DEFAULT_SLOT);

@@ -53,6 +53,14 @@ class NestingCard extends SignalElement {
 }
 customElements.define('nesting-card', NestingCard);
 
+/** A component whose template draws a marker that nobody gives content to. */
+class BareFrame extends SignalElement {
+  render() {
+    return html`<span class="bare"><x-content></x-content></span>`;
+  }
+}
+customElements.define('bare-frame', BareFrame);
+
 describe('light-DOM content projection', () => {
   afterEach(() => {
     tick.value = 0;
@@ -116,6 +124,30 @@ describe('light-DOM content projection', () => {
     );
     assert.equal(inner.querySelector('header b')?.textContent, 'Inner header');
     assert.equal(inner.querySelector('.body i')?.textContent, 'Inner body');
+  });
+
+  it('leaves a childless component its own markers', async () => {
+    const element = mount(`
+      <slotted-card>
+        <p>Body</p>
+        <bare-frame></bare-frame>
+      </slotted-card>
+    `);
+    await settled(element);
+    const frame = present(element.querySelector('bare-frame'));
+    await settled(frame);
+
+    tick.value = 1;
+    await settled(element);
+
+    // The frame captured nothing, so the card must not take its marker for one of its
+    // own. Filling it would move the card's content, the frame included, into the
+    // frame, which the DOM refuses after the nodes have already left the card.
+    assert.equal(element.querySelector('.tick')?.textContent, '1', 'the card must have re-rendered');
+    const body = present(element.querySelector('.body > x-content'));
+    assert.equal(element.querySelector('.body p')?.parentElement, body, 'the card keeps its content');
+    assert.equal(frame.parentElement, body, 'the frame stays where the card projected it');
+    assert.equal(present(frame.querySelector('.bare > x-content')).childNodes.length, 0);
   });
 
   it('keeps a caller replacing its content inside the marker', async () => {

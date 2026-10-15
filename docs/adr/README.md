@@ -111,6 +111,7 @@ Numbers are permanent and never reused, so the index has gaps.
 | [ADR-0138](0138-an-application-may-leave-out-the-collection-and-locales.md) | An application may leave out the collection and locales | accepted | `cli/delivery/build.mjs` |
 | [ADR-0139](0139-an-external-stylesheet-carries-its-authors-pin.md) | An external stylesheet carries its author's pin | accepted | `cli/delivery/build.mjs` |
 | [ADR-0140](0140-a-pipe-is-a-call.md) | A pipe is a call | accepted | `source/lib/core/template/expression-parser.js`, `cli/message-catalog/index.mjs`, `tools/checks/dialect-reference.mjs` |
+| [ADR-0141](0141-every-component-bounds-its-own-markers.md) | Every component bounds its own markers | accepted | `source/lib/core/elements/projection.js` |
 
 <!-- /generated:adr-index -->
 
