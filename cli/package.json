@@ -83,7 +83,7 @@
   "dependencies": {
     "parse5": "6.0.1",
     "typescript": "6.0.3",
-    "vite": "8.2.1"
+    "vite": "8.2.4"
   },
   "//scaffold": [
     "srl new pins these application-owned packages in the project it writes. They",
