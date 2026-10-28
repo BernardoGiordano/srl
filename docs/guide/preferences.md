@@ -70,12 +70,14 @@ setTheme('ocean');
 `theme`, `resolvedTheme`, and `availableThemes` are signals. The selected name
 is saved through the preference service. The resolved name appears as
 `data-theme` on `<html>`, and remotes can follow the `themechange` event.
-Custom themes override `--ui-` tokens; other tokens come from the linked palette.
+Custom themes override `--ui-` tokens; other tokens come from the linked palette,
+in the arm of the theme's `colorScheme`.
 
 The component styles and palette are separate files. `style.css` supplies low
 specificity defaults and reads `--ui-color-*` tokens. `theme-default.css`
-defines the light and dark token values. Link both when using the default
-palette.
+defines each token once, as a `light-dark()` pair where the light and dark
+values differ, and `color-scheme` picks the arm (ADR-0142). Link both when
+using the default palette.
 
 ```html
 <link rel="stylesheet" href="/components/style.css" />

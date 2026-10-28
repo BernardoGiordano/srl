@@ -11,87 +11,44 @@
  * meaning, so a single application accent reads as the accent rather than as a second
  * blue arguing with the first.
  *
- * Three blocks, one set of values twice, on purpose. `:root` is the light palette;
- * the media query answers `prefers-color-scheme` only while no theme is chosen, so
- * `:root:not([data-theme])` stops applying the moment the theme controller writes the
- * attribute; `[data-theme='dark']` is the explicit choice, and it must win in both
- * directions — a document whose system is light and whose preference is dark gets the
- * dark values from the third block alone.
+ * One block, each colour written once. A token that differs between the light and the dark
+ * palette is a `light-dark()` pair, and the element's `color-scheme` picks the arm wherever the
+ * colour is used. `:root` follows the system preference while no theme is chosen; the theme
+ * controller writes `data-theme` and an inline `color-scheme`, and both explicit choices win in
+ * either direction. A registered theme takes the arm of its own `colorScheme` for every token
+ * it does not list. ADR-0142.
  */
 
-:root,
-[data-theme='light'] {
-  color-scheme: light;
-  --ui-color-canvas: #f4f4f5;
-  --ui-color-surface: #ffffff;
-  --ui-color-surface-raised: #ffffff;
+:root {
+  color-scheme: light dark;
+  --ui-color-canvas: light-dark(#f4f4f5, #0c0c0e);
+  --ui-color-surface: light-dark(#ffffff, #17171a);
+  --ui-color-surface-raised: light-dark(#ffffff, #1f1f23);
   /* Pointer feedback. Distinct from canvas, so a hovered row and the keyboard's
      active row are not the same colour on a surface that is already canvas. */
-  --ui-color-hover: #ebebed;
-  --ui-color-text: #18181b;
-  --ui-color-text-muted: #6b6b70;
-  --ui-color-border: #dcdcdf;
-  --ui-color-primary: #262629;
-  --ui-color-primary-hover: #0f0f11;
-  --ui-color-primary-contrast: #ffffff;
-  --ui-color-accent: #52525a;
-  --ui-color-accent-strong: #18181b;
-  --ui-color-sidebar: #18181b;
+  --ui-color-hover: light-dark(#ebebed, #29292e);
+  --ui-color-text: light-dark(#18181b, #ededf0);
+  --ui-color-text-muted: light-dark(#6b6b70, #a1a1a8);
+  --ui-color-border: light-dark(#dcdcdf, #33333a);
+  --ui-color-primary: light-dark(#262629, #e4e4e8);
+  --ui-color-primary-hover: light-dark(#0f0f11, #ffffff);
+  --ui-color-primary-contrast: light-dark(#ffffff, #0c0c0e);
+  --ui-color-accent: light-dark(#52525a, #a1a1a8);
+  --ui-color-accent-strong: light-dark(#18181b, #d4d4d9);
+  --ui-color-sidebar: light-dark(#18181b, #08080a);
   --ui-color-sidebar-hover: rgb(255 255 255 / 8%);
   --ui-color-sidebar-active: rgb(255 255 255 / 14%);
-  --ui-color-sidebar-text: #ffffff;
-  --ui-color-sidebar-muted: rgb(255 255 255 / 68%);
-  --ui-color-overlay: rgb(9 9 11 / 56%);
-  --ui-color-focus-ring: #52525a;
-  --ui-color-shadow: rgb(9 9 11 / 14%);
+  --ui-color-sidebar-text: light-dark(#ffffff, #f5f5f7);
+  --ui-color-sidebar-muted: light-dark(rgb(255 255 255 / 68%), rgb(255 255 255 / 66%));
+  --ui-color-overlay: light-dark(rgb(9 9 11 / 56%), rgb(0 0 0 / 70%));
+  --ui-color-focus-ring: light-dark(#52525a, #a1a1a8);
+  --ui-color-shadow: light-dark(rgb(9 9 11 / 14%), rgb(0 0 0 / 50%));
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    color-scheme: dark;
-    --ui-color-canvas: #0c0c0e;
-    --ui-color-surface: #17171a;
-    --ui-color-surface-raised: #1f1f23;
-    --ui-color-hover: #29292e;
-    --ui-color-text: #ededf0;
-    --ui-color-text-muted: #a1a1a8;
-    --ui-color-border: #33333a;
-    --ui-color-primary: #e4e4e8;
-    --ui-color-primary-hover: #ffffff;
-    --ui-color-primary-contrast: #0c0c0e;
-    --ui-color-accent: #a1a1a8;
-    --ui-color-accent-strong: #d4d4d9;
-    --ui-color-sidebar: #08080a;
-    --ui-color-sidebar-hover: rgb(255 255 255 / 8%);
-    --ui-color-sidebar-active: rgb(255 255 255 / 14%);
-    --ui-color-sidebar-text: #f5f5f7;
-    --ui-color-sidebar-muted: rgb(255 255 255 / 66%);
-    --ui-color-overlay: rgb(0 0 0 / 70%);
-    --ui-color-focus-ring: #a1a1a8;
-    --ui-color-shadow: rgb(0 0 0 / 50%);
-  }
+[data-theme='light'] {
+  color-scheme: light;
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --ui-color-canvas: #0c0c0e;
-  --ui-color-surface: #17171a;
-  --ui-color-surface-raised: #1f1f23;
-  --ui-color-hover: #29292e;
-  --ui-color-text: #ededf0;
-  --ui-color-text-muted: #a1a1a8;
-  --ui-color-border: #33333a;
-  --ui-color-primary: #e4e4e8;
-  --ui-color-primary-hover: #ffffff;
-  --ui-color-primary-contrast: #0c0c0e;
-  --ui-color-accent: #a1a1a8;
-  --ui-color-accent-strong: #d4d4d9;
-  --ui-color-sidebar: #08080a;
-  --ui-color-sidebar-hover: rgb(255 255 255 / 8%);
-  --ui-color-sidebar-active: rgb(255 255 255 / 14%);
-  --ui-color-sidebar-text: #f5f5f7;
-  --ui-color-sidebar-muted: rgb(255 255 255 / 66%);
-  --ui-color-overlay: rgb(0 0 0 / 70%);
-  --ui-color-focus-ring: #a1a1a8;
-  --ui-color-shadow: rgb(0 0 0 / 50%);
 }

@@ -1,6 +1,7 @@
 /**
- * Register this application's ocean theme before the first render. Unlisted tokens
- * inherit the light palette. `registerTheme` accepts only `--ui-` tokens.
+ * Register this application's ocean theme before the first render. A token it does not
+ * list takes the dark arm of the linked palette, because its `colorScheme` is dark
+ * (ADR-0142). `registerTheme` accepts only `--ui-` tokens.
  *
  * @type {Record<string, import('@core/appearance/types.js').ThemeDefinition>}
  */
