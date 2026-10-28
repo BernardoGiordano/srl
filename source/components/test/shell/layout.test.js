@@ -188,6 +188,40 @@ describe('ui-sidebar-group', () => {
     assert.notOk(group.querySelector('.panel'));
   });
 
+  it('says what a click chose, so a caller can keep the open state', async () => {
+    const group = /** @type {HTMLElement & { open: boolean }} */ (
+      mount(`
+        <ui-sidebar-group>
+          <span slot="trigger">Settings</span>
+          <div class="panel">rows</div>
+        </ui-sidebar-group>
+      `)
+    );
+    await settled(group);
+    /** @type {boolean[]} */
+    const told = [];
+    let heardOutside = false;
+    group.addEventListener('open-change', (event) => {
+      told.push(/** @type {CustomEvent<boolean>} */ (event).detail);
+    });
+    document.body.addEventListener('open-change', () => (heardOutside = true));
+
+    const button = /** @type {HTMLElement} */ (present(group.querySelector('button')));
+    button.click();
+    await settled(group);
+    button.click();
+    await settled(group);
+
+    assert.sameArray(told, [true, false]);
+    assert.notOk(heardOutside, 'a nested group must not reach the listener of the one around it');
+
+    // The caller writes back, as a binding does, and the group follows it.
+    group.open = true;
+    await settled(group);
+    assert.ok(group.hasAttribute('data-open'));
+    assert.sameArray(told, [true, false], 'a write from outside is not a choice to report');
+  });
+
   it('keeps projected node identity across close and reopen', async () => {
     const group = mount(`
       <ui-sidebar-group>

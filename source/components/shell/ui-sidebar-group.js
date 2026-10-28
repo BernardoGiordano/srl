@@ -19,6 +19,15 @@ import { nextElementId, optionalAttr } from '../internal/dom.js';
  *       </div>
  *     </ui-sidebar-group>
  *
+ * A click raises `open-change`, whose `detail` is the new `open`. A caller that keeps
+ * the open state itself, say to remember it across a reload, leaves `match` empty,
+ * binds `[.open]` and writes back what the event says. With no `match` the route plays
+ * no part, so `open` is the whole state and the caller's copy cannot disagree with it.
+ * The event does not bubble, because a group may sit inside another, and a listener on
+ * the outer one must not hear the inner.
+ *
+ *     <ui-sidebar-group [.open]="isOpen(key)" (open-change)="setOpen(key, $event)">
+ *
  * Named content must be a whole element. `slot="trigger"` has to sit on an element
  * that exists when this component captures its content, so a `*if` or `*for` cannot
  * produce the trigger itself and has to wrap it, as above. The default slot has no
@@ -84,6 +93,7 @@ export class UiSidebarGroup extends SignalElement {
     // because the route matched sets false to false, and Lit schedules on change.
     // Ask explicitly rather than relying on the two agreeing.
     this.requestUpdate();
+    this.dispatchEvent(new CustomEvent('open-change', { detail: this.open }));
   }
 
   /** @param {Map<PropertyKey, unknown>} changed */

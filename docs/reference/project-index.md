@@ -22,7 +22,7 @@ Everything the library and the shared collection define:
 | `ui-form-error` | `UiFormError` | `source/components/inputs/ui-form-error.js` | `source/components/inputs/ui-form-error.html` | — | 4 | 0 | 2 | 0 | 0 |
 | `ui-menu` | `UiMenu` | `source/components/shell/ui-menu.js` | `source/components/shell/ui-menu.html` | — | 5 | 0 | 5 | 0 | 2 |
 | `ui-sidebar` | `UiSidebar` | `source/components/shell/ui-sidebar.js` | `source/components/shell/ui-sidebar.html` | — | 2 | 0 | 2 | 0 | 1 |
-| `ui-sidebar-group` | `UiSidebarGroup` | `source/components/shell/ui-sidebar-group.js` | `source/components/shell/ui-sidebar-group.html` | — | 5 | 0 | 5 | 0 | 2 |
+| `ui-sidebar-group` | `UiSidebarGroup` | `source/components/shell/ui-sidebar-group.js` | `source/components/shell/ui-sidebar-group.html` | — | 5 | 0 | 5 | 1 | 2 |
 | `ui-sidebar-item` | `UiSidebarItem` | `source/components/shell/ui-sidebar-item.js` | `source/components/shell/ui-sidebar-item.html` | — | 4 | 0 | 4 | 0 | 1 |
 | `ui-sidebar-toggle` | `UiSidebarToggle` | `source/components/shell/ui-sidebar-toggle.js` | `source/components/shell/ui-sidebar-toggle.html` | — | 3 | 0 | 3 | 0 | 1 |
 | `ui-table` | `UiTable` | `source/components/data/ui-table.js` | `source/components/data/ui-table.html` | `ui-table-column` | 29 | 0 | 23 | 10 | 1 |

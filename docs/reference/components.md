@@ -149,7 +149,7 @@ package's `custom-elements.json`.
 |---|---|
 | Inputs | `label`, `match`, `open`, `panelClass` (`panel-class`), `triggerClass` (`trigger-class`) |
 | Observed attributes | `label`, `match`, `open`, `panel-class`, `trigger-class` |
-| Events | none |
+| Events | `open-change` |
 | Projection | default, `trigger` |
 | Uses | none |
 
