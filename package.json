@@ -1,6 +1,6 @@
 {
   "name": "srl",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "type": "module",
   "description": "Buildless reactive frontend library, its component collection, its toolchain, and the example application",
