@@ -6,7 +6,7 @@
 
   <groupId>dev.santella.srl</groupId>
   <artifactId>srl-webstorm</artifactId>
-  <version>1.2.2</version>
+  <version>1.2.3</version>
   <packaging>jar</packaging>
 
   <name>srl WebStorm plugin</name>

@@ -74,7 +74,7 @@ jobs:
         working-directory: editors/vscode
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx --yes ovsx@1.2.2 --pat "$OVSX_PAT" publish srl-*.vsix
+        run: npx --yes ovsx@1.2.3 --pat "$OVSX_PAT" publish srl-*.vsix
 
   webstorm:
     runs-on: ubuntu-latest

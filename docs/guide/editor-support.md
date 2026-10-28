@@ -38,7 +38,7 @@ server in the project, so each workspace gets its own grammar version. The CLI
 requires Node.js 22 or newer.
 
 ```bash
-npm install --save-dev @srljs/core@1.2.2 @srljs/cli@1.2.2
+npm install --save-dev @srljs/core@1.2.3 @srljs/cli@1.2.3
 ```
 
 ## VS Code
@@ -52,7 +52,7 @@ cd editors/vscode
 npm install
 npm test
 npm run package
-code --install-extension srl-1.2.2.vsix
+code --install-extension srl-1.2.3.vsix
 ```
 
 The extension starts one server per workspace folder and watches each folder

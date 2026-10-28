@@ -200,7 +200,7 @@ void test('it never claims a Remote, an API call or a write', () => {
   assert.ok(immutable !== undefined);
   const pattern = new RegExp(immutable.slice(1, -1), 'u');
   assert.ok(pattern.test('/assets/entry-AAAAAAAA.js'));
-  assert.ok(!pattern.test('/remotes/sales/1.2.2/assets/remote-entry-AAAAAAAA.js'));
+  assert.ok(!pattern.test('/remotes/sales/1.2.3/assets/remote-entry-AAAAAAAA.js'));
 });
 
 void test('it does not skip waiting, so a running tab keeps the worker it started with', () => {
